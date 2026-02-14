@@ -1,0 +1,16 @@
+name = "whisk"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "dist"
+
+# KV Namespaces - create with: npx wrangler kv namespace create WHISK_KV
+[[kv_namespaces]]
+binding = "WHISK_KV"
+id = "" # Fill in after running: npx wrangler kv namespace create WHISK_KV
+
+# R2 Bucket - create with: npx wrangler r2 bucket create whisk-photos
+[[r2_buckets]]
+binding = "WHISK_R2"
+bucket_name = "whisk-photos"
+
+[vars]
+ENVIRONMENT = "production"

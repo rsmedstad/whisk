@@ -1,0 +1,93 @@
+import type { TagDefinition, TagGroup } from "../types";
+
+export const PRESET_TAGS: TagDefinition[] = [
+  // Meal
+  { name: "breakfast", type: "preset", group: "meal", usageCount: 0 },
+  { name: "brunch", type: "preset", group: "meal", usageCount: 0 },
+  { name: "lunch", type: "preset", group: "meal", usageCount: 0 },
+  { name: "dinner", type: "preset", group: "meal", usageCount: 0 },
+  { name: "dessert", type: "preset", group: "meal", usageCount: 0 },
+  { name: "appetizer", type: "preset", group: "meal", usageCount: 0 },
+  { name: "snack", type: "preset", group: "meal", usageCount: 0 },
+  { name: "side dish", type: "preset", group: "meal", usageCount: 0 },
+
+  // Cuisine
+  { name: "italian", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "mexican", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "chinese", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "thai", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "indian", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "japanese", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "korean", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "mediterranean", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "american", type: "preset", group: "cuisine", usageCount: 0 },
+  { name: "french", type: "preset", group: "cuisine", usageCount: 0 },
+
+  // Diet
+  { name: "vegetarian", type: "preset", group: "diet", usageCount: 0 },
+  { name: "vegan", type: "preset", group: "diet", usageCount: 0 },
+  { name: "gluten-free", type: "preset", group: "diet", usageCount: 0 },
+  { name: "dairy-free", type: "preset", group: "diet", usageCount: 0 },
+  { name: "keto", type: "preset", group: "diet", usageCount: 0 },
+  { name: "low-carb", type: "preset", group: "diet", usageCount: 0 },
+  { name: "healthy", type: "preset", group: "diet", usageCount: 0 },
+
+  // Method
+  { name: "grilling", type: "preset", group: "method", usageCount: 0 },
+  { name: "baking", type: "preset", group: "method", usageCount: 0 },
+  { name: "slow cook", type: "preset", group: "method", usageCount: 0 },
+  { name: "instant pot", type: "preset", group: "method", usageCount: 0 },
+  { name: "one-pot", type: "preset", group: "method", usageCount: 0 },
+  { name: "air fryer", type: "preset", group: "method", usageCount: 0 },
+  { name: "no-cook", type: "preset", group: "method", usageCount: 0 },
+  { name: "stir-fry", type: "preset", group: "method", usageCount: 0 },
+
+  // Speed
+  { name: "under 30 min", type: "preset", group: "speed", usageCount: 0 },
+  { name: "quick", type: "preset", group: "speed", usageCount: 0 },
+  { name: "weeknight", type: "preset", group: "speed", usageCount: 0 },
+  { name: "meal prep", type: "preset", group: "speed", usageCount: 0 },
+
+  // Season
+  { name: "summer", type: "preset", group: "season", usageCount: 0 },
+  { name: "fall", type: "preset", group: "season", usageCount: 0 },
+  { name: "winter", type: "preset", group: "season", usageCount: 0 },
+  { name: "spring", type: "preset", group: "season", usageCount: 0 },
+  { name: "holiday", type: "preset", group: "season", usageCount: 0 },
+];
+
+export const TAG_GROUP_LABELS: Record<TagGroup, string> = {
+  meal: "Meal",
+  cuisine: "Cuisine",
+  diet: "Diet",
+  method: "Method",
+  speed: "Speed",
+  season: "Season",
+  custom: "Custom",
+};
+
+export const TAG_GROUP_ORDER: TagGroup[] = [
+  "meal",
+  "cuisine",
+  "diet",
+  "method",
+  "speed",
+  "season",
+  "custom",
+];
+
+export function getTagsByGroup(
+  tags: TagDefinition[]
+): Map<TagGroup, TagDefinition[]> {
+  const grouped = new Map<TagGroup, TagDefinition[]>();
+  for (const group of TAG_GROUP_ORDER) {
+    grouped.set(group, []);
+  }
+  for (const tag of tags) {
+    const group = (tag.group ?? "custom") as TagGroup;
+    const list = grouped.get(group) ?? [];
+    list.push(tag);
+    grouped.set(group, list);
+  }
+  return grouped;
+}

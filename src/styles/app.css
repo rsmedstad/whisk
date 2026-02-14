@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+@theme {
+  --color-orange-50: #fff7ed;
+  --color-orange-100: #ffedd5;
+  --color-orange-200: #fed7aa;
+  --color-orange-300: #fdba74;
+  --color-orange-400: #fb923c;
+  --color-orange-500: #f97316;
+  --color-orange-600: #ea580c;
+  --color-orange-700: #c2410c;
+  --color-orange-800: #9a3412;
+  --color-orange-900: #7c2d12;
+}
+
+/* ── Seasonal Accent Palettes ─────────────────────────────
+   Override --color-orange-* so all orange-* utility classes
+   automatically pick up the seasonal accent color.
+   Applied via data-accent attribute on <html>. */
+
+/* Valentine's Day — rose/pink */
+[data-accent="valentine"] {
+  --color-orange-50: #fff1f2;
+  --color-orange-100: #ffe4e6;
+  --color-orange-200: #fecdd3;
+  --color-orange-300: #fda4af;
+  --color-orange-400: #fb7185;
+  --color-orange-500: #f43f5e;
+  --color-orange-600: #e11d48;
+  --color-orange-700: #be123c;
+  --color-orange-800: #9f1239;
+  --color-orange-900: #881337;
+}
+
+/* St. Patrick's Day — emerald */
+[data-accent="stpatrick"] {
+  --color-orange-50: #ecfdf5;
+  --color-orange-100: #d1fae5;
+  --color-orange-200: #a7f3d0;
+  --color-orange-300: #6ee7b7;
+  --color-orange-400: #34d399;
+  --color-orange-500: #10b981;
+  --color-orange-600: #059669;
+  --color-orange-700: #047857;
+  --color-orange-800: #065f46;
+  --color-orange-900: #064e3b;
+}
+
+/* Easter — violet/lavender */
+[data-accent="easter"] {
+  --color-orange-50: #f5f3ff;
+  --color-orange-100: #ede9fe;
+  --color-orange-200: #ddd6fe;
+  --color-orange-300: #c4b5fd;
+  --color-orange-400: #a78bfa;
+  --color-orange-500: #8b5cf6;
+  --color-orange-600: #7c3aed;
+  --color-orange-700: #6d28d9;
+  --color-orange-800: #5b21b6;
+  --color-orange-900: #4c1d95;
+}
+
+/* 4th of July — blue/red patriotic */
+[data-accent="july4th"] {
+  --color-orange-50: #eff6ff;
+  --color-orange-100: #dbeafe;
+  --color-orange-200: #bfdbfe;
+  --color-orange-300: #93c5fd;
+  --color-orange-400: #60a5fa;
+  --color-orange-500: #3b82f6;
+  --color-orange-600: #2563eb;
+  --color-orange-700: #1d4ed8;
+  --color-orange-800: #1e40af;
+  --color-orange-900: #1e3a8a;
+}
+
+/* Halloween — deep orange/amber */
+[data-accent="halloween"] {
+  --color-orange-50: #fffbeb;
+  --color-orange-100: #fef3c7;
+  --color-orange-200: #fde68a;
+  --color-orange-300: #fcd34d;
+  --color-orange-400: #fbbf24;
+  --color-orange-500: #f59e0b;
+  --color-orange-600: #d97706;
+  --color-orange-700: #b45309;
+  --color-orange-800: #92400e;
+  --color-orange-900: #78350f;
+}
+
+/* Thanksgiving — warm amber/brown */
+[data-accent="thanksgiving"] {
+  --color-orange-50: #fefce8;
+  --color-orange-100: #fef9c3;
+  --color-orange-200: #fef08a;
+  --color-orange-300: #fde047;
+  --color-orange-400: #facc15;
+  --color-orange-500: #ca8a04;
+  --color-orange-600: #a16207;
+  --color-orange-700: #854d0e;
+  --color-orange-800: #713f12;
+  --color-orange-900: #422006;
+}
+
+/* Christmas — red/green (red primary) */
+[data-accent="christmas"] {
+  --color-orange-50: #fef2f2;
+  --color-orange-100: #fee2e2;
+  --color-orange-200: #fecaca;
+  --color-orange-300: #fca5a5;
+  --color-orange-400: #f87171;
+  --color-orange-500: #ef4444;
+  --color-orange-600: #dc2626;
+  --color-orange-700: #b91c1c;
+  --color-orange-800: #991b1b;
+  --color-orange-900: #7f1d1d;
+}
+
+/* ── Season defaults (when no holiday is near) ──────────── */
+
+/* Spring — fresh green */
+[data-accent="spring"] {
+  --color-orange-50: #f0fdf4;
+  --color-orange-100: #dcfce7;
+  --color-orange-200: #bbf7d0;
+  --color-orange-300: #86efac;
+  --color-orange-400: #4ade80;
+  --color-orange-500: #22c55e;
+  --color-orange-600: #16a34a;
+  --color-orange-700: #15803d;
+  --color-orange-800: #166534;
+  --color-orange-900: #14532d;
+}
+
+/* Summer — sky blue */
+[data-accent="summer"] {
+  --color-orange-50: #f0f9ff;
+  --color-orange-100: #e0f2fe;
+  --color-orange-200: #bae6fd;
+  --color-orange-300: #7dd3fc;
+  --color-orange-400: #38bdf8;
+  --color-orange-500: #0ea5e9;
+  --color-orange-600: #0284c7;
+  --color-orange-700: #0369a1;
+  --color-orange-800: #075985;
+  --color-orange-900: #0c4a6e;
+}
+
+/* Fall — warm amber (the app's natural orange, slightly warmer) */
+[data-accent="fall"] {
+  --color-orange-50: #fffbeb;
+  --color-orange-100: #fef3c7;
+  --color-orange-200: #fde68a;
+  --color-orange-300: #fcd34d;
+  --color-orange-400: #fbbf24;
+  --color-orange-500: #f59e0b;
+  --color-orange-600: #d97706;
+  --color-orange-700: #b45309;
+  --color-orange-800: #92400e;
+  --color-orange-900: #78350f;
+}
+
+/* Winter — cool slate blue */
+[data-accent="winter"] {
+  --color-orange-50: #f8fafc;
+  --color-orange-100: #f1f5f9;
+  --color-orange-200: #e2e8f0;
+  --color-orange-300: #94a3b8;
+  --color-orange-400: #64748b;
+  --color-orange-500: #6366f1;
+  --color-orange-600: #4f46e5;
+  --color-orange-700: #4338ca;
+  --color-orange-800: #3730a3;
+  --color-orange-900: #312e81;
+}
+
+/* Safe area insets for PWA / notched devices */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent overscroll bounce on iOS */
+body {
+  overscroll-behavior: none;
+}
+
+/* Hide scrollbar but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

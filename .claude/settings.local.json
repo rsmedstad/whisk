@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun:*)",
+      "Bash(npm view:*)",
+      "Bash(npx tsc:*)",
+      "Bash(bunx vite build:*)",
+      "Bash(npx vite build)",
+      "Bash(git add:*)"
+    ]
+  }
+}
