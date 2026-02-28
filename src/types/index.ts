@@ -169,6 +169,42 @@ export interface AppSettings {
   preferredAiModel: "auto" | "groq" | "xai" | "gemini" | "cf";
 }
 
+// ── AI Configuration ───────────────────────────────────────
+
+export interface AIFunctionConfig {
+  provider: string;
+  model: string;
+}
+
+export interface AIConfig {
+  mode: "simple" | "advanced";
+  defaultProvider?: string;
+  defaultTextModel?: string;
+  defaultVisionModel?: string;
+  chat?: AIFunctionConfig;
+  suggestions?: AIFunctionConfig;
+  vision?: AIFunctionConfig;
+  ocr?: AIFunctionConfig;
+}
+
+export interface AIModelInfo {
+  id: string;
+  name: string;
+}
+
+export interface AIAvailableProvider {
+  id: string;
+  name: string;
+  available: boolean;
+  textModels: AIModelInfo[];
+  visionModels: AIModelInfo[];
+}
+
+export interface AIConfigResponse {
+  config: AIConfig | null;
+  providers: AIAvailableProvider[];
+}
+
 // ── AI Capabilities (returned by /api/capabilities) ────
 
 export interface AICapabilities {
@@ -190,4 +226,7 @@ export interface Env {
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   XAI_API_KEY?: string;
+  DEEPSEEK_API_KEY?: string;
+  CEREBRAS_API_KEY?: string;
+  MISTRAL_API_KEY?: string;
 }
