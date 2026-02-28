@@ -2,8 +2,6 @@ name = "whisk"
 compatibility_date = "2024-12-01"
 pages_build_output_dir = "dist"
 
-pages_build_output_dir = "./dist"
-
 # KV Namespaces - create with: npx wrangler kv namespace create WHISK_KV
 [[kv_namespaces]]
 binding = "WHISK_KV"
