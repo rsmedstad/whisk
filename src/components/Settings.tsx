@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppSettings, AICapabilities } from "../types";
+import { useAIConfig } from "../hooks/useAIConfig";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
+import { AIConfigPanel } from "./AIConfigPanel";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -12,7 +14,8 @@ interface SettingsProps {
   capabilities: AICapabilities;
 }
 
-export function Settings({ theme, onSetTheme, onLogout, capabilities }: SettingsProps) {
+export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
+  const aiConfig = useAIConfig();
   const navigate = useNavigate();
   const [units, setUnits] = useState<"imperial" | "metric">(() => {
     return (localStorage.getItem("whisk_units") as "imperial" | "metric") ?? "imperial";
@@ -236,44 +239,19 @@ export function Settings({ theme, onSetTheme, onLogout, capabilities }: Settings
           </Card>
         </section>
 
-        {/* AI Services Status */}
+        {/* AI Model Configuration */}
         <section>
           <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
-            AI Services
+            AI Model Configuration
           </h2>
-          <Card>
-            <div className="space-y-3">
-              {[
-                { label: "Chat & Suggestions", key: "chat" as const, desc: "Recipe ideas, meal planning help" },
-                { label: "Photo Recognition", key: "vision" as const, desc: "Identify dishes from photos" },
-                { label: "Nutrition Estimates", key: "nutritionEstimate" as const, desc: "Calorie and macro estimates" },
-              ].map((service) => (
-                <div key={service.key} className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium dark:text-stone-200">{service.label}</p>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">{service.desc}</p>
-                  </div>
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      capabilities[service.key]
-                        ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                        : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
-                    }`}
-                  >
-                    {capabilities[service.key] ? "Active" : "Not configured"}
-                  </span>
-                </div>
-              ))}
-              <div className="pt-2 border-t border-stone-100 dark:border-stone-800 space-y-1.5">
-                <p className="text-xs text-stone-400 dark:text-stone-500">
-                  AI features are configured by the book owner via environment variables. Supports Groq, OpenAI, Anthropic Claude, Google Gemini, and xAI Grok.
-                </p>
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Privacy note: When AI features are enabled, recipe data (titles, ingredients, steps) is sent to the configured third-party AI provider. These providers may store, process, or use this data per their own terms. If you have cherished or private recipes, be aware they are not necessarily confidential once shared with AI services.
-                </p>
-              </div>
-            </div>
-          </Card>
+          <AIConfigPanel
+            config={aiConfig.config}
+            providers={aiConfig.providers}
+            isLoading={aiConfig.isLoading}
+            isSaving={aiConfig.isSaving}
+            error={aiConfig.error}
+            onSave={aiConfig.saveConfig}
+          />
         </section>
 
         {/* Data */}

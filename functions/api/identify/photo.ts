@@ -1,34 +1,81 @@
-interface Env {
-  XAI_API_KEY?: string;
+import {
+  loadAIConfig,
+  resolveConfig,
+  callVisionAI,
+  type ProviderEnv,
+} from "../../lib/ai-providers";
+
+interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
 }
 
-// POST /api/identify/photo - AI food identification (placeholder)
+// POST /api/identify/photo - AI food identification from photo
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!env.XAI_API_KEY) {
+  const config = await loadAIConfig(env.WHISK_KV);
+  const fnConfig = resolveConfig(config, "vision", env);
+
+  if (!fnConfig) {
     return new Response(
       JSON.stringify({
         title: "AI Identification Unavailable",
         confidence: "N/A",
         ingredients: [],
-        message: "Configure XAI_API_KEY to enable photo identification.",
+        message: "Configure a vision-capable AI provider in Settings to enable photo identification.",
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  // TODO: Implement xAI Grok Vision API call
-  // 1. Read photo from form data
-  // 2. Send to xAI Vision endpoint
-  // 3. Parse response for food identification
-  // 4. Return structured result
+  // Read photo from form data
+  const formData = await request.formData();
+  const photo = formData.get("photo") as File | null;
+  const context = formData.get("context") as string | null;
 
-  return new Response(
-    JSON.stringify({
-      title: "AI identification coming soon",
-      confidence: "N/A",
-      ingredients: [],
-    }),
-    { headers: { "Content-Type": "application/json" } }
+  if (!photo) {
+    return new Response(
+      JSON.stringify({ error: "No photo provided" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Convert to base64
+  const arrayBuffer = await photo.arrayBuffer();
+  const base64 = btoa(
+    Array.from(new Uint8Array(arrayBuffer), (b) => String.fromCharCode(b)).join("")
   );
+  const mimeType = photo.type || "image/jpeg";
+
+  const prompt = [
+    "You are a food identification expert. Analyze this photo and identify the dish or food item.",
+    "Respond with ONLY a JSON object (no markdown) with these fields:",
+    '{ "title": "Name of the dish", "confidence": "high" | "medium" | "low", "description": "Brief description", "ingredients": ["ingredient1", "ingredient2", ...], "cuisine": "cuisine type", "tags": ["tag1", "tag2"] }',
+    context ? `\nAdditional context from the user: ${context}` : "",
+    "If you cannot identify the food, still return the JSON structure with your best guess and low confidence.",
+  ].join("\n");
+
+  try {
+    const content = await callVisionAI(fnConfig, env, prompt, base64, mimeType, {
+      maxTokens: 512,
+      temperature: 0.3,
+    });
+
+    // Parse AI response — strip markdown fences if present
+    const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const result = JSON.parse(jsonStr);
+
+    return new Response(
+      JSON.stringify(result),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        title: "Identification failed",
+        confidence: "N/A",
+        ingredients: [],
+        message: err instanceof Error ? err.message : "Failed to identify food",
+      }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
 };

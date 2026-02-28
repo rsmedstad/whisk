@@ -1,5 +1,11 @@
-interface Env {
-  GROQ_API_KEY?: string;
+import {
+  loadAIConfig,
+  resolveConfig,
+  callTextAI,
+  type ProviderEnv,
+} from "../../lib/ai-providers";
+
+interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
 }
 
@@ -13,11 +19,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json()) as SuggestBody;
   const { seasonalContext } = body;
 
-  if (!env.GROQ_API_KEY) {
+  const config = await loadAIConfig(env.WHISK_KV);
+  const fnConfig = resolveConfig(config, "suggestions", env);
+
+  if (!fnConfig) {
     return new Response(
       JSON.stringify({
         suggestions: [],
-        message: "Configure GROQ_API_KEY to enable AI suggestions.",
+        message: "Configure an AI provider in Settings to enable suggestions.",
       }),
       { headers: { "Content-Type": "application/json" } }
     );
@@ -29,7 +38,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const systemParts: string[] = [
     "You are Whisk, a recipe suggestion engine. Given the user's recipe collection and current context, suggest 3-5 recipes they should consider making.",
-    "Return ONLY a JSON array of objects with: { title, reason, tags, isFromCollection }",
+    "Return ONLY a JSON object with a \"suggestions\" key containing an array of objects with: { title, reason, tags, isFromCollection }",
     "Prefer recipes from the user's collection when they match. Include 1-2 new suggestions if relevant.",
   ];
 
@@ -50,31 +59,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   try {
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: systemParts.join("\n") },
-          { role: "user", content: "What should I make this week?" },
-        ],
-        max_tokens: 512,
-        temperature: 0.8,
-        response_format: { type: "json_object" },
-      }),
-    });
+    const content = await callTextAI(
+      fnConfig,
+      env,
+      [
+        { role: "system", content: systemParts.join("\n") },
+        { role: "user", content: "What should I make this week?" },
+      ],
+      { maxTokens: 512, temperature: 0.8, jsonMode: true }
+    );
 
-    if (!groqRes.ok) throw new Error(`Groq API error: ${groqRes.status}`);
-
-    const groqData = (await groqRes.json()) as {
-      choices: { message: { content: string } }[];
-    };
-
-    const parsed = JSON.parse(groqData.choices[0]?.message.content ?? "[]");
+    const parsed = JSON.parse(content);
 
     return new Response(
       JSON.stringify({ suggestions: parsed.suggestions ?? parsed }),

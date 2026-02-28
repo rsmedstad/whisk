@@ -1,37 +1,25 @@
-interface Env {
-  GROQ_API_KEY?: string;
-  OPENAI_API_KEY?: string;
-  ANTHROPIC_API_KEY?: string;
-  GEMINI_API_KEY?: string;
-  XAI_API_KEY?: string;
+import {
+  loadAIConfig,
+  resolveConfig,
+  type ProviderEnv,
+} from "../lib/ai-providers";
+
+interface Env extends ProviderEnv {
+  WHISK_KV: KVNamespace;
 }
 
 // GET /api/capabilities — returns which AI features are available
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-  // Any text-capable provider enables chat/suggestions/nutrition
-  const hasTextAI = !!(
-    env.GROQ_API_KEY ||
-    env.OPENAI_API_KEY ||
-    env.ANTHROPIC_API_KEY ||
-    env.GEMINI_API_KEY ||
-    env.XAI_API_KEY
-  );
+  const config = await loadAIConfig(env.WHISK_KV);
 
-  // Vision requires a provider with image understanding
-  const hasVisionAI = !!(
-    env.XAI_API_KEY ||
-    env.OPENAI_API_KEY ||
-    env.ANTHROPIC_API_KEY ||
-    env.GEMINI_API_KEY
-  );
+  // Each capability is available if a provider+model can be resolved for it
+  const chat = !!resolveConfig(config, "chat", env);
+  const vision = !!resolveConfig(config, "vision", env);
+  const suggestions = !!resolveConfig(config, "suggestions", env);
+  const nutritionEstimate = chat; // uses same provider as chat
 
   return new Response(
-    JSON.stringify({
-      chat: hasTextAI,
-      vision: hasVisionAI,
-      suggestions: hasTextAI,
-      nutritionEstimate: hasTextAI,
-    }),
+    JSON.stringify({ chat, vision, suggestions, nutritionEstimate }),
     { headers: { "Content-Type": "application/json" } }
   );
 };

@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /
+
+# Whisk is a private recipe manager — no indexing needed

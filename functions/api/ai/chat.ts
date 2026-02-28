@@ -1,5 +1,11 @@
-interface Env {
-  GROQ_API_KEY?: string;
+import {
+  loadAIConfig,
+  resolveConfig,
+  callTextAI,
+  type ProviderEnv,
+} from "../../lib/ai-providers";
+
+interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
 }
 
@@ -14,11 +20,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const { messages, seasonalContext } = body;
   const lastMessage = messages[messages.length - 1]?.content ?? "";
 
-  if (!env.GROQ_API_KEY) {
-    // Without AI, give a useful contextual placeholder response
+  const config = await loadAIConfig(env.WHISK_KV);
+  const fnConfig = resolveConfig(config, "chat", env);
+
+  if (!fnConfig) {
     const fallback = seasonalContext
-      ? `AI suggestions aren't configured yet. Add a GROQ_API_KEY secret to enable this feature.\n\nBased on your calendar context:\n${seasonalContext}\n\nIn the meantime, try browsing your recipes with seasonal tags or searching by ingredient!`
-      : `AI suggestions aren't configured yet. Add a GROQ_API_KEY secret to enable this feature.\n\nIn the meantime, you can browse your recipes, search by ingredient, and use tags to filter!`;
+      ? `AI suggestions aren't configured yet. Add an AI provider API key and configure it in Settings to enable this feature.\n\nBased on your calendar context:\n${seasonalContext}\n\nIn the meantime, try browsing your recipes with seasonal tags or searching by ingredient!`
+      : `AI suggestions aren't configured yet. Add an AI provider API key and configure it in Settings to enable this feature.\n\nIn the meantime, you can browse your recipes, search by ingredient, and use tags to filter!`;
 
     return new Response(
       JSON.stringify({ content: fallback }),
@@ -30,7 +38,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const indexData = await env.WHISK_KV.get("recipe_index", "text");
   const recipeIndex = indexData ? JSON.parse(indexData) : [];
 
-  // Build system prompt with seasonal and recipe context
+  // Build system prompt
   const systemParts: string[] = [
     "You are Whisk, a friendly personal recipe assistant. You help users discover, plan, and cook recipes from their personal collection.",
     "Keep responses concise and practical. When suggesting recipes, prefer ones from the user's collection when possible.",
@@ -54,40 +62,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
-  // Call Groq API
-  const groqMessages = [
+  const allMessages = [
     { role: "system", content: systemParts.join("\n") },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
   try {
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: groqMessages,
-        max_tokens: 1024,
-        temperature: 0.7,
-      }),
+    const content = await callTextAI(fnConfig, env, allMessages, {
+      maxTokens: 1024,
+      temperature: 0.7,
     });
 
-    if (!groqRes.ok) {
-      throw new Error(`Groq API error: ${groqRes.status}`);
-    }
-
-    const groqData = (await groqRes.json()) as {
-      choices: { message: { content: string } }[];
-    };
-
     return new Response(
-      JSON.stringify({ content: groqData.choices[0]?.message.content ?? "" }),
+      JSON.stringify({ content }),
       { headers: { "Content-Type": "application/json" } }
     );
-  } catch (err) {
+  } catch {
     return new Response(
       JSON.stringify({
         content: `I received your message: "${lastMessage}"\n\nI'm having trouble connecting to the AI service right now. Please try again in a moment.`,
