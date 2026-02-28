@@ -47,6 +47,9 @@ export interface ProviderEnv {
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   XAI_API_KEY?: string;
+  DEEPSEEK_API_KEY?: string;
+  CEREBRAS_API_KEY?: string;
+  MISTRAL_API_KEY?: string;
 }
 
 // ── Provider Registry ──────────────────────────────────────
@@ -60,12 +63,65 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     baseUrl: "https://api.groq.com/openai/v1",
     textModels: [
       { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
-      { id: "llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout (Multimodal)" },
+      { id: "llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout" },
       { id: "llama-4-maverick-17b-128e-instruct", name: "Llama 4 Maverick" },
     ],
     visionModels: [
       { id: "llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout" },
       { id: "llama-4-maverick-17b-128e-instruct", name: "Llama 4 Maverick" },
+    ],
+  },
+  gemini: {
+    id: "gemini",
+    name: "Google Gemini",
+    envKey: "GEMINI_API_KEY",
+    format: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    textModels: [
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash-Lite" },
+    ],
+    visionModels: [
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash-Lite" },
+    ],
+  },
+  deepseek: {
+    id: "deepseek",
+    name: "DeepSeek",
+    envKey: "DEEPSEEK_API_KEY",
+    format: "openai",
+    baseUrl: "https://api.deepseek.com",
+    textModels: [
+      { id: "deepseek-chat", name: "DeepSeek V3.2 (Chat)" },
+      { id: "deepseek-reasoner", name: "DeepSeek V3.2 (Reasoner)" },
+    ],
+    visionModels: [],
+  },
+  cerebras: {
+    id: "cerebras",
+    name: "Cerebras",
+    envKey: "CEREBRAS_API_KEY",
+    format: "openai",
+    baseUrl: "https://api.cerebras.ai/v1",
+    textModels: [
+      { id: "llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout" },
+      { id: "llama3.3-70b", name: "Llama 3.3 70B" },
+    ],
+    visionModels: [],
+  },
+  mistral: {
+    id: "mistral",
+    name: "Mistral",
+    envKey: "MISTRAL_API_KEY",
+    format: "openai",
+    baseUrl: "https://api.mistral.ai/v1",
+    textModels: [
+      { id: "mistral-small-latest", name: "Mistral Small" },
+      { id: "mistral-medium-latest", name: "Mistral Medium" },
+    ],
+    visionModels: [
+      { id: "pixtral-large-latest", name: "Pixtral Large" },
     ],
   },
   openai: {
@@ -75,6 +131,8 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     format: "openai",
     baseUrl: "https://api.openai.com/v1",
     textModels: [
+      { id: "gpt-4.1-nano", name: "GPT-4.1 Nano" },
+      { id: "gpt-4.1-mini", name: "GPT-4.1 Mini" },
       { id: "gpt-4o-mini", name: "GPT-4o Mini" },
       { id: "gpt-4o", name: "GPT-4o" },
     ],
@@ -91,26 +149,11 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     baseUrl: "https://api.anthropic.com/v1",
     textModels: [
       { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
+      { id: "claude-sonnet-4-6-20260217", name: "Claude Sonnet 4.6" },
     ],
     visionModels: [
       { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
-    ],
-  },
-  gemini: {
-    id: "gemini",
-    name: "Google Gemini",
-    envKey: "GEMINI_API_KEY",
-    format: "gemini",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    textModels: [
-      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-    ],
-    visionModels: [
-      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "claude-sonnet-4-6-20260217", name: "Claude Sonnet 4.6" },
     ],
   },
   xai: {
@@ -121,6 +164,7 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     baseUrl: "https://api.x.ai/v1",
     textModels: [
       { id: "grok-3-mini-fast", name: "Grok 3 Mini Fast" },
+      { id: "grok-3-fast", name: "Grok 3 Fast" },
     ],
     visionModels: [
       { id: "grok-2-vision-1212", name: "Grok 2 Vision" },

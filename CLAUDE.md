@@ -106,7 +106,7 @@ public/
 
 6. **Seasonal theme via CSS custom properties**: Tailwind CSS 4's `@theme` creates `--color-orange-*` vars. The `[data-accent="..."]` selectors in `app.css` override these for seasonal palettes. Zero component changes needed — just swap the `data-accent` attribute on `<html>`.
 
-7. **AI provider flexibility**: The `Env` type has optional keys for 5 providers. `/api/capabilities` auto-detects which are configured. Components receive boolean flags (`chatEnabled`, `visionEnabled`) and show graceful degradation banners.
+7. **AI provider flexibility**: The `Env` type has optional keys for 8 providers. `/api/capabilities` auto-detects which are configured. `/api/ai/config` stores per-function provider+model choices in KV. Components receive boolean flags (`chatEnabled`, `visionEnabled`) and show graceful degradation banners. The Settings page has a full AI configuration UI with simple and advanced modes.
 
 ## Coding Conventions
 
@@ -145,13 +145,16 @@ Set in Cloudflare dashboard or `.dev.vars` locally:
 | Variable | Required | Purpose |
 |---|---|---|
 | `APP_SECRET` | Yes | Shared password for authentication |
-| `GROQ_API_KEY` | No | Groq API (fast text, llama models) |
-| `OPENAI_API_KEY` | No | OpenAI API (GPT, vision) |
-| `ANTHROPIC_API_KEY` | No | Anthropic API (Claude, vision) |
-| `GEMINI_API_KEY` | No | Google Gemini API (text + vision) |
+| `GROQ_API_KEY` | No | Groq API (fast text + vision, llama models) |
+| `GEMINI_API_KEY` | No | Google Gemini API (free tier, text + vision) |
+| `DEEPSEEK_API_KEY` | No | DeepSeek API (cheapest text, V3.2) |
+| `CEREBRAS_API_KEY` | No | Cerebras API (fastest inference, free tier) |
+| `MISTRAL_API_KEY` | No | Mistral API (free tier, text + Pixtral vision) |
+| `OPENAI_API_KEY` | No | OpenAI API (GPT-4.1/4o, vision) |
+| `ANTHROPIC_API_KEY` | No | Anthropic API (Claude 4.5/4.6, vision) |
 | `XAI_API_KEY` | No | xAI Grok API (text + vision) |
 
-At least one AI provider key is needed for AI features. Vision requires a provider that supports image input (any except Groq).
+At least one AI provider key is needed for AI features. Vision requires a provider that supports image input. Free options with vision: Groq (Llama 4 Scout), Gemini (2.5 Flash), Mistral (Pixtral). Configurable per-feature in Settings > AI Model Configuration.
 
 ## PWA Requirements
 
