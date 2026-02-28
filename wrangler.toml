@@ -5,7 +5,7 @@ pages_build_output_dir = "dist"
 # KV Namespaces - create with: npx wrangler kv namespace create WHISK_KV
 [[kv_namespaces]]
 binding = "WHISK_KV"
-id = "" # Fill in after running: npx wrangler kv namespace create WHISK_KV
+id = "9961b213d1114876af09f83f3884aeb9" # Fill in after running: npx wrangler kv namespace create WHISK_KV
 
 # R2 Bucket - create with: npx wrangler r2 bucket create whisk-photos
 [[r2_buckets]]
