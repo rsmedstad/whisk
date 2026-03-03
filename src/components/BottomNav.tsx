@@ -1,11 +1,11 @@
 import { NavLink } from "react-router-dom";
 import { classNames } from "../lib/utils";
 import { useKeyboard } from "../hooks/useKeyboard";
-import { BookOpen, Camera, Sparkles, ClipboardList, CalendarDays } from "./ui/Icon";
+import { BookOpen, Globe, Sparkles, ClipboardList, CalendarDays } from "./ui/Icon";
 
 const tabs = [
   { to: "/", icon: BookOpen, label: "Recipes" },
-  { to: "/identify", icon: Camera, label: "Identify" },
+  { to: "/discover", icon: Globe, label: "Discover" },
   { to: "/suggest", icon: Sparkles, label: "Suggest" },
   { to: "/list", icon: ClipboardList, label: "List" },
   { to: "/plan", icon: CalendarDays, label: "Plan" },
