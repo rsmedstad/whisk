@@ -20,7 +20,7 @@ const RecipeForm = lazy(() => import("./components/recipes/RecipeForm").then(m =
 const CookMode = lazy(() => import("./components/recipes/CookMode").then(m => ({ default: m.CookMode })));
 const ShoppingList = lazy(() => import("./components/list/ShoppingList").then(m => ({ default: m.ShoppingList })));
 const MealPlan = lazy(() => import("./components/plan/MealPlan").then(m => ({ default: m.MealPlan })));
-const IdentifyPhoto = lazy(() => import("./components/identify/IdentifyPhoto").then(m => ({ default: m.IdentifyPhoto })));
+const Discover = lazy(() => import("./components/discover/Discover").then(m => ({ default: m.Discover })));
 const SuggestChat = lazy(() => import("./components/suggest/SuggestChat").then(m => ({ default: m.SuggestChat })));
 const Settings = lazy(() => import("./components/Settings").then(m => ({ default: m.Settings })));
 const ImportRecipes = lazy(() => import("./components/import/ImportRecipes").then(m => ({ default: m.ImportRecipes })));
@@ -157,7 +157,8 @@ function AppShell({
           />
 
           {/* Other tabs — lazy loaded */}
-          <Route path="/identify" element={<IdentifyPhoto visionEnabled={capabilities.vision} />} />
+          <Route path="/discover" element={<Discover visionEnabled={capabilities.vision} chatEnabled={capabilities.chat} />} />
+          <Route path="/identify" element={<Navigate to="/discover" replace />} />
           <Route path="/suggest" element={<SuggestChat chatEnabled={capabilities.chat} />} />
           <Route
             path="/list"

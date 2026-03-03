@@ -37,6 +37,16 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
   const [householdSize, setHouseholdSize] = useState(() => {
     return parseInt(localStorage.getItem("whisk_household_size") ?? "4", 10);
   });
+  const [zipCode, setZipCode] = useState(() => {
+    return localStorage.getItem("whisk_zip_code") ?? "";
+  });
+  const [preferredStores, setPreferredStores] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("whisk_preferred_stores");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch { return []; }
+  });
+  const [storeInput, setStoreInput] = useState("");
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -72,6 +82,26 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
     const clamped = Math.max(1, Math.min(20, size));
     setHouseholdSize(clamped);
     localStorage.setItem("whisk_household_size", String(clamped));
+  };
+
+  const handleZipChange = (zip: string) => {
+    setZipCode(zip);
+    localStorage.setItem("whisk_zip_code", zip);
+  };
+
+  const handleAddStore = () => {
+    const name = storeInput.trim();
+    if (!name || preferredStores.includes(name)) { setStoreInput(""); return; }
+    const updated = [...preferredStores, name];
+    setPreferredStores(updated);
+    localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
+    setStoreInput("");
+  };
+
+  const handleRemoveStore = (store: string) => {
+    const updated = preferredStores.filter((s) => s !== store);
+    setPreferredStores(updated);
+    localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
   };
 
   const handleReset = () => {
@@ -308,6 +338,57 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                     className="w-9 h-9 rounded-lg border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-medium text-lg"
                   >
                     +
+                  </button>
+                </div>
+              </div>
+
+              <Input
+                label="Zip Code"
+                value={zipCode}
+                onChange={(e) => handleZipChange(e.target.value)}
+                placeholder="90210"
+              />
+
+              <div>
+                <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                  Preferred Stores
+                </label>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                  Used for deal scanning and shopping list store tags
+                </p>
+                {preferredStores.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {preferredStores.map((store) => (
+                      <span
+                        key={store}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                      >
+                        {store}
+                        <button
+                          onClick={() => handleRemoveStore(store)}
+                          className="text-orange-400 hover:text-red-500"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={storeInput}
+                    onChange={(e) => setStoreInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddStore(); } }}
+                    placeholder="e.g. Costco, Trader Joe's"
+                    className="flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  />
+                  <button
+                    onClick={handleAddStore}
+                    disabled={!storeInput.trim()}
+                    className="px-3 py-2 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
+                  >
+                    Add
                   </button>
                 </div>
               </div>
