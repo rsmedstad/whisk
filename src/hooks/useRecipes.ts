@@ -148,6 +148,33 @@ export function useRecipes() {
     [recipes]
   );
 
+  const markCooked = useCallback(
+    async (id: string) => {
+      const now = new Date().toISOString();
+      const recipe = recipes.find((r) => r.id === id);
+      const newCount = (recipe?.cookedCount ?? 0) + 1;
+
+      // Optimistic: update local state immediately
+      setRecipes((prev) => {
+        const updated = prev.map((r) =>
+          r.id === id ? { ...r, cookedCount: newCount, lastCookedAt: now } : r
+        );
+        setLocal(CACHE_KEYS.RECIPE_INDEX, updated);
+        return updated;
+      });
+
+      // Update cached full recipe
+      const cachedFull = getLocal<Recipe>(CACHE_KEYS.RECIPE(id));
+      if (cachedFull) {
+        setLocal(CACHE_KEYS.RECIPE(id), { ...cachedFull, cookedCount: newCount, lastCookedAt: now });
+      }
+
+      // Background sync
+      api.put(`/recipes/${id}`, { cookedCount: newCount, lastCookedAt: now }).catch(() => {});
+    },
+    [recipes]
+  );
+
   return {
     recipes,
     isLoading,
@@ -158,6 +185,7 @@ export function useRecipes() {
     updateRecipe,
     deleteRecipe,
     toggleFavorite,
+    markCooked,
   };
 }
 

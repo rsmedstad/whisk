@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Plus } from "../ui/Icon";
+import { classNames } from "../../lib/utils";
+import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
 
 interface Message {
@@ -28,6 +30,7 @@ function extractUrls(text: string): string[] {
 
 export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
   const navigate = useNavigate();
+  const { isKeyboardOpen } = useKeyboard();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +50,7 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages]);
+  }, [messages, isKeyboardOpen]);
 
   const sendMessage = async (text: string) => {
     const userMsg: Message = { role: "user", content: text };
@@ -102,7 +105,7 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-4"
+        className={classNames("flex-1 overflow-y-auto px-4 py-4 space-y-4", isKeyboardOpen ? "pb-16" : "pb-24")}
       >
         {/* AI status banner */}
         {!chatEnabled && messages.length === 0 && (
@@ -221,10 +224,14 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
       </div>
 
       {/* Input */}
-      <div className="sticky bottom-16 left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3 pb-[calc(var(--sab)+4.5rem)]">
+      <div className={classNames(
+        "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
+        isKeyboardOpen ? "bottom-0 pb-1" : "bottom-16 pb-[calc(var(--sab)+4.5rem)]"
+      )}>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
+            enterKeyHint="send"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your recipes..."

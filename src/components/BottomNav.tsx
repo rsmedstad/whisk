@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { classNames } from "../lib/utils";
+import { useKeyboard } from "../hooks/useKeyboard";
 import { BookOpen, Camera, Sparkles, ClipboardList, CalendarDays } from "./ui/Icon";
 
 const tabs = [
@@ -11,6 +12,10 @@ const tabs = [
 ] as const;
 
 export function BottomNav() {
+  const { isKeyboardOpen } = useKeyboard();
+
+  if (isKeyboardOpen) return null;
+
   return (
     <nav className="no-print fixed bottom-0 left-0 right-0 z-40 border-t border-stone-200 bg-white/95 backdrop-blur-sm dark:border-stone-700 dark:bg-stone-950/95 pb-[var(--sab)]">
       <div className="flex items-center justify-around">

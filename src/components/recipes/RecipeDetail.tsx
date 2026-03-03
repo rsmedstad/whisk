@@ -30,7 +30,7 @@ const PANTRY_STAPLES = new Set([
 export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShoppingList }: RecipeDetailProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getRecipe, toggleFavorite, deleteRecipe, updateRecipe } = useRecipes();
+  const { getRecipe, toggleFavorite, deleteRecipe, updateRecipe, markCooked } = useRecipes();
   const tags = useTags();
   // Initialize from cache synchronously — no spinner for cached recipes
   const cachedRecipe = id ? getLocal<Recipe>(CACHE_KEYS.RECIPE(id)) : null;
@@ -283,6 +283,23 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             {recipe.yield && <span>{recipe.yield}</span>}
             {recipe.difficulty && (
               <span className="capitalize">{recipe.difficulty}</span>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (recipe) {
+                  markCooked(recipe.id);
+                  setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: new Date().toISOString() } : r);
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+            >
+              <Check className="w-3.5 h-3.5" /> Made This{recipe.cookedCount ? ` (${recipe.cookedCount})` : ""}
+            </button>
+            {recipe.lastCookedAt && (
+              <span className="text-xs text-stone-400 dark:text-stone-500">
+                Last made {new Date(recipe.lastCookedAt).toLocaleDateString()}
+              </span>
             )}
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2 items-center">

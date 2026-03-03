@@ -12,6 +12,7 @@
   --color-orange-700: #316334;
   --color-orange-800: #2a4f2c;
   --color-orange-900: #234126;
+  --color-orange-950: #132816;
 }
 
 /* ── Seasonal Accent Palettes ─────────────────────────────
@@ -31,6 +32,7 @@
   --color-orange-700: #be123c;
   --color-orange-800: #9f1239;
   --color-orange-900: #881337;
+  --color-orange-950: #4c0519;
 }
 
 /* St. Patrick's Day — emerald */
@@ -45,6 +47,7 @@
   --color-orange-700: #047857;
   --color-orange-800: #065f46;
   --color-orange-900: #064e3b;
+  --color-orange-950: #022c22;
 }
 
 /* Easter — violet/lavender */
@@ -59,6 +62,7 @@
   --color-orange-700: #6d28d9;
   --color-orange-800: #5b21b6;
   --color-orange-900: #4c1d95;
+  --color-orange-950: #2e1065;
 }
 
 /* 4th of July — blue/red patriotic */
@@ -73,6 +77,7 @@
   --color-orange-700: #1d4ed8;
   --color-orange-800: #1e40af;
   --color-orange-900: #1e3a8a;
+  --color-orange-950: #172554;
 }
 
 /* Halloween — deep orange/amber */
@@ -87,6 +92,7 @@
   --color-orange-700: #b45309;
   --color-orange-800: #92400e;
   --color-orange-900: #78350f;
+  --color-orange-950: #451a03;
 }
 
 /* Thanksgiving — warm amber/brown */
@@ -101,6 +107,7 @@
   --color-orange-700: #854d0e;
   --color-orange-800: #713f12;
   --color-orange-900: #422006;
+  --color-orange-950: #271306;
 }
 
 /* Christmas — red/green (red primary) */
@@ -115,6 +122,7 @@
   --color-orange-700: #b91c1c;
   --color-orange-800: #991b1b;
   --color-orange-900: #7f1d1d;
+  --color-orange-950: #450a0a;
 }
 
 /* ── Season defaults (when no holiday is near) ──────────── */
@@ -131,6 +139,7 @@
   --color-orange-700: #15803d;
   --color-orange-800: #166534;
   --color-orange-900: #14532d;
+  --color-orange-950: #052e16;
 }
 
 /* Summer — sky blue */
@@ -145,6 +154,7 @@
   --color-orange-700: #0369a1;
   --color-orange-800: #075985;
   --color-orange-900: #0c4a6e;
+  --color-orange-950: #082f49;
 }
 
 /* Fall — warm amber (the app's natural orange, slightly warmer) */
@@ -159,6 +169,7 @@
   --color-orange-700: #b45309;
   --color-orange-800: #92400e;
   --color-orange-900: #78350f;
+  --color-orange-950: #451a03;
 }
 
 /* Winter — cool slate blue */
@@ -173,6 +184,7 @@
   --color-orange-700: #4338ca;
   --color-orange-800: #3730a3;
   --color-orange-900: #312e81;
+  --color-orange-950: #1e1b4b;
 }
 
 /* Safe area insets for PWA / notched devices */

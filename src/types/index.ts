@@ -30,6 +30,10 @@ export interface Recipe {
   difficulty?: "easy" | "medium" | "hard";
   notes?: string;
 
+  // Cooking history
+  cookedCount?: number;
+  lastCookedAt?: string;
+
   // System
   createdAt: string;
   updatedAt: string;
@@ -71,6 +75,8 @@ export interface RecipeIndexEntry {
   cookTime?: number;
   servings?: number;
   description?: string;
+  cookedCount?: number;
+  lastCookedAt?: string;
 }
 
 // ── Tags ────────────────────────────────────────────────

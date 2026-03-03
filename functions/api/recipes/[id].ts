@@ -15,6 +15,8 @@ interface RecipeIndexEntry {
   cookTime?: number;
   servings?: number;
   description?: string;
+  cookedCount?: number;
+  lastCookedAt?: string;
 }
 
 // GET /api/recipes/:id
@@ -102,6 +104,8 @@ export const onRequestPut: PagesFunction<Env> = async ({
           cookTime: updated.cookTime as number | undefined,
           servings: updated.servings as number | undefined,
           description: updated.description as string | undefined,
+          cookedCount: updated.cookedCount as number | undefined,
+          lastCookedAt: updated.lastCookedAt as string | undefined,
         }
       : entry
   );

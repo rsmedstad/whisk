@@ -10,7 +10,7 @@ import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
 import { InstallPrompt } from "../InstallPrompt";
 import { FirstRunGuide } from "./FirstRunGuide";
-import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Fire } from "../ui/Icon";
+import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Fire, Check } from "../ui/Icon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed";
 
@@ -58,9 +58,17 @@ export function RecipeList({
   }, [recipes, availableTags]);
 
   const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    const isMealType = MEAL_TYPES.includes(tag);
+    setSelectedTags((prev) => {
+      if (prev.includes(tag)) {
+        return prev.filter((t) => t !== tag);
+      }
+      if (isMealType) {
+        // Single-select for meal types: deselect other meal types
+        return [...prev.filter((t) => !MEAL_TYPES.includes(t)), tag];
+      }
+      return [...prev, tag];
+    });
   };
 
   if (isLoading) {
@@ -228,7 +236,7 @@ function RecipeCard({
       className="flex w-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition-shadow hover:shadow-md active:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:active:bg-stone-800"
     >
       {/* Image */}
-      <div className="aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
+      <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
         {recipe.thumbnailUrl ? (
           <img
             src={recipe.thumbnailUrl}
@@ -241,28 +249,26 @@ function RecipeCard({
             <Fire className="w-10 h-10" />
           </div>
         )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite();
+          }}
+          className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/30 backdrop-blur-sm"
+        >
+          {recipe.favorite ? (
+            <HeartFilled className="w-5 h-5 text-red-500" />
+          ) : (
+            <Heart className="w-5 h-5 text-white/80" />
+          )}
+        </button>
       </div>
 
       {/* Info */}
       <div className="p-3">
-        <div className="flex items-start justify-between gap-1">
-          <h3 className="font-semibold text-sm line-clamp-2 dark:text-stone-100">
-            {recipe.title}
-          </h3>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite();
-            }}
-            className="shrink-0"
-          >
-            {recipe.favorite ? (
-              <HeartFilled className="w-5 h-5 text-red-500" />
-            ) : (
-              <Heart className="w-5 h-5 text-stone-300 dark:text-stone-600" />
-            )}
-          </button>
-        </div>
+        <h3 className="font-semibold text-sm line-clamp-2 dark:text-stone-100">
+          {recipe.title}
+        </h3>
 
         {recipe.tags.length > 0 && (
           <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
@@ -279,6 +285,11 @@ function RecipeCard({
           {recipe.servings && (
             <span className="flex items-center gap-1">
               <Users className="w-3.5 h-3.5" /> {recipe.servings} srv
+            </span>
+          )}
+          {recipe.cookedCount && recipe.cookedCount > 0 && (
+            <span className="flex items-center gap-1 text-green-500" title={`Made ${recipe.cookedCount} time${recipe.cookedCount !== 1 ? "s" : ""}`}>
+              <Check className="w-3.5 h-3.5" /> {recipe.cookedCount}
             </span>
           )}
         </div>

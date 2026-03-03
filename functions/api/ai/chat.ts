@@ -35,14 +35,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   // Fetch recipe index for context
-  const indexData = await env.WHISK_KV.get("recipe_index", "text");
-  const recipeIndex = indexData ? JSON.parse(indexData) : [];
+  const indexData = await env.WHISK_KV.get("recipes:index", "text");
+  const recipeIndex: { title: string; tags: string[]; cuisine?: string; prepTime?: number; cookTime?: number; servings?: number; description?: string; cookedCount?: number }[] = indexData ? JSON.parse(indexData) : [];
 
   // Build system prompt
   const systemParts: string[] = [
     "You are Whisk, a friendly personal recipe assistant. You help users discover, plan, and cook recipes from their personal collection.",
-    "Keep responses concise and practical. When suggesting recipes, prefer ones from the user's collection when possible.",
-    "If asked about recipes you don't have details on, suggest the user add them or offer general cooking advice.",
+    "IMPORTANT: Only recommend recipes that exist in the user's collection listed below. Never invent or fabricate recipe names. If no recipe matches the request, say so honestly and suggest they browse by different tags or add new recipes.",
+    "If the user explicitly asks for new recipe ideas outside their collection, you may suggest new ones. When doing so, always include a full URL to a real recipe on a popular site (e.g. allrecipes.com, seriouseats.com, budgetbytes.com). Clearly note these are not in their collection.",
+    "Keep responses concise and practical. Format recipe names exactly as they appear in the collection.",
   ];
 
   if (seasonalContext) {
@@ -54,11 +55,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   if (recipeIndex.length > 0) {
-    const recipeSummary = (recipeIndex as { title: string; tags: string[] }[])
-      .map((r) => `- ${r.title}${r.tags.length > 0 ? ` (${r.tags.join(", ")})` : ""}`)
+    const recipeSummary = recipeIndex
+      .map((r) => {
+        const parts = [`- ${r.title}`];
+        if (r.tags.length > 0) parts.push(`[${r.tags.join(", ")}]`);
+        if (r.cuisine) parts.push(`(${r.cuisine})`);
+        const totalTime = (r.prepTime ?? 0) + (r.cookTime ?? 0);
+        if (totalTime > 0) parts.push(`${totalTime}min`);
+        if (r.servings) parts.push(`serves ${r.servings}`);
+        if (r.cookedCount) parts.push(`cooked ${r.cookedCount}x`);
+        if (r.description) parts.push(`— ${r.description}`);
+        return parts.join(" ");
+      })
       .join("\n");
     systemParts.push(
-      `\n--- User's Recipe Collection (${recipeIndex.length} recipes) ---\n${recipeSummary}`
+      `\n--- User's Recipe Collection (${recipeIndex.length} recipes) ---\n${recipeSummary}`,
+      "\nThese are the ONLY recipes the user has. Do not reference any recipes not in this list unless the user asks for new ideas."
     );
   }
 

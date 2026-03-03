@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { AppSettings, AICapabilities } from "../types";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
+import { getSeasonalAccent } from "../lib/seasonal";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
@@ -107,17 +108,29 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                   Theme
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(["system", "light", "dark", "seasonal"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => onSetTheme(t)}
-                      className={`py-2 rounded-lg text-sm font-medium border capitalize ${
-                        theme === t ? activeClass : inactiveClass
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
+                  {(["system", "light", "dark", "seasonal"] as const).map((t) => {
+                    const ACCENT_LABELS: Record<string, string> = {
+                      valentine: "Valentine's Day", stpatrick: "St. Patrick's",
+                      easter: "Easter", july4th: "4th of July",
+                      halloween: "Halloween", thanksgiving: "Thanksgiving",
+                      christmas: "Christmas", spring: "Spring",
+                      summer: "Summer", fall: "Fall", winter: "Winter",
+                    };
+                    const label = t === "seasonal"
+                      ? `Seasonal — ${ACCENT_LABELS[getSeasonalAccent()] ?? "Auto"}`
+                      : t;
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => onSetTheme(t)}
+                        className={`py-2 rounded-lg text-sm font-medium border capitalize ${
+                          theme === t ? activeClass : inactiveClass
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
                 {theme === "seasonal" && (
                   <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
