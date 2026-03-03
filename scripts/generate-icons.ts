@@ -1,45 +1,49 @@
 /**
- * Generate PWA icon PNGs with whisk graphic.
+ * Generate PWA icon PNGs from the Whisk brand icon.
  * Run: bun scripts/generate-icons.ts
  */
 import sharp from "sharp";
-import { mkdirSync, writeFileSync } from "fs";
+import { writeFileSync } from "fs";
 import { join } from "path";
 
 const ICON_DIR = join(import.meta.dir, "..", "public", "icons");
-mkdirSync(ICON_DIR, { recursive: true });
 
-const ICON_COLOR = "#4ade80"; // green-400
-const BG_DARK = "#1c1917"; // stone-950
+function makeIconSvg(size: number, maskable: boolean = false): string {
+  const rx = maskable ? 0 : 112;
 
-function makeWhiskSvg(size: number, maskable: boolean = false): string {
-  const cornerRadius = maskable ? 0 : Math.round(size * 0.21);
-  const padding = maskable ? size * 0.2 : size * 0.1;
-  const cx = size / 2;
-  const avail = size - padding * 2;
-  const whiskTop = padding + avail * 0.08;
-  const junction = padding + avail * 0.64;
-  const handleEnd = padding + avail * 0.88;
-  const spread = avail * 0.24;
-  const inner = avail * 0.15;
-  const sw = (f: number) => (avail * f).toFixed(1);
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" rx="${cornerRadius}" fill="${BG_DARK}"/>
-  <g stroke="${ICON_COLOR}" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M${cx} ${junction} C${cx - spread} ${junction - avail * 0.15}, ${cx - spread - 4} ${whiskTop + avail * 0.15}, ${cx} ${whiskTop}" stroke-width="${sw(0.035)}"/>
-    <path d="M${cx} ${junction} C${cx + spread} ${junction - avail * 0.15}, ${cx + spread + 4} ${whiskTop + avail * 0.15}, ${cx} ${whiskTop}" stroke-width="${sw(0.035)}"/>
-    <path d="M${cx} ${junction} C${cx - inner} ${junction - avail * 0.12}, ${cx - inner - 2} ${whiskTop + avail * 0.12}, ${cx} ${whiskTop}" stroke-width="${sw(0.03)}"/>
-    <path d="M${cx} ${junction} C${cx + inner} ${junction - avail * 0.12}, ${cx + inner + 2} ${whiskTop + avail * 0.12}, ${cx} ${whiskTop}" stroke-width="${sw(0.03)}"/>
-    <line x1="${cx}" y1="${junction}" x2="${cx}" y2="${whiskTop}" stroke-width="${sw(0.028)}"/>
-    <line x1="${cx}" y1="${junction}" x2="${cx}" y2="${handleEnd}" stroke-width="${sw(0.055)}"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#16a34a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="${rx}" fill="url(#bg)"/>
+  <!-- W letterform -->
+  <path d="M 75 155 L 148 380 L 218 235 L 288 380 L 360 155"
+        stroke="white" stroke-width="30" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Balloon whisk -->
+  <g stroke="white" fill="none" stroke-linecap="round">
+    <path d="M410 335 C378 275, 374 210, 410 150" stroke-width="7"/>
+    <path d="M410 335 C442 275, 446 210, 410 150" stroke-width="7"/>
+    <path d="M410 335 C390 275, 386 210, 410 150" stroke-width="5.5"/>
+    <path d="M410 335 C430 275, 434 210, 410 150" stroke-width="5.5"/>
+    <line x1="410" y1="335" x2="410" y2="150" stroke-width="4"/>
+    <line x1="410" y1="335" x2="410" y2="395" stroke-width="14"/>
   </g>
+  <!-- Sparkles -->
+  <path d="M440 128 L443 116 L446 128 L458 131 L446 134 L443 146 L440 134 L428 131 Z"
+        fill="white" opacity="0.9"/>
+  <path d="M373 140 L375 133 L377 140 L384 142 L377 144 L375 151 L373 144 L366 142 Z"
+        fill="white" opacity="0.6"/>
+  <circle cx="452" cy="178" r="4" fill="white" opacity="0.5"/>
 </svg>`;
 }
 
 async function generateIcon(name: string, size: number, maskable: boolean = false) {
-  const svg = makeWhiskSvg(size, maskable);
-  const png = await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer();
+  const svg = makeIconSvg(size, maskable);
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
   writeFileSync(join(ICON_DIR, name), png);
   console.log(`Generated ${name} (${size}x${size})`);
 }
@@ -48,7 +52,7 @@ await Promise.all([
   generateIcon("icon-192.png", 192),
   generateIcon("icon-512.png", 512),
   generateIcon("icon-512-maskable.png", 512, true),
-  generateIcon("apple-touch-icon.png", 180),
+  generateIcon("apple-touch-icon.png", 180, true),
 ]);
 
 console.log("All icons generated.");
