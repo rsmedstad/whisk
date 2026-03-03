@@ -15,11 +15,9 @@ export function useKeyboard() {
     };
 
     viewport.addEventListener("resize", handleResize);
-    viewport.addEventListener("scroll", handleResize);
 
     return () => {
       viewport.removeEventListener("resize", handleResize);
-      viewport.removeEventListener("scroll", handleResize);
     };
   }, []);
 

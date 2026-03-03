@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { Recipe, Ingredient } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
@@ -43,6 +43,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [shoppingToast, setShoppingToast] = useState<{ message: string; recipeId: string } | null>(null);
+  const [justCooked, setJustCooked] = useState(false);
 
   // Background refresh — updates from network silently
   useEffect(() => {
@@ -126,8 +127,10 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     scaleIngredient(ing, originalServings, servings)
   );
 
-  const photos = recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
-  const heroPhoto = photos[photoIndex];
+  const photos = useMemo(
+    () => recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i),
+    [recipe.photos]
+  );
 
   return (
     <div className="min-h-screen pb-24">
@@ -287,14 +290,21 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (recipe) {
+                if (recipe && !justCooked) {
                   markCooked(recipe.id);
                   setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: new Date().toISOString() } : r);
+                  setJustCooked(true);
+                  setTimeout(() => setJustCooked(false), 2000);
                 }
               }}
-              className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+              className={classNames(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                justCooked
+                  ? "border-green-500 bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400"
+                  : "border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400"
+              )}
             >
-              <Check className="w-3.5 h-3.5" /> Made This{recipe.cookedCount ? ` (${recipe.cookedCount})` : ""}
+              <Check className="w-3.5 h-3.5" /> {justCooked ? "Logged!" : `Made This${recipe.cookedCount ? ` (${recipe.cookedCount})` : ""}`}
             </button>
             {recipe.lastCookedAt && (
               <span className="text-xs text-stone-400 dark:text-stone-500">
@@ -564,16 +574,18 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
       {/* Shopping list toast */}
       {shoppingToast && (
-        <div className="fixed bottom-20 left-4 right-4 z-50 flex items-center justify-between rounded-lg bg-stone-800 px-4 py-3 text-sm text-white shadow-lg dark:bg-stone-700 animate-in slide-in-from-bottom-2">
-          <span>{shoppingToast.message}</span>
-          {shoppingToast.recipeId && (
-            <button
-              onClick={handleUndoAdd}
-              className="ml-3 font-semibold text-orange-400 hover:text-orange-300"
-            >
-              Undo
-            </button>
-          )}
+        <div className="fixed bottom-20 inset-x-0 z-50 max-w-2xl mx-auto px-4">
+          <div className="flex items-center justify-between rounded-lg bg-stone-800 px-4 py-3 text-sm text-white shadow-lg dark:bg-stone-700">
+            <span>{shoppingToast.message}</span>
+            {shoppingToast.recipeId && (
+              <button
+                onClick={handleUndoAdd}
+                className="ml-3 font-semibold text-orange-400 hover:text-orange-300"
+              >
+                Undo
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

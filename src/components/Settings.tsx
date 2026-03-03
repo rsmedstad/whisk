@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AppSettings, AICapabilities } from "../types";
+import type { AppSettings, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
 import { getSeasonalAccent } from "../lib/seasonal";
+import { api } from "../lib/api";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
@@ -37,6 +38,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
     return parseInt(localStorage.getItem("whisk_household_size") ?? "4", 10);
   });
   const [showDanger, setShowDanger] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleUnitsChange = (u: "imperial" | "metric") => {
     setUnits(u);
@@ -76,6 +78,38 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("whisk_") || k.startsWith("recipes_") || k.startsWith("recipe_") || k.startsWith("shopping_") || k.startsWith("meal_plan_") || k.startsWith("tag_") || k.startsWith("ai_"));
     keys.forEach((k) => localStorage.removeItem(k));
     onLogout();
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const index = await api.get<RecipeIndexEntry[]>("/recipes");
+      const recipes: Recipe[] = [];
+      for (const entry of index) {
+        try {
+          const recipe = await api.get<Recipe>(`/recipes/${entry.id}`);
+          recipes.push(recipe);
+        } catch {
+          // Skip recipes that fail to load
+        }
+      }
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        version: "0.1.0",
+        recipes,
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `whisk-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Export failed. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const activeClass = "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300";
@@ -328,8 +362,8 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
           </h2>
           <Card>
             <div className="space-y-3">
-              <Button variant="secondary" fullWidth onClick={() => alert("Export coming soon!")}>
-                Export All (JSON)
+              <Button variant="secondary" fullWidth onClick={handleExport} disabled={isExporting}>
+                {isExporting ? "Exporting..." : "Export All (JSON)"}
               </Button>
               <Button variant="secondary" fullWidth onClick={() => navigate("/settings/import")}>
                 Import from CSV

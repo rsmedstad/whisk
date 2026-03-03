@@ -31,7 +31,8 @@ export function TimerBar({
   const displayTimer = active[0] ?? paused[0] ?? completed[0];
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50">
+    <div className="fixed top-0 inset-x-0 z-50">
+      <div className="max-w-2xl mx-auto">
       {/* Collapsed bar */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -128,6 +129,7 @@ export function TimerBar({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -96,7 +96,8 @@ function AppShell({
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-stone-950">
+    <div className="min-h-screen bg-stone-100 dark:bg-black">
+      <div className="max-w-2xl mx-auto min-h-screen bg-white dark:bg-stone-950 shadow-[0_0_40px_rgba(0,0,0,0.08)] dark:shadow-[0_0_40px_rgba(0,0,0,0.4)]">
       {/* Timer bar */}
       {timers.hasActiveTimers && (
         <TimerBar
@@ -217,6 +218,7 @@ function AppShell({
         <Route path="/recipes/:id/cook" element={null} />
         <Route path="*" element={<BottomNav />} />
       </Routes>
+      </div>
     </div>
   );
 }

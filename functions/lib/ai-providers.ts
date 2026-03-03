@@ -313,6 +313,10 @@ export async function callVisionAI(
   }
 }
 
+// ── Timeout ───────────────────────────────────────────────
+
+const AI_TIMEOUT_MS = 30000;
+
 // ── OpenAI-Compatible Format (Groq, OpenAI, xAI) ──────────
 
 async function callOpenAIText(
@@ -335,6 +339,7 @@ async function callOpenAIText(
   }
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -365,6 +370,7 @@ async function callOpenAIVision(
   temperature: number
 ): Promise<string> {
   const res = await fetch(`${baseUrl}/chat/completions`, {
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -423,6 +429,7 @@ async function callAnthropicText(
   }
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -453,6 +460,7 @@ async function callAnthropicVision(
   temperature: number
 ): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -527,6 +535,7 @@ async function callGeminiText(
   const res = await fetch(
     `${baseUrl}/models/${model}:generateContent?key=${apiKey}`,
     {
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -557,6 +566,7 @@ async function callGeminiVision(
   const res = await fetch(
     `${baseUrl}/models/${model}:generateContent?key=${apiKey}`,
     {
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

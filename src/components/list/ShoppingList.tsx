@@ -201,8 +201,11 @@ export function ShoppingList({
                           )}
                         </span>
                         <button
-                          onClick={() => onRemoveItem(item.id)}
-                          className="opacity-0 group-hover:opacity-100 text-stone-400 hover:text-red-500 px-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveItem(item.id);
+                          }}
+                          className="text-stone-300 hover:text-red-500 dark:text-stone-600 dark:hover:text-red-400 px-1 shrink-0"
                         >
                           <XMark className="w-4 h-4" />
                         </button>

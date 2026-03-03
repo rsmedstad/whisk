@@ -31,7 +31,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
+    const pageAbort = AbortSignal.timeout(15000);
     const res = await fetch(url, {
+      signal: pageAbort,
       headers: {
         "User-Agent":
           "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
@@ -89,7 +91,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       for (let i = 0; i < toDownload.length; i++) {
         const imgUrl = toDownload[i]!;
         try {
+          const imgAbort = AbortSignal.timeout(10000);
           const imgRes = await fetch(imgUrl, {
+            signal: imgAbort,
             headers: {
               "User-Agent":
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
