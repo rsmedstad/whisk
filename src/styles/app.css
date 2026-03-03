@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Default accent — fresh green (overridden by data-accent for seasonal/holiday themes) */
   --color-orange-50: #f0fdf4;
