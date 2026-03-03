@@ -1,49 +1,53 @@
+/**
+ * Generate PWA icon PNGs with whisk graphic.
+ * Run: bun scripts/generate-icons.ts
+ */
 import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 
 const ICON_DIR = join(import.meta.dir, "..", "public", "icons");
-
-// Ensure directory exists
 mkdirSync(ICON_DIR, { recursive: true });
 
-// Orange background with white "W" — matches the favicon.svg design
-function createSvg(size: number, padding: number = 0): string {
-  const cornerRadius = Math.round(size * 0.2);
-  const fontSize = Math.round(size * 0.52);
-  const textY = Math.round(size * 0.68);
+const ICON_COLOR = "#4ade80"; // green-400
+const BG_DARK = "#1c1917"; // stone-950
 
-  if (padding > 0) {
-    // Maskable icon: smaller icon with padding for safe zone
-    const innerSize = size - padding * 2;
-    const innerRadius = Math.round(innerSize * 0.2);
-    const innerFontSize = Math.round(innerSize * 0.52);
-    const innerTextY = padding + Math.round(innerSize * 0.68);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="#f97316"/>
-  <rect x="${padding}" y="${padding}" width="${innerSize}" height="${innerSize}" rx="${innerRadius}" fill="#f97316"/>
-  <text x="${size / 2}" y="${innerTextY}" font-family="system-ui, -apple-system, sans-serif" font-size="${innerFontSize}" font-weight="bold" text-anchor="middle" fill="white">W</text>
-</svg>`;
-  }
+function makeWhiskSvg(size: number, maskable: boolean = false): string {
+  const cornerRadius = maskable ? 0 : Math.round(size * 0.21);
+  const padding = maskable ? size * 0.2 : size * 0.1;
+  const cx = size / 2;
+  const avail = size - padding * 2;
+  const whiskTop = padding + avail * 0.08;
+  const junction = padding + avail * 0.64;
+  const handleEnd = padding + avail * 0.88;
+  const spread = avail * 0.24;
+  const inner = avail * 0.15;
+  const sw = (f: number) => (avail * f).toFixed(1);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" rx="${cornerRadius}" fill="#f97316"/>
-  <text x="${size / 2}" y="${textY}" font-family="system-ui, -apple-system, sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="middle" fill="white">W</text>
+  <rect width="${size}" height="${size}" rx="${cornerRadius}" fill="${BG_DARK}"/>
+  <g stroke="${ICON_COLOR}" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M${cx} ${junction} C${cx - spread} ${junction - avail * 0.15}, ${cx - spread - 4} ${whiskTop + avail * 0.15}, ${cx} ${whiskTop}" stroke-width="${sw(0.035)}"/>
+    <path d="M${cx} ${junction} C${cx + spread} ${junction - avail * 0.15}, ${cx + spread + 4} ${whiskTop + avail * 0.15}, ${cx} ${whiskTop}" stroke-width="${sw(0.035)}"/>
+    <path d="M${cx} ${junction} C${cx - inner} ${junction - avail * 0.12}, ${cx - inner - 2} ${whiskTop + avail * 0.12}, ${cx} ${whiskTop}" stroke-width="${sw(0.03)}"/>
+    <path d="M${cx} ${junction} C${cx + inner} ${junction - avail * 0.12}, ${cx + inner + 2} ${whiskTop + avail * 0.12}, ${cx} ${whiskTop}" stroke-width="${sw(0.03)}"/>
+    <line x1="${cx}" y1="${junction}" x2="${cx}" y2="${whiskTop}" stroke-width="${sw(0.028)}"/>
+    <line x1="${cx}" y1="${junction}" x2="${cx}" y2="${handleEnd}" stroke-width="${sw(0.055)}"/>
+  </g>
 </svg>`;
 }
 
-async function generateIcon(name: string, size: number, padding: number = 0) {
-  const svg = createSvg(size, padding);
+async function generateIcon(name: string, size: number, maskable: boolean = false) {
+  const svg = makeWhiskSvg(size, maskable);
   const png = await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer();
-  const outPath = join(ICON_DIR, name);
-  writeFileSync(outPath, png);
+  writeFileSync(join(ICON_DIR, name), png);
   console.log(`Generated ${name} (${size}x${size})`);
 }
 
 await Promise.all([
   generateIcon("icon-192.png", 192),
   generateIcon("icon-512.png", 512),
-  generateIcon("icon-512-maskable.png", 512, 80),
+  generateIcon("icon-512-maskable.png", 512, true),
   generateIcon("apple-touch-icon.png", 180),
 ]);
 
