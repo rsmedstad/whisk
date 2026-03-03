@@ -55,6 +55,9 @@ export function App() {
     const tempUnit = prefs.units === "metric" ? "C" : "F";
     localStorage.setItem("whisk_temp_unit", tempUnit);
 
+    // Apply grams preference
+    localStorage.setItem("whisk_show_grams", String(prefs.showGrams));
+
     // Store zip code if provided
     if (prefs.zipCode) {
       localStorage.setItem("whisk_zip_code", prefs.zipCode);
