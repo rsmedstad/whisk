@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { Plus } from "../ui/Icon";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
 
 interface Message {
@@ -12,7 +14,20 @@ interface SuggestChatProps {
   chatEnabled?: boolean;
 }
 
+const URL_REGEX = /https?:\/\/[^\s,)}\]"']+/g;
+
+function extractUrls(text: string): string[] {
+  const matches = text.match(URL_REGEX);
+  if (!matches) return [];
+  // Filter to likely recipe URLs (not images, not generic)
+  return [...new Set(matches)].filter((url) => {
+    const lower = url.toLowerCase();
+    return !lower.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/);
+  });
+}
+
 export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -155,24 +170,44 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
         )}
 
         {/* Messages */}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={
-              msg.role === "user" ? "flex justify-end" : "flex justify-start"
-            }
-          >
+        {messages.map((msg, i) => {
+          const urls = msg.role === "assistant" ? extractUrls(msg.content) : [];
+          return (
             <div
-              className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm ${
-                msg.role === "user"
-                  ? "bg-orange-500 text-white"
-                  : "bg-stone-100 dark:bg-stone-800 dark:text-stone-200"
-              }`}
+              key={i}
+              className={
+                msg.role === "user" ? "flex justify-end" : "flex justify-start"
+              }
             >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <div
+                className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm ${
+                  msg.role === "user"
+                    ? "bg-orange-500 text-white"
+                    : "bg-stone-100 dark:bg-stone-800 dark:text-stone-200"
+                }`}
+              >
+                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {urls.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2 border-t border-stone-200 dark:border-stone-700 pt-2">
+                    {urls.map((url) => (
+                      <button
+                        key={url}
+                        onClick={() =>
+                          navigate(
+                            `/recipes/new?url=${encodeURIComponent(url)}`
+                          )
+                        }
+                        className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" /> Save Recipe
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {isLoading && (
           <div className="flex justify-start">
@@ -193,7 +228,7 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your recipes..."
-            className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+            className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
           />
           <Button type="submit" size="sm" disabled={!input.trim() || isLoading}>
             Send

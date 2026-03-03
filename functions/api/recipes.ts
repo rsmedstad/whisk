@@ -8,6 +8,7 @@ interface RecipeIndexEntry {
   tags: string[];
   cuisine?: string;
   favorite: boolean;
+  favoritedBy?: string[];
   updatedAt: string;
   thumbnailUrl?: string;
   prepTime?: number;
@@ -16,29 +17,47 @@ interface RecipeIndexEntry {
   description?: string;
 }
 
-// GET /api/recipes - List all recipes (returns index)
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-  const index = await env.WHISK_KV.get("recipes:index", "json");
-  return new Response(JSON.stringify(index ?? []), {
+// GET /api/recipes - List all recipes (returns index with per-user favorites)
+export const onRequestGet: PagesFunction<Env> = async ({ env, data }) => {
+  const index =
+    ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
+
+  const userId = (data as Record<string, string>).userId;
+
+  // Resolve favorites per user and strip favoritedBy from response
+  const resolved = index.map(({ favoritedBy, ...entry }) => ({
+    ...entry,
+    favorite: userId
+      ? (favoritedBy ?? []).includes(userId)
+      : entry.favorite,
+  }));
+
+  return new Response(JSON.stringify(resolved), {
     headers: { "Content-Type": "application/json" },
   });
 };
 
 // POST /api/recipes - Create a new recipe
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, data }) => {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const id = `r_${crypto.randomUUID().split("-")[0]}`;
     const now = new Date().toISOString();
+    const userId = (data as Record<string, string>).userId;
+
+    // If this user favorited the recipe at creation, track in favoritedBy
+    const isFavorite = (body.favorite as boolean) ?? false;
+    const favoritedBy: string[] = isFavorite && userId ? [userId] : [];
 
     const recipe = {
       ...body,
       id,
+      favoritedBy,
       createdAt: now,
       updatedAt: now,
+      createdBy: userId ?? undefined,
     } as Record<string, unknown>;
 
-    // Store full recipe
     await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(recipe));
 
     // Update index
@@ -51,7 +70,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       title: recipe.title as string,
       tags: (recipe.tags as string[]) ?? [],
       cuisine: recipe.cuisine as string | undefined,
-      favorite: (recipe.favorite as boolean) ?? false,
+      favorite: isFavorite,
+      favoritedBy,
       updatedAt: now,
       thumbnailUrl: recipe.thumbnailUrl as string | undefined,
       prepTime: recipe.prepTime as number | undefined,

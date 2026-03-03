@@ -4,11 +4,13 @@ import type { PlannedMeal, MealSlot } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
 import { Button } from "../ui/Button";
+import { ChevronLeft, ChevronRight, XMark, Sunrise, Sun, Moon } from "../ui/Icon";
+import type { ReactNode } from "react";
 
-const MEAL_SLOTS: { slot: MealSlot; icon: string; label: string }[] = [
-  { slot: "breakfast", icon: "\uD83C\uDF05", label: "Breakfast" },
-  { slot: "lunch", icon: "\uD83C\uDF1E", label: "Lunch" },
-  { slot: "dinner", icon: "\uD83C\uDF19", label: "Dinner" },
+const MEAL_SLOTS: { slot: MealSlot; icon: ReactNode; label: string }[] = [
+  { slot: "breakfast", icon: <Sunrise className="w-4 h-4 text-amber-500" />, label: "Breakfast" },
+  { slot: "lunch", icon: <Sun className="w-4 h-4 text-orange-500" />, label: "Lunch" },
+  { slot: "dinner", icon: <Moon className="w-4 h-4 text-indigo-500" />, label: "Dinner" },
 ];
 
 interface MealPlanProps {
@@ -65,9 +67,9 @@ export function MealPlan({
         <div className="flex items-center justify-between pb-3">
           <button
             onClick={onPrevWeek}
-            className="p-1 text-stone-500 dark:text-stone-400 text-lg"
+            className="p-1 text-stone-500 dark:text-stone-400"
           >
-            &#9664;
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <span className="text-sm font-medium dark:text-stone-200">
             {formatDateShort(weekDates[0]!)} &ndash;{" "}
@@ -75,9 +77,9 @@ export function MealPlan({
           </span>
           <button
             onClick={onNextWeek}
-            className="p-1 text-stone-500 dark:text-stone-400 text-lg"
+            className="p-1 text-stone-500 dark:text-stone-400"
           >
-            &#9654;
+            <ChevronRight className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -115,7 +117,7 @@ export function MealPlan({
                       key={slot}
                       className="flex items-center gap-2 rounded-lg bg-stone-50 dark:bg-stone-900 px-3 py-2"
                     >
-                      <span className="text-sm">{icon}</span>
+                      <span className="flex-shrink-0">{icon}</span>
 
                       {meal ? (
                         <div className="flex-1 flex items-center justify-between min-w-0">
@@ -135,15 +137,15 @@ export function MealPlan({
                           </button>
                           <button
                             onClick={() => onRemoveMeal(meal.id)}
-                            className="text-stone-400 hover:text-red-500 text-xs ml-2 flex-shrink-0"
+                            className="text-stone-400 hover:text-red-500 ml-2 flex-shrink-0"
                           >
-                            &times;
+                            <XMark className="w-4 h-4" />
                           </button>
                         </div>
                       ) : isAdding ? (
                         <div className="flex-1 flex gap-2">
                           <input
-                            className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                            className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                             placeholder="What's for dinner?"
                             value={mealInput}
                             onChange={(e) => setMealInput(e.target.value)}

@@ -1,14 +1,16 @@
-import { useState, useEffect, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { nanoid } from "nanoid";
-import type { Recipe, Ingredient, Step } from "../../types";
+import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import type { Recipe, RecipePhoto, Ingredient, Step } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
+import { getLocal, CACHE_KEYS } from "../../lib/cache";
+import { compressImage } from "../../lib/compress";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { TextArea } from "../ui/TextArea";
 import { TagChip } from "../ui/TagChip";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { parseTimerFromText } from "../../lib/utils";
+import { ChevronLeft, XMark, Plus, Camera } from "../ui/Icon";
 
 interface RecipeFormProps {
   allTags: string[];
@@ -20,33 +22,43 @@ const EMPTY_STEP: Step = { text: "" };
 
 export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { getRecipe, createRecipe, updateRecipe } = useRecipes();
   const isEditing = !!id && id !== "new";
+  const importTriggered = useRef(false);
 
-  const [isLoading, setIsLoading] = useState(isEditing);
+  // Cache-first: load recipe from localStorage synchronously for instant paint
+  const cachedRecipe = isEditing && id ? getLocal<Recipe>(CACHE_KEYS.RECIPE(id)) : null;
+
+  const [isLoading, setIsLoading] = useState(isEditing && !cachedRecipe);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form state
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [ingredients, setIngredients] = useState<Ingredient[]>([
-    { ...EMPTY_INGREDIENT },
-  ]);
-  const [steps, setSteps] = useState<Step[]>([{ ...EMPTY_STEP }]);
-  const [prepTime, setPrepTime] = useState("");
-  const [cookTime, setCookTime] = useState("");
-  const [servings, setServings] = useState("");
-  const [yieldStr, setYieldStr] = useState("");
-  const [difficulty, setDifficulty] = useState<Recipe["difficulty"]>(undefined);
-  const [tags, setTags] = useState<string[]>([]);
-  const [cuisine, setCuisine] = useState("");
-  const [notes, setNotes] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
+  // Form state — pre-populate from cache if editing
+  const [title, setTitle] = useState(cachedRecipe?.title ?? "");
+  const [description, setDescription] = useState(cachedRecipe?.description ?? "");
+  const [ingredients, setIngredients] = useState<Ingredient[]>(
+    cachedRecipe?.ingredients?.length ? cachedRecipe.ingredients : [{ ...EMPTY_INGREDIENT }]
+  );
+  const [steps, setSteps] = useState<Step[]>(
+    cachedRecipe?.steps?.length ? cachedRecipe.steps : [{ ...EMPTY_STEP }]
+  );
+  const [prepTime, setPrepTime] = useState(cachedRecipe?.prepTime?.toString() ?? "");
+  const [cookTime, setCookTime] = useState(cachedRecipe?.cookTime?.toString() ?? "");
+  const [servings, setServings] = useState(cachedRecipe?.servings?.toString() ?? "");
+  const [yieldStr, setYieldStr] = useState(cachedRecipe?.yield ?? "");
+  const [difficulty, setDifficulty] = useState<Recipe["difficulty"]>(cachedRecipe?.difficulty);
+  const [tags, setTags] = useState<string[]>(cachedRecipe?.tags ?? []);
+  const [cuisine, setCuisine] = useState(cachedRecipe?.cuisine ?? "");
+  const [notes, setNotes] = useState(cachedRecipe?.notes ?? "");
+  const [videoUrl, setVideoUrl] = useState(cachedRecipe?.videoUrl ?? "");
   const [importUrl, setImportUrl] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [photos, setPhotos] = useState<RecipePhoto[]>(cachedRecipe?.photos ?? []);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load existing recipe for editing
+  // Background refresh for edit mode — update fields if server has newer data
   useEffect(() => {
     if (!isEditing || !id) return;
     getRecipe(id)
@@ -66,10 +78,46 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
         setCuisine(r.cuisine ?? "");
         setNotes(r.notes ?? "");
         setVideoUrl(r.videoUrl ?? "");
+        setPhotos(r.photos ?? []);
       })
-      .catch(() => navigate("/"))
+      .catch(() => { if (!cachedRecipe) navigate("/"); })
       .finally(() => setIsLoading(false));
   }, [isEditing, id, getRecipe, navigate]);
+
+  // Auto-import from ?url= query param (e.g. from Suggest page)
+  useEffect(() => {
+    const urlParam = searchParams.get("url");
+    if (!urlParam || isEditing || importTriggered.current) return;
+    importTriggered.current = true;
+    setImportUrl(urlParam);
+    // Trigger import automatically
+    (async () => {
+      try {
+        const res = await fetch(`/api/import/url`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+          },
+          body: JSON.stringify({ url: urlParam }),
+        });
+        if (!res.ok) throw new Error("Import failed");
+        const data = (await res.json()) as Record<string, unknown>;
+        if (data.title) setTitle(data.title as string);
+        if (data.description) setDescription(data.description as string);
+        if (Array.isArray(data.ingredients) && data.ingredients.length) setIngredients(data.ingredients as Ingredient[]);
+        if (Array.isArray(data.steps) && data.steps.length) setSteps(data.steps as Step[]);
+        if (data.prepTime) setPrepTime(String(data.prepTime));
+        if (data.cookTime) setCookTime(String(data.cookTime));
+        if (data.servings) setServings(String(data.servings));
+        if (Array.isArray(data.photos) && data.photos.length) {
+          setPhotos(data.photos as RecipePhoto[]);
+        }
+      } catch {
+        // Silent fail — user can still manually import or fill in
+      }
+    })();
+  }, [searchParams, isEditing]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -88,7 +136,8 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
             timerMinutes: s.timerMinutes ?? parseTimerFromText(s.text) ?? undefined,
           })),
         favorite: false,
-        photos: [],
+        photos,
+        thumbnailUrl: photos.find((p) => p.isPrimary)?.url ?? photos[0]?.url,
         tags,
         cuisine: cuisine.trim() || undefined,
         prepTime: prepTime ? parseInt(prepTime) : undefined,
@@ -166,6 +215,68 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
     setNewTag("");
   };
 
+  const handlePhotoUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]!;
+        // Compress before upload
+        const compressed = await compressImage(file, "hero");
+        const form = new FormData();
+        form.append("file", compressed, `photo-${Date.now()}.webp`);
+
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+          },
+          body: form,
+        });
+        if (!res.ok) continue;
+        const data = (await res.json()) as { url: string };
+        setPhotos((prev) => [
+          ...prev,
+          { url: data.url, isPrimary: prev.length === 0 },
+        ]);
+      }
+    } catch {
+      alert("Failed to upload photo");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // If we removed the primary, make the first one primary
+      if (next.length > 0 && !next.some((p) => p.isPrimary)) {
+        next[0] = { ...next[0]!, isPrimary: true };
+      }
+      return next;
+    });
+  };
+
+  const setPrimaryPhoto = (index: number) => {
+    setPhotos((prev) =>
+      prev.map((p, i) => ({ ...p, isPrimary: i === index }))
+    );
+  };
+
+  const movePhoto = (index: number, direction: -1 | 1) => {
+    setPhotos((prev) => {
+      const next = [...prev];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= next.length) return prev;
+      const temp = next[targetIndex]!;
+      next[targetIndex] = next[index]!;
+      next[index] = temp;
+      return next;
+    });
+  };
+
   const handleImportUrl = async () => {
     if (!importUrl.trim()) return;
     try {
@@ -186,6 +297,9 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
       if (data.prepTime) setPrepTime(String(data.prepTime));
       if (data.cookTime) setCookTime(String(data.cookTime));
       if (data.servings) setServings(String(data.servings));
+      if (Array.isArray(data.photos) && data.photos.length) {
+        setPhotos(data.photos as RecipePhoto[]);
+      }
     } catch {
       alert("Could not import from that URL. Try adding manually.");
     }
@@ -200,9 +314,9 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
       <div className="sticky top-0 z-30 flex items-center justify-between bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 py-3 pt-[calc(var(--sat)+0.75rem)]">
         <button
           onClick={() => navigate(-1)}
-          className="text-stone-600 dark:text-stone-400 text-sm font-medium"
+          className="flex items-center gap-1 text-stone-600 dark:text-stone-400 text-sm font-medium"
         >
-          &#8592; Cancel
+          <ChevronLeft className="w-4 h-4" /> Cancel
         </button>
         <h1 className="font-semibold dark:text-stone-100">
           {isEditing ? "Edit Recipe" : "New Recipe"}
@@ -232,6 +346,96 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
           />
         </div>
 
+        {/* Photos */}
+        <section>
+          <h2 className="text-sm font-semibold mb-2 dark:text-stone-100">
+            Photos
+          </h2>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handlePhotoUpload(e.target.files)}
+          />
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {photos.map((photo, i) => (
+              <div
+                key={photo.url}
+                className="relative shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 border-stone-200 dark:border-stone-700"
+              >
+                <img
+                  src={photo.url}
+                  alt={`Photo ${i + 1}`}
+                  className="w-full h-full object-cover"
+                />
+                {photo.isPrimary && (
+                  <span className="absolute top-1 left-1 rounded bg-orange-500 px-1 py-0.5 text-[10px] font-bold text-white leading-none">
+                    Cover
+                  </span>
+                )}
+                <div className="absolute inset-0 flex items-end justify-center gap-1 bg-linear-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity">
+                  {!photo.isPrimary && (
+                    <button
+                      type="button"
+                      onClick={() => setPrimaryPhoto(i)}
+                      className="mb-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium"
+                    >
+                      Cover
+                    </button>
+                  )}
+                  {i > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => movePhoto(i, -1)}
+                      className="mb-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium"
+                    >
+                      &larr;
+                    </button>
+                  )}
+                  {i < photos.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => movePhoto(i, 1)}
+                      className="mb-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium"
+                    >
+                      &rarr;
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removePhoto(i)}
+                  className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 text-white"
+                >
+                  <XMark className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="shrink-0 w-24 h-24 rounded-lg border-2 border-dashed border-stone-300 dark:border-stone-600 flex flex-col items-center justify-center gap-1 text-stone-400 hover:border-orange-400 hover:text-orange-500 transition-colors"
+            >
+              {isUploading ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  <span className="text-[10px] font-medium">Add Photo</span>
+                </>
+              )}
+            </button>
+          </div>
+          {photos.length > 1 && (
+            <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">
+              Tap a photo to set as cover. Drag or use arrows to reorder.
+            </p>
+          )}
+        </section>
+
         {/* Ingredients */}
         <section>
           <h2 className="text-sm font-semibold mb-2 dark:text-stone-100">
@@ -241,19 +445,19 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
             {ingredients.map((ing, i) => (
               <div key={i} className="flex gap-2 items-start">
                 <input
-                  className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                   placeholder="Amt"
                   value={ing.amount ?? ""}
                   onChange={(e) => updateIngredient(i, "amount", e.target.value)}
                 />
                 <input
-                  className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                   placeholder="Unit"
                   value={ing.unit ?? ""}
                   onChange={(e) => updateIngredient(i, "unit", e.target.value)}
                 />
                 <input
-                  className="flex-1 rounded-lg border border-stone-300 bg-white px-2 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  className="flex-1 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                   placeholder="Ingredient name"
                   value={ing.name}
                   onChange={(e) => updateIngredient(i, "name", e.target.value)}
@@ -264,7 +468,7 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
                     onClick={() => removeIngredient(i)}
                     className="p-2 text-stone-400 hover:text-red-500"
                   >
-                    &times;
+                    <XMark className="w-4 h-4" />
                   </button>
                 )}
               </div>
@@ -305,7 +509,7 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
                     onClick={() => removeStep(i)}
                     className="p-2 text-stone-400 hover:text-red-500"
                   >
-                    &times;
+                    <XMark className="w-4 h-4" />
                   </button>
                 )}
               </div>
@@ -398,7 +602,7 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
           </div>
           <div className="flex gap-2">
             <input
-              className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+              className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
               placeholder="Add custom tag..."
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
@@ -454,7 +658,7 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
             </h2>
             <div className="flex gap-2">
               <input
-                className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                 placeholder="https://allrecipes.com/..."
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}

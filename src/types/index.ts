@@ -7,6 +7,7 @@ export interface Recipe {
   ingredients: Ingredient[];
   steps: Step[];
   favorite: boolean;
+  favoritedBy?: string[]; // user IDs who favorited this recipe
 
   // Media
   photos: RecipePhoto[];
@@ -106,6 +107,7 @@ export interface ShoppingItem {
   checked: boolean;
   sourceRecipeId?: string;
   addedBy?: "manual" | "recipe" | "ai" | "scan";
+  addedByUser?: string; // user name who added this item
 }
 
 export type ShoppingCategory =
@@ -142,6 +144,27 @@ export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
+}
+
+// ── Household / Multi-User ──────────────────────────────
+
+export interface Household {
+  members: HouseholdMember[];
+  updatedAt: string;
+}
+
+export interface HouseholdMember {
+  id: string;
+  name: string;
+  isOwner: boolean;
+  joinedAt: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  userId: string;
+  name: string;
+  isOwner: boolean;
 }
 
 // ── Timer ───────────────────────────────────────────────
@@ -212,6 +235,23 @@ export interface AICapabilities {
   vision: boolean;
   suggestions: boolean;
   nutritionEstimate: boolean;
+}
+
+// ── Import ─────────────────────────────────────────────
+
+export interface CsvRow {
+  category: string;
+  dishName: string;
+  recipeLink: string;
+  notes: string;
+  ingredientNotes: string;
+}
+
+export interface ImportResult {
+  title: string;
+  status: "pending" | "importing" | "created" | "failed";
+  error?: string;
+  recipeId?: string;
 }
 
 // ── Cloudflare Env ──────────────────────────────────────

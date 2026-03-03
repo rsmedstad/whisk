@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "./ui/Card";
 import { Button } from "./ui/Button";
 
-type Platform = "ios-safari" | "ios-other" | "android" | "desktop" | "pwa";
+type Platform = "ios" | "android" | "desktop" | "pwa";
 
 function detectPlatform(): Platform {
   // Already installed as PWA
@@ -10,17 +10,28 @@ function detectPlatform(): Platform {
   if ((navigator as { standalone?: boolean }).standalone) return "pwa";
 
   const ua = navigator.userAgent.toLowerCase();
-  const isIOS = /iphone|ipad|ipod/.test(ua);
-  const isSafari = /safari/.test(ua) && !/crios|fxios|chrome/.test(ua);
-
-  if (isIOS && isSafari) return "ios-safari";
-  if (isIOS) return "ios-other";
+  if (/iphone|ipad|ipod/.test(ua)) return "ios";
   if (/android/.test(ua)) return "android";
   return "desktop";
 }
 
+function getBrowserName(): string {
+  const ua = navigator.userAgent;
+  if (/CriOS/.test(ua)) return "Chrome";
+  if (/FxiOS/.test(ua)) return "Firefox";
+  if (/EdgiOS/.test(ua)) return "Edge";
+  if (/OPiOS/.test(ua)) return "Opera";
+  if (/Brave/.test(ua)) return "Brave";
+  if (/Safari/.test(ua) && !/Chrome/.test(ua)) return "Safari";
+  if (/SamsungBrowser/.test(ua)) return "Samsung Internet";
+  if (/Chrome/.test(ua)) return "Chrome";
+  if (/Firefox/.test(ua)) return "Firefox";
+  return "your browser";
+}
+
 export function InstallPrompt() {
   const [platform, setPlatform] = useState<Platform>("desktop");
+  const [browserName, setBrowserName] = useState("your browser");
   const [dismissed, setDismissed] = useState(() => {
     return localStorage.getItem("whisk_install_dismissed") === "true";
   });
@@ -28,8 +39,8 @@ export function InstallPrompt() {
 
   useEffect(() => {
     setPlatform(detectPlatform());
+    setBrowserName(getBrowserName());
 
-    // Capture the beforeinstallprompt event (Chrome/Android)
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -38,7 +49,6 @@ export function InstallPrompt() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  // Don't show if already installed or dismissed
   if (platform === "pwa" || dismissed) return null;
 
   const handleDismiss = () => {
@@ -69,27 +79,21 @@ export function InstallPrompt() {
             </button>
           </div>
 
-          {platform === "ios-safari" && (
+          {platform === "ios" && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
                 <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">1</span>
-                Tap the <span className="inline-block w-5 h-5 text-center leading-5 bg-stone-100 dark:bg-stone-800 rounded text-xs">&#9757;</span> share button at the bottom of Safari
+                Tap the share button in {browserName}
               </div>
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
                 <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">2</span>
-                Scroll down and tap "Add to Home Screen"
+                Scroll down and tap &ldquo;Add to Home Screen&rdquo;
               </div>
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
                 <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">3</span>
-                Tap "Add" in the top-right corner
+                Tap &ldquo;Add&rdquo; to confirm
               </div>
             </div>
-          )}
-
-          {platform === "ios-other" && (
-            <p className="text-sm text-stone-600 dark:text-stone-300">
-              For the best experience, open Whisk in Safari, then tap the share button and choose "Add to Home Screen".
-            </p>
           )}
 
           {platform === "android" && deferredPrompt && (
@@ -102,11 +106,11 @@ export function InstallPrompt() {
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
                 <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">1</span>
-                Tap the menu (&#8942;) in your browser
+                Open the menu in {browserName}
               </div>
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
                 <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">2</span>
-                Tap "Add to Home screen" or "Install app"
+                Tap &ldquo;Add to Home screen&rdquo; or &ldquo;Install app&rdquo;
               </div>
             </div>
           )}
@@ -119,7 +123,7 @@ export function InstallPrompt() {
                 </Button>
               ) : (
                 <p className="text-sm text-stone-600 dark:text-stone-300">
-                  Look for the install icon in your browser's address bar, or use your browser's menu to install this app.
+                  Look for the install icon in {browserName}&apos;s address bar, or use the menu to install this app.
                 </p>
               )}
             </>

@@ -1,16 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  --color-orange-50: #fff7ed;
-  --color-orange-100: #ffedd5;
-  --color-orange-200: #fed7aa;
-  --color-orange-300: #fdba74;
-  --color-orange-400: #fb923c;
-  --color-orange-500: #f97316;
-  --color-orange-600: #ea580c;
-  --color-orange-700: #c2410c;
-  --color-orange-800: #9a3412;
-  --color-orange-900: #7c2d12;
+  /* Sage / herb green — warm and culinary */
+  --color-orange-50: #f3f8f4;
+  --color-orange-100: #e0efdf;
+  --color-orange-200: #c2dfc1;
+  --color-orange-300: #97c898;
+  --color-orange-400: #6aad6e;
+  --color-orange-500: #4d9250;
+  --color-orange-600: #3b7a3e;
+  --color-orange-700: #316334;
+  --color-orange-800: #2a4f2c;
+  --color-orange-900: #234126;
 }
 
 /* ── Seasonal Accent Palettes ─────────────────────────────

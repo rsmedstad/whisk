@@ -2,9 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
+import { ChevronLeft } from "../ui/Icon";
 
 interface LoginProps {
-  onLogin: (password: string) => Promise<void>;
+  onLogin: (password: string, name?: string) => Promise<void>;
   isLoading: boolean;
   error: string | null;
 }
@@ -14,12 +15,13 @@ type Screen = "welcome" | "join" | "setup-info";
 export function Login({ onLogin, isLoading, error }: LoginProps) {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!password.trim()) return;
+    if (!password.trim() || !name.trim()) return;
     try {
-      await onLogin(password);
+      await onLogin(password, name.trim());
     } catch {
       // Error handled by parent
     }
@@ -55,9 +57,9 @@ export function Login({ onLogin, isLoading, error }: LoginProps) {
         <div className="w-full max-w-sm">
           <button
             onClick={() => setScreen("welcome")}
-            className="text-stone-500 dark:text-stone-400 text-sm mb-6 block"
+            className="flex items-center gap-1 text-stone-500 dark:text-stone-400 text-sm mb-6"
           >
-            &#8592; Back
+            <ChevronLeft className="w-4 h-4" /> Back
           </button>
 
           <h1 className="text-2xl font-bold dark:text-stone-100 mb-2">
@@ -114,9 +116,9 @@ export function Login({ onLogin, isLoading, error }: LoginProps) {
       <div className="w-full max-w-sm">
         <button
           onClick={() => setScreen("welcome")}
-          className="text-stone-500 dark:text-stone-400 text-sm mb-6 block"
+          className="flex items-center gap-1 text-stone-500 dark:text-stone-400 text-sm mb-6"
         >
-          &#8592; Back
+          <ChevronLeft className="w-4 h-4" /> Back
         </button>
 
         <div className="text-center mb-8">
@@ -124,17 +126,27 @@ export function Login({ onLogin, isLoading, error }: LoginProps) {
             Join a Book
           </h1>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            Enter the password shared by your book owner
+            Enter your name and the password shared by your book owner
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
+            label="Your Name"
+            type="text"
+            placeholder="e.g. Ryan"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            autoComplete="given-name"
+          />
+
+          <Input
+            label="Book Password"
             type="password"
             placeholder="Book password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoFocus
             autoComplete="current-password"
           />
 
@@ -142,7 +154,7 @@ export function Login({ onLogin, isLoading, error }: LoginProps) {
             <p className="text-sm text-red-500 text-center">{error}</p>
           )}
 
-          <Button type="submit" fullWidth disabled={isLoading || !password.trim()}>
+          <Button type="submit" fullWidth disabled={isLoading || !password.trim() || !name.trim()}>
             {isLoading ? "Joining..." : "Join Book"}
           </Button>
         </form>

@@ -1,12 +1,13 @@
 import { NavLink } from "react-router-dom";
 import { classNames } from "../lib/utils";
+import { BookOpen, Camera, Sparkles, ClipboardList, CalendarDays } from "./ui/Icon";
 
 const tabs = [
-  { to: "/", icon: "\uD83D\uDCD6", label: "Recipes" },
-  { to: "/identify", icon: "\uD83D\uDCF7", label: "Identify" },
-  { to: "/suggest", icon: "\u2728", label: "Suggest" },
-  { to: "/list", icon: "\uD83D\uDCCB", label: "List" },
-  { to: "/plan", icon: "\uD83D\uDCC5", label: "Plan" },
+  { to: "/", icon: BookOpen, label: "Recipes" },
+  { to: "/identify", icon: Camera, label: "Identify" },
+  { to: "/suggest", icon: Sparkles, label: "Suggest" },
+  { to: "/list", icon: ClipboardList, label: "List" },
+  { to: "/plan", icon: CalendarDays, label: "Plan" },
 ] as const;
 
 export function BottomNav() {
@@ -27,7 +28,7 @@ export function BottomNav() {
               )
             }
           >
-            <span className="text-xl leading-none">{tab.icon}</span>
+            <tab.icon className="w-6 h-6" />
             <span>{tab.label}</span>
           </NavLink>
         ))}

@@ -15,15 +15,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
-    const key = `photos/${file.name}`;
-    await env.WHISK_R2.put(key, await file.arrayBuffer(), {
-      httpMetadata: {
-        contentType: file.type || "image/webp",
-      },
+    // Generate a unique hash-based filename to avoid collisions
+    const buffer = await file.arrayBuffer();
+    const hashBuf = await crypto.subtle.digest("SHA-256", buffer);
+    const hashHex = [...new Uint8Array(hashBuf)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 16);
+
+    const contentType = file.type || "image/webp";
+    const ext = contentType.includes("png")
+      ? "png"
+      : contentType.includes("webp")
+        ? "webp"
+        : "jpg";
+
+    const key = `photos/${hashHex}.${ext}`;
+    await env.WHISK_R2.put(key, buffer, {
+      httpMetadata: { contentType },
     });
 
     return new Response(
-      JSON.stringify({ url: `/photos/${file.name}`, key }),
+      JSON.stringify({ url: `/${key}`, key }),
       { headers: { "Content-Type": "application/json" } }
     );
   } catch {

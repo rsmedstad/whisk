@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { Recipe } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
+import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { useSpeech } from "../../hooks/useSpeech";
 import { classNames, parseTimerFromText } from "../../lib/utils";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
+import { SpeakerWave, ChevronLeft, ChevronRight, Stopwatch } from "../ui/Icon";
 
 interface CookModeProps {
   onStartTimer: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
@@ -17,16 +19,17 @@ export function CookMode({ onStartTimer }: CookModeProps) {
   const { getRecipe } = useRecipes();
   const wakeLock = useWakeLock();
   const speech = useSpeech();
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const cachedRecipe = id ? getLocal<Recipe>(CACHE_KEYS.RECIPE(id)) : null;
+  const [recipe, setRecipe] = useState<Recipe | null>(cachedRecipe);
   const [currentStep, setCurrentStep] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cachedRecipe);
 
-  // Load recipe and activate wake lock
+  // Background refresh
   useEffect(() => {
     if (!id) return;
     getRecipe(id)
       .then(setRecipe)
-      .catch(() => navigate("/"))
+      .catch(() => { if (!cachedRecipe) navigate("/"); })
       .finally(() => setIsLoading(false));
   }, [id, getRecipe, navigate]);
 
@@ -46,6 +49,22 @@ export function CookMode({ onStartTimer }: CookModeProps) {
 
   if (isLoading || !recipe) {
     return <LoadingSpinner className="py-20" size="lg" />;
+  }
+
+  if (recipe.steps.length === 0) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex flex-col items-center justify-center px-6">
+        <p className="text-stone-500 dark:text-stone-400 mb-4">
+          This recipe doesn&apos;t have any steps yet.
+        </p>
+        <button
+          onClick={() => navigate(`/recipes/${recipe.id}`)}
+          className="text-sm font-medium text-orange-500"
+        >
+          Back to recipe
+        </button>
+      </div>
+    );
   }
 
   const step = recipe.steps[currentStep];
@@ -72,14 +91,13 @@ export function CookMode({ onStartTimer }: CookModeProps) {
           <button
             onClick={speech.toggle}
             className={classNames(
-              "text-lg",
               speech.isEnabled
                 ? "text-orange-500"
                 : "text-stone-400 dark:text-stone-500"
             )}
             title={speech.isEnabled ? "Disable read aloud" : "Enable read aloud"}
           >
-            &#128266;
+            <SpeakerWave className="w-5 h-5" />
           </button>
           <button
             onClick={() => navigate(`/recipes/${recipe.id}`)}
@@ -120,37 +138,37 @@ export function CookMode({ onStartTimer }: CookModeProps) {
             }
             className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-100 px-5 py-2.5 text-sm font-semibold text-orange-700 dark:bg-orange-950 dark:text-orange-300"
           >
-            &#9201; Start {timerMin}:00 Timer
+            <Stopwatch className="w-4 h-4" /> Start {timerMin}:00 Timer
           </button>
         )}
       </div>
 
       {/* Navigation */}
-      <div className="px-6 pb-8 pb-[calc(var(--sab)+2rem)]">
+      <div className="px-6 pb-[calc(var(--sab)+2rem)]">
         <div className="flex items-center justify-between gap-4">
           <button
             onClick={goPrev}
             disabled={currentStep === 0}
             className={classNames(
-              "flex-1 py-3 rounded-xl text-sm font-semibold border",
+              "flex-1 py-3 rounded-xl text-sm font-semibold border flex items-center justify-center gap-1",
               currentStep === 0
                 ? "border-stone-200 text-stone-300 dark:border-stone-700 dark:text-stone-600"
                 : "border-stone-300 text-stone-700 active:bg-stone-100 dark:border-stone-600 dark:text-stone-200 dark:active:bg-stone-800"
             )}
           >
-            &#9664; Prev
+            <ChevronLeft className="w-4 h-4" /> Prev
           </button>
           <button
             onClick={goNext}
             disabled={currentStep === totalSteps - 1}
             className={classNames(
-              "flex-1 py-3 rounded-xl text-sm font-semibold",
+              "flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-1",
               currentStep === totalSteps - 1
                 ? "bg-stone-200 text-stone-400 dark:bg-stone-700 dark:text-stone-500"
                 : "bg-orange-500 text-white active:bg-orange-600"
             )}
           >
-            Next &#9654;
+            Next <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 

@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppSettings, AICapabilities } from "../types";
 import { useAIConfig } from "../hooks/useAIConfig";
+import { useHousehold } from "../hooks/useHousehold";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
+import { ChevronLeft, Trash } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -16,6 +18,7 @@ interface SettingsProps {
 
 export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
   const aiConfig = useAIConfig();
+  const hh = useHousehold();
   const navigate = useNavigate();
   const [units, setUnits] = useState<"imperial" | "metric">(() => {
     return (localStorage.getItem("whisk_units") as "imperial" | "metric") ?? "imperial";
@@ -83,9 +86,9 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="text-stone-600 dark:text-stone-400 text-sm font-medium"
+            className="flex items-center gap-1 text-stone-600 dark:text-stone-400 text-sm font-medium"
           >
-            &#8592; Back
+            <ChevronLeft className="w-4 h-4" /> Back
           </button>
           <h1 className="text-xl font-bold dark:text-stone-100">Settings</h1>
         </div>
@@ -238,6 +241,57 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
             </div>
           </Card>
         </section>
+
+        {/* Household Members */}
+        {hh.household.members.length > 0 && (
+          <section>
+            <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+              Household Members
+            </h2>
+            <Card>
+              <div className="space-y-3">
+                {hh.household.members.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 flex items-center justify-center text-sm font-bold">
+                        {member.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium dark:text-stone-200">
+                          {member.name}
+                          {member.id === hh.currentUserId && (
+                            <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">(you)</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-stone-400 dark:text-stone-500">
+                          {member.isOwner ? "Owner" : "Member"}
+                          {" \u00B7 Joined "}
+                          {new Date(member.joinedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    {hh.isOwner && member.id !== hh.currentUserId && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Remove ${member.name} from the household?`)) {
+                            hh.removeMember(member.id);
+                          }
+                        }}
+                        className="p-1.5 text-stone-400 hover:text-red-500"
+                        title={`Remove ${member.name}`}
+                      >
+                        <Trash className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </section>
+        )}
 
         {/* AI Model Configuration */}
         <section>

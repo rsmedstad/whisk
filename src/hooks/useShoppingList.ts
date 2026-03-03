@@ -52,6 +52,7 @@ export function useShoppingList() {
         addedBy?: ShoppingItem["addedBy"];
       }
     ) => {
+      const userName = localStorage.getItem("whisk_display_name") ?? undefined;
       const item: ShoppingItem = {
         id: nanoid(10),
         name,
@@ -61,6 +62,7 @@ export function useShoppingList() {
         checked: false,
         sourceRecipeId: options?.sourceRecipeId,
         addedBy: options?.addedBy ?? "manual",
+        addedByUser: userName,
       };
       await saveList({ ...list, items: [...list.items, item] });
     },
@@ -104,18 +106,47 @@ export function useShoppingList() {
     async (
       ingredients: { name: string; amount?: string; unit?: string; category?: string }[],
       recipeId: string
-    ) => {
-      const newItems: ShoppingItem[] = ingredients.map((ing) => ({
-        id: nanoid(10),
-        name: ing.name,
-        amount: ing.amount,
-        unit: ing.unit,
-        category: (ing.category as ShoppingCategory) ?? categorizeIngredient(ing.name),
-        checked: false,
-        sourceRecipeId: recipeId,
-        addedBy: "recipe" as const,
-      }));
-      await saveList({ ...list, items: [...list.items, ...newItems] });
+    ): Promise<{ added: number; skippedDuplicates: number }> => {
+      // Check if any items from this recipe are already on the list
+      const existingFromRecipe = new Set(
+        list.items
+          .filter((i) => i.sourceRecipeId === recipeId)
+          .map((i) => i.name.toLowerCase())
+      );
+
+      const userName = localStorage.getItem("whisk_display_name") ?? undefined;
+      const newItems: ShoppingItem[] = ingredients
+        .filter((ing) => !existingFromRecipe.has(ing.name.toLowerCase()))
+        .map((ing) => ({
+          id: nanoid(10),
+          name: ing.name,
+          amount: ing.amount,
+          unit: ing.unit,
+          category: (ing.category as ShoppingCategory) ?? categorizeIngredient(ing.name),
+          checked: false,
+          sourceRecipeId: recipeId,
+          addedBy: "recipe" as const,
+          addedByUser: userName,
+        }));
+
+      if (newItems.length > 0) {
+        await saveList({ ...list, items: [...list.items, ...newItems] });
+      }
+
+      return {
+        added: newItems.length,
+        skippedDuplicates: ingredients.length - newItems.length,
+      };
+    },
+    [list, saveList]
+  );
+
+  const removeFromRecipe = useCallback(
+    async (recipeId: string) => {
+      await saveList({
+        ...list,
+        items: list.items.filter((item) => item.sourceRecipeId !== recipeId),
+      });
     },
     [list, saveList]
   );
@@ -129,5 +160,6 @@ export function useShoppingList() {
     clearChecked,
     clearAll,
     addFromRecipe,
+    removeFromRecipe,
   };
 }

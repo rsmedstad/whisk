@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { TextArea } from "../ui/TextArea";
 import { Card } from "../ui/Card";
+import { Camera, Sparkles } from "../ui/Icon";
 
 interface IdentifyPhotoProps {
   visionEnabled?: boolean;
@@ -102,7 +103,7 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
             />
           ) : (
             <div className="text-center">
-              <span className="text-4xl">&#x1F4F7;</span>
+              <Camera className="w-10 h-10 text-stone-400 dark:text-stone-500 mx-auto" />
               <p className="mt-2 text-sm font-medium text-stone-500 dark:text-stone-400">
                 Take Photo
               </p>
@@ -142,7 +143,7 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
           <Card>
             <div className="space-y-3">
               <div className="flex items-start gap-2">
-                <span className="text-lg">&#x1F916;</span>
+                <Sparkles className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm text-stone-500 dark:text-stone-400">
                     This looks like:
@@ -165,9 +166,9 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
                     {result.ingredients.map((ing, i) => (
                       <li
                         key={i}
-                        className="text-sm text-stone-600 dark:text-stone-400 flex gap-1"
+                        className="text-sm text-stone-600 dark:text-stone-400 flex gap-1.5 items-center"
                       >
-                        <span>&bull;</span> {ing}
+                        <span className="w-1 h-1 rounded-full bg-stone-400 shrink-0" /> {ing}
                       </li>
                     ))}
                   </ul>

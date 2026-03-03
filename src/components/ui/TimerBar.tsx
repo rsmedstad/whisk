@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { CookingTimer } from "../../types";
 import { formatTimerDisplay } from "../../lib/utils";
 import { classNames } from "../../lib/utils";
+import { Stopwatch, ChevronUp, ChevronDown } from "./Icon";
 
 interface TimerBarProps {
   timers: CookingTimer[];
@@ -42,7 +43,7 @@ export function TimerBar({
         )}
       >
         <span className="flex items-center gap-2">
-          <span>&#9201;</span>
+          <Stopwatch className="w-4 h-4" />
           {active.length > 0
             ? `${active.length} timer${active.length > 1 ? "s" : ""} running`
             : completed.length > 0
@@ -57,7 +58,7 @@ export function TimerBar({
                 : formatTimerDisplay(displayTimer.remainingSeconds)}
             </span>
           )}
-          <span>{expanded ? "\u25B2" : "\u25BC"}</span>
+          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </span>
       </button>
 

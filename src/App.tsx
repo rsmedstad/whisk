@@ -23,6 +23,7 @@ const MealPlan = lazy(() => import("./components/plan/MealPlan").then(m => ({ de
 const IdentifyPhoto = lazy(() => import("./components/identify/IdentifyPhoto").then(m => ({ default: m.IdentifyPhoto })));
 const SuggestChat = lazy(() => import("./components/suggest/SuggestChat").then(m => ({ default: m.SuggestChat })));
 const Settings = lazy(() => import("./components/Settings").then(m => ({ default: m.Settings })));
+const ImportRecipes = lazy(() => import("./components/import/ImportRecipes").then(m => ({ default: m.ImportRecipes })));
 
 // Minimal skeleton for lazy-loaded routes — no layout shift
 function RouteSkeleton() {
@@ -86,8 +87,12 @@ function AppShell({
     timers.startTimer(label, minutes, recipeId, stepIndex);
   };
 
-  const handleAddToShoppingList = (ingredients: Ingredient[], recipeId: string) => {
-    shoppingList.addFromRecipe(ingredients, recipeId);
+  const handleAddToShoppingList = async (ingredients: Ingredient[], recipeId: string) => {
+    return shoppingList.addFromRecipe(ingredients, recipeId);
+  };
+
+  const handleUndoShoppingList = async (recipeId: string) => {
+    await shoppingList.removeFromRecipe(recipeId);
   };
 
   return (
@@ -132,6 +137,7 @@ function AppShell({
               <RecipeDetail
                 onStartTimer={handleStartTimer}
                 onAddToShoppingList={handleAddToShoppingList}
+                onUndoShoppingList={handleUndoShoppingList}
               />
             }
           />
@@ -163,6 +169,7 @@ function AppShell({
                 onRemoveItem={shoppingList.removeItem}
                 onClearChecked={shoppingList.clearChecked}
                 onClearAll={shoppingList.clearAll}
+                recipeIndex={recipes.recipes}
               />
             }
           />
@@ -189,6 +196,14 @@ function AppShell({
                 onSetTheme={onSetTheme}
                 onLogout={onLogout}
                 capabilities={capabilities}
+              />
+            }
+          />
+          <Route
+            path="/import"
+            element={
+              <ImportRecipes
+                onImportComplete={recipes.fetchRecipes}
               />
             }
           />

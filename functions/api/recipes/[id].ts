@@ -8,6 +8,7 @@ interface RecipeIndexEntry {
   tags: string[];
   cuisine?: string;
   favorite: boolean;
+  favoritedBy?: string[];
   updatedAt: string;
   thumbnailUrl?: string;
   prepTime?: number;
@@ -17,9 +18,9 @@ interface RecipeIndexEntry {
 }
 
 // GET /api/recipes/:id
-export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ params, env, data }) => {
   const id = params.id as string;
-  const recipe = await env.WHISK_KV.get(`recipe:${id}`, "json");
+  const recipe = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<string, unknown> | null;
 
   if (!recipe) {
     return new Response(JSON.stringify({ error: "Recipe not found" }), {
@@ -29,8 +30,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
   }
 
   // Update lastViewedAt
-  const updated = { ...(recipe as Record<string, unknown>), lastViewedAt: new Date().toISOString() };
+  const updated: Record<string, unknown> = { ...recipe, lastViewedAt: new Date().toISOString() };
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
+
+  // Resolve favorite for requesting user
+  const userId = (data as Record<string, string>).userId;
+  if (userId) {
+    const favoritedBy = (updated.favoritedBy as string[]) ?? [];
+    updated.favorite = favoritedBy.includes(userId);
+  }
 
   return new Response(JSON.stringify(updated), {
     headers: { "Content-Type": "application/json" },
@@ -42,6 +50,7 @@ export const onRequestPut: PagesFunction<Env> = async ({
   params,
   request,
   env,
+  data,
 }) => {
   const id = params.id as string;
   const existing = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<string, unknown> | null;
@@ -55,6 +64,21 @@ export const onRequestPut: PagesFunction<Env> = async ({
 
   const updates = (await request.json()) as Record<string, unknown>;
   const now = new Date().toISOString();
+  const userId = (data as Record<string, string>).userId;
+
+  // Handle per-user favorite toggling
+  if ("favorite" in updates && userId) {
+    const favoritedBy = new Set((existing.favoritedBy as string[]) ?? []);
+    if (updates.favorite) {
+      favoritedBy.add(userId);
+    } else {
+      favoritedBy.delete(userId);
+    }
+    updates.favoritedBy = [...favoritedBy];
+    // Legacy fallback: favorite is true if anyone has favorited
+    updates.favorite = favoritedBy.size > 0;
+  }
+
   const updated: Record<string, unknown> = { ...existing, ...updates, updatedAt: now };
 
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
@@ -71,6 +95,7 @@ export const onRequestPut: PagesFunction<Env> = async ({
           tags: (updated.tags as string[]) ?? entry.tags,
           cuisine: updated.cuisine as string | undefined,
           favorite: (updated.favorite as boolean) ?? entry.favorite,
+          favoritedBy: (updated.favoritedBy as string[]) ?? entry.favoritedBy,
           updatedAt: now,
           thumbnailUrl: updated.thumbnailUrl as string | undefined,
           prepTime: updated.prepTime as number | undefined,
@@ -82,6 +107,12 @@ export const onRequestPut: PagesFunction<Env> = async ({
   );
 
   await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+
+  // Resolve favorite for the requesting user in the response
+  if (userId) {
+    const favoritedBy = (updated.favoritedBy as string[]) ?? [];
+    updated.favorite = favoritedBy.includes(userId);
+  }
 
   return new Response(JSON.stringify(updated), {
     headers: { "Content-Type": "application/json" },

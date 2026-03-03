@@ -32,5 +32,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     });
   }
 
+  // Parse user identity from session (backwards-compatible with old "valid" format)
+  if (session !== "valid") {
+    try {
+      const parsed = JSON.parse(session) as { userId: string; name: string };
+      context.data.userId = parsed.userId;
+      context.data.userName = parsed.name;
+    } catch {
+      // Old-format session, no user identity — still valid
+    }
+  }
+
   return context.next();
 };
