@@ -98,7 +98,7 @@ export function MealPlan({
                   "text-sm font-semibold mb-2",
                   isToday
                     ? "text-orange-500"
-                    : "text-stone-500 dark:text-stone-400"
+                    : "text-stone-500 dark:text-orange-300/40"
                 )}
               >
                 {isToday && "Today \u00B7 "}
@@ -115,7 +115,7 @@ export function MealPlan({
                   return (
                     <div
                       key={slot}
-                      className="flex items-center gap-2 rounded-lg bg-stone-50 dark:bg-stone-900 px-3 py-2"
+                      className="flex items-center gap-2 rounded-lg bg-stone-50 dark:bg-stone-900 dark:border dark:border-stone-800 px-3 py-2"
                     >
                       <span className="flex-shrink-0">{icon}</span>
 

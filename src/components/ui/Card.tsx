@@ -15,7 +15,7 @@ export function Card({
     <div
       className={classNames(
         "rounded-xl border border-stone-200 bg-white shadow-sm",
-        "dark:border-stone-700 dark:bg-stone-900",
+        "dark:border-stone-800 dark:bg-stone-900 dark:ring-1 dark:ring-orange-500/6",
         padded && "p-4",
         className
       )}

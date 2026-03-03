@@ -98,7 +98,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
       <div className="px-4 py-4 space-y-6">
         {/* Appearance */}
         <section>
-          <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
             Appearance
           </h2>
           <Card>
@@ -144,7 +144,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
 
         {/* Units & Measurements */}
         <section>
-          <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
             Units & Measurements
           </h2>
           <Card>
@@ -215,7 +215,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
 
         {/* Account */}
         <section>
-          <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
             Account
           </h2>
           <Card>
@@ -258,7 +258,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
         {/* Household Members */}
         {hh.household.members.length > 0 && (
           <section>
-            <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+            <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
               Household Members
             </h2>
             <Card>
@@ -308,7 +308,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
 
         {/* AI Model Configuration */}
         <section>
-          <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
             AI Model Configuration
           </h2>
           <AIConfigPanel
@@ -323,7 +323,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
 
         {/* Data */}
         <section>
-          <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
             Data
           </h2>
           <Card>
@@ -340,7 +340,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
 
         {/* About */}
         <section>
-          <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
             About
           </h2>
           <Card>

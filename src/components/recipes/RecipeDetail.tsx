@@ -527,7 +527,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         {/* Notes */}
         {recipe.notes && (
           <section>
-            <h2 className="text-lg font-semibold mb-2 dark:text-stone-100">
+            <h2 className="text-lg font-semibold mb-2 dark:text-orange-100/80">
               Notes
             </h2>
             <p className="text-sm text-stone-600 dark:text-stone-300 whitespace-pre-wrap">

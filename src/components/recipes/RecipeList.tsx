@@ -233,7 +233,7 @@ function RecipeCard({
   return (
     <button
       onClick={onClick}
-      className="flex w-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition-shadow hover:shadow-md active:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:active:bg-stone-800"
+      className="flex w-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
     >
       {/* Image */}
       <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">

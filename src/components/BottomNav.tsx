@@ -17,7 +17,7 @@ export function BottomNav() {
   if (isKeyboardOpen) return null;
 
   return (
-    <nav className="no-print fixed bottom-0 left-0 right-0 z-40 border-t border-stone-200 bg-white/95 backdrop-blur-sm dark:border-stone-700 dark:bg-stone-950/95 pb-[var(--sab)]">
+    <nav className="no-print fixed bottom-0 left-0 right-0 z-40 border-t border-stone-200 bg-white/95 backdrop-blur-sm dark:border-orange-500/10 dark:bg-stone-950/95 pb-[var(--sab)]">
       <div className="flex items-center justify-around">
         {tabs.map((tab) => (
           <NavLink

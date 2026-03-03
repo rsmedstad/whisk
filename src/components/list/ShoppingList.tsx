@@ -150,9 +150,17 @@ export function ShoppingList({
 
               return (
                 <section key={cat}>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-1.5">
-                    {CATEGORY_LABELS[cat]}
-                  </h3>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50">
+                      {CATEGORY_LABELS[cat]}
+                    </h3>
+                    <button
+                      onClick={() => items.forEach((item) => onRemoveItem(item.id))}
+                      className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
+                    >
+                      clear
+                    </button>
+                  </div>
                   <ul className="space-y-1">
                     {sorted.map((item) => (
                       <li
@@ -172,11 +180,12 @@ export function ShoppingList({
                         </button>
                         <span
                           className={classNames(
-                            "flex-1 text-sm",
+                            "flex-1 text-sm line-clamp-1",
                             item.checked
                               ? "line-through text-stone-400 dark:text-stone-500"
                               : "dark:text-stone-200"
                           )}
+                          title={[item.amount, item.unit, item.name].filter(Boolean).join(" ")}
                         >
                           {[item.amount, item.unit, item.name]
                             .filter(Boolean)
@@ -205,7 +214,7 @@ export function ShoppingList({
             })}
 
             {/* Summary */}
-            <div className="border-t border-stone-200 dark:border-stone-700 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
+            <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
               {totalCount} item{totalCount !== 1 ? "s" : ""}
               {checkedCount > 0 &&
                 ` \u00B7 ${checkedCount} checked`}
