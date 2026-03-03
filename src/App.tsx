@@ -170,6 +170,9 @@ function AppShell({
                 onRemoveItem={shoppingList.removeItem}
                 onClearChecked={shoppingList.clearChecked}
                 onClearAll={shoppingList.clearAll}
+                onUpdateItem={shoppingList.updateItem}
+                onClearCategory={shoppingList.clearCategory}
+                onClassifyUncategorized={shoppingList.classifyUncategorized}
                 recipeIndex={recipes.recipes}
               />
             }
