@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  /* Default accent — Tailwind orange (overridden by data-accent for seasonal themes) */
-  --color-orange-50: #fff7ed;
-  --color-orange-100: #ffedd5;
-  --color-orange-200: #fed7aa;
-  --color-orange-300: #fdba74;
-  --color-orange-400: #fb923c;
-  --color-orange-500: #f97316;
-  --color-orange-600: #ea580c;
-  --color-orange-700: #c2410c;
-  --color-orange-800: #9a3412;
-  --color-orange-900: #7c2d12;
-  --color-orange-950: #431407;
+  /* Default accent — fresh green (overridden by data-accent for seasonal/holiday themes) */
+  --color-orange-50: #f0fdf4;
+  --color-orange-100: #dcfce7;
+  --color-orange-200: #bbf7d0;
+  --color-orange-300: #86efac;
+  --color-orange-400: #4ade80;
+  --color-orange-500: #22c55e;
+  --color-orange-600: #16a34a;
+  --color-orange-700: #15803d;
+  --color-orange-800: #166534;
+  --color-orange-900: #14532d;
+  --color-orange-950: #052e16;
 }
 
 /* ── Seasonal Accent Palettes ─────────────────────────────

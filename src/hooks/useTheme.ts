@@ -24,7 +24,7 @@ function applyAccent(accent: string | null) {
 
 export function useTheme() {
   const [preference, setPreference] = useState<Theme>(() => {
-    return (localStorage.getItem("whisk_theme") as Theme) ?? "system";
+    return (localStorage.getItem("whisk_theme") as Theme) ?? "seasonal";
   });
 
   // Resolve dark/light mode

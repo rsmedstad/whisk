@@ -10,7 +10,7 @@ import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
 import { InstallPrompt } from "../InstallPrompt";
 import { FirstRunGuide } from "./FirstRunGuide";
-import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Fire, Check } from "../ui/Icon";
+import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Check } from "../ui/Icon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed";
 
@@ -198,7 +198,7 @@ export function RecipeList({
           <FirstRunGuide />
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<Fire className="w-12 h-12" />}
+            icon={<WhiskLogo className="w-12 h-12" />}
             title="No results"
             description="Try a different search or filter"
           />
@@ -246,7 +246,7 @@ function RecipeCard({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-stone-300 dark:text-stone-600">
-            <Fire className="w-10 h-10" />
+            <WhiskLogo className="w-10 h-10" />
           </div>
         )}
         <button

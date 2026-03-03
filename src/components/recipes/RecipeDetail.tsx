@@ -126,7 +126,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     scaleIngredient(ing, originalServings, servings)
   );
 
-  const photos = recipe.photos.length > 0 ? recipe.photos : [];
+  const photos = recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
   const heroPhoto = photos[photoIndex];
 
   return (
@@ -512,7 +512,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   onClick={() => navigate(`/recipes/${recipe.id}/cook`)}
                 >
                   <span className="flex items-center justify-center gap-2">
-                    <Fire className="w-5 h-5" /> Start Cooking
+                    <Fire className="w-5 h-5" /> Cook Mode
                   </span>
                 </Button>
               </>
