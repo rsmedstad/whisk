@@ -198,6 +198,13 @@ export interface AppSettings {
   preferredAiModel: "auto" | "groq" | "xai" | "gemini" | "cf";
 }
 
+// ── Onboarding ──────────────────────────────────────────
+
+export interface OnboardingPrefs {
+  units: "imperial" | "metric";
+  zipCode: string;
+}
+
 // ── AI Configuration ───────────────────────────────────────
 
 export interface AIFunctionConfig {

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
@@ -12,7 +12,7 @@ import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
-import type { Ingredient, AppSettings } from "./types";
+import type { Ingredient, AppSettings, OnboardingPrefs } from "./types";
 
 // Lazy-load everything except the home tab (RecipeList) for instant first paint
 const RecipeDetail = lazy(() => import("./components/recipes/RecipeDetail").then(m => ({ default: m.RecipeDetail })));
@@ -40,13 +40,52 @@ function RouteSkeleton() {
 export function App() {
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+
+  const handleLogin = useCallback(async (password: string, name?: string) => {
+    await auth.login(password, name);
+    if (localStorage.getItem("whisk_onboarded") !== "true") {
+      setNeedsOnboarding(true);
+    }
+  }, [auth.login]);
+
+  const handleCompleteOnboarding = useCallback((prefs: OnboardingPrefs) => {
+    // Apply units + auto-sync temperature
+    localStorage.setItem("whisk_units", prefs.units);
+    const tempUnit = prefs.units === "metric" ? "C" : "F";
+    localStorage.setItem("whisk_temp_unit", tempUnit);
+
+    // Store zip code if provided
+    if (prefs.zipCode) {
+      localStorage.setItem("whisk_zip_code", prefs.zipCode);
+    }
+
+    // Mark onboarding complete
+    localStorage.setItem("whisk_onboarded", "true");
+    setNeedsOnboarding(false);
+  }, []);
 
   if (!auth.isAuthenticated) {
     return (
       <Login
-        onLogin={auth.login}
+        onLogin={handleLogin}
         isLoading={auth.isLoading}
         error={auth.error}
+      />
+    );
+  }
+
+  if (needsOnboarding) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        isLoading={auth.isLoading}
+        error={auth.error}
+        showOnboarding
+        userName={auth.userName ?? ""}
+        currentTheme={theme}
+        onSetTheme={setTheme}
+        onCompleteOnboarding={handleCompleteOnboarding}
       />
     );
   }

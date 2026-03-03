@@ -37,8 +37,12 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
   const [householdSize, setHouseholdSize] = useState(() => {
     return parseInt(localStorage.getItem("whisk_household_size") ?? "4", 10);
   });
+  const [zipCode, setZipCode] = useState(() => {
+    return localStorage.getItem("whisk_zip_code") ?? "";
+  });
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   const handleUnitsChange = (u: "imperial" | "metric") => {
     setUnits(u);
@@ -66,6 +70,15 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
   const handleNameChange = (name: string) => {
     setDisplayName(name);
     localStorage.setItem("whisk_display_name", name);
+  };
+
+  const handleZipChange = (zip: string) => {
+    setZipCode(zip);
+    if (zip.trim()) {
+      localStorage.setItem("whisk_zip_code", zip.trim());
+    } else {
+      localStorage.removeItem("whisk_zip_code");
+    }
   };
 
   const handleHouseholdChange = (size: number) => {
@@ -261,6 +274,19 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                 placeholder="Ryan"
               />
               <div>
+                <Input
+                  label="Zip Code"
+                  value={zipCode}
+                  onChange={(e) => handleZipChange(e.target.value)}
+                  placeholder="e.g. 90210"
+                  maxLength={10}
+                  inputMode="numeric"
+                />
+                <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
+                  Used locally for seasonal suggestions. Not shared.
+                </p>
+              </div>
+              <div>
                 <label className="text-sm font-medium dark:text-stone-200 block mb-2">
                   Household Size
                 </label>
@@ -368,6 +394,30 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
               <Button variant="secondary" fullWidth onClick={() => navigate("/settings/import")}>
                 Import from CSV
               </Button>
+              <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  disabled={isClearingCache}
+                  onClick={async () => {
+                    setIsClearingCache(true);
+                    try {
+                      const keys = await caches.keys();
+                      await Promise.all(keys.map((k) => caches.delete(k)));
+                      const registrations = await navigator.serviceWorker.getRegistrations();
+                      await Promise.all(registrations.map((r) => r.unregister()));
+                      window.location.reload();
+                    } catch {
+                      window.location.reload();
+                    }
+                  }}
+                >
+                  {isClearingCache ? "Clearing..." : "Clear Cache & Reload"}
+                </Button>
+                <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
+                  Fixes stale styles or broken updates. Your data is not affected.
+                </p>
+              </div>
             </div>
           </Card>
         </section>

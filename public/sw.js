@@ -1,4 +1,4 @@
-const CACHE_NAME = "whisk-v2";
+const CACHE_NAME = "whisk-v3";
 const API_CACHE = "whisk-api-v1";
 const PHOTO_CACHE = "whisk-photos-v1";
 

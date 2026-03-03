@@ -3,16 +3,43 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { ChevronLeft } from "../ui/Icon";
+import { getSeasonalAccent } from "../../lib/seasonal";
+import type { AppSettings, OnboardingPrefs } from "../../types";
 
 interface LoginProps {
   onLogin: (password: string, name?: string) => Promise<void>;
   isLoading: boolean;
   error: string | null;
+  showOnboarding?: boolean;
+  userName?: string;
+  currentTheme?: AppSettings["theme"];
+  onSetTheme?: (theme: AppSettings["theme"]) => void;
+  onCompleteOnboarding?: (prefs: OnboardingPrefs) => void;
 }
 
 type Screen = "welcome" | "join" | "setup-info";
 
-export function Login({ onLogin, isLoading, error }: LoginProps) {
+const ACCENT_LABELS: Record<string, string> = {
+  valentine: "Valentine's Day", stpatrick: "St. Patrick's",
+  easter: "Easter", july4th: "4th of July",
+  halloween: "Halloween", thanksgiving: "Thanksgiving",
+  christmas: "Christmas", spring: "Spring",
+  summer: "Summer", fall: "Fall", winter: "Winter",
+};
+
+const activeClass = "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300";
+const inactiveClass = "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400";
+
+export function Login({
+  onLogin,
+  isLoading,
+  error,
+  showOnboarding,
+  userName,
+  currentTheme,
+  onSetTheme,
+  onCompleteOnboarding,
+}: LoginProps) {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -26,6 +53,18 @@ export function Login({ onLogin, isLoading, error }: LoginProps) {
       // Error handled by parent
     }
   };
+
+  // Onboarding screen (shown after first successful login)
+  if (showOnboarding && userName && onCompleteOnboarding) {
+    return (
+      <OnboardingScreen
+        userName={userName}
+        currentTheme={currentTheme ?? "seasonal"}
+        onSetTheme={onSetTheme}
+        onComplete={onCompleteOnboarding}
+      />
+    );
+  }
 
   if (screen === "welcome") {
     return (
@@ -158,6 +197,120 @@ export function Login({ onLogin, isLoading, error }: LoginProps) {
             {isLoading ? "Joining..." : "Join Book"}
           </Button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Onboarding Screen ───────────────────────────────────────
+
+function OnboardingScreen({
+  userName,
+  currentTheme,
+  onSetTheme,
+  onComplete,
+}: {
+  userName: string;
+  currentTheme: AppSettings["theme"];
+  onSetTheme?: (theme: AppSettings["theme"]) => void;
+  onComplete: (prefs: OnboardingPrefs) => void;
+}) {
+  const [units, setUnits] = useState<OnboardingPrefs["units"]>("imperial");
+  const [zipCode, setZipCode] = useState("");
+
+  const handleThemeChange = (t: AppSettings["theme"]) => {
+    onSetTheme?.(t);
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold dark:text-stone-100 mb-1">
+            Welcome, {userName}!
+          </h1>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            Let's personalize your experience
+          </p>
+        </div>
+
+        <Card>
+          <div className="space-y-4">
+            {/* Theme */}
+            <div>
+              <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                Theme
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["system", "light", "dark", "seasonal"] as const).map((t) => {
+                  const label = t === "seasonal"
+                    ? `Seasonal — ${ACCENT_LABELS[getSeasonalAccent()] ?? "Auto"}`
+                    : t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => handleThemeChange(t)}
+                      className={`py-2 rounded-lg text-sm font-medium border capitalize ${
+                        currentTheme === t ? activeClass : inactiveClass
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {currentTheme === "seasonal" && (
+                <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+                  Colors change with holidays and seasons
+                </p>
+              )}
+            </div>
+
+            {/* Units */}
+            <div>
+              <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                Measurements
+              </label>
+              <div className="flex gap-2">
+                {(["imperial", "metric"] as const).map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => setUnits(u)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border capitalize ${
+                      units === u ? activeClass : inactiveClass
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Zip Code */}
+            <div>
+              <Input
+                label="Zip Code (optional)"
+                placeholder="e.g. 90210"
+                value={zipCode}
+                onChange={(e) => setZipCode(e.target.value)}
+                maxLength={10}
+                inputMode="numeric"
+              />
+              <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
+                Used locally for seasonal suggestions. Not shared.
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <div className="mt-6">
+          <Button
+            fullWidth
+            onClick={() => onComplete({ units, zipCode: zipCode.trim() })}
+          >
+            Get Started
+          </Button>
+        </div>
       </div>
     </div>
   );
