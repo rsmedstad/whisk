@@ -114,6 +114,7 @@ export interface ShoppingItem {
   sourceRecipeId?: string;
   addedBy?: "manual" | "recipe" | "ai" | "scan";
   addedByUser?: string; // user name who added this item
+  store?: string; // optional store tag for filtering (e.g. "Costco", "Trader Joe's")
 }
 
 export type ShoppingCategory =
@@ -121,6 +122,7 @@ export type ShoppingCategory =
   | "dairy"
   | "meat"
   | "pantry"
+  | "snacks"
   | "frozen"
   | "bakery"
   | "beverages"

@@ -42,7 +42,7 @@ async function request<T>(
     headers,
   });
 
-  if (res.status === 401) {
+  if (res.status === 401 && path !== "/auth") {
     clearToken();
     window.location.reload();
     throw new Error("Unauthorized");
@@ -50,7 +50,14 @@ async function request<T>(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `Request failed: ${res.status}`);
+    let message = text || `Request failed: ${res.status}`;
+    try {
+      const json = JSON.parse(text) as { error?: string };
+      if (json.error) message = json.error;
+    } catch {
+      // Not JSON, use raw text
+    }
+    throw new Error(message);
   }
 
   if (res.status === 204) return undefined as T;

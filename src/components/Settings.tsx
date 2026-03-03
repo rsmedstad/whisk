@@ -9,7 +9,7 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
-import { ChevronLeft, Trash } from "./ui/Icon";
+import { ChevronLeft, Trash, Sunrise, Moon, Sun } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -40,6 +40,13 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
   const [zipCode, setZipCode] = useState(() => {
     return localStorage.getItem("whisk_zip_code") ?? "";
   });
+  const [preferredStores, setPreferredStores] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("whisk_preferred_stores");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch { return []; }
+  });
+  const [storeInput, setStoreInput] = useState("");
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -85,6 +92,21 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
     const clamped = Math.max(1, Math.min(20, size));
     setHouseholdSize(clamped);
     localStorage.setItem("whisk_household_size", String(clamped));
+  };
+
+  const handleAddStore = () => {
+    const name = storeInput.trim();
+    if (!name || preferredStores.includes(name)) { setStoreInput(""); return; }
+    const updated = [...preferredStores, name];
+    setPreferredStores(updated);
+    localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
+    setStoreInput("");
+  };
+
+  const handleRemoveStore = (store: string) => {
+    const updated = preferredStores.filter((s) => s !== store);
+    setPreferredStores(updated);
+    localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
   };
 
   const handleReset = () => {
@@ -163,26 +185,52 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                       christmas: "Christmas", spring: "Spring",
                       summer: "Summer", fall: "Fall", winter: "Winter",
                     };
+                    const ACCENT_ICONS: Record<string, string> = {
+                      valentine: "\u2764\uFE0F", stpatrick: "\u2618\uFE0F",
+                      easter: "\uD83D\uDC30", july4th: "\uD83C\uDDFA\uD83C\uDDF8",
+                      halloween: "\uD83C\uDF83", thanksgiving: "\uD83E\uDD83",
+                      christmas: "\uD83C\uDF84", spring: "\uD83C\uDF31",
+                      summer: "\u2600\uFE0F", fall: "\uD83C\uDF42", winter: "\u2744\uFE0F",
+                    };
+                    const THEME_ICONS: Record<string, typeof Sun> = {
+                      system: Sunrise, light: Sun, dark: Moon,
+                    };
+                    const currentAccent = getSeasonalAccent();
+                    const ThemeIcon = THEME_ICONS[t];
+                    const seasonalIcon = ACCENT_ICONS[currentAccent] ?? "";
                     const label = t === "seasonal"
-                      ? `Seasonal — ${ACCENT_LABELS[getSeasonalAccent()] ?? "Auto"}`
+                      ? `${seasonalIcon} ${ACCENT_LABELS[currentAccent] ?? "Auto"}`
                       : t;
                     return (
                       <button
                         key={t}
                         onClick={() => onSetTheme(t)}
-                        className={`py-2 rounded-lg text-sm font-medium border capitalize ${
+                        className={`py-2 px-2 rounded-lg text-sm font-medium border capitalize flex items-center justify-center gap-1.5 ${
                           theme === t ? activeClass : inactiveClass
                         }`}
                       >
+                        {ThemeIcon && <ThemeIcon className="w-4 h-4" />}
                         {label}
                       </button>
                     );
                   })}
                 </div>
                 {theme === "seasonal" && (
-                  <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-                    Colors change with holidays and seasons
-                  </p>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-full bg-orange-500" />
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      Colors change with holidays and seasons — currently <span className="font-medium text-orange-600 dark:text-orange-400">{(() => {
+                        const labels: Record<string, string> = {
+                          valentine: "Valentine's Day", stpatrick: "St. Patrick's",
+                          easter: "Easter", july4th: "4th of July",
+                          halloween: "Halloween", thanksgiving: "Thanksgiving",
+                          christmas: "Christmas", spring: "Spring",
+                          summer: "Summer", fall: "Fall", winter: "Winter",
+                        };
+                        return labels[getSeasonalAccent()] ?? "Auto";
+                      })()}</span>
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -308,6 +356,57 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                     className="w-9 h-9 rounded-lg border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-medium text-lg"
                   >
                     +
+                  </button>
+                </div>
+              </div>
+
+              <Input
+                label="Zip Code"
+                value={zipCode}
+                onChange={(e) => handleZipChange(e.target.value)}
+                placeholder="90210"
+              />
+
+              <div>
+                <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                  Preferred Stores
+                </label>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                  Used for deal scanning and shopping list store tags
+                </p>
+                {preferredStores.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {preferredStores.map((store) => (
+                      <span
+                        key={store}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                      >
+                        {store}
+                        <button
+                          onClick={() => handleRemoveStore(store)}
+                          className="text-orange-400 hover:text-red-500"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={storeInput}
+                    onChange={(e) => setStoreInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddStore(); } }}
+                    placeholder="e.g. Costco, Trader Joe's"
+                    className="flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  />
+                  <button
+                    onClick={handleAddStore}
+                    disabled={!storeInput.trim()}
+                    className="px-3 py-2 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
+                  >
+                    Add
                   </button>
                 </div>
               </div>
