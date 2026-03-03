@@ -3,67 +3,175 @@ import type { ShoppingCategory } from "../types";
 // Maps ingredient keywords to shopping categories
 const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
   produce: [
-    "apple", "avocado", "banana", "basil", "bell pepper", "berry", "blueberry",
-    "broccoli", "cabbage", "carrot", "celery", "cherry", "cilantro", "corn",
-    "cucumber", "dill", "eggplant", "garlic", "ginger", "grape", "green bean",
-    "green onion", "herbs", "jalapeno", "kale", "lemon", "lettuce", "lime",
-    "mango", "mint", "mushroom", "onion", "orange", "oregano", "parsley",
-    "peach", "pear", "pepper", "pineapple", "potato", "raspberry", "rosemary",
-    "sage", "scallion", "shallot", "spinach", "squash", "strawberry",
-    "sweet potato", "thyme", "tomato", "watermelon", "zucchini",
-    "arugula", "asparagus", "beet", "bok choy", "cauliflower", "fennel",
-    "leek", "pea", "radish", "turnip",
+    "apple", "apricot", "artichoke", "arugula", "asparagus", "avocado",
+    "banana", "basil", "bean sprout", "beet", "bell pepper", "berry",
+    "blackberry", "blueberry", "bok choy", "broccoli", "brussels sprout",
+    "butternut", "cabbage", "cantaloupe", "carrot", "cauliflower", "celery",
+    "chard", "cherry", "chive", "cilantro", "clementine", "collard",
+    "corn", "cranberry", "cucumber", "date", "dill", "edamame", "eggplant",
+    "endive", "fennel", "fig", "garlic", "ginger", "grape", "grapefruit",
+    "green bean", "green onion", "guava", "herb", "honeydew",
+    "jalapeno", "jicama", "kale", "kiwi", "kohlrabi", "kumquat",
+    "leek", "lemon", "lettuce", "lime", "lychee", "mango", "melon",
+    "mint", "mushroom", "nectarine", "okra", "olive", "onion", "orange",
+    "oregano", "papaya", "parsley", "parsnip", "passion fruit", "pea",
+    "peach", "pear", "pepper", "persimmon", "pineapple", "plantain",
+    "plum", "pomegranate", "potato", "pumpkin", "radicchio", "radish",
+    "raspberry", "rhubarb", "romaine", "rosemary", "rutabaga", "sage",
+    "scallion", "serrano", "shallot", "snap pea", "snow pea", "spinach",
+    "sprout", "squash", "starfruit", "strawberry", "sweet potato",
+    "tangelo", "tangerine", "thyme", "tomatillo", "tomato", "turnip",
+    "watercress", "watermelon", "yam", "zucchini",
+    "fresh fruit", "fresh vegetable", "salad", "lettuce mix", "salad mix",
+    "coleslaw mix", "stir fry mix", "baby spinach", "spring mix",
   ],
   dairy: [
-    "butter", "cheese", "cheddar", "cream", "cream cheese", "egg", "eggs",
-    "half and half", "heavy cream", "milk", "mozzarella", "parmesan",
-    "ricotta", "sour cream", "whipping cream", "yogurt", "cottage cheese",
-    "goat cheese", "feta", "brie", "swiss", "provolone", "gruyere",
+    "butter", "buttermilk", "cheese", "cheddar", "colby", "cottage cheese",
+    "cream", "cream cheese", "crema", "creme fraiche", "custard",
+    "egg", "eggs", "feta", "ghee", "goat cheese", "gouda", "gruyere",
+    "half and half", "heavy cream", "heavy whipping cream", "havarti",
+    "ice cream", "kefir", "mascarpone", "milk", "monterey jack",
+    "mozzarella", "muenster", "neufchatel", "oat milk", "parmesan",
+    "pecorino", "pepper jack", "provolone", "queso", "ricotta",
+    "sharp cheddar", "sour cream", "swiss", "whipping cream",
+    "whipped cream", "yogurt", "almond milk", "soy milk", "coconut milk",
+    "brie", "camembert", "manchego", "asiago", "romano",
   ],
   meat: [
-    "bacon", "beef", "brisket", "chicken", "chorizo", "duck", "ground beef",
-    "ground turkey", "ham", "hot dog", "lamb", "pork", "prosciutto",
-    "ribeye", "salami", "salmon", "sausage", "shrimp", "sirloin", "steak",
-    "tenderloin", "tuna", "turkey", "veal", "fish", "cod", "tilapia",
-    "crab", "lobster", "scallop", "clam", "mussel", "anchovy",
+    "anchovy", "bacon", "bass", "beef", "bratwurst", "brisket", "catfish",
+    "chicken", "chorizo", "clam", "cod", "crab", "crawfish", "duck",
+    "filet", "fish", "flank steak", "flounder", "ground beef",
+    "ground chicken", "ground pork", "ground turkey", "grouper", "haddock",
+    "halibut", "ham", "hot dog", "italian sausage", "jerky", "kielbasa",
+    "lamb", "lobster", "mahi mahi", "meatball", "mussel", "octopus",
+    "oyster", "pancetta", "pepperoni", "pork", "prawn", "prosciutto",
+    "ribeye", "ribs", "roast", "salami", "salmon", "sardine", "sausage",
+    "scallop", "sea bass", "shrimp", "sirloin", "snapper", "sole",
+    "squid", "steak", "swordfish", "tenderloin", "tilapia", "trout",
+    "tuna", "turkey", "veal", "venison",
   ],
   pantry: [
-    "baking powder", "baking soda", "bbq sauce", "bouillon", "breadcrumb",
-    "broth", "brown sugar", "canola oil", "cayenne", "chili", "cinnamon",
-    "cocoa", "coconut", "cornstarch", "cumin", "curry", "dijon", "flour",
-    "honey", "hot sauce", "ketchup", "maple syrup", "marinara", "mayo",
-    "mayonnaise", "mustard", "nutmeg", "oats", "olive oil", "paprika",
-    "pasta", "peanut butter", "pepper", "ranch", "red pepper flakes", "rice",
-    "salt", "sesame oil", "soy sauce", "sriracha", "stock", "sugar",
-    "tahini", "teriyaki", "tomato paste", "tomato sauce", "vanilla",
-    "vegetable oil", "vinegar", "worcestershire", "yeast", "noodle",
-    "quinoa", "couscous", "lentil", "bean", "chickpea", "chip",
+    "agave", "almond", "almond butter", "almond flour", "baking mix",
+    "baking powder", "baking soda", "balsamic", "barley", "basmati",
+    "bay leaf", "bbq sauce", "black bean", "bouillon", "breadcrumb",
+    "broth", "brown rice", "brown sugar", "bulgur", "canola oil",
+    "caper", "cardamom", "cashew", "cayenne", "cereal", "chia seed",
+    "chickpea", "chili", "chili powder", "cinnamon", "clove", "cocoa",
+    "coconut", "coconut cream", "coconut oil", "confectioner",
+    "coriander", "cornmeal", "cornstarch", "couscous", "cracker",
+    "cranberry sauce", "cream of mushroom", "cream of chicken",
+    "cumin", "curry", "curry paste", "dijon", "dried fruit",
+    "evaporated milk", "extract", "farro", "fish sauce", "flax",
+    "flour", "garam masala", "garlic powder", "gelatin", "gnocchi",
+    "grain", "granola", "gravy", "hazelnut", "hemp seed", "hoisin",
+    "honey", "hot sauce", "hummus", "jam", "jasmine rice", "jelly",
+    "ketchup", "lentil", "macadamia", "maple syrup", "marinara",
+    "mayo", "mayonnaise", "mirin", "miso", "molasses", "mustard",
+    "noodle", "nut", "nutmeg", "oat", "olive oil", "onion powder",
+    "orzo", "oyster sauce", "panko", "paprika", "pasta",
+    "peanut", "peanut butter", "pecan", "penne", "pesto", "pickle",
+    "pine nut", "pistachio", "polenta", "poppy seed", "powdered sugar",
+    "pretzel", "protein powder", "quinoa", "raisin", "ranch",
+    "red pepper flake", "relish", "rice", "rice vinegar",
+    "rotini", "salsa", "salt", "sesame", "sesame oil",
+    "soy sauce", "spaghetti", "spice", "sriracha", "starch", "stock",
+    "stuffing", "sugar", "sunflower seed", "sweetener",
+    "taco seasoning", "taco shell", "tahini", "tamari", "tapioca",
+    "teriyaki", "tomato paste", "tomato sauce", "tortilla chip",
+    "turmeric", "vanilla", "vegetable oil", "vinegar", "walnut",
+    "wasabi", "white rice", "wild rice", "worcestershire", "yeast",
+    "bean", "canned", "dried", "seed",
+  ],
+  snacks: [
+    "chip", "corn chip", "crouton", "dip", "fruit snack",
+    "granola bar", "gummy", "nacho", "nut mix", "pita chip",
+    "popcorn", "pork rind", "rice cake", "salsa verde",
+    "snack bar", "snack mix", "tortilla chip", "trail mix",
+    "veggie straw", "protein bar", "energy bar",
   ],
   frozen: [
-    "frozen", "ice cream", "frozen pizza", "frozen vegetable", "frozen fruit",
-    "popsicle", "frozen dinner", "sorbet", "gelato",
+    "frozen", "ice cream", "frozen pizza", "frozen vegetable",
+    "frozen fruit", "popsicle", "frozen dinner", "sorbet", "gelato",
+    "frozen waffle", "frozen burrito", "frozen pie", "ice pop",
+    "frozen fry", "frozen nugget", "frozen fish stick",
+    "frozen shrimp", "frozen berry", "tv dinner",
   ],
   bakery: [
-    "bagel", "baguette", "bread", "bun", "ciabatta", "croissant", "english muffin",
-    "flatbread", "naan", "pita", "roll", "sourdough", "tortilla", "wrap",
-    "cake", "cookie", "donut", "muffin", "pie crust",
+    "bagel", "baguette", "bialy", "bread", "brioche", "bun",
+    "challah", "ciabatta", "cornbread", "crescent roll", "croissant",
+    "danish", "dinner roll", "english muffin", "flatbread", "focaccia",
+    "hamburger bun", "hot dog bun", "kaiser roll", "lavash", "loaf",
+    "naan", "pita", "pretzel roll", "pumpernickel", "roll",
+    "rye bread", "scone", "sourdough", "texas toast", "tortilla",
+    "wheat bread", "white bread", "whole wheat", "wrap",
+    "cake", "cookie", "cupcake", "donut", "doughnut", "muffin",
+    "pie crust", "pastry",
   ],
   beverages: [
-    "beer", "club soda", "coconut water", "coffee", "cola", "ginger ale",
-    "juice", "kombucha", "lemonade", "seltzer", "soda", "sparkling water",
-    "tea", "tonic", "water", "wine",
+    "beer", "bourbon", "brandy", "champagne", "cider", "club soda",
+    "cocktail", "coconut water", "coffee", "cola", "cranberry juice",
+    "energy drink", "espresso", "gatorade", "gin", "ginger ale",
+    "ginger beer", "grape juice", "iced tea", "juice", "kombucha",
+    "lemonade", "liqueur", "mineral water", "orange juice", "prosecco",
+    "rum", "sake", "seltzer", "soda", "sparkling water", "sprite",
+    "tea", "tequila", "tonic", "vodka", "water", "whiskey", "wine",
   ],
   other: [],
 };
 
+/**
+ * Normalize an ingredient name for category matching:
+ * - lowercase
+ * - strip trailing 's' / 'es' for basic plural handling
+ * - strip leading amounts/numbers
+ */
+function normalizeForMatch(name: string): string {
+  let lower = name.toLowerCase().trim();
+  // Strip leading numbers & units like "2 cups", "1/2 lb"
+  lower = lower.replace(/^[\d\/.\s]+(oz|lb|cup|tbsp|tsp|g|kg|ml|l|pt|qt|gal|bunch|head|can|pkg|bag|box|jar|bottle|ct|count|stick|clove|sprig|slice|piece|each)s?\b\s*/i, "");
+  lower = lower.replace(/^[\d\/.\s]+/, "").trim();
+  return lower;
+}
+
+/**
+ * Simple stemming: try both the raw word and common plural-stripped forms
+ */
+function getStemVariants(word: string): string[] {
+  const variants = [word];
+  if (word.endsWith("ies")) {
+    variants.push(word.slice(0, -3) + "y"); // berries → berry
+  }
+  if (word.endsWith("ves")) {
+    variants.push(word.slice(0, -3) + "f"); // halves → half
+  }
+  if (word.endsWith("es")) {
+    variants.push(word.slice(0, -2)); // tomatoes → tomato
+  }
+  if (word.endsWith("s") && !word.endsWith("ss")) {
+    variants.push(word.slice(0, -1)); // almonds → almond
+  }
+  return variants;
+}
+
 export function categorizeIngredient(name: string): ShoppingCategory {
-  const lower = name.toLowerCase();
+  const normalized = normalizeForMatch(name);
+  const variants = getStemVariants(normalized);
 
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (category === "other") continue;
     for (const keyword of keywords) {
-      if (lower.includes(keyword)) {
-        return category as ShoppingCategory;
+      // Check if normalized name or any stem variant contains keyword
+      for (const variant of variants) {
+        if (variant.includes(keyword) || keyword.includes(variant)) {
+          return category as ShoppingCategory;
+        }
+      }
+      // Also check keyword stems against the name
+      const keywordVariants = getStemVariants(keyword);
+      for (const kv of keywordVariants) {
+        if (normalized.includes(kv)) {
+          return category as ShoppingCategory;
+        }
       }
     }
   }
@@ -76,10 +184,23 @@ export const CATEGORY_LABELS: Record<ShoppingCategory, string> = {
   dairy: "Dairy & Eggs",
   meat: "Meat & Seafood",
   pantry: "Pantry",
+  snacks: "Snacks",
   frozen: "Frozen",
   bakery: "Bakery",
   beverages: "Beverages",
   other: "Other",
+};
+
+export const CATEGORY_EMOJI: Record<ShoppingCategory, string> = {
+  produce: "\uD83E\uDD66",
+  dairy: "\uD83E\uDDC8",
+  meat: "\uD83E\uDD69",
+  pantry: "\uD83E\uDED9",
+  snacks: "\uD83C\uDF7F",
+  frozen: "\u2744\uFE0F",
+  bakery: "\uD83C\uDF5E",
+  beverages: "\uD83E\uDD64",
+  other: "\uD83D\uDCE6",
 };
 
 export const CATEGORY_ORDER: ShoppingCategory[] = [
@@ -87,6 +208,7 @@ export const CATEGORY_ORDER: ShoppingCategory[] = [
   "dairy",
   "meat",
   "pantry",
+  "snacks",
   "frozen",
   "bakery",
   "beverages",
