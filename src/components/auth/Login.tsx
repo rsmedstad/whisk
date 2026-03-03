@@ -27,6 +27,14 @@ const ACCENT_LABELS: Record<string, string> = {
   summer: "Summer", fall: "Fall", winter: "Winter",
 };
 
+const ACCENT_SYMBOLS: Record<string, string> = {
+  valentine: "\u{1F495}", stpatrick: "\u2618\uFE0F",
+  easter: "\u{1F423}", july4th: "\u{1F386}",
+  halloween: "\u{1F383}", thanksgiving: "\u{1F983}",
+  christmas: "\u{1F384}", spring: "\u{1F331}",
+  summer: "\u2600\uFE0F", fall: "\u{1F342}", winter: "\u2744\uFE0F",
+};
+
 const activeClass = "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300";
 const inactiveClass = "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400";
 
@@ -306,28 +314,28 @@ function OnboardingScreen({
                 Theme
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {(["system", "light", "dark", "seasonal"] as const).map((t) => {
-                  const label = t === "seasonal"
-                    ? `Seasonal — ${ACCENT_LABELS[getSeasonalAccent()] ?? "Auto"}`
-                    : t;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => handleThemeChange(t)}
-                      className={`py-2 rounded-lg text-sm font-medium border capitalize ${
-                        currentTheme === t ? activeClass : inactiveClass
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+                {(["system", "light", "dark", "seasonal"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => handleThemeChange(t)}
+                    className={`py-2 rounded-lg text-sm font-medium border capitalize ${
+                      currentTheme === t ? activeClass : inactiveClass
+                    }`}
+                  >
+                    {t === "seasonal" ? "Seasonal / Holiday" : t}
+                  </button>
+                ))}
               </div>
-              {currentTheme === "seasonal" && (
-                <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-                  Colors change with holidays and seasons
-                </p>
-              )}
+              {currentTheme === "seasonal" && (() => {
+                const accent = getSeasonalAccent();
+                const symbol = ACCENT_SYMBOLS[accent] ?? "";
+                const name = ACCENT_LABELS[accent] ?? "Auto";
+                return (
+                  <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+                    {symbol} Currently: {name} — changes automatically
+                  </p>
+                );
+              })()}
             </div>
 
             {/* Units */}
