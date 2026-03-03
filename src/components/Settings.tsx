@@ -8,7 +8,7 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
-import { ChevronLeft, Trash } from "./ui/Icon";
+import { ChevronLeft, Trash, Sunrise, Moon, Sun } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -116,26 +116,52 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                       christmas: "Christmas", spring: "Spring",
                       summer: "Summer", fall: "Fall", winter: "Winter",
                     };
+                    const ACCENT_ICONS: Record<string, string> = {
+                      valentine: "\u2764\uFE0F", stpatrick: "\u2618\uFE0F",
+                      easter: "\uD83D\uDC30", july4th: "\uD83C\uDDFA\uD83C\uDDF8",
+                      halloween: "\uD83C\uDF83", thanksgiving: "\uD83E\uDD83",
+                      christmas: "\uD83C\uDF84", spring: "\uD83C\uDF31",
+                      summer: "\u2600\uFE0F", fall: "\uD83C\uDF42", winter: "\u2744\uFE0F",
+                    };
+                    const THEME_ICONS: Record<string, typeof Sun> = {
+                      system: Sunrise, light: Sun, dark: Moon,
+                    };
+                    const currentAccent = getSeasonalAccent();
+                    const ThemeIcon = THEME_ICONS[t];
+                    const seasonalIcon = ACCENT_ICONS[currentAccent] ?? "";
                     const label = t === "seasonal"
-                      ? `Seasonal — ${ACCENT_LABELS[getSeasonalAccent()] ?? "Auto"}`
+                      ? `${seasonalIcon} ${ACCENT_LABELS[currentAccent] ?? "Auto"}`
                       : t;
                     return (
                       <button
                         key={t}
                         onClick={() => onSetTheme(t)}
-                        className={`py-2 rounded-lg text-sm font-medium border capitalize ${
+                        className={`py-2 px-2 rounded-lg text-sm font-medium border capitalize flex items-center justify-center gap-1.5 ${
                           theme === t ? activeClass : inactiveClass
                         }`}
                       >
+                        {ThemeIcon && <ThemeIcon className="w-4 h-4" />}
                         {label}
                       </button>
                     );
                   })}
                 </div>
                 {theme === "seasonal" && (
-                  <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-                    Colors change with holidays and seasons
-                  </p>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-full bg-orange-500" />
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      Colors change with holidays and seasons — currently <span className="font-medium text-orange-600 dark:text-orange-400">{(() => {
+                        const labels: Record<string, string> = {
+                          valentine: "Valentine's Day", stpatrick: "St. Patrick's",
+                          easter: "Easter", july4th: "4th of July",
+                          halloween: "Halloween", thanksgiving: "Thanksgiving",
+                          christmas: "Christmas", spring: "Spring",
+                          summer: "Summer", fall: "Fall", winter: "Winter",
+                        };
+                        return labels[getSeasonalAccent()] ?? "Auto";
+                      })()}</span>
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

@@ -151,6 +151,60 @@ export function useShoppingList() {
     [list, saveList]
   );
 
+  const updateItem = useCallback(
+    async (itemId: string, updates: Partial<Pick<ShoppingItem, "store" | "category" | "name">>) => {
+      await saveList({
+        ...list,
+        items: list.items.map((item) =>
+          item.id === itemId ? { ...item, ...updates } : item
+        ),
+      });
+    },
+    [list, saveList]
+  );
+
+  const clearCategory = useCallback(
+    async (category: ShoppingCategory) => {
+      await saveList({
+        ...list,
+        items: list.items.filter((item) => item.category !== category),
+      });
+    },
+    [list, saveList]
+  );
+
+  const classifyUncategorized = useCallback(async () => {
+    const uncategorized = list.items.filter((i) => i.category === "other");
+    if (uncategorized.length === 0) return;
+
+    try {
+      const result = await api.post<{ items: { name: string; category: string }[] }>(
+        "/shopping/classify",
+        { items: uncategorized.map((i) => i.name) }
+      );
+
+      if (result?.items) {
+        const categoryMap = new Map<string, string>();
+        for (const item of result.items) {
+          categoryMap.set(item.name.toLowerCase(), item.category);
+        }
+
+        const updatedItems = list.items.map((item) => {
+          if (item.category !== "other") return item;
+          const newCat = categoryMap.get(item.name.toLowerCase());
+          if (newCat && newCat !== "other") {
+            return { ...item, category: newCat as ShoppingCategory };
+          }
+          return item;
+        });
+
+        await saveList({ ...list, items: updatedItems });
+      }
+    } catch {
+      // AI classification failed silently
+    }
+  }, [list, saveList]);
+
   return {
     list,
     isLoading,
@@ -161,5 +215,8 @@ export function useShoppingList() {
     clearAll,
     addFromRecipe,
     removeFromRecipe,
+    updateItem,
+    clearCategory,
+    classifyUncategorized,
   };
 }
