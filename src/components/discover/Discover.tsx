@@ -6,7 +6,7 @@ import { classNames } from "../../lib/utils";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { TextArea } from "../ui/TextArea";
-import { Camera, Sparkles, Tag, ChevronRight } from "../ui/Icon";
+import { Camera, Sparkles, Tag, ChevronRight, ChevronDown, Link } from "../ui/Icon";
 
 interface DiscoverProps {
   visionEnabled?: boolean;
@@ -52,8 +52,12 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
   // -- Deals scanner state --
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [flyerPreview, setFlyerPreview] = useState<string | null>(null);
+  const [dealUrl, setDealUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
-  const [deals, setDeals] = useState<DealScanResult | null>(null);
+  const [allDeals, setAllDeals] = useState<Deal[]>([]);
+  const [dealsMeta, setDealsMeta] = useState<{ storeName?: string | null; validDates?: string | null } | null>(null);
+  const [dealsMessage, setDealsMessage] = useState<string | null>(null);
+  const [pageCount, setPageCount] = useState(0);
   const [preferredStores] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem("whisk_preferred_stores");
@@ -77,6 +81,7 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
     confidence: string;
     ingredients: string[];
   } | null>(null);
+  const [showIdentify, setShowIdentify] = useState(false);
 
   // Load ideas on category change
   const loadIdeas = useCallback(async (category: IdeaCategory) => {
@@ -105,20 +110,27 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
     loadIdeas(ideaCategory);
   }, [ideaCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Deals scanner
+  // Deals scanner — photo
   const handleFlyerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFlyerPreview(URL.createObjectURL(file));
-    setDeals(null);
+    setDealUrl("");
   };
 
   const handleScanDeals = async () => {
-    if (!fileInputRef.current?.files?.[0]) return;
+    const hasPhoto = fileInputRef.current?.files?.[0];
+    const hasUrl = dealUrl.trim();
+    if (!hasPhoto && !hasUrl) return;
+
     setIsScanning(true);
     try {
       const formData = new FormData();
-      formData.append("photo", fileInputRef.current.files[0]);
+      if (hasPhoto) {
+        formData.append("photo", fileInputRef.current!.files![0]!);
+      } else {
+        formData.append("url", hasUrl);
+      }
 
       const token = localStorage.getItem("whisk_token");
       const res = await fetch("/api/discover/scan-deals", {
@@ -129,12 +141,38 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
 
       if (!res.ok) throw new Error("Scan failed");
       const data = (await res.json()) as DealScanResult;
-      setDeals(data);
+
+      // Accumulate deals across pages
+      setAllDeals((prev) => [...prev, ...data.deals]);
+      if (data.storeName || data.validDates) {
+        setDealsMeta((prev) => prev ?? { storeName: data.storeName, validDates: data.validDates });
+      }
+      if (data.deals.length === 0 && data.message) {
+        setDealsMessage(data.message);
+      } else {
+        setDealsMessage(null);
+      }
+      setPageCount((n) => n + 1);
+
+      // Reset input for next page
+      setFlyerPreview(null);
+      setDealUrl("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch {
-      setDeals({ deals: [], message: "Failed to scan flyer. Try a clearer photo." });
+      setDealsMessage("Failed to scan. Try a clearer image or different URL.");
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const handleResetDeals = () => {
+    setAllDeals([]);
+    setDealsMeta(null);
+    setDealsMessage(null);
+    setPageCount(0);
+    setFlyerPreview(null);
+    setDealUrl("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // Identify photo
@@ -170,6 +208,8 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
     }
   };
 
+  const hasInput = flyerPreview || dealUrl.trim();
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -190,33 +230,38 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
             </h2>
           </div>
 
-          {!visionEnabled ? (
+          {!visionEnabled && !chatEnabled ? (
             <Card>
               <div className="text-center py-2">
                 <p className="text-sm text-stone-500 dark:text-stone-400">
-                  Add a vision AI provider in Settings to scan flyers
+                  Add an AI provider in Settings to scan deals
                 </p>
               </div>
             </Card>
           ) : (
             <>
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-xl border-2 border-dashed border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-stone-900 cursor-pointer overflow-hidden"
-              >
-                {flyerPreview ? (
-                  <img src={flyerPreview} alt="Flyer preview" className="w-full max-h-48 object-cover" />
-                ) : (
-                  <div className="text-center py-6">
-                    <Camera className="w-8 h-8 text-stone-400 dark:text-stone-500 mx-auto" />
-                    <p className="mt-1.5 text-sm font-medium text-stone-500 dark:text-stone-400">
-                      Photo a store flyer
-                    </p>
-                    <p className="text-xs text-stone-400 dark:text-stone-500">
-                      We'll extract the deals using AI
-                    </p>
-                  </div>
-                )}
+              {/* URL input */}
+              <div className="flex gap-2 mb-2">
+                <div className="relative flex-1">
+                  <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                  <input
+                    type="url"
+                    value={dealUrl}
+                    onChange={(e) => {
+                      setDealUrl(e.target.value);
+                      if (e.target.value.trim()) setFlyerPreview(null);
+                    }}
+                    placeholder="Paste store ad URL..."
+                    className="w-full rounded-lg border border-stone-300 bg-white pl-9 pr-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+                  />
+                </div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="shrink-0 rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 p-2 text-stone-500 dark:text-stone-400 hover:border-orange-400"
+                  title="Upload screenshot or photo"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
               </div>
               <input
                 ref={fileInputRef}
@@ -227,36 +272,52 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
                 className="hidden"
               />
 
+              {/* Photo preview */}
               {flyerPreview && (
+                <div className="rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
+                  <img src={flyerPreview} alt="Flyer preview" className="w-full max-h-48 object-cover" />
+                </div>
+              )}
+
+              {/* Scan button */}
+              {hasInput && (
                 <Button
                   fullWidth
                   onClick={handleScanDeals}
                   disabled={isScanning}
-                  className="mt-2"
                 >
-                  {isScanning ? "Scanning deals..." : "Extract Deals"}
+                  {isScanning
+                    ? "Scanning deals..."
+                    : pageCount > 0
+                      ? `Scan Page ${pageCount + 1}`
+                      : "Extract Deals"}
                 </Button>
               )}
 
-              {/* Deals results */}
-              {deals && (
+              {/* Accumulated deals results */}
+              {(allDeals.length > 0 || dealsMessage) && (
                 <div className="mt-3 space-y-2">
-                  {deals.storeName && (
+                  {dealsMeta?.storeName && (
                     <p className="text-sm font-semibold dark:text-stone-200">
-                      {deals.storeName}
-                      {deals.validDates && (
+                      {dealsMeta.storeName}
+                      {dealsMeta.validDates && (
                         <span className="ml-2 text-xs font-normal text-stone-400">
-                          {deals.validDates}
+                          {dealsMeta.validDates}
                         </span>
                       )}
                     </p>
                   )}
-                  {deals.message && deals.deals.length === 0 && (
-                    <p className="text-sm text-stone-500 dark:text-stone-400">{deals.message}</p>
+                  {pageCount > 1 && (
+                    <p className="text-xs text-stone-400 dark:text-stone-500">
+                      {allDeals.length} deals from {pageCount} pages
+                    </p>
                   )}
-                  {deals.deals.length > 0 && (
+                  {dealsMessage && allDeals.length === 0 && (
+                    <p className="text-sm text-stone-500 dark:text-stone-400">{dealsMessage}</p>
+                  )}
+                  {allDeals.length > 0 && (
                     <div className="grid grid-cols-1 gap-1.5">
-                      {deals.deals.map((deal, i) => (
+                      {allDeals.map((deal, i) => (
                         <div
                           key={i}
                           className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-stone-50 dark:bg-stone-900"
@@ -269,7 +330,7 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
                               <p className="text-[10px] text-stone-400 truncate">{deal.notes}</p>
                             )}
                           </div>
-                          <div className="text-right ml-2 flex-shrink-0">
+                          <div className="text-right ml-2 shrink-0">
                             <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
                               {deal.price}
                             </p>
@@ -284,18 +345,14 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
                       ))}
                     </div>
                   )}
-                  {deals.deals.length > 0 && (
+                  {allDeals.length > 0 && (
                     <Button
                       variant="secondary"
                       size="sm"
                       fullWidth
-                      onClick={() => {
-                        setDeals(null);
-                        setFlyerPreview(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
+                      onClick={handleResetDeals}
                     >
-                      Scan Another Flyer
+                      Start Over
                     </Button>
                   )}
                 </div>
@@ -408,124 +465,137 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
 
         <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
 
-        {/* ── Identify a Dish ─────────────────────────────── */}
+        {/* ── Identify a Dish (collapsed by default) ─────── */}
         <section className="px-4 py-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Camera className="w-4 h-4 text-orange-500" />
-            <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide">
+          <button
+            onClick={() => setShowIdentify(!showIdentify)}
+            className="flex items-center gap-2 w-full"
+          >
+            <Camera className="w-4 h-4 text-stone-400 dark:text-stone-500" />
+            <h2 className="text-sm font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
               Identify a Dish
             </h2>
-          </div>
+            <ChevronDown
+              className={classNames(
+                "w-4 h-4 text-stone-400 ml-auto transition-transform",
+                showIdentify && "rotate-180"
+              )}
+            />
+          </button>
 
-          {!visionEnabled && (
-            <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-3 py-2 mb-3">
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                Add a vision API key in Settings to enable photo identification.
-              </p>
-            </div>
-          )}
-
-          <div
-            onClick={() => identifyFileRef.current?.click()}
-            className="aspect-video rounded-xl border-2 border-dashed border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-stone-900 flex flex-col items-center justify-center cursor-pointer overflow-hidden"
-          >
-            {identifyPreview ? (
-              <img src={identifyPreview} alt="Preview" className="h-full w-full object-cover" />
-            ) : (
-              <div className="text-center">
-                <Camera className="w-8 h-8 text-stone-400 dark:text-stone-500 mx-auto" />
-                <p className="mt-1.5 text-sm font-medium text-stone-500 dark:text-stone-400">
-                  Snap a photo of any dish
-                </p>
-                <p className="text-xs text-stone-400 dark:text-stone-500">
-                  AI will identify it and suggest a recipe
-                </p>
-              </div>
-            )}
-          </div>
-          <input
-            ref={identifyFileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleIdentifyFile}
-            className="hidden"
-          />
-
-          {identifyPreview && !identifyResult && (
-            <div className="mt-2 space-y-2">
-              <TextArea
-                label="Add context (optional)"
-                value={identifyContext}
-                onChange={(e) => setIdentifyContext(e.target.value)}
-                placeholder="&quot;My mom's pot roast, about 6 servings&quot;"
-                rows={2}
-              />
-              <Button fullWidth onClick={handleIdentify} disabled={isIdentifying}>
-                {isIdentifying ? "Identifying..." : "Identify This"}
-              </Button>
-            </div>
-          )}
-
-          {identifyResult && (
-            <Card className="mt-3">
-              <div className="space-y-3">
-                <div className="flex items-start gap-2">
-                  <Sparkles className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
-                      This looks like:
-                    </p>
-                    <h3 className="text-lg font-bold dark:text-stone-100">
-                      {identifyResult.title}
-                    </h3>
-                    <p className="text-xs text-stone-400">
-                      Confidence: {identifyResult.confidence}
-                    </p>
-                  </div>
+          {showIdentify && (
+            <div className="mt-3">
+              {!visionEnabled && (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-3 py-2 mb-3">
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Add a vision API key in Settings to enable photo identification.
+                  </p>
                 </div>
+              )}
 
-                {identifyResult.ingredients.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium text-stone-600 dark:text-stone-300 mb-1">
-                      Detected ingredients:
+              <div
+                onClick={() => identifyFileRef.current?.click()}
+                className="aspect-video rounded-xl border-2 border-dashed border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-stone-900 flex flex-col items-center justify-center cursor-pointer overflow-hidden"
+              >
+                {identifyPreview ? (
+                  <img src={identifyPreview} alt="Preview" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="text-center">
+                    <Camera className="w-8 h-8 text-stone-400 dark:text-stone-500 mx-auto" />
+                    <p className="mt-1.5 text-sm font-medium text-stone-500 dark:text-stone-400">
+                      Snap a photo of any dish
                     </p>
-                    <ul className="space-y-0.5">
-                      {identifyResult.ingredients.map((ing, i) => (
-                        <li key={i} className="text-sm text-stone-600 dark:text-stone-400 flex gap-1.5 items-center">
-                          <span className="w-1 h-1 rounded-full bg-stone-400 shrink-0" /> {ing}
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="text-xs text-stone-400 dark:text-stone-500">
+                      AI will identify it and suggest a recipe
+                    </p>
                   </div>
                 )}
+              </div>
+              <input
+                ref={identifyFileRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleIdentifyFile}
+                className="hidden"
+              />
 
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      const params = new URLSearchParams({
-                        title: identifyResult.title,
-                        ingredients: identifyResult.ingredients.join(","),
-                      });
-                      navigate(`/recipes/new?${params.toString()}`);
-                    }}
-                  >
-                    Save as Recipe
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setIdentifyResult(null);
-                      setIdentifyPreview(null);
-                    }}
-                  >
-                    Try Again
+              {identifyPreview && !identifyResult && (
+                <div className="mt-2 space-y-2">
+                  <TextArea
+                    label="Add context (optional)"
+                    value={identifyContext}
+                    onChange={(e) => setIdentifyContext(e.target.value)}
+                    placeholder="&quot;My mom's pot roast, about 6 servings&quot;"
+                    rows={2}
+                  />
+                  <Button fullWidth onClick={handleIdentify} disabled={isIdentifying}>
+                    {isIdentifying ? "Identifying..." : "Identify This"}
                   </Button>
                 </div>
-              </div>
-            </Card>
+              )}
+
+              {identifyResult && (
+                <Card className="mt-3">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-stone-500 dark:text-stone-400">
+                          This looks like:
+                        </p>
+                        <h3 className="text-lg font-bold dark:text-stone-100">
+                          {identifyResult.title}
+                        </h3>
+                        <p className="text-xs text-stone-400">
+                          Confidence: {identifyResult.confidence}
+                        </p>
+                      </div>
+                    </div>
+
+                    {identifyResult.ingredients.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-stone-600 dark:text-stone-300 mb-1">
+                          Detected ingredients:
+                        </p>
+                        <ul className="space-y-0.5">
+                          {identifyResult.ingredients.map((ing, i) => (
+                            <li key={i} className="text-sm text-stone-600 dark:text-stone-400 flex gap-1.5 items-center">
+                              <span className="w-1 h-1 rounded-full bg-stone-400 shrink-0" /> {ing}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const params = new URLSearchParams({
+                            title: identifyResult.title,
+                            ingredients: identifyResult.ingredients.join(","),
+                          });
+                          navigate(`/recipes/new?${params.toString()}`);
+                        }}
+                      >
+                        Save as Recipe
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setIdentifyResult(null);
+                          setIdentifyPreview(null);
+                        }}
+                      >
+                        Try Again
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
+            </div>
           )}
         </section>
       </div>

@@ -171,6 +171,7 @@ function AppShell({
               <RecipeForm
                 allTags={tags.allTagNames}
                 onAddTag={async (name) => { await tags.addCustomTag(name); }}
+                chatEnabled={capabilities.chat}
               />
             }
           />
@@ -190,6 +191,7 @@ function AppShell({
               <RecipeForm
                 allTags={tags.allTagNames}
                 onAddTag={async (name) => { await tags.addCustomTag(name); }}
+                chatEnabled={capabilities.chat}
               />
             }
           />

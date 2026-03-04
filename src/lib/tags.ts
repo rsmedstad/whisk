@@ -76,6 +76,25 @@ export const TAG_GROUP_ORDER: TagGroup[] = [
   "custom",
 ];
 
+// Speed tags that are auto-derived from time data (not "meal prep" — that's a style choice)
+const AUTO_SPEED_TAGS = new Set(["under 30 min", "quick", "weeknight"]);
+
+export function deriveSpeedTags(prepTime?: number, cookTime?: number): string[] {
+  const total = (prepTime ?? 0) + (cookTime ?? 0);
+  if (total <= 0) return [];
+  if (total <= 30) return ["under 30 min", "quick", "weeknight"];
+  if (total <= 45) return ["weeknight"];
+  return [];
+}
+
+export function mergeSpeedTags(existingTags: string[], prepTime?: number, cookTime?: number): string[] {
+  const filtered = existingTags.filter((t) => !AUTO_SPEED_TAGS.has(t));
+  const derived = deriveSpeedTags(prepTime, cookTime);
+  return [...new Set([...filtered, ...derived])];
+}
+
+export const PRESET_TAG_NAMES = PRESET_TAGS.map((t) => t.name);
+
 export function getTagsByGroup(
   tags: TagDefinition[]
 ): Map<TagGroup, TagDefinition[]> {

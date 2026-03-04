@@ -50,6 +50,8 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
+  const [isRetagging, setIsRetagging] = useState(false);
+  const [retagResult, setRetagResult] = useState<string | null>(null);
 
   const handleUnitsChange = (u: "imperial" | "metric") => {
     setUnits(u);
@@ -493,6 +495,35 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
               <Button variant="secondary" fullWidth onClick={() => navigate("/settings/import")}>
                 Import from CSV
               </Button>
+              <div>
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  disabled={isRetagging}
+                  onClick={async () => {
+                    setIsRetagging(true);
+                    setRetagResult(null);
+                    try {
+                      const data = await api.post<{ updated: number }>("/recipes/retag");
+                      setRetagResult(`Updated ${data.updated} recipe${data.updated === 1 ? "" : "s"}`);
+                    } catch {
+                      setRetagResult("Failed to refresh tags");
+                    } finally {
+                      setIsRetagging(false);
+                    }
+                  }}
+                >
+                  {isRetagging ? "Refreshing..." : "Refresh Speed Tags"}
+                </Button>
+                <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
+                  Recalculates time-based tags for all recipes
+                </p>
+                {retagResult && (
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center font-medium">
+                    {retagResult}
+                  </p>
+                )}
+              </div>
               <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
                 <Button
                   variant="secondary"

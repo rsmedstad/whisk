@@ -10,10 +10,11 @@ import {
   classNames,
   parseTimerFromText,
 } from "../../lib/utils";
+import { categorizeIngredient, CATEGORY_LABELS, CATEGORY_ORDER } from "../../lib/categories";
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { TagChip } from "../ui/TagChip";
-import { ChevronLeft, HeartFilled, Heart, Pencil, EllipsisVertical, PlayCircle, Clock, Users, Stopwatch, Check, Minus, Plus, Fire, Trash, Tag, XMark } from "../ui/Icon";
+import { ChevronLeft, HeartFilled, Heart, Pencil, EllipsisVertical, PlayCircle, Clock, Users, Stopwatch, Check, Fire, Trash, Tag, XMark } from "../ui/Icon";
 
 interface RecipeDetailProps {
   onStartTimer: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
@@ -44,6 +45,9 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [newTag, setNewTag] = useState("");
   const [shoppingToast, setShoppingToast] = useState<{ message: string; recipeId: string } | null>(null);
   const [justCooked, setJustCooked] = useState(false);
+  const [ingredientSort, setIngredientSort] = useState<"recipe" | "category">(
+    () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
+  );
 
   // Background refresh — updates from network silently
   useEffect(() => {
@@ -117,6 +121,11 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     setShoppingToast(null);
   }, [shoppingToast, onUndoShoppingList]);
 
+  const photos = useMemo(
+    () => recipe?.photos?.length ? recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i) : [],
+    [recipe?.photos]
+  );
+
   if (isLoading || !recipe) {
     return <LoadingSpinner className="py-20" size="lg" />;
   }
@@ -125,11 +134,6 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const servings = scaledServings ?? originalServings;
   const ingredients = recipe.ingredients.map((ing) =>
     scaleIngredient(ing, originalServings, servings)
-  );
-
-  const photos = useMemo(
-    () => recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i),
-    [recipe.photos]
   );
 
   return (
@@ -412,37 +416,67 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           <section>
             {recipe.servings && (
               <div className="flex items-center gap-3 mb-3">
-                <span className="text-sm text-stone-500 dark:text-stone-400">
-                  Servings:
+                <span className="text-sm text-stone-500 dark:text-stone-400 shrink-0">
+                  Scale:
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      setScaledServings(Math.max(1, servings - 1))
-                    }
-                    className="h-8 w-8 rounded-full border border-stone-300 flex items-center justify-center dark:border-stone-600 dark:text-stone-300"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <span className="w-8 text-center font-medium dark:text-stone-100">
-                    {servings}
-                  </span>
-                  <button
-                    onClick={() => setScaledServings(servings + 1)}
-                    className="h-8 w-8 rounded-full border border-stone-300 flex items-center justify-center dark:border-stone-600 dark:text-stone-300"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                <div className="flex gap-1.5">
+                  {[
+                    { label: "½×", mult: 0.5 },
+                    { label: "1×", mult: 1 },
+                    { label: "2×", mult: 2 },
+                    { label: "3×", mult: 3 },
+                    { label: "4×", mult: 4 },
+                  ].map(({ label, mult }) => {
+                    const target = Math.round(originalServings * mult);
+                    const isActive = servings === target;
+                    return (
+                      <button
+                        key={mult}
+                        onClick={() => setScaledServings(target)}
+                        className={classNames(
+                          "px-3 py-1 rounded-full text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-orange-500 text-white"
+                            : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+                        )}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
+                <span className="text-xs text-stone-400 dark:text-stone-500 shrink-0">
+                  {servings} servings
+                </span>
               </div>
             )}
 
+            {/* Ingredient sort toggle */}
+            <div className="bg-stone-100 dark:bg-stone-800 rounded-lg p-0.5 flex mb-3">
+              {([
+                { value: "recipe" as const, label: "Recipe Order" },
+                { value: "category" as const, label: "By Category" },
+              ]).map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => {
+                    setIngredientSort(value);
+                    localStorage.setItem("whisk_ingredient_sort", value);
+                  }}
+                  className={classNames(
+                    "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                    ingredientSort === value
+                      ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
+                      : "text-stone-500 dark:text-stone-400"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {ingredients.length > 0 ? (
-              <ul className="space-y-2">
-                {ingredients.map((ing, i) => (
-                  <IngredientRow key={i} ingredient={ing} />
-                ))}
-              </ul>
+              <GroupedIngredients ingredients={ingredients} sort={ingredientSort} />
             ) : (
               <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">
                 No ingredients listed
@@ -592,7 +626,91 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   );
 }
 
-function IngredientRow({ ingredient }: { ingredient: Ingredient }) {
+function GroupedIngredients({ ingredients, sort }: { ingredients: Ingredient[]; sort: "recipe" | "category" }) {
+  // If any ingredient has an explicit group (e.g. "For the sauce"), use those
+  const hasExplicitGroups = ingredients.some((i) => i.group);
+
+  // Recipe order: use explicit groups if present, otherwise flat list
+  if (sort === "recipe") {
+    if (hasExplicitGroups) {
+      const groups = new Map<string, Ingredient[]>();
+      for (const ing of ingredients) {
+        const key = ing.group ?? "";
+        const list = groups.get(key);
+        if (list) list.push(ing);
+        else groups.set(key, [ing]);
+      }
+      return (
+        <div className="space-y-4">
+          {[...groups.entries()].map(([group, ings]) => (
+            <div key={group}>
+              {group && (
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1.5">
+                  {group}
+                </h3>
+              )}
+              <ul className="space-y-2">
+                {ings.map((ing, i) => (
+                  <IngredientRow key={i} ingredient={ing} hideGroup />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <ul className="space-y-2">
+        {ingredients.map((ing, i) => (
+          <IngredientRow key={i} ingredient={ing} />
+        ))}
+      </ul>
+    );
+  }
+
+  // Category sort: auto-group by shopping category
+  const grouped = new Map<string, Ingredient[]>();
+  for (const ing of ingredients) {
+    const cat = categorizeIngredient(ing.name);
+    const list = grouped.get(cat);
+    if (list) list.push(ing);
+    else grouped.set(cat, [ing]);
+  }
+
+  // If everything falls into one category, skip headers
+  if (grouped.size <= 1) {
+    return (
+      <ul className="space-y-2">
+        {ingredients.map((ing, i) => (
+          <IngredientRow key={i} ingredient={ing} />
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {CATEGORY_ORDER.filter((cat) => grouped.has(cat)).map((cat) => {
+        const ings = grouped.get(cat)!;
+        return (
+          <div key={cat}>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1.5">
+              {CATEGORY_LABELS[cat]}
+            </h3>
+            <ul className="space-y-2">
+              {ings.map((ing, i) => (
+                <IngredientRow key={i} ingredient={ing} />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function IngredientRow({ ingredient, hideGroup }: { ingredient: Ingredient; hideGroup?: boolean }) {
   const [checked, setChecked] = useState(false);
 
   const display = [ingredient.amount, ingredient.unit, ingredient.name]
@@ -618,7 +736,7 @@ function IngredientRow({ ingredient }: { ingredient: Ingredient }) {
         {checked && <Check className="w-3 h-3" />}
       </span>
       <span className="dark:text-stone-200">
-        {ingredient.group && (
+        {!hideGroup && ingredient.group && (
           <span className="font-medium text-stone-500 dark:text-stone-400">
             {ingredient.group}:{" "}
           </span>

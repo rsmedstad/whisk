@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "deploy": "bun run build && npx wrangler pages deploy dist",
+    "deploy": "bun run build && npx wrangler pages deploy dist --branch main",
     "setup": "node scripts/setup.js",
     "import-csv": "bun scripts/import-csv.ts"
   },

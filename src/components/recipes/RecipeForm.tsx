@@ -4,23 +4,25 @@ import type { Recipe, RecipePhoto, Ingredient, Step } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { compressImage } from "../../lib/compress";
+import { mergeSpeedTags } from "../../lib/tags";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { TextArea } from "../ui/TextArea";
 import { TagChip } from "../ui/TagChip";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { parseTimerFromText } from "../../lib/utils";
-import { ChevronLeft, XMark, Plus, Camera } from "../ui/Icon";
+import { ChevronLeft, XMark, Plus, Camera, Sparkles } from "../ui/Icon";
 
 interface RecipeFormProps {
   allTags: string[];
   onAddTag: (name: string) => Promise<void>;
+  chatEnabled?: boolean;
 }
 
 const EMPTY_INGREDIENT: Ingredient = { name: "", amount: "", unit: "" };
 const EMPTY_STEP: Step = { text: "" };
 
-export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
+export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -56,7 +58,33 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
   const [newTag, setNewTag] = useState("");
   const [photos, setPhotos] = useState<RecipePhoto[]>(cachedRecipe?.photos ?? []);
   const [isUploading, setIsUploading] = useState(false);
+  const [isAutoTagging, setIsAutoTagging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchAutoTags = async (t: string, desc: string, ings: Ingredient[]) => {
+    if (!chatEnabled) return;
+    try {
+      const res = await fetch("/api/ai/auto-tag", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+        },
+        body: JSON.stringify({
+          title: t,
+          description: desc,
+          ingredients: ings.filter((i) => i.name.trim()).map((i) => i.name),
+        }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { tags?: string[] };
+      if (Array.isArray(data.tags)) {
+        setTags((prev) => [...new Set([...prev, ...data.tags!])]);
+      }
+    } catch {
+      // Silent fail
+    }
+  };
 
   // Background refresh for edit mode — update fields if server has newer data
   useEffect(() => {
@@ -113,6 +141,19 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
         if (Array.isArray(data.photos) && data.photos.length) {
           setPhotos(data.photos as RecipePhoto[]);
         }
+        // Auto-tag from imported data
+        const importedPrep = data.prepTime ? Number(data.prepTime) : undefined;
+        const importedCook = data.cookTime ? Number(data.cookTime) : undefined;
+        if (importedPrep || importedCook) {
+          setTags((prev) => mergeSpeedTags(prev, importedPrep, importedCook));
+        }
+        if (data.title) {
+          fetchAutoTags(
+            data.title as string,
+            (data.description as string) ?? "",
+            Array.isArray(data.ingredients) ? (data.ingredients as Ingredient[]) : [],
+          );
+        }
       } catch {
         // Silent fail — user can still manually import or fill in
       }
@@ -138,7 +179,7 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
         favorite: false,
         photos,
         thumbnailUrl: photos.find((p) => p.isPrimary)?.url ?? photos[0]?.url,
-        tags,
+        tags: mergeSpeedTags(tags, prepTime ? parseInt(prepTime) : undefined, cookTime ? parseInt(cookTime) : undefined),
         cuisine: cuisine.trim() || undefined,
         prepTime: prepTime ? parseInt(prepTime) : undefined,
         cookTime: cookTime ? parseInt(cookTime) : undefined,
@@ -299,6 +340,19 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
       if (data.servings) setServings(String(data.servings));
       if (Array.isArray(data.photos) && data.photos.length) {
         setPhotos(data.photos as RecipePhoto[]);
+      }
+      // Auto-tag from imported data
+      const importedPrep = data.prepTime ? Number(data.prepTime) : undefined;
+      const importedCook = data.cookTime ? Number(data.cookTime) : undefined;
+      if (importedPrep || importedCook) {
+        setTags((prev) => mergeSpeedTags(prev, importedPrep, importedCook));
+      }
+      if (data.title) {
+        fetchAutoTags(
+          data.title as string,
+          (data.description as string) ?? "",
+          Array.isArray(data.ingredients) ? (data.ingredients as Ingredient[]) : [],
+        );
       }
     } catch {
       alert("Could not import from that URL. Try adding manually.");
@@ -586,9 +640,30 @@ export function RecipeForm({ allTags, onAddTag }: RecipeFormProps) {
 
         {/* Tags */}
         <section>
-          <h2 className="text-sm font-semibold mb-2 dark:text-stone-100">
-            Tags
-          </h2>
+          <div className="flex items-center gap-2 mb-2">
+            <h2 className="text-sm font-semibold dark:text-stone-100">
+              Tags
+            </h2>
+            {chatEnabled && (
+              <button
+                type="button"
+                disabled={isAutoTagging || !title.trim()}
+                onClick={async () => {
+                  setIsAutoTagging(true);
+                  await fetchAutoTags(title, description, ingredients);
+                  setIsAutoTagging(false);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900 disabled:opacity-50 transition-colors"
+              >
+                {isAutoTagging ? (
+                  <span className="inline-block w-3 h-3 border border-orange-300 border-t-orange-600 rounded-full animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                Auto-tag
+              </button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-1.5 mb-2">
             {allTags.slice(0, 20).map((tag) => (
               <TagChip
