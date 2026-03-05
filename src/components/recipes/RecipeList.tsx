@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RecipeIndexEntry } from "../../types";
 import { filterAndSortRecipes } from "../../hooks/useRecipes";
@@ -13,6 +13,43 @@ import { FirstRunGuide } from "./FirstRunGuide";
 import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Check } from "../ui/Icon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category";
+
+/** Enables click-drag horizontal scrolling on desktop (touch works natively). */
+function useDragScroll() {
+  const ref = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    dragging.current = true;
+    startX.current = e.pageX - el.offsetLeft;
+    scrollLeft.current = el.scrollLeft;
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none";
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragging.current) return;
+    const el = ref.current;
+    if (!el) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    el.scrollLeft = scrollLeft.current - (x - startX.current);
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    dragging.current = false;
+    el.style.cursor = "";
+    el.style.userSelect = "";
+  }, []);
+
+  return { ref, onMouseDown, onMouseMove, onMouseUp, onMouseLeave: onMouseUp };
+}
 
 interface RecipeListProps {
   recipes: RecipeIndexEntry[];
@@ -256,21 +293,19 @@ export function RecipeList({
                   </span>
                 </h2>
                 {recipeLayout === "horizontal" ? (
-                  <div className="overflow-hidden -mx-4">
-                    <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 px-4">
-                      {group.recipes.map((recipe) => (
-                        <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
-                          <RecipeCard
-                            recipe={recipe}
-                            onClick={() => navigate(`/recipes/${recipe.id}`)}
-                            onToggleFavorite={() => onToggleFavorite(recipe.id)}
-                          />
-                        </div>
-                      ))}
-                      {/* Spacer for last card peek */}
-                      <div className="shrink-0 w-1" aria-hidden />
-                    </div>
-                  </div>
+                  <CarouselRow>
+                    {group.recipes.map((recipe) => (
+                      <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
+                        <RecipeCard
+                          recipe={recipe}
+                          onClick={() => navigate(`/recipes/${recipe.id}`)}
+                          onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                        />
+                      </div>
+                    ))}
+                    {/* Spacer for last card peek */}
+                    <div className="shrink-0 w-1" aria-hidden />
+                  </CarouselRow>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                     {group.recipes.map((recipe) => (
@@ -298,6 +333,24 @@ export function RecipeList({
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CarouselRow({ children }: { children: React.ReactNode }) {
+  const drag = useDragScroll();
+  return (
+    <div className="overflow-hidden -mx-4">
+      <div
+        ref={drag.ref}
+        onMouseDown={drag.onMouseDown}
+        onMouseMove={drag.onMouseMove}
+        onMouseUp={drag.onMouseUp}
+        onMouseLeave={drag.onMouseLeave}
+        className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 px-4 cursor-grab"
+      >
+        {children}
       </div>
     </div>
   );
