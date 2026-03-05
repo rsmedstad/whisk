@@ -9,7 +9,7 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
-import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun, Globe } from "./ui/Icon";
+import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun, Globe, Share } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -58,6 +58,7 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
     localStorage.setItem("whisk_recipe_layout", layout);
   };
 
+  const [showShareModal, setShowShareModal] = useState(false);
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -162,6 +163,13 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
           <h1 className="text-xl font-bold dark:text-stone-100">Settings</h1>
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="ml-auto p-2 text-stone-400 hover:text-orange-500 dark:text-stone-500 dark:hover:text-orange-400 transition-colors"
+            title="Invite to recipe book"
+          >
+            <Share className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -760,6 +768,60 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
           )}
         </section>
       </div>
+
+      {/* Share / Invite Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" onClick={() => setShowShareModal(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 shadow-xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold dark:text-stone-100">Invite to Recipe Book</h2>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              Share this link and password with someone to give them access to your recipe book.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-stone-500 dark:text-stone-400 block mb-1">Link</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={window.location.origin}
+                    className="flex-1 rounded-[var(--wk-radius-input)] border border-stone-300 bg-stone-50 px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.origin);
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-stone-400 dark:text-stone-500">
+                They'll need the shared password to sign in. Share it separately for security.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              {navigator.share && (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    navigator.share({
+                      title: "Join my Whisk recipe book",
+                      text: "Join my recipe book on Whisk!",
+                      url: window.location.origin,
+                    }).catch(() => {});
+                  }}
+                >
+                  Share
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setShowShareModal(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

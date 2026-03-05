@@ -782,8 +782,8 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   className={classNames(
                     "flex-1 flex items-center justify-center gap-2 rounded-(--wk-radius-btn) border px-4 py-2.5 text-sm font-medium transition-colors",
                     justCooked
-                      ? "border-green-500 bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400"
-                      : "border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400"
+                      ? "border-orange-500 bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400"
+                      : "border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400"
                   )}
                 >
                   <Check className="w-4 h-4" />
@@ -805,11 +805,44 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 )}
               </div>
               {(recipe.cookedCount || recipe.lastCookedAt) && (
-                <p className="text-xs text-stone-400 dark:text-stone-500 text-center">
-                  {recipe.cookedCount ? `Cooked ${recipe.cookedCount} time${recipe.cookedCount !== 1 ? "s" : ""}` : ""}
+                <div className="flex items-center justify-center gap-2 text-xs text-stone-400 dark:text-stone-500">
+                  {recipe.cookedCount ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          const newCount = Math.max(0, (recipe.cookedCount ?? 0) - 1);
+                          updateRecipe(recipe.id, {
+                            cookedCount: newCount,
+                            ...(newCount === 0 ? { lastCookedAt: undefined } : {}),
+                          });
+                          setRecipe((r) => r ? {
+                            ...r,
+                            cookedCount: newCount,
+                            ...(newCount === 0 ? { lastCookedAt: undefined } : {}),
+                          } : r);
+                        }}
+                        className="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 flex items-center justify-center hover:border-orange-500 hover:text-orange-500 transition-colors"
+                        title="Decrease cooked count"
+                      >
+                        -
+                      </button>
+                      <span>Cooked {recipe.cookedCount} time{recipe.cookedCount !== 1 ? "s" : ""}</span>
+                      <button
+                        onClick={() => {
+                          const newCount = (recipe.cookedCount ?? 0) + 1;
+                          updateRecipe(recipe.id, { cookedCount: newCount, lastCookedAt: new Date().toISOString() });
+                          setRecipe((r) => r ? { ...r, cookedCount: newCount, lastCookedAt: new Date().toISOString() } : r);
+                        }}
+                        className="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 flex items-center justify-center hover:border-orange-500 hover:text-orange-500 transition-colors"
+                        title="Increase cooked count"
+                      >
+                        +
+                      </button>
+                    </span>
+                  ) : null}
                   {recipe.cookedCount && recipe.lastCookedAt ? " · " : ""}
                   {recipe.lastCookedAt ? `Last ${new Date(recipe.lastCookedAt).toLocaleDateString()}` : ""}
-                </p>
+                </div>
               )}
             </div>
 

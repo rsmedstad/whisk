@@ -194,24 +194,26 @@ export function RecipeList({
         </div>
 
         {/* Search */}
-        <div className="pb-2 relative">
-          <input
-            type="search"
-            enterKeyHint="search"
-            placeholder="Search recipes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-            className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 pr-8 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-            >
-              <XMark className="w-4 h-4" />
-            </button>
-          )}
+        <div className="pb-2">
+          <div className="relative">
+            <input
+              type="search"
+              enterKeyHint="search"
+              placeholder="Search recipes..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+              className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 pr-8 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+              >
+                <XMark className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filter bar */}
@@ -230,6 +232,7 @@ export function RecipeList({
             selected={favoritesOnly}
             onToggle={() => { setFavoritesOnly(!favoritesOnly); setOpenDropdown(null); }}
           />
+          <span className="text-stone-300 dark:text-stone-600 text-sm select-none">|</span>
           {filterGroups.map((group) => {
             const activeCount = group.tags.filter((t) => selectedTags.includes(t)).length;
             return (
@@ -240,7 +243,7 @@ export function RecipeList({
                       setOpenDropdown(null);
                     } else {
                       const rect = e.currentTarget.getBoundingClientRect();
-                      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                      setDropdownPos({ top: rect.bottom + 4, left: Math.max(8, Math.min(rect.left, window.innerWidth - 180)) });
                       setOpenDropdown(group.key);
                     }
                   }}
@@ -267,7 +270,8 @@ export function RecipeList({
                   setOpenDropdown(null);
                 } else {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  setDropdownPos({ top: rect.bottom + 4, left: rect.right - 120, right: undefined });
+                  const right = window.innerWidth - rect.right;
+                  setDropdownPos({ top: rect.bottom + 4, left: 0, right: Math.max(8, right) });
                   setOpenDropdown("sort");
                 }
               }}
@@ -294,7 +298,12 @@ export function RecipeList({
               <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
               <div
                 className="fixed z-50 min-w-35 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1"
-                style={{ top: dropdownPos.top, left: dropdownPos.left }}
+                style={{
+                  top: dropdownPos.top,
+                  ...(dropdownPos.right != null
+                    ? { right: dropdownPos.right }
+                    : { left: Math.min(dropdownPos.left, window.innerWidth - 160) }),
+                }}
               >
                 {isSort
                   ? sortOptions.map(([value, label]) => (
