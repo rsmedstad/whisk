@@ -192,8 +192,11 @@ export interface CookingTimer {
 
 // ── Settings ────────────────────────────────────────────
 
+export type AppStyle = "modern" | "editorial" | "soft" | "brutalist" | "glass";
+
 export interface AppSettings {
   theme: "system" | "light" | "dark" | "seasonal";
+  style: AppStyle;
   units: "imperial" | "metric";
   temperatureUnit: "F" | "C";
   showGramWeights: boolean;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AppSettings, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
+import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
 import { getSeasonalAccent } from "../lib/seasonal";
@@ -14,11 +14,13 @@ import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun } from "./ui/Icon";
 interface SettingsProps {
   theme: AppSettings["theme"];
   onSetTheme: (theme: AppSettings["theme"]) => void;
+  style: AppStyle;
+  onSetStyle: (style: AppStyle) => void;
   onLogout: () => void;
   capabilities: AICapabilities;
 }
 
-export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
+export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout }: SettingsProps) {
   const aiConfig = useAIConfig();
   const hh = useHousehold();
   const navigate = useNavigate();
@@ -198,7 +200,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                       <button
                         key={t}
                         onClick={() => onSetTheme(t)}
-                        className={`py-2 px-2 rounded-lg font-medium border flex items-center justify-center gap-1.5 ${
+                        className={`py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex items-center justify-center gap-1.5 ${
                           t === "seasonal" ? "" : "capitalize text-sm "
                         }${theme === t ? activeClass : inactiveClass}`}
                       >
@@ -238,6 +240,33 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                   </div>
                 )}
               </div>
+
+              {/* Design Style */}
+              <div>
+                <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                  Design Style
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { id: "modern" as const, label: "Modern", desc: "Clean & minimal" },
+                    { id: "editorial" as const, label: "Editorial", desc: "Sharp & typographic" },
+                    { id: "soft" as const, label: "Soft", desc: "Rounded & cozy" },
+                    { id: "brutalist" as const, label: "Brutalist", desc: "Bold & raw" },
+                    { id: "glass" as const, label: "Glass", desc: "Frosted & layered" },
+                  ]).map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => onSetStyle(s.id)}
+                      className={`py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-0.5 ${
+                        style === s.id ? activeClass : inactiveClass
+                      }`}
+                    >
+                      <span className="text-sm">{s.label}</span>
+                      <span className="text-[10px] opacity-60">{s.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </Card>
         </section>
@@ -258,7 +287,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                     <button
                       key={u}
                       onClick={() => handleUnitsChange(u)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border capitalize ${
+                      className={`flex-1 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border capitalize ${
                         units === u ? activeClass : inactiveClass
                       }`}
                     >
@@ -277,7 +306,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                     <button
                       key={t}
                       onClick={() => handleTempChange(t)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border ${
+                      className={`flex-1 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
                         tempUnit === t ? activeClass : inactiveClass
                       }`}
                     >
@@ -349,7 +378,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => handleHouseholdChange(householdSize - 1)}
-                    className="w-9 h-9 rounded-lg border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-medium text-lg"
+                    className="w-9 h-9 rounded-[var(--wk-radius-btn)] border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-medium text-lg"
                   >
                     -
                   </button>
@@ -358,7 +387,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                   </span>
                   <button
                     onClick={() => handleHouseholdChange(householdSize + 1)}
-                    className="w-9 h-9 rounded-lg border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-medium text-lg"
+                    className="w-9 h-9 rounded-[var(--wk-radius-btn)] border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-medium text-lg"
                   >
                     +
                   </button>
@@ -378,7 +407,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                     return (
                       <label
                         key={store}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 cursor-pointer"
+                        className="flex items-center gap-3 px-3 py-2 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 cursor-pointer"
                       >
                         <input
                           type="checkbox"

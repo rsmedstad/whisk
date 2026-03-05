@@ -150,7 +150,7 @@ export function RecipeList({
             placeholder="Search recipes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+            className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
           />
         </div>
 
@@ -172,7 +172,7 @@ export function RecipeList({
                   setShowSort(false);
                 }}
                 className={classNames(
-                  "px-3 py-1 rounded-full text-xs font-medium border",
+                  "px-3 py-1 rounded-[var(--wk-radius-tag)] text-xs font-medium border",
                   sort === value
                     ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                     : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
@@ -293,7 +293,7 @@ function RecipeCard({
   return (
     <button
       onClick={onClick}
-      className="flex w-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
+      className="wk-card flex w-full flex-col overflow-hidden rounded-[var(--wk-radius-card)] border-[length:var(--wk-border-card)] border-stone-200 bg-white text-left shadow-[var(--wk-shadow-card)] transition-all hover:shadow-[var(--wk-shadow-card-hover)] active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
     >
       {/* Image */}
       <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">

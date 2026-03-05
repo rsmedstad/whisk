@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
+import { useStyle } from "./hooks/useStyle";
 import { useRecipes } from "./hooks/useRecipes";
 import { useShoppingList } from "./hooks/useShoppingList";
 import { useMealPlan } from "./hooks/useMealPlan";
@@ -12,7 +13,7 @@ import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
-import type { Ingredient, AppSettings, OnboardingPrefs } from "./types";
+import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs } from "./types";
 
 // Lazy-load everything except the home tab (RecipeList) for instant first paint
 const RecipeDetail = lazy(() => import("./components/recipes/RecipeDetail").then(m => ({ default: m.RecipeDetail })));
@@ -30,9 +31,9 @@ function RouteSkeleton() {
   return (
     <div className="animate-pulse px-4 pt-16 space-y-4">
       <div className="h-6 w-40 bg-stone-200 dark:bg-stone-800 rounded" />
-      <div className="h-20 bg-stone-100 dark:bg-stone-800 rounded-xl" />
-      <div className="h-20 bg-stone-100 dark:bg-stone-800 rounded-xl" />
-      <div className="h-20 bg-stone-100 dark:bg-stone-800 rounded-xl" />
+      <div className="h-20 bg-stone-100 dark:bg-stone-800 rounded-[var(--wk-radius-card)]" />
+      <div className="h-20 bg-stone-100 dark:bg-stone-800 rounded-[var(--wk-radius-card)]" />
+      <div className="h-20 bg-stone-100 dark:bg-stone-800 rounded-[var(--wk-radius-card)]" />
     </div>
   );
 }
@@ -40,6 +41,7 @@ function RouteSkeleton() {
 export function App() {
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
+  const { style, setStyle } = useStyle();
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const handleLogin = useCallback(async (password: string, name?: string) => {
@@ -98,6 +100,8 @@ export function App() {
       <AppShell
         theme={theme}
         onSetTheme={setTheme}
+        style={style}
+        onSetStyle={setStyle}
         onLogout={auth.logout}
       />
     </BrowserRouter>
@@ -107,10 +111,14 @@ export function App() {
 function AppShell({
   theme,
   onSetTheme,
+  style,
+  onSetStyle,
   onLogout,
 }: {
   theme: AppSettings["theme"];
   onSetTheme: (t: AppSettings["theme"]) => void;
+  style: AppStyle;
+  onSetStyle: (s: AppStyle) => void;
   onLogout: () => void;
 }) {
   const recipes = useRecipes();
@@ -243,6 +251,8 @@ function AppShell({
               <Settings
                 theme={theme}
                 onSetTheme={onSetTheme}
+                style={style}
+                onSetStyle={onSetStyle}
                 onLogout={onLogout}
                 capabilities={capabilities}
               />

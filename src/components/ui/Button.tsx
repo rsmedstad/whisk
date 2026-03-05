@@ -36,7 +36,7 @@ export function Button({
   return (
     <button
       className={classNames(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors",
+        "inline-flex items-center justify-center gap-2 rounded-[var(--wk-radius-btn)] font-medium transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2",
         "disabled:opacity-50 disabled:pointer-events-none",
         variants[variant],

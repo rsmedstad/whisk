@@ -233,6 +233,113 @@
   --color-stone-950: #0c0a10;
 }
 
+/* ── Design Style Tokens ──────────────────────────────────
+   Override shape, depth, and texture via data-style attribute
+   on <html>. Works independently of color/accent themes. */
+
+/* Modern (default) — clean, flat, soft corners */
+:root {
+  --wk-radius-card: 0.75rem;
+  --wk-radius-btn: 0.5rem;
+  --wk-radius-input: 0.5rem;
+  --wk-radius-tag: 9999px;
+  --wk-shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --wk-shadow-card-hover: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --wk-border-card: 1px;
+  --wk-border-input: 1px;
+  --wk-heading-weight: 700;
+  --wk-heading-tracking: 0em;
+  --wk-heading-transform: none;
+  --wk-card-backdrop: none;
+}
+
+/* Editorial — sharp, typographic, magazine-inspired */
+[data-style="editorial"] {
+  --wk-radius-card: 2px;
+  --wk-radius-btn: 2px;
+  --wk-radius-input: 2px;
+  --wk-radius-tag: 2px;
+  --wk-shadow-card: none;
+  --wk-shadow-card-hover: none;
+  --wk-border-card: 1px;
+  --wk-border-input: 1px;
+  --wk-heading-weight: 800;
+  --wk-heading-tracking: -0.025em;
+  --wk-heading-transform: none;
+  --wk-card-backdrop: none;
+}
+
+/* Soft — rounded, cozy, shadow-defined edges */
+[data-style="soft"] {
+  --wk-radius-card: 1.25rem;
+  --wk-radius-btn: 9999px;
+  --wk-radius-input: 0.75rem;
+  --wk-radius-tag: 9999px;
+  --wk-shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
+  --wk-shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+  --wk-border-card: 0px;
+  --wk-border-input: 1px;
+  --wk-heading-weight: 700;
+  --wk-heading-tracking: 0em;
+  --wk-heading-transform: none;
+  --wk-card-backdrop: none;
+}
+
+/* Brutalist — hard edges, thick borders, offset shadows */
+[data-style="brutalist"] {
+  --wk-radius-card: 0px;
+  --wk-radius-btn: 0px;
+  --wk-radius-input: 0px;
+  --wk-radius-tag: 0px;
+  --wk-shadow-card: 3px 3px 0 0 rgb(0 0 0);
+  --wk-shadow-card-hover: 5px 5px 0 0 rgb(0 0 0);
+  --wk-border-card: 2px;
+  --wk-border-input: 2px;
+  --wk-heading-weight: 900;
+  --wk-heading-tracking: -0.03em;
+  --wk-heading-transform: uppercase;
+  --wk-card-backdrop: none;
+}
+.dark[data-style="brutalist"],
+.dark [data-style="brutalist"],
+[data-style="brutalist"].dark,
+[data-style="brutalist"] .dark {
+  --wk-shadow-card: 3px 3px 0 0 rgb(255 255 255 / 0.3);
+  --wk-shadow-card-hover: 5px 5px 0 0 rgb(255 255 255 / 0.3);
+}
+html.dark[data-style="brutalist"] {
+  --wk-shadow-card: 3px 3px 0 0 rgb(255 255 255 / 0.3);
+  --wk-shadow-card-hover: 5px 5px 0 0 rgb(255 255 255 / 0.3);
+}
+
+/* Glass — translucent layers, frosted blur, glow */
+[data-style="glass"] {
+  --wk-radius-card: 1rem;
+  --wk-radius-btn: 0.75rem;
+  --wk-radius-input: 0.75rem;
+  --wk-radius-tag: 9999px;
+  --wk-shadow-card: 0 8px 32px rgb(0 0 0 / 0.06);
+  --wk-shadow-card-hover: 0 8px 32px rgb(0 0 0 / 0.12);
+  --wk-border-card: 1px;
+  --wk-border-input: 1px;
+  --wk-heading-weight: 600;
+  --wk-heading-tracking: 0em;
+  --wk-heading-transform: none;
+  --wk-card-backdrop: blur(16px);
+}
+
+/* Glass style-specific overrides for card and nav surfaces */
+[data-style="glass"] .wk-card {
+  background: rgb(255 255 255 / 0.65);
+  -webkit-backdrop-filter: var(--wk-card-backdrop);
+  backdrop-filter: var(--wk-card-backdrop);
+  border-color: rgb(255 255 255 / 0.3);
+}
+html.dark[data-style="glass"] .wk-card {
+  background: rgb(12 10 9 / 0.55);
+  border-color: rgb(255 255 255 / 0.08);
+}
+
 /* Safe area insets for PWA / notched devices */
 :root {
   --sat: env(safe-area-inset-top, 0px);
