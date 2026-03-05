@@ -17,7 +17,7 @@ createRoot(document.getElementById("root")!).render(
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("/sw.js")
+      .register("/sw.js", { updateViaCache: "none" })
       .then((reg) => {
         // Check for updates every 30 minutes
         setInterval(() => reg.update(), 30 * 60 * 1000);
