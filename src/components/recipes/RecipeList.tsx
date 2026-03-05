@@ -17,7 +17,7 @@ type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category";
 /** Enables click-drag horizontal scrolling with momentum on desktop. */
 function useDragScroll() {
   const ref = useRef<HTMLDivElement>(null);
-  const state = useRef({ dragging: false, startX: 0, scrollLeft: 0, lastX: 0, lastTime: 0, velocity: 0, animId: 0 });
+  const state = useRef({ dragging: false, didDrag: false, startX: 0, scrollLeft: 0, lastX: 0, lastTime: 0, velocity: 0, animId: 0 });
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     const el = ref.current;
@@ -25,6 +25,7 @@ function useDragScroll() {
     cancelAnimationFrame(state.current.animId);
     const s = state.current;
     s.dragging = true;
+    s.didDrag = false;
     s.startX = e.pageX;
     s.scrollLeft = el.scrollLeft;
     s.lastX = e.pageX;
@@ -32,7 +33,6 @@ function useDragScroll() {
     s.velocity = 0;
     el.style.cursor = "grabbing";
     el.style.userSelect = "none";
-    // Disable snap during drag for smooth movement
     el.style.scrollSnapType = "none";
   }, []);
 
@@ -42,6 +42,8 @@ function useDragScroll() {
     const el = ref.current;
     if (!el) return;
     e.preventDefault();
+    // Mark as a real drag if mouse moved more than 5px
+    if (Math.abs(e.pageX - s.startX) > 5) s.didDrag = true;
     const now = Date.now();
     const dt = now - s.lastTime;
     const dx = e.pageX - s.lastX;
@@ -60,20 +62,28 @@ function useDragScroll() {
     el.style.cursor = "";
     el.style.userSelect = "";
     // Momentum coast
-    let v = -s.velocity * 15; // px per frame at 60fps
+    let v = -s.velocity * 15;
     const coast = () => {
       if (Math.abs(v) < 0.5) {
         el.style.scrollSnapType = "";
         return;
       }
       el.scrollLeft += v;
-      v *= 0.95; // friction
+      v *= 0.95;
       s.animId = requestAnimationFrame(coast);
     };
     s.animId = requestAnimationFrame(coast);
   }, []);
 
-  return { ref, onMouseDown, onMouseMove, onMouseUp, onMouseLeave: onMouseUp };
+  // Suppress click events that follow a drag (prevents opening a recipe)
+  const onClickCapture = useCallback((e: React.MouseEvent) => {
+    if (state.current.didDrag) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, []);
+
+  return { ref, onMouseDown, onMouseMove, onMouseUp, onMouseLeave: onMouseUp, onClickCapture };
 }
 
 interface RecipeListProps {
@@ -317,7 +327,7 @@ export function RecipeList({
                     {group.recipes.length}
                   </span>
                 </h2>
-                {recipeLayout === "horizontal" ? (
+                {recipeLayout === "horizontal" && !search && selectedTags.length === 0 && !favoritesOnly ? (
                   <CarouselRow>
                     {group.recipes.map((recipe) => (
                       <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
@@ -373,6 +383,7 @@ function CarouselRow({ children }: { children: React.ReactNode }) {
         onMouseMove={drag.onMouseMove}
         onMouseUp={drag.onMouseUp}
         onMouseLeave={drag.onMouseLeave}
+        onClickCapture={drag.onClickCapture}
         className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 px-4 cursor-grab"
       >
         {children}
