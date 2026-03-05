@@ -22,6 +22,21 @@
         var dark = t === 'dark' || ((t === 'system' || t === 'seasonal') && window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.classList.toggle('dark', dark);
       })();
+
+      // One-time migration: nuke old service workers and caches.
+      // Old SWs (whisk-v5 etc.) cache JS/CSS and block updates forever.
+      // Gated by version flag so it runs once per client.
+      (function() {
+        if (!('serviceWorker' in navigator) || localStorage.getItem('whisk_sw_v') === '2') return;
+        localStorage.setItem('whisk_sw_v', '2');
+        var p1 = navigator.serviceWorker.getRegistrations().then(function(regs) {
+          return Promise.all(regs.map(function(r) { return r.unregister(); }));
+        });
+        var p2 = ('caches' in window) ? caches.keys().then(function(keys) {
+          return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+        }) : Promise.resolve();
+        Promise.all([p1, p2]).then(function() { window.location.reload(); });
+      })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
