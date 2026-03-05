@@ -76,7 +76,7 @@ export function RecipeList({
     [recipes, search, selectedTags, favoritesOnly, sort]
   );
 
-  const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish"];
+  const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish", "drinks"];
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number } | null>(null);
 
@@ -243,7 +243,7 @@ export function RecipeList({
                       setOpenDropdown(null);
                     } else {
                       const rect = e.currentTarget.getBoundingClientRect();
-                      setDropdownPos({ top: rect.bottom + 4, left: Math.max(8, Math.min(rect.left, window.innerWidth - 180)) });
+                      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
                       setOpenDropdown(group.key);
                     }
                   }}
@@ -302,7 +302,7 @@ export function RecipeList({
                   top: dropdownPos.top,
                   ...(dropdownPos.right != null
                     ? { right: dropdownPos.right }
-                    : { left: Math.min(dropdownPos.left, window.innerWidth - 160) }),
+                    : { left: dropdownPos.left }),
                 }}
               >
                 {isSort

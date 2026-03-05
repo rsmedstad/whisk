@@ -10,6 +10,7 @@ export const PRESET_TAGS: TagDefinition[] = [
   { name: "appetizer", type: "preset", group: "meal", usageCount: 0 },
   { name: "snack", type: "preset", group: "meal", usageCount: 0 },
   { name: "side dish", type: "preset", group: "meal", usageCount: 0 },
+  { name: "drinks", type: "preset", group: "meal", usageCount: 0 },
 
   // Cuisine
   { name: "italian", type: "preset", group: "cuisine", usageCount: 0 },
