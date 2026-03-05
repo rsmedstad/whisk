@@ -210,7 +210,7 @@ function AppShell({
           />
 
           {/* Other tabs — lazy loaded */}
-          <Route path="/discover" element={<Discover visionEnabled={capabilities.vision} chatEnabled={capabilities.chat} />} />
+          <Route path="/discover" element={<Discover chatEnabled={capabilities.chat} unsplashEnabled={capabilities.unsplash} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
           <Route path="/suggest" element={<SuggestChat chatEnabled={capabilities.chat} />} />
           <Route
@@ -243,6 +243,8 @@ function AppShell({
                 onPrevWeek={mealPlan.goToPrevWeek}
                 onToday={mealPlan.goToToday}
                 isLoading={mealPlan.isLoading}
+                visionEnabled={capabilities.vision}
+                chatEnabled={capabilities.chat}
               />
             }
           />

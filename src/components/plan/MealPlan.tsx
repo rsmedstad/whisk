@@ -5,6 +5,7 @@ import { getWeekDates, formatDateShort, toDateString, classNames } from "../../l
 import { EmptyState } from "../ui/EmptyState";
 import { Button } from "../ui/Button";
 import { ChevronLeft, ChevronRight, XMark, Sunrise, Sun, Moon } from "../ui/Icon";
+import { DealsScanner } from "./DealsScanner";
 import type { ReactNode } from "react";
 
 const MEAL_SLOTS: { slot: MealSlot; icon: ReactNode; label: string }[] = [
@@ -22,6 +23,8 @@ interface MealPlanProps {
   onPrevWeek: () => void;
   onToday: () => void;
   isLoading: boolean;
+  visionEnabled?: boolean;
+  chatEnabled?: boolean;
 }
 
 export function MealPlan({
@@ -33,6 +36,8 @@ export function MealPlan({
   onPrevWeek,
   onToday,
   isLoading,
+  visionEnabled = false,
+  chatEnabled = false,
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
@@ -84,8 +89,14 @@ export function MealPlan({
         </div>
       </div>
 
-      {/* Day-by-day */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 pb-24 space-y-4">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto pb-24">
+        {/* Deals Scanner — collapsible */}
+        <DealsScanner visionEnabled={visionEnabled} chatEnabled={chatEnabled} />
+        <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
+
+        {/* Day-by-day */}
+        <div className="px-4 py-3 space-y-4">
         {weekDates.map((date) => {
           const dateStr = toDateString(date);
           const isToday = dateStr === today;
@@ -184,6 +195,7 @@ export function MealPlan({
             </section>
           );
         })}
+        </div>
       </div>
     </div>
   );

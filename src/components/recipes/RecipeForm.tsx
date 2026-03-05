@@ -477,7 +477,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
             </div>
             <h2 className="text-lg font-semibold dark:text-stone-100">Add from URL</h2>
             <p className="text-sm text-stone-500 dark:text-stone-400">
-              Paste a recipe link and we'll import it automatically
+              Paste a recipe link to import it with tags and analysis applied automatically
             </p>
           </div>
 

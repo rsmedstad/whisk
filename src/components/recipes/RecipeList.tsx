@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import type { RecipeIndexEntry } from "../../types";
 import { filterAndSortRecipes } from "../../hooks/useRecipes";
@@ -76,7 +77,7 @@ export function RecipeList({
     [recipes, search, selectedTags, favoritesOnly, sort]
   );
 
-  const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish", "drinks"];
+  const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish"];
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number } | null>(null);
 
@@ -122,6 +123,8 @@ export function RecipeList({
     for (const recipe of filtered) {
       if (recipe.favorite) favorites.push(recipe);
       const matchingCats = CATEGORY_ORDER.filter((c) => recipe.tags.includes(c));
+      const isDrinks = recipe.tags.includes("drinks");
+      if (isDrinks) matchingCats.push("drinks");
       if (matchingCats.length === 0) matchingCats.push("other");
       for (const key of matchingCats) {
         const list = groups.get(key);
@@ -146,6 +149,8 @@ export function RecipeList({
     }
     const other = groups.get("other");
     if (other) ordered.push({ label: "Other", recipes: other });
+    const drinks = groups.get("drinks");
+    if (drinks) ordered.push({ label: "Drinks", recipes: drinks });
     return ordered;
   }, [filtered, sort]);
 
@@ -282,8 +287,8 @@ export function RecipeList({
             </button>
           </div>
         </div>
-        {/* Dropdown panel — rendered fixed to avoid overflow clipping */}
-        {openDropdown && dropdownPos && (() => {
+        {/* Dropdown panel — portaled to body to escape backdrop-blur containing block */}
+        {openDropdown && dropdownPos && createPortal((() => {
           const sortOptions: [SortOption, string][] = [
             ["category", "Category"],
             ["recent", "Recent"],
@@ -342,24 +347,26 @@ export function RecipeList({
               </div>
             </>
           );
-        })()}
+        })(), document.body)}
 
         {/* Active filter chips */}
         {selectedTags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pb-2">
-            {selectedTags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
-                className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
-              >
-                {tag}
-                <XMark className="w-3 h-3" />
-              </button>
-            ))}
+          <div className="flex items-center gap-1.5 pb-2">
+            <div className="flex flex-wrap gap-1.5 flex-1">
+              {selectedTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 capitalize"
+                >
+                  {tag}
+                  <XMark className="w-3 h-3" />
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setSelectedTags([])}
-              className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 px-1"
+              className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 shrink-0 transition-colors"
             >
               Clear all
             </button>
@@ -461,7 +468,8 @@ function RecipeCard({
   onClick: () => void;
   onToggleFavorite: () => void;
 }) {
-  const totalTime = formatTotalTime(recipe.prepTime, recipe.cookTime);
+  const isDrinks = recipe.tags.includes("drinks");
+  const totalTime = isDrinks ? null : formatTotalTime(recipe.prepTime, recipe.cookTime);
 
   return (
     <button
@@ -504,23 +512,25 @@ function RecipeCard({
             {recipe.title}
           </h3>
           <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
-            {recipe.tags.length > 0 ? recipe.tags.slice(0, 3).join(", ") : "\u00A0"}
+            {recipe.tags.length > 0 ? recipe.tags.slice(0, 3).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ") : "\u00A0"}
           </p>
         </div>
 
         <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400 dark:text-stone-500">
-          {totalTime && (
+          {isDrinks && recipe.spirits && recipe.spirits.length > 0 ? (
+            <span className="truncate">{recipe.spirits.join(", ")}</span>
+          ) : totalTime ? (
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" /> {totalTime}
             </span>
-          )}
+          ) : null}
           {recipe.avgRating && (
             <span className="flex items-center gap-1 text-amber-500">
               <svg className="w-3.5 h-3.5 fill-amber-400" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
               {recipe.avgRating}
             </span>
           )}
-          {recipe.cookedCount && recipe.cookedCount > 0 && (
+          {recipe.cookedCount != null && recipe.cookedCount > 0 && (
             <span className="flex items-center gap-1 text-green-500" title={`Made ${recipe.cookedCount} time${recipe.cookedCount !== 1 ? "s" : ""}`}>
               <Check className="w-3.5 h-3.5" /> {recipe.cookedCount}
             </span>

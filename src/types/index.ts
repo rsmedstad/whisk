@@ -85,6 +85,7 @@ export interface RecipeIndexEntry {
   lastCookedAt?: string;
   avgRating?: number; // pre-computed average of ratings
   ratingCount?: number; // number of users who rated
+  spirits?: string[]; // display-only: primary liquors for drinks
 }
 
 // ── Tags ────────────────────────────────────────────────
@@ -263,6 +264,23 @@ export interface AICapabilities {
   suggestions: boolean;
   nutritionEstimate: boolean;
   instagramImport: boolean;
+  unsplash: boolean;
+}
+
+export interface InspirationIdea {
+  title: string;
+  description: string;
+  searchTerm: string;
+  imageUrl?: string;
+  photographer?: string;
+  photographerUrl?: string;
+}
+
+export interface InspirationResponse {
+  ideas: InspirationIdea[];
+  generatedAt: string;
+  season: string;
+  greeting: string;
 }
 
 // ── Import ─────────────────────────────────────────────
