@@ -33,6 +33,9 @@ export function RecipeList({
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sort, setSort] = useState<SortOption>("category");
   const [showSort, setShowSort] = useState(false);
+  const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
+    return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
+  });
 
   const filtered = useMemo(
     () =>
@@ -248,17 +251,34 @@ export function RecipeList({
                 )}>
                   {group.label === "Favorites" && <HeartFilled className="w-3.5 h-3.5" />}
                   {group.label}
+                  <span className="text-xs font-normal text-stone-400 dark:text-stone-500 ml-1.5">
+                    {group.recipes.length}
+                  </span>
                 </h2>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                  {group.recipes.map((recipe) => (
-                    <RecipeCard
-                      key={recipe.id}
-                      recipe={recipe}
-                      onClick={() => navigate(`/recipes/${recipe.id}`)}
-                      onToggleFavorite={() => onToggleFavorite(recipe.id)}
-                    />
-                  ))}
-                </div>
+                {recipeLayout === "horizontal" ? (
+                  <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 -mr-4 pr-4">
+                    {group.recipes.map((recipe) => (
+                      <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
+                        <RecipeCard
+                          recipe={recipe}
+                          onClick={() => navigate(`/recipes/${recipe.id}`)}
+                          onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                    {group.recipes.map((recipe) => (
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        onClick={() => navigate(`/recipes/${recipe.id}`)}
+                        onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             ))}
           </div>

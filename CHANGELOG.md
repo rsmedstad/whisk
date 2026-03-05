@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.1] - 2026-03-05
+
+### Recipe List
+
+- Horizontal carousel layout: categories now display as horizontally scrollable rows with peeking cards to hint at more content
+- Recipe count badge next to each category heading
+- New layout setting in Settings > Appearance: switch between Carousel (horizontal scroll per category) and Grid (vertical list)
+- Layout preference persists via `whisk_recipe_layout` localStorage key
+
+---
+
 ## [0.3.0] - 2026-03-04
 
 ### Import & Scraping Overhaul

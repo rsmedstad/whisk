@@ -49,6 +49,15 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
     } catch { return []; }
   });
 
+  const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
+    return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
+  });
+
+  const handleRecipeLayoutChange = (layout: "horizontal" | "vertical") => {
+    setRecipeLayout(layout);
+    localStorage.setItem("whisk_recipe_layout", layout);
+  };
+
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -263,6 +272,33 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
                     >
                       <span className="text-sm">{s.label}</span>
                       <span className="text-[10px] opacity-60">{s.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recipe Layout */}
+              <div>
+                <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                  Recipe Layout
+                </label>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                  How categories display on the Recipes tab
+                </p>
+                <div className="flex gap-2">
+                  {([
+                    { id: "horizontal" as const, label: "Carousel", desc: "Scroll sideways per category" },
+                    { id: "vertical" as const, label: "Grid", desc: "All recipes in a vertical list" },
+                  ]).map((l) => (
+                    <button
+                      key={l.id}
+                      onClick={() => handleRecipeLayoutChange(l.id)}
+                      className={`flex-1 py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-0.5 ${
+                        recipeLayout === l.id ? activeClass : inactiveClass
+                      }`}
+                    >
+                      <span className="text-sm">{l.label}</span>
+                      <span className="text-[10px] opacity-60">{l.desc}</span>
                     </button>
                   ))}
                 </div>
