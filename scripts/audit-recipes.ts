@@ -1,178 +1,75 @@
-#!/usr/bin/env bun
-/**
- * Audit all recipes in the live Whisk instance.
- *
- * Reports:
- *  - Total recipe count
- *  - Recipes with 0 ingredients (stubs)
- *  - Recipes with 0 steps
- *  - Recipes with no image
- *  - Recipes with source URLs that could be re-scraped
- *
- * Usage:
- *   bun scripts/audit-recipes.ts [--api URL] [--password PASSWORD]
- */
+// Audit all recipes for missing data (direct KV access)
+const CF_ACCOUNT_ID = "1d6a394479cb4f03320a4aba405c831e";
+const KV_NS = "9961b213d1114876af09f83f3884aeb9";
+const configPath = `${process.env.APPDATA}/xdg.config/.wrangler/config/default.toml`;
+const config = await Bun.file(configPath).text();
+const tokenMatch = config.match(/oauth_token\s*=\s*"([^"]+)"/);
+if (!tokenMatch?.[1]) { console.error("No OAuth token"); process.exit(1); }
+const token = tokenMatch[1];
+const kvBase = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${KV_NS}`;
+const headers = { Authorization: `Bearer ${token}` };
 
-const API_BASE = getArg("--api") ?? "https://whisk-15t.pages.dev";
-const PASSWORD = getArg("--password") ?? "test123";
+const listRes = await fetch(`${kvBase}/keys?prefix=recipe:`, { headers });
+const keys = ((await listRes.json()) as { result: { name: string }[] }).result
+  .filter(k => k.name !== "recipe_index");
 
-interface Recipe {
-  id: string;
-  title: string;
-  ingredients: { name: string }[];
-  steps: { text: string }[];
-  photos: { url: string }[];
-  thumbnailUrl?: string;
-  source?: { type: string; url?: string; domain?: string };
-  tags: string[];
-  notes?: string;
+interface Issue { id: string; title: string; critical: string[]; minor: string[] }
+const issues: Issue[] = [];
+let total = 0;
+
+for (const { name: key } of keys) {
+  const res = await fetch(`${kvBase}/values/${encodeURIComponent(key)}`, { headers });
+  const d = await res.json() as Record<string, unknown>;
+  const id = key.replace("recipe:", "");
+  const title = (d.title as string) ?? "(no title)";
+  total++;
+
+  const critical: string[] = [];
+  const minor: string[] = [];
+
+  const ingredients = d.ingredients as unknown[] | undefined;
+  const steps = d.steps as unknown[] | undefined;
+  const photos = d.photos as unknown[] | undefined;
+  const thumb = d.thumbnailUrl as string | undefined;
+
+  if (!ingredients || ingredients.length === 0) critical.push("NO INGREDIENTS");
+  if (!steps || steps.length === 0) critical.push("NO STEPS");
+  if (!thumb && (!photos || photos.length === 0)) critical.push("NO IMAGE");
+  if (thumb && (!photos || photos.length === 0)) minor.push("has thumbnailUrl but empty photos array");
+  if (!d.description) minor.push("no description");
+  if (!d.sourceUrl) minor.push("no sourceUrl");
+  if (!d.prepTime && !d.cookTime) minor.push("no cook/prep times");
+  if (!d.servings) minor.push("no servings");
+
+  if (critical.length > 0 || minor.length > 0) {
+    issues.push({ id, title, critical, minor });
+  }
 }
 
-interface IndexEntry {
-  id: string;
-  title: string;
-  thumbnailUrl?: string;
+console.log(`Audited ${total} recipes\n`);
+
+const criticalIssues = issues.filter(i => i.critical.length > 0);
+const minorOnly = issues.filter(i => i.critical.length === 0);
+
+if (criticalIssues.length > 0) {
+  console.log(`=== CRITICAL (${criticalIssues.length} recipes) ===\n`);
+  for (const { id, title, critical, minor } of criticalIssues) {
+    console.log(`${id} | ${title}`);
+    for (const p of critical) console.log(`  *** ${p}`);
+    for (const p of minor) console.log(`  - ${p}`);
+    console.log();
+  }
 }
 
-function getArg(flag: string): string | undefined {
-  const idx = process.argv.indexOf(flag);
-  if (idx === -1 || idx + 1 >= process.argv.length) return undefined;
-  return process.argv[idx + 1];
+if (minorOnly.length > 0) {
+  console.log(`=== MINOR (${minorOnly.length} recipes) ===\n`);
+  for (const { id, title, minor } of minorOnly) {
+    console.log(`${id} | ${title}`);
+    for (const p of minor) console.log(`  - ${p}`);
+    console.log();
+  }
 }
 
-async function authenticate(): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/auth`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  if (!res.ok) throw new Error(`Auth failed: ${res.status}`);
-  const data = (await res.json()) as { token: string };
-  return data.token;
+if (issues.length === 0) {
+  console.log("All recipes have complete data!");
 }
-
-async function fetchIndex(token: string): Promise<IndexEntry[]> {
-  const res = await fetch(`${API_BASE}/api/recipes`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch index: ${res.status}`);
-  return (await res.json()) as IndexEntry[];
-}
-
-async function fetchRecipe(token: string, id: string): Promise<Recipe> {
-  const res = await fetch(`${API_BASE}/api/recipes/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch recipe ${id}: ${res.status}`);
-  return (await res.json()) as Recipe;
-}
-
-async function main() {
-  console.log(`Auditing recipes at ${API_BASE}\n`);
-
-  const token = await authenticate();
-  console.log("Authenticated.\n");
-
-  const index = await fetchIndex(token);
-  console.log(`Total recipes in index: ${index.length}\n`);
-
-  // Fetch all full recipes (with rate limiting to be polite)
-  const recipes: Recipe[] = [];
-  for (const entry of index) {
-    recipes.push(await fetchRecipe(token, entry.id));
-  }
-
-  // Analyze
-  const noIngredients: Recipe[] = [];
-  const noSteps: Recipe[] = [];
-  const noImage: Recipe[] = [];
-  const hasUrlCanRescrape: Recipe[] = [];
-  const textOnlyStubs: Recipe[] = [];
-
-  for (const r of recipes) {
-    const ingredientCount = r.ingredients?.length ?? 0;
-    const stepCount = r.steps?.length ?? 0;
-    const hasImage = !!(r.thumbnailUrl || (r.photos && r.photos.length > 0));
-    const sourceUrl = r.source?.url;
-
-    if (ingredientCount === 0) noIngredients.push(r);
-    if (stepCount === 0) noSteps.push(r);
-    if (!hasImage) noImage.push(r);
-
-    // Can re-scrape: has a URL source and missing ingredients or steps
-    if (sourceUrl && (ingredientCount === 0 || stepCount === 0)) {
-      hasUrlCanRescrape.push(r);
-    }
-
-    // Text-only stubs: no URL source and missing data
-    if (!sourceUrl && (ingredientCount === 0 || stepCount === 0)) {
-      textOnlyStubs.push(r);
-    }
-  }
-
-  // Report
-  console.log("═══════════════════════════════════════════");
-  console.log("  RECIPE AUDIT REPORT");
-  console.log("═══════════════════════════════════════════\n");
-
-  console.log(`Total recipes:           ${recipes.length}`);
-  console.log(`With 0 ingredients:      ${noIngredients.length}`);
-  console.log(`With 0 steps:            ${noSteps.length}`);
-  console.log(`With no image:           ${noImage.length}`);
-  console.log(`Re-scrapable (has URL):  ${hasUrlCanRescrape.length}`);
-  console.log(`Text-only stubs (no URL): ${textOnlyStubs.length}`);
-
-  if (noIngredients.length > 0) {
-    console.log("\n── Recipes with 0 ingredients ──────────────");
-    for (const r of noIngredients) {
-      const url = r.source?.url ?? "(no URL)";
-      const steps = r.steps?.length ?? 0;
-      console.log(`  ${r.title}`);
-      console.log(`    ID: ${r.id} | Steps: ${steps} | Source: ${url}`);
-    }
-  }
-
-  if (noSteps.length > 0) {
-    console.log("\n── Recipes with 0 steps ────────────────────");
-    for (const r of noSteps) {
-      const url = r.source?.url ?? "(no URL)";
-      const ingredients = r.ingredients?.length ?? 0;
-      console.log(`  ${r.title}`);
-      console.log(`    ID: ${r.id} | Ingredients: ${ingredients} | Source: ${url}`);
-    }
-  }
-
-  if (noImage.length > 0) {
-    console.log("\n── Recipes with no image ───────────────────");
-    for (const r of noImage) {
-      console.log(`  ${r.title} (${r.id})`);
-    }
-  }
-
-  if (hasUrlCanRescrape.length > 0) {
-    console.log("\n── Re-scrapable stubs (have URL, missing data) ──");
-    for (const r of hasUrlCanRescrape) {
-      const ing = r.ingredients?.length ?? 0;
-      const steps = r.steps?.length ?? 0;
-      console.log(`  ${r.title}`);
-      console.log(`    ID: ${r.id} | Ingredients: ${ing} | Steps: ${steps}`);
-      console.log(`    URL: ${r.source?.url}`);
-    }
-  }
-
-  if (textOnlyStubs.length > 0) {
-    console.log("\n── Text-only stubs (no URL, need manual entry) ──");
-    for (const r of textOnlyStubs) {
-      console.log(`  ${r.title} (${r.id})`);
-    }
-  }
-
-  console.log("\n═══════════════════════════════════════════");
-  console.log("  AUDIT COMPLETE");
-  console.log("═══════════════════════════════════════════");
-}
-
-main().catch((err) => {
-  console.error("Audit failed:", err);
-  process.exit(1);
-});

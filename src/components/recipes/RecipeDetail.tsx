@@ -205,10 +205,16 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     }
   }, [recipe, isGroupingSteps, updateRecipe]);
 
-  const photos = useMemo(
-    () => recipe?.photos?.length ? recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i) : [],
-    [recipe?.photos]
-  );
+  const photos = useMemo(() => {
+    if (recipe?.photos?.length) {
+      return recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
+    }
+    // Fall back to thumbnailUrl if no photos array
+    if (recipe?.thumbnailUrl) {
+      return [{ url: recipe.thumbnailUrl, isPrimary: true }];
+    }
+    return [];
+  }, [recipe?.photos, recipe?.thumbnailUrl]);
 
   if (isLoading || !recipe) {
     return <LoadingSpinner className="py-20" size="lg" />;
