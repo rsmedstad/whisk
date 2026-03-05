@@ -317,10 +317,10 @@ function RecipeCard({
   return (
     <button
       onClick={onClick}
-      className="wk-card flex w-full flex-col overflow-hidden rounded-[var(--wk-radius-card)] border-[length:var(--wk-border-card)] border-stone-200 bg-white text-left shadow-[var(--wk-shadow-card)] transition-all hover:shadow-[var(--wk-shadow-card-hover)] active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
+      className="wk-card flex h-full w-full flex-col overflow-hidden rounded-[var(--wk-radius-card)] border-[length:var(--wk-border-card)] border-stone-200 bg-white text-left shadow-[var(--wk-shadow-card)] transition-all hover:shadow-[var(--wk-shadow-card-hover)] active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
     >
       {/* Image */}
-      <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
+      <div className="relative aspect-3/2 w-full shrink-0 overflow-hidden bg-stone-100 dark:bg-stone-800">
         {recipe.thumbnailUrl ? (
           <img
             src={recipe.thumbnailUrl}
@@ -348,19 +348,18 @@ function RecipeCard({
         </button>
       </div>
 
-      {/* Info */}
-      <div className="p-3">
-        <h3 className="font-semibold text-sm line-clamp-2 dark:text-stone-100">
-          {recipe.title}
-        </h3>
-
-        {recipe.tags.length > 0 && (
-          <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
-            {recipe.tags.slice(0, 3).join(", ")}
+      {/* Info — fixed height so cards align in carousel rows */}
+      <div className="flex flex-col justify-between p-3 min-h-[5.5rem]">
+        <div>
+          <h3 className="font-semibold text-sm line-clamp-2 dark:text-stone-100">
+            {recipe.title}
+          </h3>
+          <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5 min-h-[1rem]">
+            {recipe.tags.length > 0 ? recipe.tags.slice(0, 3).join(", ") : "\u00A0"}
           </p>
-        )}
+        </div>
 
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400 dark:text-stone-500">
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400 dark:text-stone-500 min-h-[1rem]">
           {totalTime && (
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" /> {totalTime}
