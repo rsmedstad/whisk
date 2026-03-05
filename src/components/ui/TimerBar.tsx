@@ -32,7 +32,7 @@ export function TimerBar({
 
   return (
     <div className="fixed top-0 inset-x-0 z-50">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-6xl mx-auto">
       {/* Collapsed bar */}
       <button
         onClick={() => setExpanded(!expanded)}

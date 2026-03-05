@@ -1,90 +1,20 @@
-import { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RecipeIndexEntry } from "../../types";
 import { filterAndSortRecipes } from "../../hooks/useRecipes";
 import { formatTotalTime } from "../../lib/utils";
 import { classNames } from "../../lib/utils";
+import { PRESET_TAGS } from "../../lib/tags";
 import { TagChip } from "../ui/TagChip";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
 import { InstallPrompt } from "../InstallPrompt";
 import { FirstRunGuide } from "./FirstRunGuide";
-import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Check } from "../ui/Icon";
+import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown } from "../ui/Icon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category";
 
-/** Enables click-drag horizontal scrolling with momentum on desktop. */
-function useDragScroll() {
-  const ref = useRef<HTMLDivElement>(null);
-  const state = useRef({ dragging: false, didDrag: false, startX: 0, scrollLeft: 0, lastX: 0, lastTime: 0, velocity: 0, animId: 0 });
-
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    const el = ref.current;
-    if (!el) return;
-    cancelAnimationFrame(state.current.animId);
-    const s = state.current;
-    s.dragging = true;
-    s.didDrag = false;
-    s.startX = e.pageX;
-    s.scrollLeft = el.scrollLeft;
-    s.lastX = e.pageX;
-    s.lastTime = Date.now();
-    s.velocity = 0;
-    el.style.cursor = "grabbing";
-    el.style.userSelect = "none";
-    el.style.scrollSnapType = "none";
-  }, []);
-
-  const onMouseMove = useCallback((e: React.MouseEvent) => {
-    const s = state.current;
-    if (!s.dragging) return;
-    const el = ref.current;
-    if (!el) return;
-    e.preventDefault();
-    // Mark as a real drag if mouse moved more than 5px
-    if (Math.abs(e.pageX - s.startX) > 5) s.didDrag = true;
-    const now = Date.now();
-    const dt = now - s.lastTime;
-    const dx = e.pageX - s.lastX;
-    if (dt > 0) s.velocity = dx / dt;
-    s.lastX = e.pageX;
-    s.lastTime = now;
-    el.scrollLeft = s.scrollLeft - (e.pageX - s.startX);
-  }, []);
-
-  const onMouseUp = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const s = state.current;
-    if (!s.dragging) return;
-    s.dragging = false;
-    el.style.cursor = "";
-    el.style.userSelect = "";
-    // Momentum coast
-    let v = -s.velocity * 15;
-    const coast = () => {
-      if (Math.abs(v) < 0.5) {
-        el.style.scrollSnapType = "";
-        return;
-      }
-      el.scrollLeft += v;
-      v *= 0.95;
-      s.animId = requestAnimationFrame(coast);
-    };
-    s.animId = requestAnimationFrame(coast);
-  }, []);
-
-  // Suppress click events that follow a drag (prevents opening a recipe)
-  const onClickCapture = useCallback((e: React.MouseEvent) => {
-    if (state.current.didDrag) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-  }, []);
-
-  return { ref, onMouseDown, onMouseMove, onMouseUp, onMouseLeave: onMouseUp, onClickCapture };
-}
 
 interface RecipeListProps {
   recipes: RecipeIndexEntry[];
@@ -147,17 +77,41 @@ export function RecipeList({
     [recipes, search, selectedTags, favoritesOnly, sort]
   );
 
-  const MEAL_TYPES = ["dinner", "lunch", "breakfast", "dessert", "appetizer", "snack", "side dish"];
-  const CATEGORY_ORDER = ["breakfast", "brunch", "lunch", "dinner", "dessert", "appetizer", "snack", "side dish"];
+  const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish"];
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
-  // Split tags into meal types and other tags
-  const { mealTags, otherTags } = useMemo(() => {
+  // Group available tags by category for dropdown filters
+  const filterGroups = useMemo(() => {
     const usedTags = new Set(recipes.flatMap((r) => r.tags));
-    const meal = MEAL_TYPES.filter((t) => usedTags.has(t));
-    const other = availableTags
-      .filter((t) => usedTags.has(t) && !MEAL_TYPES.includes(t))
-      .slice(0, 12);
-    return { mealTags: meal, otherTags: other };
+    const presetByGroup = new Map<string, string[]>();
+    const presetNames = new Set<string>();
+    for (const t of PRESET_TAGS) {
+      presetNames.add(t.name);
+      if (!usedTags.has(t.name)) continue;
+      const group = t.group ?? "custom";
+      const list = presetByGroup.get(group) ?? [];
+      list.push(t.name);
+      presetByGroup.set(group, list);
+    }
+    // Custom tags = used tags not in presets
+    const custom = availableTags.filter((t) => usedTags.has(t) && !presetNames.has(t));
+    if (custom.length > 0) presetByGroup.set("custom", custom);
+
+    const groups: { key: string; label: string; tags: string[] }[] = [];
+    const ORDER: [string, string][] = [
+      ["meal", "Type"],
+      ["cuisine", "Cuisine"],
+      ["diet", "Diet"],
+      ["method", "Method"],
+      ["speed", "Speed"],
+      ["season", "Season"],
+      ["custom", "Other"],
+    ];
+    for (const [key, label] of ORDER) {
+      const tags = presetByGroup.get(key);
+      if (tags && tags.length > 0) groups.push({ key, label, tags });
+    }
+    return groups;
   }, [recipes, availableTags]);
 
   // Group recipes by meal category for the "category" sort view
@@ -167,13 +121,15 @@ export function RecipeList({
     const favorites: RecipeIndexEntry[] = [];
     for (const recipe of filtered) {
       if (recipe.favorite) favorites.push(recipe);
-      const mealTag = CATEGORY_ORDER.find((c) => recipe.tags.includes(c));
-      const key = mealTag ?? "other";
-      const list = groups.get(key);
-      if (list) {
-        list.push(recipe);
-      } else {
-        groups.set(key, [recipe]);
+      const matchingCats = CATEGORY_ORDER.filter((c) => recipe.tags.includes(c));
+      if (matchingCats.length === 0) matchingCats.push("other");
+      for (const key of matchingCats) {
+        const list = groups.get(key);
+        if (list) {
+          list.push(recipe);
+        } else {
+          groups.set(key, [recipe]);
+        }
       }
     }
     // Sort alphabetically within each group
@@ -201,17 +157,9 @@ export function RecipeList({
   };
 
   const toggleTag = (tag: string) => {
-    const isMealType = MEAL_TYPES.includes(tag);
-    setSelectedTags((prev) => {
-      if (prev.includes(tag)) {
-        return prev.filter((t) => t !== tag);
-      }
-      if (isMealType) {
-        // Single-select for meal types: deselect other meal types
-        return [...prev.filter((t) => !MEAL_TYPES.includes(t)), tag];
-      }
-      return [...prev, tag];
-    });
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
   };
 
   if (isLoading) {
@@ -253,7 +201,7 @@ export function RecipeList({
         </div>
 
         {/* Search */}
-        <div className="pb-2">
+        <div className="pb-2 relative">
           <input
             type="search"
             enterKeyHint="search"
@@ -261,8 +209,16 @@ export function RecipeList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-            className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+            className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 pr-8 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
           />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+            >
+              <XMark className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Sort dropdown */}
@@ -295,41 +251,88 @@ export function RecipeList({
           </div>
         )}
 
-        {/* Meal-type quick filters */}
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        {/* Filter bar */}
+        <div className="flex items-center gap-2 pb-2 overflow-x-auto no-scrollbar">
           <TagChip
             label="All"
             selected={!favoritesOnly && selectedTags.length === 0}
             onToggle={() => {
               setSelectedTags([]);
               setFavoritesOnly(false);
+              setOpenDropdown(null);
             }}
           />
           <TagChip
             label="Favorites"
             selected={favoritesOnly}
-            onToggle={() => setFavoritesOnly(!favoritesOnly)}
+            onToggle={() => { setFavoritesOnly(!favoritesOnly); setOpenDropdown(null); }}
           />
-          {mealTags.map((tag) => (
-            <TagChip
-              key={tag}
-              label={tag}
-              selected={selectedTags.includes(tag)}
-              onToggle={() => toggleTag(tag)}
-            />
-          ))}
+          {filterGroups.map((group) => {
+            const activeCount = group.tags.filter((t) => selectedTags.includes(t)).length;
+            return (
+              <div key={group.key} className="relative shrink-0">
+                <button
+                  onClick={() => setOpenDropdown(openDropdown === group.key ? null : group.key)}
+                  className={classNames(
+                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    activeCount > 0
+                      ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      : openDropdown === group.key
+                        ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                  )}
+                >
+                  {group.label}{activeCount > 0 && ` (${activeCount})`}
+                  <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === group.key && "rotate-180")} />
+                </button>
+                {openDropdown === group.key && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
+                    <div className="absolute left-0 top-9 z-50 min-w-[140px] rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1">
+                      {group.tags.map((tag) => {
+                        const isActive = selectedTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            onClick={() => toggleTag(tag)}
+                            className={classNames(
+                              "w-full px-3 py-2 text-left text-sm capitalize flex items-center justify-between gap-2 transition-colors",
+                              isActive
+                                ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                                : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                            )}
+                          >
+                            {tag}
+                            {isActive && <Check className="w-4 h-4 text-orange-500" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
-        {/* Other tag filters */}
-        {otherTags.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-3 no-scrollbar">
-            {otherTags.map((tag) => (
-              <TagChip
+        {/* Active filter chips */}
+        {selectedTags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pb-2">
+            {selectedTags.map((tag) => (
+              <button
                 key={tag}
-                label={tag}
-                selected={selectedTags.includes(tag)}
-                onToggle={() => toggleTag(tag)}
-              />
+                onClick={() => toggleTag(tag)}
+                className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+              >
+                {tag}
+                <XMark className="w-3 h-3" />
+              </button>
             ))}
+            <button
+              onClick={() => setSelectedTags([])}
+              className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 px-1"
+            >
+              Clear all
+            </button>
           </div>
         )}
       </div>
@@ -378,7 +381,7 @@ export function RecipeList({
                     <div className="shrink-0 w-1" aria-hidden />
                   </CarouselRow>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {group.recipes.map((recipe) => (
                       <RecipeCard
                         key={recipe.id}
@@ -393,7 +396,7 @@ export function RecipeList({
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filtered.map((recipe) => (
               <RecipeCard
                 key={recipe.id}
@@ -410,18 +413,9 @@ export function RecipeList({
 }
 
 function CarouselRow({ children }: { children: React.ReactNode }) {
-  const drag = useDragScroll();
   return (
     <div className="overflow-hidden -mx-4">
-      <div
-        ref={drag.ref}
-        onMouseDown={drag.onMouseDown}
-        onMouseMove={drag.onMouseMove}
-        onMouseUp={drag.onMouseUp}
-        onMouseLeave={drag.onMouseLeave}
-        onClickCapture={drag.onClickCapture}
-        className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 px-4 cursor-grab"
-      >
+      <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 px-4">
         {children}
       </div>
     </div>
@@ -473,26 +467,27 @@ function RecipeCard({
         </button>
       </div>
 
-      {/* Info — fixed height so cards align in carousel rows */}
-      <div className="flex flex-col justify-between p-3 min-h-[5.5rem]">
+      {/* Info — flex-grow fills remaining card height, justify-between pins metadata to bottom */}
+      <div className="flex flex-1 flex-col justify-between p-3">
         <div>
-          <h3 className="font-semibold text-sm line-clamp-2 dark:text-stone-100">
+          <h3 className="font-semibold text-sm line-clamp-2 min-h-10 dark:text-stone-100">
             {recipe.title}
           </h3>
-          <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5 min-h-[1rem]">
+          <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
             {recipe.tags.length > 0 ? recipe.tags.slice(0, 3).join(", ") : "\u00A0"}
           </p>
         </div>
 
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400 dark:text-stone-500 min-h-[1rem]">
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400 dark:text-stone-500">
           {totalTime && (
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" /> {totalTime}
             </span>
           )}
-          {recipe.servings && (
-            <span className="flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" /> {recipe.servings} srv
+          {recipe.avgRating && (
+            <span className="flex items-center gap-1 text-amber-500">
+              <svg className="w-3.5 h-3.5 fill-amber-400" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
+              {recipe.avgRating}
             </span>
           )}
           {recipe.cookedCount && recipe.cookedCount > 0 && (

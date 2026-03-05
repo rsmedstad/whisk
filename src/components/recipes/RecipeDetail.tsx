@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { Recipe, Ingredient } from "../../types";
+import type { Recipe, Ingredient, Step } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { useTags } from "../../hooks/useTags";
@@ -9,12 +9,13 @@ import {
   scaleIngredient,
   classNames,
   parseTimerFromText,
+  decodeEntities,
 } from "../../lib/utils";
 import { categorizeIngredient, CATEGORY_LABELS, CATEGORY_ORDER } from "../../lib/categories";
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { TagChip } from "../ui/TagChip";
-import { ChevronLeft, HeartFilled, Heart, Pencil, EllipsisVertical, PlayCircle, Clock, Users, Stopwatch, Check, Fire, Trash, Tag, XMark } from "../ui/Icon";
+import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Stopwatch, Check, Fire, Tag, XMark } from "../ui/Icon";
 
 interface RecipeDetailProps {
   onStartTimer: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
@@ -49,6 +50,8 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
   );
   const [isRefetching, setIsRefetching] = useState(false);
+  const [isGroupingSteps, setIsGroupingSteps] = useState(false);
+  const galleryRef = useRef<HTMLDivElement>(null);
 
   // Background refresh — updates from network silently
   useEffect(() => {
@@ -161,6 +164,43 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     }
   }, [recipe, isRefetching, updateRecipe]);
 
+  const handleGroupSteps = useCallback(async () => {
+    if (!recipe || isGroupingSteps) return;
+    const hasGroups = recipe.steps.some((s) => s.group);
+    if (hasGroups) {
+      // Clear groups
+      const clearedSteps = recipe.steps.map((s) => ({ ...s, group: undefined }));
+      setRecipe((r) => r ? { ...r, steps: clearedSteps } : r);
+      await updateRecipe(recipe.id, { steps: clearedSteps });
+      return;
+    }
+    setIsGroupingSteps(true);
+    try {
+      const res = await fetch("/api/ai/group-steps", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+        },
+        body: JSON.stringify({
+          title: recipe.title,
+          steps: recipe.steps.map((s) => s.text),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = (await res.json()) as { groups: string[] };
+      if (data.groups.length === recipe.steps.length) {
+        const groupedSteps = recipe.steps.map((s, i) => ({ ...s, group: data.groups[i] }));
+        setRecipe((r) => r ? { ...r, steps: groupedSteps } : r);
+        await updateRecipe(recipe.id, { steps: groupedSteps });
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsGroupingSteps(false);
+    }
+  }, [recipe, isGroupingSteps, updateRecipe]);
+
   const photos = useMemo(
     () => recipe?.photos?.length ? recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i) : [],
     [recipe?.photos]
@@ -186,19 +226,26 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         >
           <ChevronLeft className="w-4 h-4" /> Back
         </button>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <HeaderStarRating
+            ratings={recipe.ratings}
+            onRate={(value) => {
+              updateRecipe(recipe.id, { rating: value } as unknown as Partial<Recipe>);
+              setRecipe((r) => {
+                if (!r) return r;
+                const dn = localStorage.getItem("whisk_display_name") ?? "User";
+                const ratings = { ...(r.ratings ?? {}) };
+                if (value === 0) { delete ratings[dn]; } else { ratings[dn] = value; }
+                return { ...r, ratings };
+              });
+            }}
+          />
           <button onClick={handleFavorite}>
             {recipe.favorite ? (
               <HeartFilled className="w-5 h-5 text-red-500" />
             ) : (
               <Heart className="w-5 h-5 text-stone-400" />
             )}
-          </button>
-          <button
-            onClick={() => navigate(`/recipes/${recipe.id}/edit`)}
-            className="text-stone-500 dark:text-stone-400"
-          >
-            <Pencil className="w-5 h-5" />
           </button>
           <div className="relative">
             <button
@@ -216,21 +263,12 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 <div className="absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800">
                   <button
                     onClick={() => {
-                      navigate(`/recipes/${recipe.id}/cook`);
+                      navigate(`/recipes/${recipe.id}/edit`);
                       setShowOverflow(false);
                     }}
                     className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-700 dark:text-stone-200"
                   >
-                    Start Cooking
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleAddToList(true);
-                      setShowOverflow(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-700 dark:text-stone-200"
-                  >
-                    Add to Shopping List
+                    Edit Recipe
                   </button>
                   {recipe.source?.url && (
                     <button
@@ -243,6 +281,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                       {isRefetching ? "Updating..." : "Update from Source"}
                     </button>
                   )}
+                  <div className="my-1 border-t border-stone-200 dark:border-stone-700" />
                   <button
                     onClick={() => {
                       handleDelete();
@@ -263,9 +302,15 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
       {(photos.length > 0 || recipe.videoUrl) && (() => {
         const totalSlides = photos.length + (recipe.videoUrl ? 1 : 0);
         const isVideoSlide = recipe.videoUrl && photoIndex === photos.length;
+        const scrollToSlide = (idx: number) => {
+          const el = galleryRef.current;
+          if (!el) return;
+          el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
+        };
         return (
-        <div className="relative">
+        <div className="relative group">
           <div
+            ref={galleryRef}
             className="flex snap-x snap-mandatory overflow-x-auto no-scrollbar"
             onScroll={(e) => {
               const el = e.currentTarget;
@@ -310,11 +355,29 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               </div>
             )}
           </div>
+          {/* Desktop arrow buttons */}
+          {totalSlides > 1 && photoIndex > 0 && (
+            <button
+              onClick={() => scrollToSlide(photoIndex - 1)}
+              className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          )}
+          {totalSlides > 1 && photoIndex < totalSlides - 1 && (
+            <button
+              onClick={() => scrollToSlide(photoIndex + 1)}
+              className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <ChevronLeft className="w-5 h-5 rotate-180" />
+            </button>
+          )}
           {totalSlides > 1 && (
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 pointer-events-none">
+            <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
               {Array.from({ length: totalSlides }).map((_, i) => (
-                <span
+                <button
                   key={i}
+                  onClick={() => scrollToSlide(i)}
                   className={classNames(
                     "h-2 w-2 rounded-full transition-colors",
                     i === photoIndex ? "bg-white" : "bg-white/50"
@@ -324,14 +387,17 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             </div>
           )}
           {totalSlides > 1 && !isVideoSlide && (
-            <div className="absolute top-3 right-3 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white">
+            <div className="absolute top-3 right-3 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white pointer-events-none">
               {photoIndex + 1}/{totalSlides}
             </div>
           )}
           {recipe.videoUrl && !isVideoSlide && (
-            <div className="absolute bottom-3 right-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white flex items-center gap-1 pointer-events-none">
+            <button
+              onClick={() => scrollToSlide(photos.length)}
+              className="absolute bottom-3 right-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white flex items-center gap-1"
+            >
               <PlayCircle className="w-4 h-4" /> Video &rarr;
-            </div>
+            </button>
           )}
         </div>
         );
@@ -341,11 +407,11 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         {/* Title & meta */}
         <div>
           <h1 className="text-2xl font-bold dark:text-stone-100">
-            {recipe.title}
+            {decodeEntities(recipe.title)}
           </h1>
           {recipe.description && (
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              {recipe.description}
+              {decodeEntities(recipe.description)}
             </p>
           )}
           <div className="flex flex-wrap gap-3 mt-2 text-sm text-stone-500 dark:text-stone-400">
@@ -363,30 +429,6 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             {recipe.yield && <span>{recipe.yield}</span>}
             {recipe.difficulty && (
               <span className="capitalize">{recipe.difficulty}</span>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (recipe && !justCooked) {
-                  markCooked(recipe.id);
-                  setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: new Date().toISOString() } : r);
-                  setJustCooked(true);
-                  setTimeout(() => setJustCooked(false), 2000);
-                }
-              }}
-              className={classNames(
-                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
-                justCooked
-                  ? "border-green-500 bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400"
-                  : "border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400"
-              )}
-            >
-              <Check className="w-3.5 h-3.5" /> {justCooked ? "Logged!" : `Made This${recipe.cookedCount ? ` (${recipe.cookedCount})` : ""}`}
-            </button>
-            {recipe.lastCookedAt && (
-              <span className="text-xs text-stone-400 dark:text-stone-500">
-                Last made {new Date(recipe.lastCookedAt).toLocaleDateString()}
-              </span>
             )}
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2 items-center">
@@ -556,23 +598,6 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               </p>
             )}
 
-            <div className="flex gap-2 mt-4">
-              <Button
-                variant="secondary"
-                fullWidth
-                onClick={() => handleAddToList(true)}
-              >
-                Add Essentials
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleAddToList(false)}
-                className="shrink-0"
-              >
-                Add All
-              </Button>
-            </div>
           </section>
         )}
 
@@ -581,47 +606,24 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           <section>
             {recipe.steps.length > 0 ? (
               <>
-                <ol className="space-y-4">
-                  {recipe.steps.map((step, i) => {
-                    const timerMin =
-                      step.timerMinutes ?? parseTimerFromText(step.text);
-                    return (
-                      <li key={i} className="flex gap-3">
-                        <span className="shrink-0 h-6 w-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center dark:bg-orange-900 dark:text-orange-300">
-                          {i + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm leading-relaxed dark:text-stone-200">
-                            {step.text}
-                          </p>
-                          {step.photoUrl && (
-                            <img
-                              src={step.photoUrl}
-                              alt={`Step ${i + 1}`}
-                              className="mt-2 rounded-lg max-h-48 object-cover"
-                              loading="lazy"
-                            />
-                          )}
-                          {timerMin && (
-                            <button
-                              onClick={() =>
-                                onStartTimer(
-                                  `Step ${i + 1}`,
-                                  timerMin,
-                                  recipe.id,
-                                  i
-                                )
-                              }
-                              className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-600 dark:bg-orange-950 dark:text-orange-400"
-                            >
-                              <Stopwatch className="w-3.5 h-3.5" /> {timerMin}:00
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
+                {recipe.steps.length >= 3 && (
+                  <div className="mb-3">
+                    <button
+                      onClick={handleGroupSteps}
+                      disabled={isGroupingSteps}
+                      className={classNames(
+                        "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                        recipe.steps.some((s) => s.group)
+                          ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                          : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                      )}
+                    >
+                      {isGroupingSteps ? "Grouping..." : recipe.steps.some((s) => s.group) ? "Grouped by Section" : "Group Sections"}
+                    </button>
+                  </div>
+                )}
+
+                <StepsList steps={recipe.steps} recipeId={recipe.id} onStartTimer={onStartTimer} />
 
                 <Button
                   fullWidth
@@ -641,21 +643,70 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           </section>
         )}
 
+        {/* Planning */}
+        <section className="border-t border-stone-200 dark:border-stone-700 pt-4 space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+            Planning
+          </h2>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={() => handleAddToList(true)}
+            >
+              Add Essentials to List
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleAddToList(false)}
+              className="shrink-0"
+            >
+              Add All
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (recipe && !justCooked) {
+                  markCooked(recipe.id);
+                  setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: new Date().toISOString() } : r);
+                  setJustCooked(true);
+                  setTimeout(() => setJustCooked(false), 2000);
+                }
+              }}
+              className={classNames(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                justCooked
+                  ? "border-green-500 bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400"
+                  : "border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400"
+              )}
+            >
+              <Check className="w-4 h-4" /> {justCooked ? "Logged!" : `Made This${recipe.cookedCount ? ` (${recipe.cookedCount})` : ""}`}
+            </button>
+            {recipe.lastCookedAt && (
+              <span className="text-xs text-stone-400 dark:text-stone-500">
+                Last made {new Date(recipe.lastCookedAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        </section>
+
         {/* Notes */}
         {recipe.notes && (
-          <section>
-            <h2 className="text-lg font-semibold mb-2 dark:text-orange-100/80">
+          <section className="border-t border-stone-200 dark:border-stone-700 pt-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
               Notes
             </h2>
             <p className="text-sm text-stone-600 dark:text-stone-300 whitespace-pre-wrap">
-              {recipe.notes}
+              {decodeEntities(recipe.notes)}
             </p>
           </section>
         )}
 
         {/* Source */}
         {(recipe.source?.url || recipe.source?.attribution) && (
-          <div className="text-sm text-stone-400 dark:text-stone-500 space-y-0.5">
+          <div className="border-t border-stone-200 dark:border-stone-700 pt-4 text-sm text-stone-400 dark:text-stone-500 space-y-0.5">
             <div>
               Source:{" "}
               {recipe.source.url ? (
@@ -678,21 +729,11 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             )}
           </div>
         )}
-
-        {/* Delete */}
-        <div className="pt-4 border-t border-stone-200 dark:border-stone-800">
-          <button
-            onClick={handleDelete}
-            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-          >
-            <Trash className="w-4 h-4" /> Delete Recipe
-          </button>
-        </div>
       </div>
 
       {/* Shopping list toast */}
       {shoppingToast && (
-        <div className="fixed bottom-20 inset-x-0 z-50 max-w-2xl mx-auto px-4">
+        <div className="fixed bottom-20 inset-x-0 z-50 max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-between rounded-lg bg-stone-800 px-4 py-3 text-sm text-white shadow-lg dark:bg-stone-700">
             <span>{shoppingToast.message}</span>
             {shoppingToast.recipeId && (
@@ -794,12 +835,99 @@ function GroupedIngredients({ ingredients, sort }: { ingredients: Ingredient[]; 
   );
 }
 
+function StepRow({ step, index, recipeId, onStartTimer }: {
+  step: Step;
+  index: number;
+  recipeId: string;
+  onStartTimer: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
+}) {
+  const timerMin = step.timerMinutes ?? parseTimerFromText(step.text);
+  return (
+    <li className="flex gap-3">
+      <span className="shrink-0 h-6 w-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center dark:bg-orange-900 dark:text-orange-300">
+        {index + 1}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm leading-relaxed dark:text-stone-200">
+          {decodeEntities(step.text)}
+        </p>
+        {step.photoUrl && (
+          <img
+            src={step.photoUrl}
+            alt={`Step ${index + 1}`}
+            className="mt-2 rounded-lg max-h-48 object-cover"
+            loading="lazy"
+          />
+        )}
+        {timerMin && (
+          <button
+            onClick={() => onStartTimer(`Step ${index + 1}`, timerMin, recipeId, index)}
+            className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-600 dark:bg-orange-950 dark:text-orange-400"
+          >
+            <Stopwatch className="w-3.5 h-3.5" /> {timerMin}:00
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function StepsList({ steps, recipeId, onStartTimer }: {
+  steps: Step[];
+  recipeId: string;
+  onStartTimer: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
+}) {
+  const hasGroups = steps.some((s) => s.group);
+
+  if (!hasGroups) {
+    return (
+      <ol className="space-y-4">
+        {steps.map((step, i) => (
+          <StepRow key={i} step={step} index={i} recipeId={recipeId} onStartTimer={onStartTimer} />
+        ))}
+      </ol>
+    );
+  }
+
+  // Group steps by section, preserving order
+  const sections: { name: string; steps: { step: Step; originalIndex: number }[] }[] = [];
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]!;
+    const groupName = step.group ?? "";
+    const last = sections[sections.length - 1];
+    if (last && last.name === groupName) {
+      last.steps.push({ step, originalIndex: i });
+    } else {
+      sections.push({ name: groupName, steps: [{ step, originalIndex: i }] });
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {sections.map((section, si) => (
+        <div key={si}>
+          {section.name && (
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-orange-600 dark:text-orange-400 mb-2">
+              {section.name}
+            </h3>
+          )}
+          <ol className="space-y-4">
+            {section.steps.map(({ step, originalIndex }) => (
+              <StepRow key={originalIndex} step={step} index={originalIndex} recipeId={recipeId} onStartTimer={onStartTimer} />
+            ))}
+          </ol>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function IngredientRow({ ingredient, hideGroup }: { ingredient: Ingredient; hideGroup?: boolean }) {
   const [checked, setChecked] = useState(false);
 
-  const display = [ingredient.amount, ingredient.unit, ingredient.name]
-    .filter(Boolean)
-    .join(" ");
+  const display = decodeEntities(
+    [ingredient.amount, ingredient.unit, ingredient.name].filter(Boolean).join(" ")
+  );
 
   return (
     <li
@@ -828,5 +956,79 @@ function IngredientRow({ ingredient, hideGroup }: { ingredient: Ingredient; hide
         {display}
       </span>
     </li>
+  );
+}
+
+const STAR_PATH = "M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z";
+
+function HeaderStarRating({ ratings, onRate }: { ratings?: Record<string, number>; onRate: (value: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const displayName = localStorage.getItem("whisk_display_name") ?? "User";
+  const myRating = ratings?.[displayName] ?? 0;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-0.5 p-1"
+      >
+        <svg
+          className={classNames(
+            "w-5 h-5",
+            myRating > 0 ? "text-amber-400 fill-amber-400" : "text-stone-400 dark:text-stone-500 fill-none"
+          )}
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={1.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d={STAR_PATH} />
+        </svg>
+        {myRating > 0 && (
+          <span className="text-xs font-semibold text-amber-500">{myRating}</span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1">
+            {[5, 4, 3, 2, 1].map((star) => (
+              <button
+                key={star}
+                onClick={() => { onRate(star === myRating ? 0 : star); setOpen(false); }}
+                className={classNames(
+                  "w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors",
+                  star === myRating
+                    ? "bg-amber-50 dark:bg-amber-950/30"
+                    : "hover:bg-stone-50 dark:hover:bg-stone-700"
+                )}
+              >
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: star }).map((_, i) => (
+                    <svg key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" viewBox="0 0 24 24">
+                      <path d={STAR_PATH} />
+                    </svg>
+                  ))}
+                </div>
+                <span className={classNames(
+                  "dark:text-stone-200",
+                  star === myRating ? "font-semibold text-amber-600 dark:text-amber-400" : "text-stone-600"
+                )}>
+                  {star === 5 ? "Amazing" : star === 4 ? "Great" : star === 3 ? "Good" : star === 2 ? "OK" : "Meh"}
+                </span>
+                {star === myRating && <span className="ml-auto text-xs text-amber-500">yours</span>}
+              </button>
+            ))}
+            {myRating > 0 && (
+              <button
+                onClick={() => { onRate(0); setOpen(false); }}
+                className="w-full px-3 py-2 text-left text-xs text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700 border-t border-stone-100 dark:border-stone-700"
+              >
+                Clear my rating
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

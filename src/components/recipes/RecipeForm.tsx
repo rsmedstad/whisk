@@ -241,7 +241,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
 
       if (isEditing && id) {
         await updateRecipe(id, recipeData);
-        navigate(`/recipes/${id}`);
+        navigate(`/recipes/${id}`, { replace: true });
       } else {
         const created = await createRecipe(recipeData);
         // Auto-tag in background after save (non-blocking)

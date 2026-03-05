@@ -31,6 +31,9 @@ export interface Recipe {
   difficulty?: "easy" | "medium" | "hard";
   notes?: string;
 
+  // Ratings (per-user, keyed by display name)
+  ratings?: Record<string, number>; // e.g. { "Ryan": 4, "Partner": 5 }
+
   // Cooking history
   cookedCount?: number;
   lastCookedAt?: string;
@@ -47,6 +50,7 @@ export interface Step {
   text: string;
   photoUrl?: string;
   timerMinutes?: number;
+  group?: string;
 }
 
 export interface RecipePhoto {
@@ -79,6 +83,8 @@ export interface RecipeIndexEntry {
   description?: string;
   cookedCount?: number;
   lastCookedAt?: string;
+  avgRating?: number; // pre-computed average of ratings
+  ratingCount?: number; // number of users who rated
 }
 
 // ── Tags ────────────────────────────────────────────────

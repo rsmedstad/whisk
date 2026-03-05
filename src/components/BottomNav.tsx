@@ -19,7 +19,7 @@ export function BottomNav() {
       "no-print fixed bottom-0 inset-x-0 z-40 transition-transform duration-200",
       isKeyboardOpen && "translate-y-full"
     )}>
-      <div className="max-w-2xl mx-auto border-t border-stone-200 bg-white/95 backdrop-blur-sm dark:border-orange-500/10 dark:bg-stone-950/95 pb-[var(--sab)]">
+      <div className="max-w-6xl mx-auto border-t border-stone-200 bg-white/95 backdrop-blur-sm dark:border-orange-500/10 dark:bg-stone-950/95 pb-[var(--sab)]">
         <div className="flex items-center justify-around">
           {tabs.map((tab) => (
             <NavLink

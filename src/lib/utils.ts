@@ -174,6 +174,24 @@ export function toDateString(date: Date): string {
   return date.toISOString().split("T")[0]!;
 }
 
+// ── Text ────────────────────────────────────────────────
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+  nbsp: " ", ndash: "\u2013", mdash: "\u2014",
+  lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201C", rdquo: "\u201D",
+  deg: "\u00B0", frac12: "\u00BD", frac14: "\u00BC", frac34: "\u00BE",
+};
+
+/** Decode HTML entities (&#123; &#xAB; &amp;) in recipe text from scraped sources. */
+export function decodeEntities(str: string): string {
+  if (!str.includes("&")) return str;
+  return str
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&([a-z]+);/gi, (match, name) => HTML_ENTITIES[name.toLowerCase()] ?? match);
+}
+
 // ── Misc ────────────────────────────────────────────────
 
 export function classNames(

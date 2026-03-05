@@ -4,7 +4,7 @@ import type { Recipe } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { useWakeLock } from "../../hooks/useWakeLock";
-import { classNames, parseTimerFromText } from "../../lib/utils";
+import { classNames, parseTimerFromText, decodeEntities } from "../../lib/utils";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Stopwatch, Check } from "../ui/Icon";
 
@@ -61,7 +61,7 @@ export function CookMode({ onStartTimer }: CookModeProps) {
           This recipe doesn&apos;t have any steps yet.
         </p>
         <button
-          onClick={() => navigate(`/recipes/${recipe.id}`)}
+          onClick={() => navigate(`/recipes/${recipe.id}`, { replace: true })}
           className="text-sm font-medium text-orange-500"
         >
           Back to recipe
@@ -91,7 +91,7 @@ export function CookMode({ onStartTimer }: CookModeProps) {
               {completedCount}/{totalSteps}
             </span>
             <button
-              onClick={() => navigate(`/recipes/${recipe.id}`)}
+              onClick={() => navigate(`/recipes/${recipe.id}`, { replace: true })}
               className="text-sm font-medium text-stone-600 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-3 py-1 rounded-lg"
             >
               Done
@@ -165,7 +165,7 @@ export function CookMode({ onStartTimer }: CookModeProps) {
                         : "text-stone-800 dark:text-stone-200"
                     )}
                   >
-                    {step.text}
+                    {decodeEntities(step.text)}
                   </p>
 
                   {timerMin && (

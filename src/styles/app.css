@@ -445,6 +445,45 @@ body {
   scrollbar-width: none;
 }
 
+/* Carousel scroll: hidden on touch, sleek scrollbar on desktop */
+.carousel-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.carousel-scroll::-webkit-scrollbar {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .carousel-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #d6d3d1 transparent;
+  }
+  .carousel-scroll::-webkit-scrollbar {
+    display: block;
+    height: 6px;
+  }
+  .carousel-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 0 16px;
+  }
+  .carousel-scroll::-webkit-scrollbar-thumb {
+    background: #d6d3d1;
+    border-radius: 3px;
+  }
+  .carousel-scroll::-webkit-scrollbar-thumb:hover {
+    background: #a8a29e;
+  }
+  :is(.dark .carousel-scroll) {
+    scrollbar-color: #57534e transparent;
+  }
+  :is(.dark .carousel-scroll)::-webkit-scrollbar-thumb {
+    background: #57534e;
+  }
+  :is(.dark .carousel-scroll)::-webkit-scrollbar-thumb:hover {
+    background: #78716c;
+  }
+}
+
 /* Print styles */
 @media print {
   .no-print {

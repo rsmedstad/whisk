@@ -645,17 +645,24 @@ function extractImageUrl(img: unknown): string | undefined {
   return undefined;
 }
 
-function stripHtml(str: string): string {
+function decodeHtmlEntities(str: string): string {
+  const named: Record<string, string> = {
+    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+    nbsp: " ", ndash: "\u2013", mdash: "\u2014",
+    lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201C", rdquo: "\u201D",
+    bull: "\u2022", hellip: "\u2026", deg: "\u00B0",
+    frac12: "\u00BD", frac13: "\u2153", frac14: "\u00BC", frac34: "\u00BE",
+  };
   return str
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#8217;/g, "\u2019")
-    .replace(/&#8220;/g, "\u201C")
-    .replace(/&#8221;/g, "\u201D")
-    .replace(/&#\d+;/g, "")
-    .replace(/&[a-z]+;/g, "")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&([a-z]+);/gi, (match, name) => named[name.toLowerCase()] ?? match);
+}
+
+function stripHtml(str: string): string {
+  return decodeHtmlEntities(
+    str.replace(/<[^>]+>/g, " ")
+  )
     .replace(/\s+/g, " ")
     .trim();
 }
