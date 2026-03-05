@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RecipeIndexEntry } from "../../types";
 import { filterAndSortRecipes } from "../../hooks/useRecipes";
@@ -100,14 +100,41 @@ export function RecipeList({
   availableTags,
 }: RecipeListProps) {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [sort, setSort] = useState<SortOption>("category");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Restore filter/sort state from sessionStorage on mount
+  const saved = useRef(() => {
+    try {
+      const raw = sessionStorage.getItem("whisk_recipe_view");
+      if (raw) return JSON.parse(raw) as { search?: string; tags?: string[]; fav?: boolean; sort?: SortOption };
+    } catch { /* ignore */ }
+    return null;
+  });
+  const restored = saved.current();
+
+  const [search, setSearch] = useState(restored?.search ?? "");
+  const [selectedTags, setSelectedTags] = useState<string[]>(restored?.tags ?? []);
+  const [favoritesOnly, setFavoritesOnly] = useState(restored?.fav ?? false);
+  const [sort, setSort] = useState<SortOption>(restored?.sort ?? "category");
   const [showSort, setShowSort] = useState(false);
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
+
+  // Save filter state to sessionStorage whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem("whisk_recipe_view", JSON.stringify({ search, tags: selectedTags, fav: favoritesOnly, sort }));
+  }, [search, selectedTags, favoritesOnly, sort]);
+
+  // Restore scroll position after recipes render
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const pos = sessionStorage.getItem("whisk_recipe_scroll");
+    if (el && pos) {
+      el.scrollTop = parseInt(pos, 10);
+      sessionStorage.removeItem("whisk_recipe_scroll");
+    }
+  }, [recipes]);
 
   const filtered = useMemo(
     () =>
@@ -165,6 +192,13 @@ export function RecipeList({
     if (other) ordered.push({ label: "Other", recipes: other });
     return ordered;
   }, [filtered, sort]);
+
+  const goToRecipe = (id: string) => {
+    if (scrollRef.current) {
+      sessionStorage.setItem("whisk_recipe_scroll", String(scrollRef.current.scrollTop));
+    }
+    navigate(`/recipes/${id}`);
+  };
 
   const toggleTag = (tag: string) => {
     const isMealType = MEAL_TYPES.includes(tag);
@@ -302,7 +336,7 @@ export function RecipeList({
       <InstallPrompt />
 
       {/* Recipe cards */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 pb-24">
         {recipes.length === 0 && !search && selectedTags.length === 0 ? (
           <FirstRunGuide />
         ) : filtered.length === 0 ? (
@@ -333,7 +367,7 @@ export function RecipeList({
                       <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
                         <RecipeCard
                           recipe={recipe}
-                          onClick={() => navigate(`/recipes/${recipe.id}`)}
+                          onClick={() => goToRecipe(recipe.id)}
                           onToggleFavorite={() => onToggleFavorite(recipe.id)}
                         />
                       </div>
@@ -347,7 +381,7 @@ export function RecipeList({
                       <RecipeCard
                         key={recipe.id}
                         recipe={recipe}
-                        onClick={() => navigate(`/recipes/${recipe.id}`)}
+                        onClick={() => goToRecipe(recipe.id)}
                         onToggleFavorite={() => onToggleFavorite(recipe.id)}
                       />
                     ))}
@@ -362,7 +396,7 @@ export function RecipeList({
               <RecipeCard
                 key={recipe.id}
                 recipe={recipe}
-                onClick={() => navigate(`/recipes/${recipe.id}`)}
+                onClick={() => goToRecipe(recipe.id)}
                 onToggleFavorite={() => onToggleFavorite(recipe.id)}
               />
             ))}
