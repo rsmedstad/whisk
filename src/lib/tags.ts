@@ -53,7 +53,14 @@ export const PRESET_TAGS: TagDefinition[] = [
   { name: "fall", type: "preset", group: "season", usageCount: 0 },
   { name: "winter", type: "preset", group: "season", usageCount: 0 },
   { name: "spring", type: "preset", group: "season", usageCount: 0 },
-  { name: "holiday", type: "preset", group: "season", usageCount: 0 },
+  { name: "christmas", type: "preset", group: "season", usageCount: 0 },
+  { name: "thanksgiving", type: "preset", group: "season", usageCount: 0 },
+  { name: "halloween", type: "preset", group: "season", usageCount: 0 },
+  { name: "easter", type: "preset", group: "season", usageCount: 0 },
+  { name: "july 4th", type: "preset", group: "season", usageCount: 0 },
+  { name: "valentines", type: "preset", group: "season", usageCount: 0 },
+  { name: "st patricks", type: "preset", group: "season", usageCount: 0 },
+  { name: "cinco de mayo", type: "preset", group: "season", usageCount: 0 },
 ];
 
 export const TAG_GROUP_LABELS: Record<TagGroup, string> = {
