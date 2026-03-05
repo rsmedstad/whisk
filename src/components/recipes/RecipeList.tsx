@@ -78,6 +78,7 @@ export function RecipeList({
 
   const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish"];
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number } | null>(null);
 
   // Group available tags by category for dropdown filters
   const filterGroups = useMemo(() => {
@@ -225,7 +226,7 @@ export function RecipeList({
             }}
           />
           <TagChip
-            label="Favorites"
+            label="Favs"
             selected={favoritesOnly}
             onToggle={() => { setFavoritesOnly(!favoritesOnly); setOpenDropdown(null); }}
           />
@@ -234,7 +235,15 @@ export function RecipeList({
             return (
               <div key={group.key} className="relative shrink-0">
                 <button
-                  onClick={() => setOpenDropdown(openDropdown === group.key ? null : group.key)}
+                  onClick={(e) => {
+                    if (openDropdown === group.key) {
+                      setOpenDropdown(null);
+                    } else {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                      setOpenDropdown(group.key);
+                    }
+                  }}
                   className={classNames(
                     "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                     activeCount > 0
@@ -247,85 +256,85 @@ export function RecipeList({
                   {group.label}{activeCount > 0 && ` (${activeCount})`}
                   <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === group.key && "rotate-180")} />
                 </button>
-                {openDropdown === group.key && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
-                    <div className="absolute left-0 top-9 z-50 min-w-[140px] rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1">
-                      {group.tags.map((tag) => {
-                        const isActive = selectedTags.includes(tag);
-                        return (
-                          <button
-                            key={tag}
-                            onClick={() => toggleTag(tag)}
-                            className={classNames(
-                              "w-full px-3 py-2 text-left text-sm capitalize flex items-center justify-between gap-2 transition-colors",
-                              isActive
-                                ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
-                                : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                            )}
-                          >
-                            {tag}
-                            {isActive && <Check className="w-4 h-4 text-orange-500" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
               </div>
             );
           })}
-          {/* Sort dropdown — pushed to far right */}
-          <div className="relative shrink-0 ml-auto">
+          {/* Sort — pushed to far right, icon only */}
+          <div className="shrink-0 ml-auto">
             <button
-              onClick={() => setOpenDropdown(openDropdown === "sort" ? null : "sort")}
-              className={classNames(
-                "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                openDropdown === "sort"
-                  ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
-                  : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-              )}
+              onClick={(e) => {
+                if (openDropdown === "sort") {
+                  setOpenDropdown(null);
+                } else {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setDropdownPos({ top: rect.bottom + 4, left: rect.right - 120, right: undefined });
+                  setOpenDropdown("sort");
+                }
+              }}
+              className="p-1.5 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 transition-colors"
+              title={`Sort: ${({ category: "Category", recent: "Recent", alpha: "A-Z", cookTime: "Cook time" } as Record<SortOption, string>)[sort]}`}
             >
-              <ArrowUpDown className="w-3 h-3" />
-              {(
-                { category: "Category", recent: "Recent", alpha: "A-Z", cookTime: "Cook time" } as Record<SortOption, string>
-              )[sort]}
-              <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "sort" && "rotate-180")} />
+              <ArrowUpDown className="w-4.5 h-4.5" />
             </button>
-            {openDropdown === "sort" && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
-                <div className="absolute right-0 top-9 z-50 min-w-30 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1">
-                  {(
-                    [
-                      ["category", "Category"],
-                      ["recent", "Recent"],
-                      ["alpha", "A-Z"],
-                      ["cookTime", "Cook time"],
-                    ] as [SortOption, string][]
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      onClick={() => {
-                        setSort(value);
-                        setOpenDropdown(null);
-                      }}
-                      className={classNames(
-                        "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
-                        sort === value
-                          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
-                          : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                      )}
-                    >
-                      {label}
-                      {sort === value && <Check className="w-4 h-4 text-orange-500" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         </div>
+        {/* Dropdown panel — rendered fixed to avoid overflow clipping */}
+        {openDropdown && dropdownPos && (() => {
+          const sortOptions: [SortOption, string][] = [
+            ["category", "Category"],
+            ["recent", "Recent"],
+            ["alpha", "A-Z"],
+            ["cookTime", "Cook time"],
+          ];
+          const isSort = openDropdown === "sort";
+          const group = isSort ? null : filterGroups.find((g) => g.key === openDropdown);
+          if (!isSort && !group) return null;
+          return (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
+              <div
+                className="fixed z-50 min-w-35 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1"
+                style={{ top: dropdownPos.top, left: dropdownPos.left }}
+              >
+                {isSort
+                  ? sortOptions.map(([value, label]) => (
+                      <button
+                        key={value}
+                        onClick={() => { setSort(value); setOpenDropdown(null); }}
+                        className={classNames(
+                          "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                          sort === value
+                            ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                            : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                        )}
+                      >
+                        {label}
+                        {sort === value && <Check className="w-4 h-4 text-orange-500" />}
+                      </button>
+                    ))
+                  : group!.tags.map((tag) => {
+                      const isActive = selectedTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => toggleTag(tag)}
+                          className={classNames(
+                            "w-full px-3 py-2 text-left text-sm capitalize flex items-center justify-between gap-2 transition-colors",
+                            isActive
+                              ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                              : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                          )}
+                        >
+                          {tag}
+                          {isActive && <Check className="w-4 h-4 text-orange-500" />}
+                        </button>
+                      );
+                    })}
+              </div>
+            </>
+          );
+        })()}
+
         {/* Active filter chips */}
         {selectedTags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pb-2">
