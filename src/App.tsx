@@ -190,6 +190,7 @@ function AppShell({
                 onStartTimer={handleStartTimer}
                 onAddToShoppingList={handleAddToShoppingList}
                 onUndoShoppingList={handleUndoShoppingList}
+                onAddMeal={mealPlan.addMeal}
               />
             }
           />
