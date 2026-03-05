@@ -198,12 +198,11 @@ When new features or bug fixes are released, you can update your instance in und
 
 If you don't see the "Sync fork" banner, your fork is already up to date.
 
-### After Updating
+### Automatic Cache Updates
 
-After the new version deploys, open your app and go to:
-**Settings** > scroll to **Data** > tap **Clear Cache & Reload**
+Whisk automatically detects when a new version has been deployed. The app checks for updates periodically, and when one is found, it clears old cached files and reloads with the latest version. No manual action needed.
 
-This ensures you're running the latest version without stale cached files.
+If you ever need to force an update, go to **Settings** > **Data** > **Clear Cache & Reload**.
 
 ### From the Command Line (Advanced)
 

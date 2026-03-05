@@ -1,4 +1,6 @@
-const CACHE_NAME = "whisk-v5";
+// __BUILD_ID__ is replaced at build time by Vite — each deploy creates a unique SW
+const BUILD_ID = "__BUILD_ID__";
+const CACHE_NAME = "whisk-" + BUILD_ID;
 const API_CACHE = "whisk-api-v2";
 const PHOTO_CACHE = "whisk-photos-v1";
 
@@ -11,6 +13,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE))
   );
+  // Activate immediately — don't wait for old tabs to close
   self.skipWaiting();
 });
 
@@ -24,8 +27,14 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k)))
       )
+      .then(() => self.clients.claim())
+      .then(() => {
+        // Notify all open tabs that a new version is active
+        self.clients.matchAll({ type: "window" }).then((clients) => {
+          clients.forEach((client) => client.postMessage({ type: "SW_UPDATED" }));
+        });
+      })
   );
-  self.clients.claim();
 });
 
 // ── Fetch ───────────────────────────────────────────────
@@ -58,7 +67,6 @@ self.addEventListener("fetch", (event) => {
 
   // ── API: network-first with cache fallback ─────────────
   if (url.pathname.startsWith("/api/")) {
-    // Only cache safe read endpoints
     const cacheable =
       url.pathname === "/api/recipes" ||
       url.pathname.match(/^\/api\/recipes\/[^/]+$/) ||
@@ -86,19 +94,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Static assets (JS/CSS): cache-first with hashed filenames ──
+  // ── Static assets (JS/CSS): stale-while-revalidate ──
+  // Vite uses content-hashed filenames, so new deploys = new URLs.
+  // Serve from cache instantly, fetch fresh copy in background.
   if (url.pathname.match(/\.(js|css|woff2?)$/) || url.pathname === "/manifest.json") {
     event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const clone = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-            }
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(request).then((cached) => {
+          const fetchPromise = fetch(request).then((response) => {
+            if (response.ok) cache.put(request, response.clone());
             return response;
-          })
+          });
+          return cached || fetchPromise;
+        })
       )
     );
     return;
@@ -109,7 +117,6 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache the latest shell
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put("/", clone));
           return response;
@@ -120,7 +127,7 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// ── Background Sync (for offline edits) ─────────────────
+// ── Message handling ────────────────────────────────────
 
 self.addEventListener("message", (event) => {
   if (event.data === "skipWaiting") {

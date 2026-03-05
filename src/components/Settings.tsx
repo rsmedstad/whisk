@@ -667,7 +667,7 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
                   </a>
                 </div>
                 <p className="text-xs text-stone-400 dark:text-stone-500 mt-2">
-                  After updating, tap "Clear Cache & Reload" above to apply changes.
+                  Updates are applied automatically. The app checks for new versions in the background.
                 </p>
               </div>
 
