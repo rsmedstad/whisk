@@ -9,6 +9,19 @@
 - New layout setting in Settings > Appearance: switch between Carousel (horizontal scroll per category) and Grid (vertical list)
 - Layout preference persists via `whisk_recipe_layout` localStorage key
 
+### Theme & Display Fixes
+
+- Fixed system theme not applying correctly on page load (synchronous theme script in index.html)
+- Fixed Safari horizontal scroll for carousel layout
+- Expanded seasonal palettes to tint the full stone color range (backgrounds, borders, cards, text)
+
+### Self-Hosting & Updates
+
+- Comprehensive README with step-by-step self-hosting guide for non-technical users
+- Covers: GitHub fork, Cloudflare Pages setup, KV/R2 storage creation, environment variables, AI provider setup
+- Settings > About & Updates section with GitHub link and update instructions
+- "Sync fork" update flow: one click on GitHub to pull latest changes, auto-deploys via Cloudflare
+
 ---
 
 ## [0.3.0] - 2026-03-04
