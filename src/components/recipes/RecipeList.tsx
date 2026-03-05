@@ -14,38 +14,63 @@ import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Ch
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category";
 
-/** Enables click-drag horizontal scrolling on desktop (touch works natively). */
+/** Enables click-drag horizontal scrolling with momentum on desktop. */
 function useDragScroll() {
   const ref = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-  const startX = useRef(0);
-  const scrollLeft = useRef(0);
+  const state = useRef({ dragging: false, startX: 0, scrollLeft: 0, lastX: 0, lastTime: 0, velocity: 0, animId: 0 });
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     const el = ref.current;
     if (!el) return;
-    dragging.current = true;
-    startX.current = e.pageX - el.offsetLeft;
-    scrollLeft.current = el.scrollLeft;
+    cancelAnimationFrame(state.current.animId);
+    const s = state.current;
+    s.dragging = true;
+    s.startX = e.pageX;
+    s.scrollLeft = el.scrollLeft;
+    s.lastX = e.pageX;
+    s.lastTime = Date.now();
+    s.velocity = 0;
     el.style.cursor = "grabbing";
     el.style.userSelect = "none";
+    // Disable snap during drag for smooth movement
+    el.style.scrollSnapType = "none";
   }, []);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragging.current) return;
+    const s = state.current;
+    if (!s.dragging) return;
     const el = ref.current;
     if (!el) return;
     e.preventDefault();
-    const x = e.pageX - el.offsetLeft;
-    el.scrollLeft = scrollLeft.current - (x - startX.current);
+    const now = Date.now();
+    const dt = now - s.lastTime;
+    const dx = e.pageX - s.lastX;
+    if (dt > 0) s.velocity = dx / dt;
+    s.lastX = e.pageX;
+    s.lastTime = now;
+    el.scrollLeft = s.scrollLeft - (e.pageX - s.startX);
   }, []);
 
   const onMouseUp = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    dragging.current = false;
+    const s = state.current;
+    if (!s.dragging) return;
+    s.dragging = false;
     el.style.cursor = "";
     el.style.userSelect = "";
+    // Momentum coast
+    let v = -s.velocity * 15; // px per frame at 60fps
+    const coast = () => {
+      if (Math.abs(v) < 0.5) {
+        el.style.scrollSnapType = "";
+        return;
+      }
+      el.scrollLeft += v;
+      v *= 0.95; // friction
+      s.animId = requestAnimationFrame(coast);
+    };
+    s.animId = requestAnimationFrame(coast);
   }, []);
 
   return { ref, onMouseDown, onMouseMove, onMouseUp, onMouseLeave: onMouseUp };
