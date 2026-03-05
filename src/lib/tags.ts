@@ -4,8 +4,8 @@ export const PRESET_TAGS: TagDefinition[] = [
   // Meal
   { name: "breakfast", type: "preset", group: "meal", usageCount: 0 },
   { name: "brunch", type: "preset", group: "meal", usageCount: 0 },
-  { name: "lunch", type: "preset", group: "meal", usageCount: 0 },
   { name: "dinner", type: "preset", group: "meal", usageCount: 0 },
+  { name: "salad", type: "preset", group: "meal", usageCount: 0 },
   { name: "dessert", type: "preset", group: "meal", usageCount: 0 },
   { name: "appetizer", type: "preset", group: "meal", usageCount: 0 },
   { name: "snack", type: "preset", group: "meal", usageCount: 0 },

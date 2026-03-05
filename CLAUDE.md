@@ -134,7 +134,7 @@ public/
 - Type the context with `PagesFunction<Env>`.
 - Return `Response` objects with appropriate status codes and JSON content type.
 - All data stored in KV under prefixed keys: `recipe:`, `recipe_index`, `session:`, `shopping_list`, `meal_plan`, `tag_index`.
-- Photos stored in R2 bucket `whisk-photos`.
+- Photos stored in R2 bucket `whisk-photos` under the `photos/` key prefix (e.g. `photos/import-abc123.jpg`). The `thumbnailUrl` field on recipes stores the path as `/photos/import-abc123.jpg`, and the serving route at `functions/photos/[[path]].ts` prepends `photos/` to form the R2 key. **When uploading to R2 via the REST API, always include the `photos/` prefix in the object key.**
 
 ### localStorage Keys
 All prefixed with `whisk_`: `whisk_token`, `whisk_theme`, `whisk_units`, `whisk_temp_unit`, `whisk_show_grams`, `whisk_display_name`, `whisk_household_size`, `whisk_install_dismissed`, etc.
@@ -163,6 +163,26 @@ At least one AI provider key is needed for AI features. Vision requires a provid
 - `viewport-fit=cover` in index.html for iOS safe area support
 - `apple-mobile-web-app-capable` and `apple-mobile-web-app-status-bar-style` meta tags
 - App must work offline for cached data (read from localStorage cache)
+
+## Data Scripts (`scripts/`)
+
+One-off Bun scripts for bulk recipe data operations. They use the Cloudflare REST API directly (KV + R2) with the wrangler OAuth token from `%APPDATA%/xdg.config/.wrangler/config/default.toml`.
+
+### Key scripts
+- `list-recipes.ts` — List all recipes with IDs, titles, thumbnail/ingredient/step counts
+- `rebuild-index.ts` — Rebuild the `recipe_index` KV key from all `recipe:*` entries
+- `update-recipes.ts` / `update-missing.ts` — Bulk update recipes with scraped data + photos
+
+### Recipe scraping strategy (in order of preference)
+1. **Direct fetch** with browser-like headers — works for most recipe sites with JSON-LD
+2. **Cloudflare Browser Rendering** REST API — for JS-heavy sites (uses `CF_BR_TOKEN`). Call `POST /accounts/{id}/browser-rendering/content` with the URL, then extract JSON-LD from the rendered HTML
+3. **Deployed Whisk import API** (`/api/import/url`) — runs Browser Rendering on CF edge, may have different IP/access than direct API calls
+4. **Manual data entry** — last resort for sites that block all automated access (e.g. simplyrecipes.com)
+
+### Common pitfalls
+- **R2 key prefix**: When uploading photos via R2 REST API, use key `photos/filename.jpg` (not just `filename.jpg`). The serving route prepends `photos/` to the path, so the R2 key must match.
+- **Recipe index**: After any KV recipe updates, always run `rebuild-index.ts` to regenerate `recipe_index`
+- **OAuth token expiry**: If scripts fail with null results from KV list, the wrangler OAuth token may have expired. Run `npx wrangler whoami` to re-authenticate.
 
 ## What NOT to Do
 

@@ -15,10 +15,10 @@ interface AutoTagBody {
   ingredients: string[];
 }
 
-// All preset tag names excluding speed group (those are derived from time data)
+// Preset tags excluding speed group (those are derived from time data)
 const PRESET_TAGS = [
   // Meal
-  "breakfast", "brunch", "lunch", "dinner", "dessert", "appetizer", "snack", "side dish",
+  "breakfast", "brunch", "dinner", "salad", "dessert", "appetizer", "snack", "side dish",
   // Cuisine
   "italian", "mexican", "chinese", "thai", "indian", "japanese", "korean", "mediterranean", "american", "french",
   // Diet
@@ -28,8 +28,6 @@ const PRESET_TAGS = [
   // Season
   "summer", "fall", "winter", "spring", "holiday",
 ];
-
-const VALID_TAGS = new Set(PRESET_TAGS);
 
 // POST /api/ai/auto-tag - AI-powered recipe tag suggestions
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -44,6 +42,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
   }
 
+  // Load user-created custom tags from the tag index so AI can reuse them
+  let allTags = [...PRESET_TAGS];
+  try {
+    const tagIndex = await env.WHISK_KV.get("tag_index", "json") as
+      | { name: string; type?: string }[]
+      | null;
+    if (tagIndex) {
+      const presetSet = new Set(PRESET_TAGS);
+      const customTags = tagIndex
+        .map((t) => t.name)
+        .filter((n) => !presetSet.has(n));
+      allTags = [...PRESET_TAGS, ...customTags];
+    }
+  } catch {
+    // Continue with preset tags only
+  }
+
+  const validTags = new Set(allTags);
+
   const ingredientList = body.ingredients.length > 0
     ? `\nIngredients: ${body.ingredients.join(", ")}`
     : "";
@@ -51,7 +68,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const systemPrompt = [
     "You are a recipe tagging assistant. Given a recipe's title, description, and ingredients, select 2-5 tags from this exact list:",
     "",
-    PRESET_TAGS.join(", "),
+    allTags.join(", "),
     "",
     "Rules:",
     "- Only use tags from the list above. Do not invent new tags.",
@@ -74,7 +91,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
 
     const parsed = JSON.parse(content) as { tags?: string[] };
-    const tags = (parsed.tags ?? []).filter((t: string) => VALID_TAGS.has(t));
+    const tags = (parsed.tags ?? []).filter((t: string) => validTags.has(t));
 
     return new Response(JSON.stringify({ tags }), {
       headers: { "Content-Type": "application/json" },

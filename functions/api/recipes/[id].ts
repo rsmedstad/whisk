@@ -17,6 +17,15 @@ interface RecipeIndexEntry {
   description?: string;
   cookedCount?: number;
   lastCookedAt?: string;
+  avgRating?: number;
+  ratingCount?: number;
+}
+
+function computeAvgRating(ratings: Record<string, number> | undefined): number | undefined {
+  if (!ratings) return undefined;
+  const values = Object.values(ratings);
+  if (values.length === 0) return undefined;
+  return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
 }
 
 // GET /api/recipes/:id
@@ -81,6 +90,19 @@ export const onRequestPut: PagesFunction<Env> = async ({
     updates.favorite = favoritedBy.size > 0;
   }
 
+  // Handle per-user rating
+  if ("rating" in updates && userId) {
+    const ratings = (existing.ratings as Record<string, number>) ?? {};
+    const ratingValue = updates.rating as number;
+    if (ratingValue >= 1 && ratingValue <= 5) {
+      ratings[userId] = ratingValue;
+    } else if (ratingValue === 0) {
+      delete ratings[userId];
+    }
+    updates.ratings = ratings;
+    delete updates.rating; // don't store the per-request field
+  }
+
   const updated: Record<string, unknown> = { ...existing, ...updates, updatedAt: now };
 
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
@@ -106,6 +128,8 @@ export const onRequestPut: PagesFunction<Env> = async ({
           description: updated.description as string | undefined,
           cookedCount: updated.cookedCount as number | undefined,
           lastCookedAt: updated.lastCookedAt as string | undefined,
+          avgRating: computeAvgRating(updated.ratings as Record<string, number> | undefined),
+          ratingCount: Object.keys((updated.ratings as Record<string, number>) ?? {}).length || undefined,
         }
       : entry
   );
