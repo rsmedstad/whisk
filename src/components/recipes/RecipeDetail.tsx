@@ -12,6 +12,8 @@ import {
   decodeEntities,
 } from "../../lib/utils";
 import { categorizeIngredient, CATEGORY_LABELS, CATEGORY_ORDER } from "../../lib/categories";
+import { estimateGrams } from "../../lib/units";
+import { parseFraction } from "../../lib/utils";
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { TagChip } from "../ui/TagChip";
@@ -49,6 +51,8 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [ingredientSort, setIngredientSort] = useState<"recipe" | "category">(
     () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
   );
+  const [ingredientResetKey, setIngredientResetKey] = useState(0);
+  const showGrams = localStorage.getItem("whisk_show_grams") === "true";
   const [isRefetching, setIsRefetching] = useState(false);
   const [isGroupingSteps, setIsGroupingSteps] = useState(false);
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -566,8 +570,8 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               </div>
             )}
 
-            {/* Ingredient sort toggle */}
-            <div className="flex gap-1.5 mb-3">
+            {/* Ingredient sort toggle + reset */}
+            <div className="flex items-center gap-1.5 mb-3">
               {([
                 { value: "recipe" as const, label: "Recipe order" },
                 { value: "category" as const, label: "By category" },
@@ -588,10 +592,22 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   {label}
                 </button>
               ))}
+              <button
+                onClick={() => setIngredientResetKey((k) => k + 1)}
+                className="ml-auto text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+              >
+                Clear checked
+              </button>
             </div>
 
+            {showGrams && ingredients.length > 0 && (
+              <p className="text-[11px] text-stone-400 dark:text-stone-500 -mt-1 mb-3">
+                Gram weights are estimates based on typical ingredient densities
+              </p>
+            )}
+
             {ingredients.length > 0 ? (
-              <GroupedIngredients ingredients={ingredients} sort={ingredientSort} />
+              <GroupedIngredients ingredients={ingredients} sort={ingredientSort} resetKey={ingredientResetKey} showGrams={showGrams} />
             ) : (
               <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">
                 No ingredients listed
@@ -643,52 +659,64 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           </section>
         )}
 
-        {/* Planning */}
-        <section className="border-t border-stone-200 dark:border-stone-700 pt-4 space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
-            Planning
-          </h2>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              fullWidth
-              onClick={() => handleAddToList(true)}
-            >
-              Add Essentials to List
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleAddToList(false)}
-              className="shrink-0"
-            >
-              Add All
-            </Button>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (recipe && !justCooked) {
-                  markCooked(recipe.id);
-                  setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: new Date().toISOString() } : r);
-                  setJustCooked(true);
-                  setTimeout(() => setJustCooked(false), 2000);
-                }
-              }}
-              className={classNames(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
-                justCooked
-                  ? "border-green-500 bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400"
-                  : "border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400"
+        {/* Planning — two columns on desktop */}
+        <section className="border-t border-stone-200 dark:border-stone-700 pt-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Cooking Log */}
+            <div className="space-y-2.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+                Cooking Log
+              </h3>
+              <button
+                onClick={() => {
+                  if (recipe && !justCooked) {
+                    markCooked(recipe.id);
+                    setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: new Date().toISOString() } : r);
+                    setJustCooked(true);
+                    setTimeout(() => setJustCooked(false), 2000);
+                  }
+                }}
+                className={classNames(
+                  "w-full flex items-center justify-center gap-2 rounded-(--wk-radius-btn) border px-4 py-2.5 text-sm font-medium transition-colors",
+                  justCooked
+                    ? "border-green-500 bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400"
+                    : "border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:border-green-500 hover:text-green-600 dark:hover:text-green-400"
+                )}
+              >
+                <Check className="w-4 h-4" />
+                {justCooked ? "Logged!" : "Made This"}
+              </button>
+              {(recipe.cookedCount || recipe.lastCookedAt) && (
+                <p className="text-xs text-stone-400 dark:text-stone-500 text-center">
+                  {recipe.cookedCount ? `Cooked ${recipe.cookedCount} time${recipe.cookedCount !== 1 ? "s" : ""}` : ""}
+                  {recipe.cookedCount && recipe.lastCookedAt ? " · " : ""}
+                  {recipe.lastCookedAt ? `Last ${new Date(recipe.lastCookedAt).toLocaleDateString()}` : ""}
+                </p>
               )}
-            >
-              <Check className="w-4 h-4" /> {justCooked ? "Logged!" : `Made This${recipe.cookedCount ? ` (${recipe.cookedCount})` : ""}`}
-            </button>
-            {recipe.lastCookedAt && (
-              <span className="text-xs text-stone-400 dark:text-stone-500">
-                Last made {new Date(recipe.lastCookedAt).toLocaleDateString()}
-              </span>
-            )}
+            </div>
+
+            {/* Shopping */}
+            <div className="space-y-2.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+                Shopping List
+              </h3>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => handleAddToList(true)}
+                >
+                  Add Essentials
+                </Button>
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => handleAddToList(false)}
+                >
+                  Add All
+                </Button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -751,7 +779,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   );
 }
 
-function GroupedIngredients({ ingredients, sort }: { ingredients: Ingredient[]; sort: "recipe" | "category" }) {
+function GroupedIngredients({ ingredients, sort, resetKey, showGrams }: { ingredients: Ingredient[]; sort: "recipe" | "category"; resetKey: number; showGrams: boolean }) {
   // If any ingredient has an explicit group (e.g. "For the sauce"), use those
   const hasExplicitGroups = ingredients.some((i) => i.group);
 
@@ -776,7 +804,7 @@ function GroupedIngredients({ ingredients, sort }: { ingredients: Ingredient[]; 
               )}
               <ul className="space-y-2">
                 {ings.map((ing, i) => (
-                  <IngredientRow key={i} ingredient={ing} hideGroup />
+                  <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} hideGroup showGrams={showGrams} />
                 ))}
               </ul>
             </div>
@@ -788,7 +816,7 @@ function GroupedIngredients({ ingredients, sort }: { ingredients: Ingredient[]; 
     return (
       <ul className="space-y-2">
         {ingredients.map((ing, i) => (
-          <IngredientRow key={i} ingredient={ing} />
+          <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} showGrams={showGrams} />
         ))}
       </ul>
     );
@@ -808,7 +836,7 @@ function GroupedIngredients({ ingredients, sort }: { ingredients: Ingredient[]; 
     return (
       <ul className="space-y-2">
         {ingredients.map((ing, i) => (
-          <IngredientRow key={i} ingredient={ing} />
+          <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} showGrams={showGrams} />
         ))}
       </ul>
     );
@@ -825,7 +853,7 @@ function GroupedIngredients({ ingredients, sort }: { ingredients: Ingredient[]; 
             </h3>
             <ul className="space-y-2">
               {ings.map((ing, i) => (
-                <IngredientRow key={i} ingredient={ing} />
+                <IngredientRow key={`${resetKey}-${cat}-${i}`} ingredient={ing} showGrams={showGrams} />
               ))}
             </ul>
           </div>
@@ -922,12 +950,24 @@ function StepsList({ steps, recipeId, onStartTimer }: {
   );
 }
 
-function IngredientRow({ ingredient, hideGroup }: { ingredient: Ingredient; hideGroup?: boolean }) {
+function IngredientRow({ ingredient, hideGroup, showGrams }: { ingredient: Ingredient; hideGroup?: boolean; showGrams?: boolean }) {
   const [checked, setChecked] = useState(false);
 
   const display = decodeEntities(
     [ingredient.amount, ingredient.unit, ingredient.name].filter(Boolean).join(" ")
   );
+
+  // Estimate gram weight for volume-based ingredients
+  let gramDisplay: string | null = null;
+  if (showGrams && ingredient.amount && ingredient.unit) {
+    const parsed = parseFraction(ingredient.amount);
+    if (parsed !== null) {
+      const grams = estimateGrams(parsed, ingredient.unit, ingredient.name);
+      if (grams !== null) {
+        gramDisplay = `${grams}g`;
+      }
+    }
+  }
 
   return (
     <li
@@ -954,6 +994,11 @@ function IngredientRow({ ingredient, hideGroup }: { ingredient: Ingredient; hide
           </span>
         )}
         {display}
+        {gramDisplay && (
+          <span className="ml-1 text-xs text-stone-400 dark:text-stone-500 font-normal">
+            ({gramDisplay})
+          </span>
+        )}
       </span>
     </li>
   );

@@ -46,7 +46,6 @@ export function RecipeList({
   const [selectedTags, setSelectedTags] = useState<string[]>(restored?.tags ?? []);
   const [favoritesOnly, setFavoritesOnly] = useState(restored?.fav ?? false);
   const [sort, setSort] = useState<SortOption>(restored?.sort ?? "category");
-  const [showSort, setShowSort] = useState(false);
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
@@ -184,13 +183,6 @@ export function RecipeList({
               <Cog className="w-5 h-5" />
             </button>
             <button
-              onClick={() => setShowSort(!showSort)}
-              className="p-2 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
-              title="Sort"
-            >
-              <ArrowUpDown className="w-5 h-5" />
-            </button>
-            <button
               onClick={() => navigate("/recipes/new")}
               className="p-2 text-orange-500 hover:text-orange-600"
               title="Add recipe"
@@ -220,36 +212,6 @@ export function RecipeList({
             </button>
           )}
         </div>
-
-        {/* Sort dropdown */}
-        {showSort && (
-          <div className="pb-2 flex gap-2 flex-wrap">
-            {(
-              [
-                ["category", "Category"],
-                ["recent", "Recent"],
-                ["alpha", "A-Z"],
-                ["cookTime", "Cook time"],
-              ] as [SortOption, string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => {
-                  setSort(value);
-                  setShowSort(false);
-                }}
-                className={classNames(
-                  "px-3 py-1 rounded-[var(--wk-radius-tag)] text-xs font-medium border",
-                  sort === value
-                    ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
-                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Filter bar */}
         <div className="flex items-center gap-2 pb-2 overflow-x-auto no-scrollbar">
@@ -313,6 +275,56 @@ export function RecipeList({
               </div>
             );
           })}
+          {/* Sort dropdown — pushed to far right */}
+          <div className="relative shrink-0 ml-auto">
+            <button
+              onClick={() => setOpenDropdown(openDropdown === "sort" ? null : "sort")}
+              className={classNames(
+                "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                openDropdown === "sort"
+                  ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                  : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+              )}
+            >
+              <ArrowUpDown className="w-3 h-3" />
+              {(
+                { category: "Category", recent: "Recent", alpha: "A-Z", cookTime: "Cook time" } as Record<SortOption, string>
+              )[sort]}
+              <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "sort" && "rotate-180")} />
+            </button>
+            {openDropdown === "sort" && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
+                <div className="absolute right-0 top-9 z-50 min-w-30 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1">
+                  {(
+                    [
+                      ["category", "Category"],
+                      ["recent", "Recent"],
+                      ["alpha", "A-Z"],
+                      ["cookTime", "Cook time"],
+                    ] as [SortOption, string][]
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        setSort(value);
+                        setOpenDropdown(null);
+                      }}
+                      className={classNames(
+                        "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                        sort === value
+                          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                          : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      )}
+                    >
+                      {label}
+                      {sort === value && <Check className="w-4 h-4 text-orange-500" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
         {/* Active filter chips */}
         {selectedTags.length > 0 && (

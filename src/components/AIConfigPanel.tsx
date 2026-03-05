@@ -139,16 +139,16 @@ export function AIConfigPanel({ config, providers, isLoading, isSaving, error, o
                 key={p.id}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
                   p.available
-                    ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
+                    ? "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950"
                     : "border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-900 opacity-60"
                 }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    p.available ? "bg-green-500" : "bg-stone-300 dark:bg-stone-600"
+                    p.available ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
                   }`}
                 />
-                <span className={p.available ? "dark:text-green-300" : "text-stone-500 dark:text-stone-500"}>
+                <span className={p.available ? "dark:text-orange-300" : "text-stone-500 dark:text-stone-500"}>
                   {p.name}
                 </span>
               </div>

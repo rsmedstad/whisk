@@ -49,7 +49,7 @@ export function InstallPrompt() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  if (platform === "pwa" || dismissed) return null;
+  if (platform === "pwa" || platform === "desktop" || dismissed) return null;
 
   const handleDismiss = () => {
     setDismissed(true);
@@ -113,20 +113,6 @@ export function InstallPrompt() {
                 Tap &ldquo;Add to Home screen&rdquo; or &ldquo;Install app&rdquo;
               </div>
             </div>
-          )}
-
-          {platform === "desktop" && (
-            <>
-              {deferredPrompt ? (
-                <Button size="sm" onClick={handleInstall}>
-                  Install App
-                </Button>
-              ) : (
-                <p className="text-sm text-stone-600 dark:text-stone-300">
-                  Look for the install icon in {browserName}&apos;s address bar, or use the menu to install this app.
-                </p>
-              )}
-            </>
           )}
 
           <p className="text-xs text-stone-400 dark:text-stone-500">

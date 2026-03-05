@@ -2,6 +2,13 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Hide native search clear button (we render our own) */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 @theme {
   /* Default accent — fresh green (overridden by data-accent for seasonal/holiday themes) */
   --color-orange-50: #f0fdf4;
@@ -332,18 +339,24 @@
 
 /* Editorial — sharp, typographic, magazine-inspired */
 [data-style="editorial"] {
-  --wk-radius-card: 2px;
+  --wk-radius-card: 0px;
   --wk-radius-btn: 2px;
   --wk-radius-input: 2px;
   --wk-radius-tag: 2px;
   --wk-shadow-card: none;
   --wk-shadow-card-hover: none;
-  --wk-border-card: 1px;
+  --wk-border-card: 0px;
   --wk-border-input: 1px;
   --wk-heading-weight: 800;
   --wk-heading-tracking: -0.025em;
-  --wk-heading-transform: none;
+  --wk-heading-transform: uppercase;
   --wk-card-backdrop: none;
+}
+[data-style="editorial"] .wk-card {
+  border-top: 2px solid currentColor;
+  border-bottom: none;
+  border-left: none;
+  border-right: none;
 }
 
 /* Soft — rounded, cozy, shadow-defined edges */
@@ -415,6 +428,13 @@ html.dark[data-style="brutalist"] {
 html.dark[data-style="glass"] .wk-card {
   background: rgb(12 10 9 / 0.55);
   border-color: rgb(255 255 255 / 0.08);
+}
+
+/* ── Heading Style Application ─────────────────────────── */
+h1, h2, h3 {
+  font-weight: var(--wk-heading-weight);
+  letter-spacing: var(--wk-heading-tracking);
+  text-transform: var(--wk-heading-transform);
 }
 
 /* Safe area insets for PWA / notched devices */

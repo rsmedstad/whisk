@@ -667,21 +667,31 @@ function stripHtml(str: string): string {
     .trim();
 }
 
+function cleanIngredientText(str: string): string {
+  return str
+    // Fix "teaspoon s" / "tablespoon s" / "cup s" artifacts from HTML stripping
+    .replace(/\b(teaspoon|tablespoon|cup|ounce|pound|clove|pinch|dash|slice|piece|stick|bunch|can|package|head|stalk|sprig)\s+s\b/gi, "$1s")
+    // Collapse multiple spaces
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function parseIngredients(
   raw: string[]
 ): { name: string; amount?: string; unit?: string }[] {
   return raw.map((str: string) => {
-    const match = str.match(
+    const cleaned = cleanIngredientText(str);
+    const match = cleaned.match(
       /^([\d\s/½⅓⅔¼¾⅛⅜⅝⅞]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|packages?|bunche?s?|pieces?|slices?|sticks?|heads?|stalks?|sprigs?|pinche?s?|dashes?)?\s*(.+)/i
     );
     if (match) {
       return {
         amount: match[1]?.trim(),
         unit: match[2]?.trim(),
-        name: match[3]?.trim() ?? str,
+        name: match[3]?.trim() ?? cleaned,
       };
     }
-    return { name: str.trim() };
+    return { name: cleaned };
   });
 }
 

@@ -63,6 +63,8 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [isRetagging, setIsRetagging] = useState(false);
   const [retagResult, setRetagResult] = useState<string | null>(null);
+  const [isFixingText, setIsFixingText] = useState(false);
+  const [fixTextResult, setFixTextResult] = useState<string | null>(null);
 
   const handleUnitsChange = (u: "imperial" | "metric") => {
     setUnits(u);
@@ -258,9 +260,9 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
                 <div className="grid grid-cols-2 gap-2">
                   {([
                     { id: "modern" as const, label: "Modern", desc: "Clean & minimal" },
-                    { id: "editorial" as const, label: "Editorial", desc: "Sharp & typographic" },
+                    { id: "editorial" as const, label: "Editorial", desc: "Magazine-style dividers" },
                     { id: "soft" as const, label: "Soft", desc: "Rounded & cozy" },
-                    { id: "brutalist" as const, label: "Brutalist", desc: "Bold & raw" },
+                    { id: "brutalist" as const, label: "Brutalist", desc: "Thick borders & hard shadows" },
                     { id: "glass" as const, label: "Glass", desc: "Frosted & layered" },
                   ]).map((s) => (
                     <button
@@ -358,7 +360,7 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
                     Show gram weights
                   </label>
                   <p className="text-xs text-stone-500 dark:text-stone-400">
-                    Display weight in grams alongside volume measurements
+                    Show estimated gram weights next to volume measurements. Weights are approximate, based on common densities for each ingredient type.
                   </p>
                 </div>
                 <button
@@ -605,6 +607,35 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
                 {retagResult && (
                   <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center font-medium">
                     {retagResult}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  disabled={isFixingText}
+                  onClick={async () => {
+                    setIsFixingText(true);
+                    setFixTextResult(null);
+                    try {
+                      const data = await api.post<{ updated: number }>("/recipes/fix-text");
+                      setFixTextResult(`Fixed ${data.updated} recipe${data.updated === 1 ? "" : "s"}`);
+                    } catch {
+                      setFixTextResult("Failed to fix text");
+                    } finally {
+                      setIsFixingText(false);
+                    }
+                  }}
+                >
+                  {isFixingText ? "Fixing..." : "Fix Text Artifacts"}
+                </Button>
+                <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
+                  Fixes &quot;teaspoon s&quot; and similar parsing artifacts
+                </p>
+                {fixTextResult && (
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center font-medium">
+                    {fixTextResult}
                   </p>
                 )}
               </div>
