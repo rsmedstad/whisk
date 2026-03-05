@@ -214,17 +214,17 @@ export function Globe(props: IconProps) {
 
 export function WhiskLogo(props: IconProps) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
       {/* Handle */}
-      <line x1="12" y1="22" x2="12" y2="14.5" />
+      <line x1="12" y1="22" x2="12" y2="14.5" strokeWidth={2} />
       {/* Ferrule band */}
-      <ellipse cx="12" cy="14.5" rx="2.5" ry="0.7" />
-      {/* Outer wire loop — rounded balloon shape */}
-      <path d="M9.5 14.5 C3 11, 3 5, 12 2.5 C21 5, 21 11, 14.5 14.5" />
+      <ellipse cx="12" cy="14.5" rx="2" ry="0.6" strokeWidth={1.5} />
+      {/* Outer wire loop — slender */}
+      <path d="M10 14.5 C5.5 11, 5.5 5, 12 2.5 C18.5 5, 18.5 11, 14 14.5" strokeWidth={1.2} />
       {/* Inner wire loop */}
-      <path d="M10.5 14.5 C6.5 11.5, 6.5 6, 12 3.5 C17.5 6, 17.5 11.5, 13.5 14.5" />
+      <path d="M11 14.5 C8 11.5, 8 6, 12 3.5 C16 6, 16 11.5, 13 14.5" strokeWidth={1} />
       {/* Center wire */}
-      <line x1="12" y1="14.5" x2="12" y2="2.5" />
+      <line x1="12" y1="14.5" x2="12" y2="2.5" strokeWidth={0.8} />
     </svg>
   );
 }

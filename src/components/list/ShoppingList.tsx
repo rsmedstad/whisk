@@ -100,6 +100,7 @@ export function ShoppingList({
     e.preventDefault();
     const name = newItem.trim();
     if (!name) return;
+    (document.activeElement as HTMLElement | null)?.blur();
     onAddItem(name);
     setNewItem("");
   };

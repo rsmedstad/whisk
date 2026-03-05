@@ -94,6 +94,7 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+    (document.activeElement as HTMLElement | null)?.blur();
     sendMessage(input.trim());
   };
 

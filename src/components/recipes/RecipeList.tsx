@@ -256,9 +256,11 @@ export function RecipeList({
         <div className="pb-2">
           <input
             type="search"
+            enterKeyHint="search"
             placeholder="Search recipes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
             className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
           />
         </div>
