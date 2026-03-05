@@ -57,6 +57,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const [notes, setNotes] = useState(cachedRecipe?.notes ?? "");
   const [videoUrl, setVideoUrl] = useState(cachedRecipe?.videoUrl ?? "");
   const [importUrl, setImportUrl] = useState("");
+  const [importStep, setImportStep] = useState("");
   const [sourceText, setSourceText] = useState(cachedRecipe?.source?.type === "manual" ? "" : "");
   const [newTag, setNewTag] = useState("");
   const [photos, setPhotos] = useState<RecipePhoto[]>(cachedRecipe?.photos ?? []);
@@ -163,7 +164,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
           },
-          body: JSON.stringify({ url: urlParam }),
+          body: JSON.stringify({ url: urlParam, downloadImage: true }),
         });
         if (!res.ok) throw new Error("Import failed");
         const data = (await res.json()) as Record<string, unknown>;
@@ -366,6 +367,22 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const handleImportUrl = async () => {
     if (!importUrl.trim()) return;
     setIsImporting(true);
+
+    // Detect Instagram for progress messaging
+    const isInstagram = /instagram\.com|instagr\.am/i.test(importUrl);
+    setImportStep(isInstagram ? "Fetching Instagram post..." : "Fetching recipe page...");
+
+    // Simulate progress steps while waiting for the single API call
+    const stepTimer = setTimeout(() => {
+      setImportStep(isInstagram ? "Extracting caption and images..." : "Extracting recipe data...");
+    }, isInstagram ? 8000 : 3000);
+    const stepTimer2 = setTimeout(() => {
+      setImportStep(isInstagram ? "Parsing recipe with AI..." : "Processing ingredients and steps...");
+    }, isInstagram ? 20000 : 8000);
+    const stepTimer3 = setTimeout(() => {
+      setImportStep("Almost done...");
+    }, isInstagram ? 40000 : 15000);
+
     try {
       const res = await fetch(`/api/import/url`, {
         method: "POST",
@@ -373,9 +390,16 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
         },
-        body: JSON.stringify({ url: importUrl }),
+        body: JSON.stringify({ url: importUrl, downloadImage: true }),
       });
-      if (!res.ok) throw new Error("Import failed");
+      clearTimeout(stepTimer);
+      clearTimeout(stepTimer2);
+      clearTimeout(stepTimer3);
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errData?.error ?? "Import failed");
+      }
+      setImportStep("Populating recipe fields...");
       const data = (await res.json()) as Record<string, unknown>;
       if (data.title) setTitle(data.title as string);
       if (data.description) setDescription(data.description as string);
@@ -402,13 +426,20 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       }
       // Show the form with populated data
       setShowManualForm(true);
-    } catch {
+    } catch (err) {
+      clearTimeout(stepTimer);
+      clearTimeout(stepTimer2);
+      clearTimeout(stepTimer3);
       // Import failed — switch to manual form with URL pre-filled as source
       setSourceText(importUrl);
       setShowManualForm(true);
-      alert("Could not import automatically — the site may block scraping. You can paste the recipe details manually, or copy the recipe text from the page.");
+      const msg = err instanceof Error ? err.message : "Import failed";
+      alert(isInstagram
+        ? `Could not import from Instagram: ${msg}`
+        : `Could not import automatically: ${msg}. You can paste the recipe details manually.`);
     } finally {
       setIsImporting(false);
+      setImportStep("");
     }
   };
 
@@ -458,7 +489,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImportUrl(); } }}
-                placeholder="https://allrecipes.com/..."
+                placeholder="https://allrecipes.com/... or Instagram link"
                 autoFocus
                 enterKeyHint="go"
                 className="w-full rounded-xl border border-stone-300 bg-white pl-10 pr-4 py-3 text-base placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
@@ -469,7 +500,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
               onClick={handleImportUrl}
               disabled={isImporting || !importUrl.trim()}
             >
-              {isImporting ? "Importing recipe..." : "Import Recipe"}
+              {isImporting ? (importStep || "Importing recipe...") : "Import Recipe"}
             </Button>
           </div>
 

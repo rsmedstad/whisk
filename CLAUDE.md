@@ -152,6 +152,7 @@ Set in Cloudflare dashboard or `.dev.vars` locally:
 | `OPENAI_API_KEY` | No | OpenAI API (GPT-4.1/4o, vision) |
 | `ANTHROPIC_API_KEY` | No | Anthropic API (Claude 4.5/4.6, vision) |
 | `XAI_API_KEY` | No | xAI Grok API (text + vision) |
+| `APIFY_API_TOKEN` | No | Apify API (Instagram post scraping, free $5/mo tier) |
 
 At least one AI provider key is needed for AI features. Vision requires a provider that supports image input. Free options with vision: Groq (Llama 4 Scout), Gemini (2.5 Flash). Configurable per-feature in Settings > AI Model Configuration.
 

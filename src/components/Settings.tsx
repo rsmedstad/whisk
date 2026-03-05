@@ -524,7 +524,7 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
               <p className="text-xs text-stone-400 dark:text-stone-500">
                 {capabilities.instagramImport
                   ? "Paste any public Instagram post URL into the recipe import field to extract the recipe."
-                  : "Add FACEBOOK_APP_TOKEN to your environment variables. Get a free token at developers.facebook.com — create an app, then find App ID and Client Token under Settings > Advanced."}
+                  : "Add APIFY_API_TOKEN to your environment variables. Sign up at apify.com for a free account ($5/month credit)."}
               </p>
             </div>
           </Card>

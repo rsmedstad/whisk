@@ -292,6 +292,6 @@ export interface Env {
   // Cloudflare Browser Rendering (for 403-blocked sites)
   CF_ACCOUNT_ID?: string;
   CF_BR_TOKEN?: string;
-  // Instagram import via oEmbed (free Facebook App token)
-  FACEBOOK_APP_TOKEN?: string;
+  // Instagram import via Apify scraper
+  APIFY_API_TOKEN?: string;
 }

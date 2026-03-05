@@ -10,7 +10,7 @@ interface Env extends ProviderEnv {
   WHISK_R2: R2Bucket;
   CF_ACCOUNT_ID?: string;
   CF_BR_TOKEN?: string;
-  FACEBOOK_APP_TOKEN?: string;
+  APIFY_API_TOKEN?: string;
 }
 
 interface RecipeData {
@@ -41,7 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
-    // ── Instagram oEmbed intercept ─────────────────────────
+    // ── Instagram intercept (via Apify) ─────────────────────
     if (isInstagramUrl(url)) {
       const result = await handleInstagramImport(url, downloadImage ?? false, env);
       return new Response(JSON.stringify(result.body), {
@@ -753,7 +753,7 @@ function parseDuration(iso: string | undefined): number | undefined {
   return hours * 60 + minutes || undefined;
 }
 
-// ── Instagram oEmbed ───────────────────────────────────────
+// ── Instagram via Apify ────────────────────────────────────
 
 function isInstagramUrl(url: string): boolean {
   try {
@@ -768,11 +768,18 @@ function isInstagramUrl(url: string): boolean {
   }
 }
 
-interface OEmbedResponse {
-  title?: string;
-  author_name?: string;
-  thumbnail_url?: string;
-  html?: string;
+interface ApifyPostResult {
+  caption?: string;
+  ownerUsername?: string;
+  type?: string; // "Image", "Video", "Sidecar" (carousel)
+  displayUrl?: string;
+  images?: string[];
+  childPosts?: { displayUrl?: string; type?: string }[];
+  videoUrl?: string;
+  likesCount?: number;
+  commentsCount?: number;
+  timestamp?: string;
+  error?: string;
 }
 
 async function handleInstagramImport(
@@ -780,92 +787,146 @@ async function handleInstagramImport(
   downloadImage: boolean,
   env: Env
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  if (!env.FACEBOOK_APP_TOKEN) {
+  if (!env.APIFY_API_TOKEN) {
     return {
       status: 422,
       body: {
-        error:
-          "Instagram import requires a Facebook App Token. Add FACEBOOK_APP_TOKEN in your Cloudflare environment variables.",
+        error: "Instagram import requires an Apify API token. Add APIFY_API_TOKEN in your Cloudflare environment variables.",
       },
     };
   }
 
-  // Call Instagram oEmbed API
-  const oembedUrl = `https://graph.facebook.com/v21.0/instagram_oembed?url=${encodeURIComponent(url)}&access_token=${env.FACEBOOK_APP_TOKEN}`;
-  const oembedRes = await fetch(oembedUrl, {
-    signal: AbortSignal.timeout(10000),
-  });
+  // Call Apify Instagram Scraper synchronously (run + get results in one call)
+  // Uses searchType "hashtag" which supports directUrls for single post lookups
+  let posts: ApifyPostResult[];
+  try {
+    const apifyRes = await fetch(
+      `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${env.APIFY_API_TOKEN}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          directUrls: [url],
+          resultsType: "posts",
+          resultsLimit: 1,
+          searchType: "hashtag",
+        }),
+        signal: AbortSignal.timeout(60000), // Apify runs can take a moment
+      }
+    );
 
-  if (!oembedRes.ok) {
-    const errText = await oembedRes.text().catch(() => "");
+    if (!apifyRes.ok) {
+      const errText = await apifyRes.text().catch(() => "");
+      return {
+        status: 422,
+        body: {
+          error: `Instagram scraper failed (${apifyRes.status}). The post may be private or unavailable.${errText ? ` Details: ${errText.slice(0, 200)}` : ""}`,
+        },
+      };
+    }
+
+    posts = (await apifyRes.json()) as ApifyPostResult[];
+  } catch (err) {
     return {
       status: 422,
       body: {
-        error: `Instagram oEmbed failed (${oembedRes.status}). The post may be private or the token may be invalid.${errText ? ` Details: ${errText.slice(0, 200)}` : ""}`,
+        error: `Instagram scraper timed out or failed. ${err instanceof Error ? err.message : ""}`.trim(),
       },
     };
   }
 
-  const oembed = (await oembedRes.json()) as OEmbedResponse;
-  const caption = oembed.title ?? "";
-  const author = oembed.author_name ?? "";
-  const thumbnailSrc = oembed.thumbnail_url;
+  const post = posts[0];
+  if (!post || post.error) {
+    return {
+      status: 422,
+      body: { error: post?.error === "restricted_page"
+        ? "Instagram post is restricted or private. Try copying the recipe text and pasting it manually."
+        : "Could not retrieve post data. It may be private or deleted." },
+    };
+  }
 
-  if (!caption && !thumbnailSrc) {
+  const caption = post.caption ?? "";
+  const author = post.ownerUsername ?? "";
+
+  // Collect images: carousel childPosts, images array, displayUrl fallback
+  // For reels/videos, displayUrl is a portrait video frame — object-cover crops it on display
+  const imageUrls: string[] = [];
+  if (post.childPosts && post.childPosts.length > 0) {
+    for (const child of post.childPosts) {
+      if (child.displayUrl) imageUrls.push(child.displayUrl);
+    }
+  }
+  if (post.images && post.images.length > 0) {
+    for (const img of post.images) {
+      if (!imageUrls.includes(img)) imageUrls.push(img);
+    }
+  }
+  if (imageUrls.length === 0 && post.displayUrl) {
+    imageUrls.push(post.displayUrl);
+  }
+
+  if (!caption && imageUrls.length === 0) {
     return {
       status: 422,
       body: { error: "Instagram post has no caption or image to extract a recipe from." },
     };
   }
 
-  // Download thumbnail to R2 if requested
-  let thumbnailUrl = thumbnailSrc;
+  // Download images to R2 if requested
+  let thumbnailUrl = imageUrls[0];
   const photos: { url: string; isPrimary: boolean }[] = [];
 
-  if (downloadImage && thumbnailSrc) {
-    try {
-      const imgRes = await fetch(thumbnailSrc, {
-        signal: AbortSignal.timeout(10000),
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-        },
-      });
-      if (imgRes.ok && imgRes.body) {
-        const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
-        const ext = contentType.includes("png")
-          ? "png"
-          : contentType.includes("webp")
-            ? "webp"
-            : "jpg";
-        const hashBuf = await crypto.subtle.digest(
-          "SHA-256",
-          new TextEncoder().encode(url)
-        );
-        const hashHex = [...new Uint8Array(hashBuf)]
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("")
-          .slice(0, 12);
-        const key = `photos/instagram-${hashHex}.${ext}`;
-
-        await env.WHISK_R2.put(key, imgRes.body, {
-          httpMetadata: { contentType },
+  if (downloadImage && imageUrls.length > 0) {
+    const toDownload = imageUrls.slice(0, 10);
+    for (let i = 0; i < toDownload.length; i++) {
+      const imgUrl = toDownload[i]!;
+      try {
+        const imgRes = await fetch(imgUrl, {
+          signal: AbortSignal.timeout(10000),
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+          },
         });
+        if (imgRes.ok && imgRes.body) {
+          const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+          const ext = contentType.includes("png")
+            ? "png"
+            : contentType.includes("webp")
+              ? "webp"
+              : "jpg";
+          const hashBuf = await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(imgUrl)
+          );
+          const hashHex = [...new Uint8Array(hashBuf)]
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("")
+            .slice(0, 12);
+          const key = `photos/instagram-${hashHex}.${ext}`;
 
-        thumbnailUrl = `/${key}`;
-        photos.push({ url: `/${key}`, isPrimary: true });
-      }
-    } catch {
-      // Keep external URL as fallback
-      if (thumbnailSrc) {
-        photos.push({ url: thumbnailSrc, isPrimary: true });
+          await env.WHISK_R2.put(key, imgRes.body, {
+            httpMetadata: { contentType },
+          });
+
+          const isPrimary = i === 0;
+          photos.push({ url: `/${key}`, isPrimary });
+          if (isPrimary) thumbnailUrl = `/${key}`;
+        }
+      } catch {
+        // Keep external URL as fallback
+        if (i === 0 && imageUrls[0]) {
+          photos.push({ url: imageUrls[0], isPrimary: true });
+        }
       }
     }
-  } else if (thumbnailSrc) {
-    photos.push({ url: thumbnailSrc, isPrimary: true });
+  } else {
+    for (let i = 0; i < imageUrls.length && i < 10; i++) {
+      photos.push({ url: imageUrls[i]!, isPrimary: i === 0 });
+    }
   }
 
-  // Try AI-powered caption parsing if an AI provider is available
+  // Use AI to parse the caption into a structured recipe
   const aiRecipe = await parseInstagramCaption(caption, env);
 
   if (aiRecipe) {
