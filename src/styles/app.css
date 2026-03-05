@@ -37,6 +37,13 @@
   --color-orange-950: #4c0519;
   --color-stone-50: #fdf7f8;
   --color-stone-100: #faf0f2;
+  --color-stone-200: #f0dce0;
+  --color-stone-300: #d4b5bc;
+  --color-stone-400: #b08e97;
+  --color-stone-500: #8d6e76;
+  --color-stone-600: #6b5359;
+  --color-stone-700: #4d3a3f;
+  --color-stone-800: #33252a;
   --color-stone-900: #1c1618;
   --color-stone-950: #100b0c;
 }
@@ -56,6 +63,13 @@
   --color-orange-950: #022c22;
   --color-stone-50: #f7fdfb;
   --color-stone-100: #f0faf6;
+  --color-stone-200: #dceee7;
+  --color-stone-300: #b5d4c6;
+  --color-stone-400: #8eb5a2;
+  --color-stone-500: #6e8d7e;
+  --color-stone-600: #536b5f;
+  --color-stone-700: #3a4d43;
+  --color-stone-800: #25332c;
   --color-stone-900: #151c1a;
   --color-stone-950: #0a100e;
 }
@@ -75,6 +89,13 @@
   --color-orange-950: #2e1065;
   --color-stone-50: #f9f7fd;
   --color-stone-100: #f3f0fa;
+  --color-stone-200: #e4dff0;
+  --color-stone-300: #c4bbd8;
+  --color-stone-400: #9f96b5;
+  --color-stone-500: #7d7492;
+  --color-stone-600: #5e576e;
+  --color-stone-700: #433d50;
+  --color-stone-800: #2d2938;
   --color-stone-900: #191620;
   --color-stone-950: #0d0b14;
 }
@@ -94,6 +115,13 @@
   --color-orange-950: #172554;
   --color-stone-50: #f7f9fd;
   --color-stone-100: #f0f3fa;
+  --color-stone-200: #dde3ee;
+  --color-stone-300: #b5bed4;
+  --color-stone-400: #8e98b3;
+  --color-stone-500: #6e7790;
+  --color-stone-600: #535a6d;
+  --color-stone-700: #3a3f4f;
+  --color-stone-800: #262a36;
   --color-stone-900: #15181c;
   --color-stone-950: #0a0c10;
 }
@@ -113,6 +141,13 @@
   --color-orange-950: #451a03;
   --color-stone-50: #fdfbf7;
   --color-stone-100: #faf6f0;
+  --color-stone-200: #ede5d8;
+  --color-stone-300: #d4c4ae;
+  --color-stone-400: #b3a088;
+  --color-stone-500: #8d7e68;
+  --color-stone-600: #6b5f4e;
+  --color-stone-700: #4d4438;
+  --color-stone-800: #332e25;
   --color-stone-900: #1c1a15;
   --color-stone-950: #100e0a;
 }
@@ -132,6 +167,13 @@
   --color-orange-950: #271306;
   --color-stone-50: #fdfcf7;
   --color-stone-100: #faf8f0;
+  --color-stone-200: #ede8d8;
+  --color-stone-300: #d4cbae;
+  --color-stone-400: #b3a588;
+  --color-stone-500: #8d8168;
+  --color-stone-600: #6b624e;
+  --color-stone-700: #4d4638;
+  --color-stone-800: #332f25;
   --color-stone-900: #1c1b15;
   --color-stone-950: #100f0a;
 }
@@ -151,6 +193,13 @@
   --color-orange-950: #450a0a;
   --color-stone-50: #fdf7f7;
   --color-stone-100: #faf0f0;
+  --color-stone-200: #f0dcdc;
+  --color-stone-300: #d4b5b5;
+  --color-stone-400: #b08e8e;
+  --color-stone-500: #8d6e6e;
+  --color-stone-600: #6b5353;
+  --color-stone-700: #4d3a3a;
+  --color-stone-800: #332525;
   --color-stone-900: #1c1515;
   --color-stone-950: #100a0a;
 }
@@ -172,6 +221,13 @@
   --color-orange-950: #500724;
   --color-stone-50: #fdf7fa;
   --color-stone-100: #faf0f4;
+  --color-stone-200: #f0dce4;
+  --color-stone-300: #d4b5c2;
+  --color-stone-400: #b08e9d;
+  --color-stone-500: #8d6e7c;
+  --color-stone-600: #6b535e;
+  --color-stone-700: #4d3a44;
+  --color-stone-800: #33252e;
   --color-stone-900: #1c1619;
   --color-stone-950: #100b0d;
 }
@@ -191,6 +247,13 @@
   --color-orange-950: #082f49;
   --color-stone-50: #f7fbfd;
   --color-stone-100: #f0f6fa;
+  --color-stone-200: #dce8ee;
+  --color-stone-300: #b5c8d4;
+  --color-stone-400: #8ea6b5;
+  --color-stone-500: #6e8592;
+  --color-stone-600: #53656e;
+  --color-stone-700: #3a484f;
+  --color-stone-800: #253035;
   --color-stone-900: #151a1c;
   --color-stone-950: #0a0e10;
 }
@@ -210,6 +273,13 @@
   --color-orange-950: #451a03;
   --color-stone-50: #fdfbf7;
   --color-stone-100: #faf6f0;
+  --color-stone-200: #ede5d8;
+  --color-stone-300: #d4c4ae;
+  --color-stone-400: #b3a088;
+  --color-stone-500: #8d7e68;
+  --color-stone-600: #6b5f4e;
+  --color-stone-700: #4d4438;
+  --color-stone-800: #332e25;
   --color-stone-900: #1c1a15;
   --color-stone-950: #100e0a;
 }
@@ -229,6 +299,13 @@
   --color-orange-950: #1e1b4b;
   --color-stone-50: #f8f7fd;
   --color-stone-100: #f2f0fa;
+  --color-stone-200: #e2dfee;
+  --color-stone-300: #bfbad4;
+  --color-stone-400: #9893b3;
+  --color-stone-500: #767192;
+  --color-stone-600: #59556e;
+  --color-stone-700: #3f3c50;
+  --color-stone-800: #2a2838;
   --color-stone-900: #18161c;
   --color-stone-950: #0c0a10;
 }

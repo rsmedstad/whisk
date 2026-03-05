@@ -256,16 +256,20 @@ export function RecipeList({
                   </span>
                 </h2>
                 {recipeLayout === "horizontal" ? (
-                  <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 -mr-4 pr-4">
-                    {group.recipes.map((recipe) => (
-                      <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
-                        <RecipeCard
-                          recipe={recipe}
-                          onClick={() => navigate(`/recipes/${recipe.id}`)}
-                          onToggleFavorite={() => onToggleFavorite(recipe.id)}
-                        />
-                      </div>
-                    ))}
+                  <div className="overflow-hidden -mx-4">
+                    <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 px-4">
+                      {group.recipes.map((recipe) => (
+                        <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
+                          <RecipeCard
+                            recipe={recipe}
+                            onClick={() => navigate(`/recipes/${recipe.id}`)}
+                            onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                          />
+                        </div>
+                      ))}
+                      {/* Spacer for last card peek */}
+                      <div className="shrink-0 w-1" aria-hidden />
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">

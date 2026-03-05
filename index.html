@@ -15,6 +15,14 @@
   </head>
   <body class="bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
     <div id="root"></div>
+    <script>
+      // Synchronous theme application — prevents flash of wrong theme before React mounts
+      (function() {
+        var t = localStorage.getItem('whisk_theme') || 'seasonal';
+        var dark = t === 'dark' || ((t === 'system' || t === 'seasonal') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
