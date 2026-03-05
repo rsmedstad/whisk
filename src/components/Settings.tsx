@@ -20,7 +20,7 @@ interface SettingsProps {
   capabilities: AICapabilities;
 }
 
-export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout }: SettingsProps) {
+export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capabilities }: SettingsProps) {
   const aiConfig = useAIConfig();
   const hh = useHousehold();
   const navigate = useNavigate();
@@ -495,6 +495,39 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout }: Set
             error={aiConfig.error}
             onSave={aiConfig.saveConfig}
           />
+        </section>
+
+        {/* Integrations */}
+        <section>
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+            Integrations
+          </h2>
+          <Card>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-stone-700 dark:text-stone-300">Instagram Import</p>
+                  <p className="text-xs text-stone-400 dark:text-stone-500">
+                    Import recipes from Instagram post captions
+                  </p>
+                </div>
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    capabilities.instagramImport
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                  }`}
+                >
+                  {capabilities.instagramImport ? "Active" : "Not configured"}
+                </span>
+              </div>
+              <p className="text-xs text-stone-400 dark:text-stone-500">
+                {capabilities.instagramImport
+                  ? "Paste any public Instagram post URL into the recipe import field to extract the recipe."
+                  : "Add FACEBOOK_APP_TOKEN to your environment variables. Get a free token at developers.facebook.com — create an app, then find App ID and Client Token under Settings > Advanced."}
+              </p>
+            </div>
+          </Card>
         </section>
 
         {/* Data */}

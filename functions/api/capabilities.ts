@@ -6,6 +6,7 @@ import {
 
 interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
+  FACEBOOK_APP_TOKEN?: string;
 }
 
 // GET /api/capabilities — returns which AI features are available
@@ -17,9 +18,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   const vision = !!resolveConfig(config, "vision", env);
   const suggestions = !!resolveConfig(config, "suggestions", env);
   const nutritionEstimate = chat; // uses same provider as chat
+  const instagramImport = !!env.FACEBOOK_APP_TOKEN;
 
   return new Response(
-    JSON.stringify({ chat, vision, suggestions, nutritionEstimate }),
+    JSON.stringify({ chat, vision, suggestions, nutritionEstimate, instagramImport }),
     { headers: { "Content-Type": "application/json" } }
   );
 };

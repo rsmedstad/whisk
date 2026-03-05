@@ -10,6 +10,7 @@ const NONE: AICapabilities = {
   vision: false,
   suggestions: false,
   nutritionEstimate: false,
+  instagramImport: false,
 };
 
 export function useCapabilities() {

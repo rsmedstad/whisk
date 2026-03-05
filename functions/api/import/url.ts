@@ -1,8 +1,16 @@
-interface Env {
+import {
+  loadAIConfig,
+  resolveConfig,
+  callTextAI,
+  type ProviderEnv,
+} from "../../lib/ai-providers";
+
+interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
   WHISK_R2: R2Bucket;
   CF_ACCOUNT_ID?: string;
   CF_BR_TOKEN?: string;
+  FACEBOOK_APP_TOKEN?: string;
 }
 
 interface RecipeData {
@@ -29,6 +37,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!url) {
       return new Response(JSON.stringify({ error: "URL required" }), {
         status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Instagram oEmbed intercept ─────────────────────────
+    if (isInstagramUrl(url)) {
+      const result = await handleInstagramImport(url, downloadImage ?? false, env);
+      return new Response(JSON.stringify(result.body), {
+        status: result.status,
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -734,4 +751,205 @@ function parseDuration(iso: string | undefined): number | undefined {
   const hours = parseInt(match[1] ?? "0");
   const minutes = parseInt(match[2] ?? "0");
   return hours * 60 + minutes || undefined;
+}
+
+// ── Instagram oEmbed ───────────────────────────────────────
+
+function isInstagramUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.hostname === "www.instagram.com" ||
+      u.hostname === "instagram.com" ||
+      u.hostname === "instagr.am"
+    );
+  } catch {
+    return false;
+  }
+}
+
+interface OEmbedResponse {
+  title?: string;
+  author_name?: string;
+  thumbnail_url?: string;
+  html?: string;
+}
+
+async function handleInstagramImport(
+  url: string,
+  downloadImage: boolean,
+  env: Env
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  if (!env.FACEBOOK_APP_TOKEN) {
+    return {
+      status: 422,
+      body: {
+        error:
+          "Instagram import requires a Facebook App Token. Add FACEBOOK_APP_TOKEN in your Cloudflare environment variables.",
+      },
+    };
+  }
+
+  // Call Instagram oEmbed API
+  const oembedUrl = `https://graph.facebook.com/v21.0/instagram_oembed?url=${encodeURIComponent(url)}&access_token=${env.FACEBOOK_APP_TOKEN}`;
+  const oembedRes = await fetch(oembedUrl, {
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!oembedRes.ok) {
+    const errText = await oembedRes.text().catch(() => "");
+    return {
+      status: 422,
+      body: {
+        error: `Instagram oEmbed failed (${oembedRes.status}). The post may be private or the token may be invalid.${errText ? ` Details: ${errText.slice(0, 200)}` : ""}`,
+      },
+    };
+  }
+
+  const oembed = (await oembedRes.json()) as OEmbedResponse;
+  const caption = oembed.title ?? "";
+  const author = oembed.author_name ?? "";
+  const thumbnailSrc = oembed.thumbnail_url;
+
+  if (!caption && !thumbnailSrc) {
+    return {
+      status: 422,
+      body: { error: "Instagram post has no caption or image to extract a recipe from." },
+    };
+  }
+
+  // Download thumbnail to R2 if requested
+  let thumbnailUrl = thumbnailSrc;
+  const photos: { url: string; isPrimary: boolean }[] = [];
+
+  if (downloadImage && thumbnailSrc) {
+    try {
+      const imgRes = await fetch(thumbnailSrc, {
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        },
+      });
+      if (imgRes.ok && imgRes.body) {
+        const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+        const ext = contentType.includes("png")
+          ? "png"
+          : contentType.includes("webp")
+            ? "webp"
+            : "jpg";
+        const hashBuf = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(url)
+        );
+        const hashHex = [...new Uint8Array(hashBuf)]
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+          .slice(0, 12);
+        const key = `photos/instagram-${hashHex}.${ext}`;
+
+        await env.WHISK_R2.put(key, imgRes.body, {
+          httpMetadata: { contentType },
+        });
+
+        thumbnailUrl = `/${key}`;
+        photos.push({ url: `/${key}`, isPrimary: true });
+      }
+    } catch {
+      // Keep external URL as fallback
+      if (thumbnailSrc) {
+        photos.push({ url: thumbnailSrc, isPrimary: true });
+      }
+    }
+  } else if (thumbnailSrc) {
+    photos.push({ url: thumbnailSrc, isPrimary: true });
+  }
+
+  // Try AI-powered caption parsing if an AI provider is available
+  const aiRecipe = await parseInstagramCaption(caption, env);
+
+  if (aiRecipe) {
+    return {
+      status: 200,
+      body: {
+        ...aiRecipe,
+        thumbnailUrl,
+        photos,
+        source: { type: "url", url, domain: "instagram.com", attribution: author ? `@${author}` : undefined },
+        lastCrawledAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  // Fallback: return caption as a single-step recipe
+  return {
+    status: 200,
+    body: {
+      title: caption.slice(0, 80).replace(/\n.*/s, "").trim() || `Recipe from @${author}`,
+      description: caption,
+      ingredients: [],
+      steps: [{ text: caption }],
+      thumbnailUrl,
+      photos,
+      source: { type: "url", url, domain: "instagram.com", attribution: author ? `@${author}` : undefined },
+      lastCrawledAt: new Date().toISOString(),
+    },
+  };
+}
+
+async function parseInstagramCaption(
+  caption: string,
+  env: Env
+): Promise<Record<string, unknown> | null> {
+  if (!caption || caption.trim().length < 20) return null;
+
+  const config = await loadAIConfig(env.WHISK_KV);
+  const fnConfig = resolveConfig(config, "chat", env);
+  if (!fnConfig) return null;
+
+  const systemPrompt = `You are a recipe extraction assistant. The user will provide an Instagram post caption that contains a recipe. Extract a structured recipe from it.
+
+Return ONLY a JSON object with these fields:
+- "title": string — the recipe name
+- "description": string — a brief description (1-2 sentences)
+- "ingredients": array of {"name": string, "amount"?: string, "unit"?: string}
+- "steps": array of {"text": string}
+- "prepTime": number (minutes, optional)
+- "cookTime": number (minutes, optional)
+- "servings": number (optional)
+
+Rules:
+- If the caption doesn't contain a recognizable recipe (no ingredients or cooking steps), return {"error": "not_a_recipe"}
+- Strip hashtags, emojis, and social media fluff from the extracted data
+- Keep step text clear and actionable
+- Combine related notes into the description
+
+Return ONLY the JSON object, no markdown or explanation.`;
+
+  try {
+    const result = await callTextAI(fnConfig, env, [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: caption.slice(0, 8000) },
+    ], {
+      maxTokens: 2048,
+      temperature: 0.1,
+      jsonMode: true,
+    });
+
+    const parsed = JSON.parse(result) as Record<string, unknown>;
+    if (parsed.error === "not_a_recipe") return null;
+    if (!parsed.title) return null;
+
+    return {
+      title: parsed.title,
+      description: parsed.description ?? "",
+      ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+      steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+      prepTime: typeof parsed.prepTime === "number" ? parsed.prepTime : undefined,
+      cookTime: typeof parsed.cookTime === "number" ? parsed.cookTime : undefined,
+      servings: typeof parsed.servings === "number" ? parsed.servings : undefined,
+    };
+  } catch {
+    return null;
+  }
 }
