@@ -256,6 +256,7 @@ function AppShell({
               />
             }
           />
+          <Route path="/settings/import" element={<Navigate to="/import" replace />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

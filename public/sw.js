@@ -1,5 +1,5 @@
-const CACHE_NAME = "whisk-v4";
-const API_CACHE = "whisk-api-v1";
+const CACHE_NAME = "whisk-v5";
+const API_CACHE = "whisk-api-v2";
 const PHOTO_CACHE = "whisk-photos-v1";
 
 // Static assets to precache on install
@@ -56,7 +56,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── API: stale-while-revalidate for GET endpoints ────
+  // ── API: network-first with cache fallback ─────────────
   if (url.pathname.startsWith("/api/")) {
     // Only cache safe read endpoints
     const cacheable =
@@ -71,17 +71,16 @@ self.addEventListener("fetch", (event) => {
 
     event.respondWith(
       caches.open(API_CACHE).then((cache) =>
-        cache.match(request).then((cached) => {
-          const networkFetch = fetch(request)
-            .then((response) => {
-              if (response.ok) cache.put(request, response.clone());
-              return response;
-            })
-            .catch(() => cached || new Response("{}", { status: 503 }));
-
-          // Return cached immediately, update in background
-          return cached || networkFetch;
-        })
+        fetch(request)
+          .then((response) => {
+            if (response.ok) cache.put(request, response.clone());
+            return response;
+          })
+          .catch(() =>
+            cache.match(request).then(
+              (cached) => cached || new Response("{}", { status: 503 })
+            )
+          )
       )
     );
     return;

@@ -11,7 +11,7 @@ import { TextArea } from "../ui/TextArea";
 import { TagChip } from "../ui/TagChip";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { parseTimerFromText } from "../../lib/utils";
-import { ChevronLeft, XMark, Plus, Camera, Sparkles } from "../ui/Icon";
+import { ChevronLeft, XMark, Plus, Camera, Sparkles, Link } from "../ui/Icon";
 
 interface RecipeFormProps {
   allTags: string[];
@@ -35,6 +35,8 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
 
   const [isLoading, setIsLoading] = useState(isEditing && !cachedRecipe);
   const [isSaving, setIsSaving] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(isEditing || !!searchParams.get("url"));
 
   // Form state — pre-populate from cache if editing
   const [title, setTitle] = useState(cachedRecipe?.title ?? "");
@@ -55,6 +57,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const [notes, setNotes] = useState(cachedRecipe?.notes ?? "");
   const [videoUrl, setVideoUrl] = useState(cachedRecipe?.videoUrl ?? "");
   const [importUrl, setImportUrl] = useState("");
+  const [sourceText, setSourceText] = useState(cachedRecipe?.source?.type === "manual" ? "" : "");
   const [newTag, setNewTag] = useState("");
   const [photos, setPhotos] = useState<RecipePhoto[]>(cachedRecipe?.photos ?? []);
   const [isUploading, setIsUploading] = useState(false);
@@ -84,6 +87,39 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
     } catch {
       // Silent fail
     }
+  };
+
+  // Fire-and-forget: auto-tag a newly created recipe in the background
+  const autoTagAfterSave = (recipeId: string, existingTags: string[], t: string, desc: string, ings: Ingredient[]) => {
+    if (!chatEnabled) return;
+    // Only auto-tag if no non-speed tags exist
+    const SPEED_TAGS = ["quick", "under 30 min", "under 15 min"];
+    const hasMeaningfulTags = existingTags.some((tag) => !SPEED_TAGS.includes(tag));
+    if (hasMeaningfulTags) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/ai/auto-tag", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+          },
+          body: JSON.stringify({
+            title: t,
+            description: desc,
+            ingredients: ings.filter((i) => i.name.trim()).map((i) => i.name),
+          }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { tags?: string[] };
+        if (Array.isArray(data.tags) && data.tags.length > 0) {
+          const mergedTags = [...new Set([...existingTags, ...data.tags])];
+          await updateRecipe(recipeId, { tags: mergedTags });
+        }
+      } catch {
+        // Silent fail — recipe was saved, tags are just a bonus
+      }
+    })();
   };
 
   // Background refresh for edit mode — update fields if server has newer data
@@ -194,7 +230,12 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
               url: importUrl,
               domain: new URL(importUrl).hostname,
             }
-          : { type: "manual" as const },
+          : sourceText.trim()
+            ? sourceText.trim().startsWith("http")
+              ? { type: "url" as const, url: sourceText.trim(), domain: new URL(sourceText.trim()).hostname }
+              : { type: "manual" as const, attribution: sourceText.trim() }
+            : { type: "manual" as const },
+        ...(importUrl ? { lastCrawledAt: new Date().toISOString() } : {}),
       };
 
       if (isEditing && id) {
@@ -202,6 +243,10 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         navigate(`/recipes/${id}`);
       } else {
         const created = await createRecipe(recipeData);
+        // Auto-tag in background after save (non-blocking)
+        if (chatEnabled && title.trim()) {
+          autoTagAfterSave(created.id, recipeData.tags ?? [], title.trim(), description.trim(), recipeData.ingredients);
+        }
         navigate(`/recipes/${created.id}`);
       }
     } catch (err) {
@@ -320,6 +365,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
 
   const handleImportUrl = async () => {
     if (!importUrl.trim()) return;
+    setIsImporting(true);
     try {
       const res = await fetch(`/api/import/url`, {
         method: "POST",
@@ -354,8 +400,15 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           Array.isArray(data.ingredients) ? (data.ingredients as Ingredient[]) : [],
         );
       }
+      // Show the form with populated data
+      setShowManualForm(true);
     } catch {
-      alert("Could not import from that URL. Try adding manually.");
+      // Import failed — switch to manual form with URL pre-filled as source
+      setSourceText(importUrl);
+      setShowManualForm(true);
+      alert("Could not import automatically — the site may block scraping. You can paste the recipe details manually, or copy the recipe text from the page.");
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -375,12 +428,97 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         <h1 className="font-semibold dark:text-stone-100">
           {isEditing ? "Edit Recipe" : "New Recipe"}
         </h1>
-        <Button size="sm" onClick={handleSubmit} disabled={isSaving || !title.trim()}>
-          {isSaving ? "Saving..." : "Save"}
-        </Button>
+        {showManualForm ? (
+          <Button size="sm" onClick={handleSubmit} disabled={isSaving || !title.trim()}>
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+        ) : (
+          <div className="w-14" />
+        )}
       </div>
 
+      {/* ── URL Import (primary for new recipes) ── */}
+      {!isEditing && !showManualForm && (
+        <div className="px-4 py-6 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-orange-50 dark:bg-orange-950/50 mb-2">
+              <Link className="w-7 h-7 text-orange-500" />
+            </div>
+            <h2 className="text-lg font-semibold dark:text-stone-100">Add from URL</h2>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              Paste a recipe link and we'll import it automatically
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                type="url"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImportUrl(); } }}
+                placeholder="https://allrecipes.com/..."
+                autoFocus
+                enterKeyHint="go"
+                className="w-full rounded-xl border border-stone-300 bg-white pl-10 pr-4 py-3 text-base placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+              />
+            </div>
+            <Button
+              fullWidth
+              onClick={handleImportUrl}
+              disabled={isImporting || !importUrl.trim()}
+            >
+              {isImporting ? "Importing recipe..." : "Import Recipe"}
+            </Button>
+          </div>
+
+          {/* Divider */}
+          <div className="relative flex items-center gap-4">
+            <div className="flex-1 border-t border-stone-200 dark:border-stone-700" />
+            <span className="text-xs text-stone-400 dark:text-stone-500 font-medium">or</span>
+            <div className="flex-1 border-t border-stone-200 dark:border-stone-700" />
+          </div>
+
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={() => setShowManualForm(true)}
+          >
+            Add Manually
+          </Button>
+        </div>
+      )}
+
+      {/* ── Manual Form ── */}
+      {showManualForm && (
       <form onSubmit={handleSubmit} className="px-4 py-4 space-y-6">
+        {/* URL import bar (compact, when in manual mode for new recipes) */}
+        {!isEditing && !importUrl && (
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                type="url"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                placeholder="Import from URL..."
+                enterKeyHint="go"
+                className="w-full rounded-lg border border-stone-300 bg-white pl-9 pr-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleImportUrl}
+              disabled={isImporting}
+            >
+              {isImporting ? "..." : "Import"}
+            </Button>
+          </div>
+        )}
+
         {/* Title & Description */}
         <div className="space-y-3">
           <Input
@@ -389,7 +527,6 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Recipe name"
             required
-            autoFocus
           />
           <TextArea
             label="Description (optional)"
@@ -725,31 +862,22 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           placeholder="https://youtube.com/..."
         />
 
-        {/* Import from URL */}
-        {!isEditing && (
-          <section>
-            <h2 className="text-sm font-semibold mb-2 dark:text-stone-100">
-              Import from URL
-            </h2>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                placeholder="https://allrecipes.com/..."
-                value={importUrl}
-                onChange={(e) => setImportUrl(e.target.value)}
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleImportUrl}
-              >
-                Import
-              </Button>
-            </div>
-          </section>
+        {/* Source */}
+        {!isEditing && !importUrl && (
+          <Input
+            label="Source (optional)"
+            value={sourceText}
+            onChange={(e) => setSourceText(e.target.value)}
+            placeholder="URL, cookbook name, grandma's recipe..."
+          />
+        )}
+        {importUrl && (
+          <div className="text-xs text-stone-400 dark:text-stone-500">
+            Imported from: <span className="text-stone-600 dark:text-stone-300">{importUrl}</span>
+          </div>
         )}
       </form>
+      )}
     </div>
   );
 }

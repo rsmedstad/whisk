@@ -59,13 +59,13 @@ src/
   styles/
     app.css            # Tailwind imports + seasonal accent palette overrides
   components/
-    BottomNav.tsx      # 5-tab navigation (Recipes, Identify, Suggest, List, Plan)
+    BottomNav.tsx      # 5-tab navigation (Recipes, Discover, Suggest, List, Plan)
     InstallPrompt.tsx  # Platform-aware PWA install instructions
     Settings.tsx       # Full settings page (theme, units, AI status, data, danger zone)
     auth/Login.tsx     # Onboarding: join existing book or setup new
     ui/                # Reusable primitives (Button, Card, Input, TextArea, etc.)
     recipes/           # RecipeList, RecipeDetail, RecipeForm, CookMode
-    identify/          # IdentifyPhoto (camera → AI food recognition)
+    discover/          # Discover tab (TheMealDB browser + AI identify)
     suggest/           # SuggestChat (AI-powered recipe discovery)
     list/              # ShoppingList
     plan/              # MealPlan
@@ -82,7 +82,8 @@ functions/api/         # Cloudflare Pages Functions (serverless API)
   ai/chat.ts           # POST /api/ai/chat
   ai/suggest.ts        # POST /api/ai/suggest
   identify/photo.ts    # POST /api/identify/photo
-  import/url.ts        # POST /api/import/url — scrape recipe from URL
+  import/url.ts        # POST /api/import/url — scrape recipe from URL (with Browser Rendering fallback)
+  import/parse.ts      # POST /api/import/parse — AI-powered text parsing for bulk import
   share/               # Public share link creation + access
   shopping/scan.ts     # POST /api/shopping/scan — OCR handwritten list
 
@@ -106,7 +107,7 @@ public/
 
 6. **Seasonal theme via CSS custom properties**: Tailwind CSS 4's `@theme` creates `--color-orange-*` vars. The `[data-accent="..."]` selectors in `app.css` override these for seasonal palettes. Zero component changes needed — just swap the `data-accent` attribute on `<html>`.
 
-7. **AI provider flexibility**: The `Env` type has optional keys for 8 providers. `/api/capabilities` auto-detects which are configured. `/api/ai/config` stores per-function provider+model choices in KV. Components receive boolean flags (`chatEnabled`, `visionEnabled`) and show graceful degradation banners. The Settings page has a full AI configuration UI with simple and advanced modes.
+7. **AI provider flexibility**: The `Env` type has optional keys for 6 providers. `/api/capabilities` auto-detects which are configured. `/api/ai/config` stores per-function provider+model choices in KV. Components receive boolean flags (`chatEnabled`, `visionEnabled`) and show graceful degradation banners. The Settings page has a full AI configuration UI with simple and advanced modes.
 
 ## Coding Conventions
 
@@ -147,14 +148,12 @@ Set in Cloudflare dashboard or `.dev.vars` locally:
 | `APP_SECRET` | Yes | Shared password for authentication |
 | `GROQ_API_KEY` | No | Groq API (fast text + vision, llama models) |
 | `GEMINI_API_KEY` | No | Google Gemini API (free tier, text + vision) |
-| `DEEPSEEK_API_KEY` | No | DeepSeek API (cheapest text, V3.2) |
 | `CEREBRAS_API_KEY` | No | Cerebras API (fastest inference, free tier) |
-| `MISTRAL_API_KEY` | No | Mistral API (free tier, text + Pixtral vision) |
 | `OPENAI_API_KEY` | No | OpenAI API (GPT-4.1/4o, vision) |
 | `ANTHROPIC_API_KEY` | No | Anthropic API (Claude 4.5/4.6, vision) |
 | `XAI_API_KEY` | No | xAI Grok API (text + vision) |
 
-At least one AI provider key is needed for AI features. Vision requires a provider that supports image input. Free options with vision: Groq (Llama 4 Scout), Gemini (2.5 Flash), Mistral (Pixtral). Configurable per-feature in Settings > AI Model Configuration.
+At least one AI provider key is needed for AI features. Vision requires a provider that supports image input. Free options with vision: Groq (Llama 4 Scout), Gemini (2.5 Flash). Configurable per-feature in Settings > AI Model Configuration.
 
 ## PWA Requirements
 

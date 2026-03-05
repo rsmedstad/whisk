@@ -172,17 +172,23 @@ export function AIConfigPanel({ config, providers, isLoading, isSaving, error, o
             <div className="space-y-3">
               <p className="text-sm font-medium dark:text-stone-200">Configuration Mode</p>
               <div className="flex gap-2">
-                {(["simple", "advanced"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => { setMode(m); setDirty(true); setSaved(false); }}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border capitalize ${
-                      mode === m ? activeClass : inactiveClass
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
+                {(["simple", "advanced"] as const).map((m) => {
+                  const MODE_LABELS: Record<string, string> = {
+                    simple: "Single Provider",
+                    advanced: "Per-Feature",
+                  };
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => { setMode(m); setDirty(true); setSaved(false); }}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border ${
+                        mode === m ? activeClass : inactiveClass
+                      }`}
+                    >
+                      {MODE_LABELS[m] ?? m}
+                    </button>
+                  );
+                })}
               </div>
               <p className="text-xs text-stone-500 dark:text-stone-400">
                 {mode === "simple"

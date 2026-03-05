@@ -19,6 +19,7 @@ export interface Recipe {
     type: "manual" | "url" | "photo" | "ai";
     url?: string;
     domain?: string;
+    attribution?: string;
   };
   tags: string[];
   cuisine?: string;
@@ -38,6 +39,7 @@ export interface Recipe {
   createdAt: string;
   updatedAt: string;
   lastViewedAt?: string;
+  lastCrawledAt?: string; // when recipe data was last fetched from source URL
   createdBy?: string;
 }
 
@@ -282,7 +284,8 @@ export interface Env {
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   XAI_API_KEY?: string;
-  DEEPSEEK_API_KEY?: string;
   CEREBRAS_API_KEY?: string;
-  MISTRAL_API_KEY?: string;
+  // Cloudflare Browser Rendering (for 403-blocked sites)
+  CF_ACCOUNT_ID?: string;
+  CF_BR_TOKEN?: string;
 }

@@ -4,7 +4,7 @@ import { getLocal, setLocal, CACHE_KEYS } from "../lib/cache";
 import type { Recipe, RecipeIndexEntry } from "../types";
 import { normalizeSearch } from "../lib/utils";
 
-type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed";
+type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category";
 
 export function useRecipes() {
   // Initialize from local cache immediately — zero latency
@@ -223,6 +223,7 @@ export function filterAndSortRecipes(
   }
 
   switch (options.sort) {
+    case "category":
     case "alpha":
       filtered.sort((a, b) => a.title.localeCompare(b.title));
       break;

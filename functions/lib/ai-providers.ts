@@ -47,9 +47,7 @@ export interface ProviderEnv {
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   XAI_API_KEY?: string;
-  DEEPSEEK_API_KEY?: string;
   CEREBRAS_API_KEY?: string;
-  MISTRAL_API_KEY?: string;
 }
 
 // ── Provider Registry ──────────────────────────────────────
@@ -87,18 +85,6 @@ export const PROVIDERS: Record<string, ProviderDef> = {
       { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash-Lite" },
     ],
   },
-  deepseek: {
-    id: "deepseek",
-    name: "DeepSeek",
-    envKey: "DEEPSEEK_API_KEY",
-    format: "openai",
-    baseUrl: "https://api.deepseek.com",
-    textModels: [
-      { id: "deepseek-chat", name: "DeepSeek V3.2 (Chat)" },
-      { id: "deepseek-reasoner", name: "DeepSeek V3.2 (Reasoner)" },
-    ],
-    visionModels: [],
-  },
   cerebras: {
     id: "cerebras",
     name: "Cerebras",
@@ -110,20 +96,6 @@ export const PROVIDERS: Record<string, ProviderDef> = {
       { id: "llama3.3-70b", name: "Llama 3.3 70B" },
     ],
     visionModels: [],
-  },
-  mistral: {
-    id: "mistral",
-    name: "Mistral",
-    envKey: "MISTRAL_API_KEY",
-    format: "openai",
-    baseUrl: "https://api.mistral.ai/v1",
-    textModels: [
-      { id: "mistral-small-latest", name: "Mistral Small" },
-      { id: "mistral-medium-latest", name: "Mistral Medium" },
-    ],
-    visionModels: [
-      { id: "pixtral-large-latest", name: "Pixtral Large" },
-    ],
   },
   openai: {
     id: "openai",

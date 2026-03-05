@@ -48,6 +48,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [ingredientSort, setIngredientSort] = useState<"recipe" | "category">(
     () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
   );
+  const [isRefetching, setIsRefetching] = useState(false);
 
   // Background refresh — updates from network silently
   useEffect(() => {
@@ -121,6 +122,45 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     setShoppingToast(null);
   }, [shoppingToast, onUndoShoppingList]);
 
+  const handleRefetch = useCallback(async () => {
+    if (!recipe?.source?.url || isRefetching) return;
+    setIsRefetching(true);
+    try {
+      const res = await fetch("/api/import/url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+        },
+        body: JSON.stringify({ url: recipe.source.url, downloadImage: true }),
+      });
+      if (!res.ok) throw new Error("Fetch failed");
+      const data = (await res.json()) as Record<string, unknown>;
+
+      const updates: Record<string, unknown> = { lastCrawledAt: new Date().toISOString() };
+      if (data.title) updates.title = data.title;
+      if (data.description) updates.description = data.description;
+      if (Array.isArray(data.ingredients) && data.ingredients.length) updates.ingredients = data.ingredients;
+      if (Array.isArray(data.steps) && data.steps.length) updates.steps = data.steps;
+      if (data.prepTime) updates.prepTime = data.prepTime;
+      if (data.cookTime) updates.cookTime = data.cookTime;
+      if (data.servings) updates.servings = data.servings;
+      if (data.videoUrl) updates.videoUrl = data.videoUrl;
+      if (Array.isArray(data.photos) && data.photos.length) {
+        updates.photos = data.photos;
+        const primary = (data.photos as { url: string; isPrimary: boolean }[]).find((p) => p.isPrimary);
+        if (primary) updates.thumbnailUrl = primary.url;
+      }
+
+      await updateRecipe(recipe.id, updates);
+      setRecipe((r) => (r ? { ...r, ...updates } as Recipe : r));
+    } catch {
+      alert("Could not refresh from source. The site may block automated access.");
+    } finally {
+      setIsRefetching(false);
+    }
+  }, [recipe, isRefetching, updateRecipe]);
+
   const photos = useMemo(
     () => recipe?.photos?.length ? recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i) : [],
     [recipe?.photos]
@@ -192,6 +232,17 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   >
                     Add to Shopping List
                   </button>
+                  {recipe.source?.url && (
+                    <button
+                      onClick={() => {
+                        handleRefetch();
+                        setShowOverflow(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-700 dark:text-stone-200"
+                    >
+                      {isRefetching ? "Updating..." : "Update from Source"}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       handleDelete();
@@ -209,7 +260,10 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
       </div>
 
       {/* Hero photo gallery — horizontal scroll-snap carousel */}
-      {photos.length > 0 && (
+      {(photos.length > 0 || recipe.videoUrl) && (() => {
+        const totalSlides = photos.length + (recipe.videoUrl ? 1 : 0);
+        const isVideoSlide = recipe.videoUrl && photoIndex === photos.length;
+        return (
         <div className="relative">
           <div
             className="flex snap-x snap-mandatory overflow-x-auto no-scrollbar"
@@ -232,10 +286,33 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 />
               </div>
             ))}
+            {recipe.videoUrl && (
+              <div className="aspect-video w-full shrink-0 snap-center bg-stone-900 flex flex-col items-center justify-center">
+                {recipe.videoUrl.includes("youtube.com") || recipe.videoUrl.includes("youtu.be") ? (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${recipe.videoUrl.match(/(?:v=|youtu\.be\/)([\w-]+)/)?.[1] ?? ""}`}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="Recipe video"
+                  />
+                ) : (
+                  <a
+                    href={recipe.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-2 text-white"
+                  >
+                    <PlayCircle className="w-12 h-12" />
+                    <span className="text-sm font-medium">Watch Recipe Video</span>
+                  </a>
+                )}
+              </div>
+            )}
           </div>
-          {photos.length > 1 && (
+          {totalSlides > 1 && (
             <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 pointer-events-none">
-              {photos.map((_, i) => (
+              {Array.from({ length: totalSlides }).map((_, i) => (
                 <span
                   key={i}
                   className={classNames(
@@ -246,23 +323,19 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               ))}
             </div>
           )}
-          {photos.length > 1 && (
+          {totalSlides > 1 && !isVideoSlide && (
             <div className="absolute top-3 right-3 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white">
-              {photoIndex + 1}/{photos.length}
+              {photoIndex + 1}/{totalSlides}
             </div>
           )}
-          {recipe.videoUrl && (
-            <a
-              href={recipe.videoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="absolute bottom-3 right-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white flex items-center gap-1"
-            >
-              <PlayCircle className="w-4 h-4" /> Video
-            </a>
+          {recipe.videoUrl && !isVideoSlide && (
+            <div className="absolute bottom-3 right-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white flex items-center gap-1 pointer-events-none">
+              <PlayCircle className="w-4 h-4" /> Video &rarr;
+            </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       <div className="px-4 py-4 space-y-6">
         {/* Title & meta */}
@@ -452,10 +525,10 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             )}
 
             {/* Ingredient sort toggle */}
-            <div className="bg-stone-100 dark:bg-stone-800 rounded-lg p-0.5 flex mb-3">
+            <div className="flex gap-1.5 mb-3">
               {([
-                { value: "recipe" as const, label: "Recipe Order" },
-                { value: "category" as const, label: "By Category" },
+                { value: "recipe" as const, label: "Recipe order" },
+                { value: "category" as const, label: "By category" },
               ]).map(({ value, label }) => (
                 <button
                   key={value}
@@ -464,10 +537,10 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                     localStorage.setItem("whisk_ingredient_sort", value);
                   }}
                   className={classNames(
-                    "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                    "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
                     ingredientSort === value
-                      ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
-                      : "text-stone-500 dark:text-stone-400"
+                      ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
                   )}
                 >
                   {label}
@@ -581,17 +654,28 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         )}
 
         {/* Source */}
-        {recipe.source?.url && (
-          <div className="text-sm text-stone-400 dark:text-stone-500">
-            Source:{" "}
-            <a
-              href={recipe.source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-orange-500 hover:underline"
-            >
-              {recipe.source.domain ?? recipe.source.url}
-            </a>
+        {(recipe.source?.url || recipe.source?.attribution) && (
+          <div className="text-sm text-stone-400 dark:text-stone-500 space-y-0.5">
+            <div>
+              Source:{" "}
+              {recipe.source.url ? (
+                <a
+                  href={recipe.source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-orange-500 hover:underline"
+                >
+                  {recipe.source.domain ?? recipe.source.url}
+                </a>
+              ) : (
+                <span className="text-stone-600 dark:text-stone-300">{recipe.source.attribution}</span>
+              )}
+            </div>
+            {recipe.lastCrawledAt && (
+              <div className="text-xs">
+                Last fetched {new Date(recipe.lastCrawledAt).toLocaleDateString()}
+              </div>
+            )}
           </div>
         )}
 

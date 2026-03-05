@@ -12,7 +12,7 @@ import { InstallPrompt } from "../InstallPrompt";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Users, Check } from "../ui/Icon";
 
-type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed";
+type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category";
 
 interface RecipeListProps {
   recipes: RecipeIndexEntry[];
@@ -31,7 +31,7 @@ export function RecipeList({
   const [search, setSearch] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [sort, setSort] = useState<SortOption>("recent");
+  const [sort, setSort] = useState<SortOption>("category");
   const [showSort, setShowSort] = useState(false);
 
   const filtered = useMemo(
@@ -46,6 +46,7 @@ export function RecipeList({
   );
 
   const MEAL_TYPES = ["dinner", "lunch", "breakfast", "dessert", "appetizer", "snack", "side dish"];
+  const CATEGORY_ORDER = ["breakfast", "brunch", "lunch", "dinner", "dessert", "appetizer", "snack", "side dish"];
 
   // Split tags into meal types and other tags
   const { mealTags, otherTags } = useMemo(() => {
@@ -56,6 +57,39 @@ export function RecipeList({
       .slice(0, 12);
     return { mealTags: meal, otherTags: other };
   }, [recipes, availableTags]);
+
+  // Group recipes by meal category for the "category" sort view
+  const groupedRecipes = useMemo(() => {
+    if (sort !== "category") return null;
+    const groups = new Map<string, RecipeIndexEntry[]>();
+    const favorites: RecipeIndexEntry[] = [];
+    for (const recipe of filtered) {
+      if (recipe.favorite) favorites.push(recipe);
+      const mealTag = CATEGORY_ORDER.find((c) => recipe.tags.includes(c));
+      const key = mealTag ?? "other";
+      const list = groups.get(key);
+      if (list) {
+        list.push(recipe);
+      } else {
+        groups.set(key, [recipe]);
+      }
+    }
+    // Sort alphabetically within each group
+    for (const list of groups.values()) {
+      list.sort((a, b) => a.title.localeCompare(b.title));
+    }
+    favorites.sort((a, b) => a.title.localeCompare(b.title));
+    // Favorites first, then category order, then "other"
+    const ordered: { label: string; recipes: RecipeIndexEntry[] }[] = [];
+    if (favorites.length > 0) ordered.push({ label: "Favorites", recipes: favorites });
+    for (const cat of CATEGORY_ORDER) {
+      const list = groups.get(cat);
+      if (list) ordered.push({ label: cat, recipes: list });
+    }
+    const other = groups.get("other");
+    if (other) ordered.push({ label: "Other", recipes: other });
+    return ordered;
+  }, [filtered, sort]);
 
   const toggleTag = (tag: string) => {
     const isMealType = MEAL_TYPES.includes(tag);
@@ -125,10 +159,10 @@ export function RecipeList({
           <div className="pb-2 flex gap-2 flex-wrap">
             {(
               [
+                ["category", "Category"],
                 ["recent", "Recent"],
                 ["alpha", "A-Z"],
                 ["cookTime", "Cook time"],
-                ["lastViewed", "Last viewed"],
               ] as [SortOption, string][]
             ).map(([value, label]) => (
               <button
@@ -202,6 +236,32 @@ export function RecipeList({
             title="No results"
             description="Try a different search or filter"
           />
+        ) : groupedRecipes ? (
+          <div className="space-y-6">
+            {groupedRecipes.map((group) => (
+              <section key={group.label}>
+                <h2 className={classNames(
+                  "text-sm font-semibold tracking-wide mb-2 capitalize",
+                  group.label === "Favorites"
+                    ? "text-red-500 dark:text-red-400 flex items-center gap-1"
+                    : "text-stone-500 dark:text-orange-300/50"
+                )}>
+                  {group.label === "Favorites" && <HeartFilled className="w-3.5 h-3.5" />}
+                  {group.label}
+                </h2>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                  {group.recipes.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      onClick={() => navigate(`/recipes/${recipe.id}`)}
+                      onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             {filtered.map((recipe) => (

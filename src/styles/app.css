@@ -35,6 +35,10 @@
   --color-orange-800: #9f1239;
   --color-orange-900: #881337;
   --color-orange-950: #4c0519;
+  --color-stone-50: #fdf7f8;
+  --color-stone-100: #faf0f2;
+  --color-stone-900: #1c1618;
+  --color-stone-950: #100b0c;
 }
 
 /* St. Patrick's Day — emerald */
@@ -50,6 +54,10 @@
   --color-orange-800: #065f46;
   --color-orange-900: #064e3b;
   --color-orange-950: #022c22;
+  --color-stone-50: #f7fdfb;
+  --color-stone-100: #f0faf6;
+  --color-stone-900: #151c1a;
+  --color-stone-950: #0a100e;
 }
 
 /* Easter — violet/lavender */
@@ -65,6 +73,10 @@
   --color-orange-800: #5b21b6;
   --color-orange-900: #4c1d95;
   --color-orange-950: #2e1065;
+  --color-stone-50: #f9f7fd;
+  --color-stone-100: #f3f0fa;
+  --color-stone-900: #191620;
+  --color-stone-950: #0d0b14;
 }
 
 /* 4th of July — blue/red patriotic */
@@ -80,6 +92,10 @@
   --color-orange-800: #1e40af;
   --color-orange-900: #1e3a8a;
   --color-orange-950: #172554;
+  --color-stone-50: #f7f9fd;
+  --color-stone-100: #f0f3fa;
+  --color-stone-900: #15181c;
+  --color-stone-950: #0a0c10;
 }
 
 /* Halloween — deep orange/amber */
@@ -95,6 +111,10 @@
   --color-orange-800: #92400e;
   --color-orange-900: #78350f;
   --color-orange-950: #451a03;
+  --color-stone-50: #fdfbf7;
+  --color-stone-100: #faf6f0;
+  --color-stone-900: #1c1a15;
+  --color-stone-950: #100e0a;
 }
 
 /* Thanksgiving — warm amber/brown */
@@ -110,6 +130,10 @@
   --color-orange-800: #713f12;
   --color-orange-900: #422006;
   --color-orange-950: #271306;
+  --color-stone-50: #fdfcf7;
+  --color-stone-100: #faf8f0;
+  --color-stone-900: #1c1b15;
+  --color-stone-950: #100f0a;
 }
 
 /* Christmas — red/green (red primary) */
@@ -125,23 +149,31 @@
   --color-orange-800: #991b1b;
   --color-orange-900: #7f1d1d;
   --color-orange-950: #450a0a;
+  --color-stone-50: #fdf7f7;
+  --color-stone-100: #faf0f0;
+  --color-stone-900: #1c1515;
+  --color-stone-950: #100a0a;
 }
 
 /* ── Season defaults (when no holiday is near) ──────────── */
 
-/* Spring — fresh green */
+/* Spring — cherry blossom pink */
 [data-accent="spring"] {
-  --color-orange-50: #f0fdf4;
-  --color-orange-100: #dcfce7;
-  --color-orange-200: #bbf7d0;
-  --color-orange-300: #86efac;
-  --color-orange-400: #4ade80;
-  --color-orange-500: #22c55e;
-  --color-orange-600: #16a34a;
-  --color-orange-700: #15803d;
-  --color-orange-800: #166534;
-  --color-orange-900: #14532d;
-  --color-orange-950: #052e16;
+  --color-orange-50: #fdf2f8;
+  --color-orange-100: #fce7f3;
+  --color-orange-200: #fbcfe8;
+  --color-orange-300: #f9a8d4;
+  --color-orange-400: #f472b6;
+  --color-orange-500: #ec4899;
+  --color-orange-600: #db2777;
+  --color-orange-700: #be185d;
+  --color-orange-800: #9d174d;
+  --color-orange-900: #831843;
+  --color-orange-950: #500724;
+  --color-stone-50: #fdf7fa;
+  --color-stone-100: #faf0f4;
+  --color-stone-900: #1c1619;
+  --color-stone-950: #100b0d;
 }
 
 /* Summer — sky blue */
@@ -157,6 +189,10 @@
   --color-orange-800: #075985;
   --color-orange-900: #0c4a6e;
   --color-orange-950: #082f49;
+  --color-stone-50: #f7fbfd;
+  --color-stone-100: #f0f6fa;
+  --color-stone-900: #151a1c;
+  --color-stone-950: #0a0e10;
 }
 
 /* Fall — warm amber (the app's natural orange, slightly warmer) */
@@ -172,6 +208,10 @@
   --color-orange-800: #92400e;
   --color-orange-900: #78350f;
   --color-orange-950: #451a03;
+  --color-stone-50: #fdfbf7;
+  --color-stone-100: #faf6f0;
+  --color-stone-900: #1c1a15;
+  --color-stone-950: #100e0a;
 }
 
 /* Winter — cool slate blue */
@@ -187,6 +227,10 @@
   --color-orange-800: #3730a3;
   --color-orange-900: #312e81;
   --color-orange-950: #1e1b4b;
+  --color-stone-50: #f8f7fd;
+  --color-stone-100: #f2f0fa;
+  --color-stone-900: #18161c;
+  --color-stone-950: #0c0a10;
 }
 
 /* Safe area insets for PWA / notched devices */

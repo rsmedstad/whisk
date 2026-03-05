@@ -9,7 +9,7 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
-import { ChevronLeft, Trash, Sunrise, Moon, Sun } from "./ui/Icon";
+import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -46,7 +46,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
       return raw ? (JSON.parse(raw) as string[]) : [];
     } catch { return []; }
   });
-  const [storeInput, setStoreInput] = useState("");
+
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -96,20 +96,6 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
     localStorage.setItem("whisk_household_size", String(clamped));
   };
 
-  const handleAddStore = () => {
-    const name = storeInput.trim();
-    if (!name || preferredStores.includes(name)) { setStoreInput(""); return; }
-    const updated = [...preferredStores, name];
-    setPreferredStores(updated);
-    localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
-    setStoreInput("");
-  };
-
-  const handleRemoveStore = (store: string) => {
-    const updated = preferredStores.filter((s) => s !== store);
-    setPreferredStores(updated);
-    localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
-  };
 
   const handleReset = () => {
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("whisk_") || k.startsWith("recipes_") || k.startsWith("recipe_") || k.startsWith("shopping_") || k.startsWith("meal_plan_") || k.startsWith("tag_") || k.startsWith("ai_"));
@@ -187,32 +173,49 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                       christmas: "Christmas", spring: "Spring",
                       summer: "Summer", fall: "Fall", winter: "Winter",
                     };
-                    const ACCENT_ICONS: Record<string, string> = {
-                      valentine: "\u2764\uFE0F", stpatrick: "\u2618\uFE0F",
-                      easter: "\uD83D\uDC30", july4th: "\uD83C\uDDFA\uD83C\uDDF8",
-                      halloween: "\uD83C\uDF83", thanksgiving: "\uD83E\uDD83",
-                      christmas: "\uD83C\uDF84", spring: "\uD83C\uDF31",
-                      summer: "\u2600\uFE0F", fall: "\uD83C\uDF42", winter: "\u2744\uFE0F",
+                    const ACCENT_SWATCHES: Record<string, [string, string]> = {
+                      valentine: ["#f43f5e", "#fda4af"],
+                      stpatrick: ["#10b981", "#6ee7b7"],
+                      easter: ["#8b5cf6", "#c4b5fd"],
+                      july4th: ["#3b82f6", "#93c5fd"],
+                      halloween: ["#f59e0b", "#fcd34d"],
+                      thanksgiving: ["#ca8a04", "#fde047"],
+                      christmas: ["#ef4444", "#fca5a5"],
+                      spring: ["#ec4899", "#f9a8d4"],
+                      summer: ["#0ea5e9", "#7dd3fc"],
+                      fall: ["#f59e0b", "#fcd34d"],
+                      winter: ["#6366f1", "#94a3b8"],
                     };
                     const THEME_ICONS: Record<string, typeof Sun> = {
-                      system: Sunrise, light: Sun, dark: Moon,
+                      system: ComputerDesktop, light: Sun, dark: Moon,
                     };
                     const currentAccent = getSeasonalAccent();
                     const ThemeIcon = THEME_ICONS[t];
-                    const seasonalIcon = ACCENT_ICONS[currentAccent] ?? "";
-                    const label = t === "seasonal"
-                      ? `${seasonalIcon} ${ACCENT_LABELS[currentAccent] ?? "Auto"}`
-                      : t;
+                    const accentLabel = ACCENT_LABELS[currentAccent] ?? "Auto";
+                    const isLongName = accentLabel.length > 10;
+                    const swatches = ACCENT_SWATCHES[currentAccent];
                     return (
                       <button
                         key={t}
                         onClick={() => onSetTheme(t)}
-                        className={`py-2 px-2 rounded-lg text-sm font-medium border capitalize flex items-center justify-center gap-1.5 ${
-                          theme === t ? activeClass : inactiveClass
-                        }`}
+                        className={`py-2 px-2 rounded-lg font-medium border flex items-center justify-center gap-1.5 ${
+                          t === "seasonal" ? "" : "capitalize text-sm "
+                        }${theme === t ? activeClass : inactiveClass}`}
                       >
                         {ThemeIcon && <ThemeIcon className="w-4 h-4" />}
-                        {label}
+                        {t === "seasonal" ? (
+                          <>
+                            {swatches && (
+                              <span className="flex gap-0.5 shrink-0">
+                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: swatches[0] }} />
+                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: swatches[1] }} />
+                              </span>
+                            )}
+                            <span className={isLongName ? "text-xs leading-tight" : "text-sm"}>
+                              Seasonal ({accentLabel})
+                            </span>
+                          </>
+                        ) : t}
                       </button>
                     );
                   })}
@@ -362,13 +365,6 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                 </div>
               </div>
 
-              <Input
-                label="Zip Code"
-                value={zipCode}
-                onChange={(e) => handleZipChange(e.target.value)}
-                placeholder="90210"
-              />
-
               <div>
                 <label className="text-sm font-medium dark:text-stone-200 block mb-2">
                   Preferred Stores
@@ -376,40 +372,30 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                 <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
                   Used for deal scanning and shopping list store tags
                 </p>
-                {preferredStores.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {preferredStores.map((store) => (
-                      <span
+                <div className="grid grid-cols-2 gap-2">
+                  {(["Jewel", "Trader Joe's", "Walmart", "Whole Foods", "Other"] as const).map((store) => {
+                    const checked = preferredStores.includes(store);
+                    return (
+                      <label
                         key={store}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg border border-stone-200 dark:border-stone-700 cursor-pointer"
                       >
-                        {store}
-                        <button
-                          onClick={() => handleRemoveStore(store)}
-                          className="text-orange-400 hover:text-red-500"
-                        >
-                          &times;
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={storeInput}
-                    onChange={(e) => setStoreInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddStore(); } }}
-                    placeholder="e.g. Costco, Trader Joe's"
-                    className="flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                  />
-                  <button
-                    onClick={handleAddStore}
-                    disabled={!storeInput.trim()}
-                    className="px-3 py-2 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
-                  >
-                    Add
-                  </button>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const updated = checked
+                              ? preferredStores.filter((s) => s !== store)
+                              : [...preferredStores, store];
+                            setPreferredStores(updated);
+                            localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
+                          }}
+                          className="w-4 h-4 rounded border-stone-300 text-orange-500 accent-orange-500"
+                        />
+                        <span className="text-sm dark:text-stone-200">{store}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -493,7 +479,7 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
                 {isExporting ? "Exporting..." : "Export All (JSON)"}
               </Button>
               <Button variant="secondary" fullWidth onClick={() => navigate("/settings/import")}>
-                Import from CSV
+                Import Recipes
               </Button>
               <div>
                 <Button
@@ -570,19 +556,19 @@ export function Settings({ theme, onSetTheme, onLogout }: SettingsProps) {
           Sign Out
         </Button>
 
-        {/* Danger zone */}
+        {/* Reset */}
         <section>
           <button
             onClick={() => setShowDanger(!showDanger)}
             className="text-xs text-stone-400 dark:text-stone-500 w-full text-center py-2"
           >
-            {showDanger ? "Hide" : "Show"} advanced options
+            {showDanger ? "Hide" : "Show"} reset options
           </button>
           {showDanger && (
             <Card>
               <div className="space-y-3">
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">
-                  Danger Zone
+                  Reset Data
                 </p>
                 <p className="text-xs text-stone-500 dark:text-stone-400">
                   This will clear all local data including cached recipes, settings, and sign you out. Server data is not affected.

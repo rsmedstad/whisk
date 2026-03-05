@@ -1,17 +1,90 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../lib/api";
+import { useRecipes } from "../../hooks/useRecipes";
 import { getSeasonalContext } from "../../lib/seasonal";
 import { classNames } from "../../lib/utils";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { TextArea } from "../ui/TextArea";
-import { Camera, Sparkles, Tag, ChevronRight, ChevronDown, Link } from "../ui/Icon";
+import { Camera, Tag, ChevronDown, Link, Plus, Check } from "../ui/Icon";
 
 interface DiscoverProps {
   visionEnabled?: boolean;
   chatEnabled?: boolean;
 }
+
+// ── TheMealDB types ────────────────────────────────────────
+
+interface MealSummary {
+  idMeal: string;
+  strMeal: string;
+  strMealThumb: string;
+}
+
+interface MealFull {
+  idMeal: string;
+  strMeal: string;
+  strMealThumb: string;
+  strCategory: string;
+  strArea: string;
+  strInstructions: string;
+  strTags: string | null;
+  strYoutube: string | null;
+  [key: string]: unknown;
+}
+
+const MEALDB_BASE = "https://www.themealdb.com/api/json/v1/1";
+
+const BROWSE_TABS = [
+  { value: "Chicken", label: "Chicken" },
+  { value: "Seafood", label: "Seafood" },
+  { value: "Pasta", label: "Pasta" },
+  { value: "Beef", label: "Beef" },
+  { value: "Dessert", label: "Dessert" },
+  { value: "Vegetarian", label: "Vegetarian" },
+  { value: "Breakfast", label: "Breakfast" },
+  { value: "Side", label: "Sides" },
+  { value: "Starter", label: "Starters" },
+  { value: "Vegan", label: "Vegan" },
+] as const;
+
+// ── TheMealDB → Whisk converter ────────────────────────────
+
+function parseMealIngredients(meal: MealFull) {
+  const ingredients: { name: string; amount?: string; unit?: string }[] = [];
+  for (let i = 1; i <= 20; i++) {
+    const name = (meal[`strIngredient${i}`] as string | null)?.trim();
+    const measure = (meal[`strMeasure${i}`] as string | null)?.trim();
+    if (!name) break;
+    // Try to split measure into amount + unit
+    const match = measure?.match(
+      /^([\d\s/½⅓⅔¼¾⅛⅜⅝⅞.]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|pieces?|slices?|sticks?|pinche?s?|dashes?|bunch|head|sprig)?\s*(.*)/i
+    );
+    if (match?.[1]) {
+      ingredients.push({
+        amount: match[1].trim(),
+        unit: match[2]?.trim() || undefined,
+        name: match[3] ? `${match[3].trim()} ${name}`.trim() : name,
+      });
+    } else {
+      ingredients.push({
+        name: measure ? `${measure} ${name}` : name,
+      });
+    }
+  }
+  return ingredients;
+}
+
+function parseMealSteps(instructions: string) {
+  // Split on numbered steps, "STEP N", or double newlines
+  const raw = instructions
+    .split(/(?:STEP\s*\d+\s*\n?|\r?\n\r?\n|\d+\.\s)/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 10);
+  return raw.map((text) => ({ text }));
+}
+
+// ── Deals types ─────────────────────────────────────────────
 
 interface Deal {
   item: string;
@@ -29,25 +102,20 @@ interface DealScanResult {
   message?: string;
 }
 
-interface RecipeIdea {
-  title: string;
-  description: string;
-  emoji: string;
-}
-
-type IdeaCategory = "seasonal" | "quick" | "trending" | "comfort" | "healthy";
-
-const IDEA_TABS: { value: IdeaCategory; label: string; emoji: string }[] = [
-  { value: "seasonal", label: "Seasonal", emoji: "\uD83C\uDF3F" },
-  { value: "quick", label: "Quick", emoji: "\u26A1" },
-  { value: "trending", label: "Trending", emoji: "\uD83D\uDD25" },
-  { value: "comfort", label: "Comfort", emoji: "\uD83E\uDEAB" },
-  { value: "healthy", label: "Healthy", emoji: "\uD83E\uDD57" },
-];
+// ── Component ───────────────────────────────────────────────
 
 export function Discover({ visionEnabled = false, chatEnabled = false }: DiscoverProps) {
   const navigate = useNavigate();
+  const { createRecipe } = useRecipes();
   const seasonal = getSeasonalContext();
+
+  // -- Browse state --
+  const [browseCategory, setBrowseCategory] = useState("Chicken");
+  const [meals, setMeals] = useState<MealSummary[]>([]);
+  const [isLoadingMeals, setIsLoadingMeals] = useState(false);
+  const [mealsCache, setMealsCache] = useState<Record<string, MealSummary[]>>({});
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   // -- Deals scanner state --
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,12 +133,6 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
     } catch { return []; }
   });
 
-  // -- Recipe ideas state --
-  const [ideaCategory, setIdeaCategory] = useState<IdeaCategory>("seasonal");
-  const [ideas, setIdeas] = useState<RecipeIdea[]>([]);
-  const [isLoadingIdeas, setIsLoadingIdeas] = useState(false);
-  const [ideasCache, setIdeasCache] = useState<Record<string, RecipeIdea[]>>({});
-
   // -- Identify state --
   const identifyFileRef = useRef<HTMLInputElement>(null);
   const [identifyPreview, setIdentifyPreview] = useState<string | null>(null);
@@ -83,34 +145,87 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
   } | null>(null);
   const [showIdentify, setShowIdentify] = useState(false);
 
-  // Load ideas on category change
-  const loadIdeas = useCallback(async (category: IdeaCategory) => {
-    const cached = ideasCache[category];
+  // ── TheMealDB fetching ──────────────────────────────────
+
+  const loadMeals = useCallback(async (category: string) => {
+    const cached = mealsCache[category];
     if (cached) {
-      setIdeas(cached);
+      setMeals(cached);
       return;
     }
-
-    setIsLoadingIdeas(true);
+    setIsLoadingMeals(true);
     try {
-      const result = await api.get<{ ideas: RecipeIdea[] }>(
-        `/discover/ideas?category=${category}&season=${seasonal.season}`
-      );
-      const items = result?.ideas ?? [];
-      setIdeas(items);
-      setIdeasCache((prev) => ({ ...prev, [category]: items }));
+      const res = await fetch(`${MEALDB_BASE}/filter.php?c=${category}`);
+      const data = (await res.json()) as { meals: MealSummary[] | null };
+      const items = data.meals ?? [];
+      // Shuffle for variety
+      const shuffled = items.sort(() => Math.random() - 0.5).slice(0, 20);
+      setMeals(shuffled);
+      setMealsCache((prev) => ({ ...prev, [category]: shuffled }));
     } catch {
-      setIdeas([]);
+      setMeals([]);
     } finally {
-      setIsLoadingIdeas(false);
+      setIsLoadingMeals(false);
     }
-  }, [seasonal.season, ideasCache]);
+  }, [mealsCache]);
 
   useEffect(() => {
-    loadIdeas(ideaCategory);
-  }, [ideaCategory]); // eslint-disable-line react-hooks/exhaustive-deps
+    loadMeals(browseCategory);
+  }, [browseCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Deals scanner — photo
+  const handleSaveRecipe = async (meal: MealSummary) => {
+    if (savingIds.has(meal.idMeal) || savedIds.has(meal.idMeal)) return;
+    setSavingIds((prev) => new Set(prev).add(meal.idMeal));
+    try {
+      // Fetch full recipe details
+      const res = await fetch(`${MEALDB_BASE}/lookup.php?i=${meal.idMeal}`);
+      const data = (await res.json()) as { meals: MealFull[] | null };
+      const full = data.meals?.[0];
+      if (!full) throw new Error("Recipe not found");
+
+      const ingredients = parseMealIngredients(full);
+      const steps = parseMealSteps(full.strInstructions);
+      const tags: string[] = [];
+      // Map TheMealDB category to our tags
+      const catLower = full.strCategory?.toLowerCase();
+      if (catLower === "breakfast") tags.push("breakfast");
+      else if (catLower === "dessert") tags.push("dessert");
+      else if (catLower === "starter") tags.push("appetizer");
+      else if (catLower === "side") tags.push("side dish");
+      else tags.push("dinner");
+      if (catLower === "vegan") tags.push("vegan");
+      if (catLower === "vegetarian") tags.push("vegetarian");
+      if (full.strArea) tags.push(full.strArea.toLowerCase());
+
+      await createRecipe({
+        title: full.strMeal,
+        description: "",
+        ingredients,
+        steps,
+        tags,
+        cuisine: full.strArea ?? "",
+        favorite: false,
+        photos: [{ url: full.strMealThumb, isPrimary: true }],
+        thumbnailUrl: full.strMealThumb,
+        videoUrl: full.strYoutube ?? undefined,
+        notes: "",
+        source: { type: "url" as const, url: `https://www.themealdb.com/meal/${full.idMeal}`, domain: "themealdb.com" },
+      });
+
+      setSavedIds((prev) => new Set(prev).add(meal.idMeal));
+    } catch {
+      // Silent fail
+    } finally {
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(meal.idMeal);
+        return next;
+      });
+    }
+  };
+
+  // ── Deals scanner handlers ──────────────────────────────
+
   const handleFlyerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -142,7 +257,6 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
       if (!res.ok) throw new Error("Scan failed");
       const data = (await res.json()) as DealScanResult;
 
-      // Accumulate deals across pages
       setAllDeals((prev) => [...prev, ...data.deals]);
       if (data.storeName || data.validDates) {
         setDealsMeta((prev) => prev ?? { storeName: data.storeName, validDates: data.validDates });
@@ -154,7 +268,6 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
       }
       setPageCount((n) => n + 1);
 
-      // Reset input for next page
       setFlyerPreview(null);
       setDealUrl("");
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -175,7 +288,8 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Identify photo
+  // ── Identify handlers ───────────────────────────────────
+
   const handleIdentifyFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -213,19 +327,129 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 py-3 pt-[calc(var(--sat)+0.75rem)]">
-        <h1 className="text-xl font-bold dark:text-stone-100">Discover</h1>
-        <p className="text-sm text-stone-500 dark:text-stone-400 mt-0.5">
-          {seasonal.greeting}
-        </p>
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
+        <div className="flex items-center justify-between py-3">
+          <h1 className="text-xl font-bold dark:text-stone-100">Discover</h1>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-24">
+        {/* ── Browse Recipes (TheMealDB) ──────────────────── */}
+        <section className="py-4">
+          <div className="flex items-center gap-2 mb-3 px-4">
+            <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">
+              Browse Recipes
+            </h2>
+          </div>
+
+          {/* Category tabs */}
+          <div className="flex gap-1.5 px-4 mb-3 overflow-x-auto no-scrollbar">
+            {BROWSE_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setBrowseCategory(tab.value)}
+                className={classNames(
+                  "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                  browseCategory === tab.value
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Meals grid */}
+          {isLoadingMeals ? (
+            <div className="grid grid-cols-2 gap-3 px-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-xl bg-stone-100 dark:bg-stone-800 aspect-3/2" />
+              ))}
+            </div>
+          ) : meals.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 px-4">
+              {meals.map((meal) => {
+                const isSaving = savingIds.has(meal.idMeal);
+                const isSaved = savedIds.has(meal.idMeal);
+                return (
+                  <button
+                    key={meal.idMeal}
+                    onClick={() => handleSaveRecipe(meal)}
+                    className="flex w-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
+                  >
+                    <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
+                      <img
+                        src={`${meal.strMealThumb}/preview`}
+                        alt={meal.strMeal}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                      {/* Save indicator */}
+                      <div
+                        className={classNames(
+                          "absolute top-1.5 right-1.5 p-1.5 rounded-full backdrop-blur-sm transition-colors",
+                          isSaved
+                            ? "bg-green-500"
+                            : isSaving
+                              ? "bg-orange-500 animate-pulse"
+                              : "bg-black/30"
+                        )}
+                      >
+                        {isSaved ? (
+                          <Check className="w-4 h-4 text-white" />
+                        ) : (
+                          <Plus className="w-4 h-4 text-white/80" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-2.5">
+                      <h3 className="font-semibold text-sm line-clamp-2 dark:text-stone-100">
+                        {meal.strMeal}
+                      </h3>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="px-4">
+              <Card>
+                <p className="text-sm text-stone-500 dark:text-stone-400 text-center py-2">
+                  No recipes found
+                </p>
+              </Card>
+            </div>
+          )}
+
+          {/* Seasonal suggestions (keep AI prompts if chat enabled) */}
+          {chatEnabled && seasonal.contextualPrompts.length > 0 && (
+            <div className="mt-4 px-4">
+              <p className="text-xs font-medium text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-2">
+                Seasonal ideas
+              </p>
+              <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                {seasonal.contextualPrompts.slice(0, 4).map((prompt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => navigate(`/suggest?q=${encodeURIComponent(prompt)}`)}
+                    className="px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
+
         {/* ── Deals Scanner ───────────────────────────────── */}
         <section className="px-4 py-4">
           <div className="flex items-center gap-2 mb-3">
-            <Tag className="w-4 h-4 text-orange-500" />
-            <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide">
+            <Tag className="w-4 h-4 text-stone-400 dark:text-stone-500" />
+            <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">
               Scan Store Deals
             </h2>
           </div>
@@ -377,94 +601,6 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
 
         <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
 
-        {/* ── Recipe Ideas ────────────────────────────────── */}
-        <section className="py-4">
-          <div className="flex items-center gap-2 mb-3 px-4">
-            <Sparkles className="w-4 h-4 text-orange-500" />
-            <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide">
-              Recipe Ideas
-            </h2>
-          </div>
-
-          {/* Category tabs */}
-          <div className="flex gap-1.5 px-4 mb-3 overflow-x-auto no-scrollbar">
-            {IDEA_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => setIdeaCategory(tab.value)}
-                className={classNames(
-                  "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                  ideaCategory === tab.value
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                )}
-              >
-                {tab.emoji} {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Ideas grid */}
-          {isLoadingIdeas ? (
-            <div className="grid grid-cols-2 gap-2.5 px-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="animate-pulse rounded-xl bg-stone-100 dark:bg-stone-800 h-28" />
-              ))}
-            </div>
-          ) : ideas.length > 0 ? (
-            <div className="grid grid-cols-2 gap-2.5 px-4">
-              {ideas.map((idea, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    // Navigate to suggest chat with this idea as the starting prompt
-                    navigate(`/suggest?q=${encodeURIComponent(idea.title)}`);
-                  }}
-                  className="rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors group"
-                >
-                  <span className="text-2xl block mb-1">{idea.emoji}</span>
-                  <p className="text-sm font-semibold dark:text-stone-200 line-clamp-1 group-hover:text-orange-600 dark:group-hover:text-orange-400">
-                    {idea.title}
-                  </p>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 mt-0.5">
-                    {idea.description}
-                  </p>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="px-4">
-              <Card>
-                <div className="text-center py-2">
-                  <p className="text-sm text-stone-500 dark:text-stone-400">
-                    {chatEnabled
-                      ? "Tap a category to browse recipe ideas"
-                      : "Add an AI provider in Settings for recipe ideas"}
-                  </p>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* Seasonal suggestions */}
-          <div className="mt-3 px-4">
-            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-              {seasonal.contextualPrompts.slice(0, 4).map((prompt, i) => (
-                <button
-                  key={i}
-                  onClick={() => navigate(`/suggest?q=${encodeURIComponent(prompt)}`)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 border border-orange-200 dark:border-orange-800"
-                >
-                  {prompt}
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
-
         {/* ── Identify a Dish (collapsed by default) ─────── */}
         <section className="px-4 py-4">
           <button
@@ -538,19 +674,16 @@ export function Discover({ visionEnabled = false, chatEnabled = false }: Discove
               {identifyResult && (
                 <Card className="mt-3">
                   <div className="space-y-3">
-                    <div className="flex items-start gap-2">
-                      <Sparkles className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-stone-500 dark:text-stone-400">
-                          This looks like:
-                        </p>
-                        <h3 className="text-lg font-bold dark:text-stone-100">
-                          {identifyResult.title}
-                        </h3>
-                        <p className="text-xs text-stone-400">
-                          Confidence: {identifyResult.confidence}
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">
+                        This looks like:
+                      </p>
+                      <h3 className="text-lg font-bold dark:text-stone-100">
+                        {identifyResult.title}
+                      </h3>
+                      <p className="text-xs text-stone-400">
+                        Confidence: {identifyResult.confidence}
+                      </p>
                     </div>
 
                     {identifyResult.ingredients.length > 0 && (

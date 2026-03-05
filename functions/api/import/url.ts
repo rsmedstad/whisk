@@ -1,6 +1,8 @@
 interface Env {
   WHISK_KV: KVNamespace;
   WHISK_R2: R2Bucket;
+  CF_ACCOUNT_ID?: string;
+  CF_BR_TOKEN?: string;
 }
 
 interface RecipeData {
@@ -31,33 +33,83 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
+    // Try regular fetch first
+    let html: string | null = null;
+    let usedBrowserRendering = false;
+
     const pageAbort = AbortSignal.timeout(15000);
     const res = await fetch(url, {
       signal: pageAbort,
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
       },
     });
 
-    if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+    const regularFetchFailed = !res.ok;
+    if (res.ok) {
+      html = await res.text();
+    }
 
-    const html = await res.text();
+    // If regular fetch failed (403, small response), try Browser Rendering
+    const needsBrowser = regularFetchFailed || (html !== null && html.length < 500);
+    if (needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
+      try {
+        const brRes = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${env.CF_BR_TOKEN}`,
+            },
+            body: JSON.stringify({
+              url,
+              gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+              // Allow all resource types — some WAFs check that images/scripts load
+              rejectResourceTypes: ["font", "media"],
+              setExtraHTTPHeaders: {
+                "Accept-Language": "en-US,en;q=0.9",
+              },
+            }),
+          }
+        );
+        if (brRes.ok) {
+          const brBody = await brRes.text();
+          // Check if BR returned actual content (not a challenge page)
+          const brHtml = brBody.startsWith("{") ? (JSON.parse(brBody) as { result?: string }).result ?? "" : brBody;
+          if (brHtml.length > 500 && !brHtml.includes("<title>Just a moment...</title>")) {
+            html = brHtml;
+            usedBrowserRendering = true;
+          }
+        }
+      } catch {
+        // Browser Rendering failed, continue with whatever we have
+      }
+    }
 
-    // Detect suspiciously small responses (likely blocked by target site)
-    if (html.length < 500) {
+    if (!html || html.length < 500) {
       return new Response(
         JSON.stringify({
-          error:
-            "Received a very small response — site may be blocking automated requests",
-          htmlLength: html.length,
+          error: regularFetchFailed
+            ? `This site blocks automated access (HTTP ${res.status}). Try copying the recipe text from the page and pasting it manually.`
+            : "Received a very small response — site may be blocking automated requests",
         }),
         { status: 422, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    void usedBrowserRendering;
 
     // Strategy 1: JSON-LD (most reliable when present)
     let recipeData = extractJsonLd(html);
@@ -137,6 +189,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }));
     }
 
+    // Extract video URL from the page
+    const videoUrl = extractVideoUrl(html);
+
     const recipe = {
       title: recipeData.name ?? "",
       description: recipeData.description ?? "",
@@ -154,6 +209,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ) || undefined,
       thumbnailUrl,
       photos,
+      videoUrl,
+      lastCrawledAt: new Date().toISOString(),
     };
 
     return new Response(JSON.stringify(recipe), {
@@ -605,18 +662,68 @@ function parseIngredients(
 }
 
 function parseSteps(raw: unknown[]): { text: string }[] {
-  return raw.map((step: unknown) => {
-    if (typeof step === "string") return { text: stripHtml(step) };
-    if (typeof step === "object" && step !== null) {
+  const steps: { text: string }[] = [];
+  for (const step of raw) {
+    let text: string;
+    if (typeof step === "string") {
+      text = stripHtml(step);
+    } else if (typeof step === "object" && step !== null) {
       const s = step as Record<string, unknown>;
-      return {
-        text: stripHtml(
-          (s.text as string) ?? (s.name as string) ?? String(step)
-        ),
-      };
+      text = stripHtml(
+        (s.text as string) ?? (s.name as string) ?? String(step)
+      );
+    } else {
+      text = String(step);
     }
-    return { text: String(step) };
-  });
+    // Split long single-step texts into logical sub-steps
+    if (text.length > 300) {
+      const split = splitLongStep(text);
+      steps.push(...split.map((t) => ({ text: t })));
+    } else if (text.trim()) {
+      steps.push({ text: text.trim() });
+    }
+  }
+  return steps;
+}
+
+function splitLongStep(text: string): string[] {
+  // Split on bold section headings like "Make the batter:", "Prepare the sauce:", "Finish the cake:"
+  const sectionSplit = text.split(
+    /(?=(?:Prepare|Make|Bake|Cook|Finish|Assemble|Serve|Meanwhile|For the|To make|Start|Mix|Whisk|Cool|Chill|Frost|Glaze|Do ahead)\s[^.]{3,40}:)/i
+  );
+  if (sectionSplit.length > 1) {
+    return sectionSplit.map((s) => s.trim()).filter((s) => s.length > 10);
+  }
+  // Split on "Step N" or "N." patterns
+  const numberedSplit = text.split(/(?=Step\s+\d+[:.]\s)/i);
+  if (numberedSplit.length > 1) {
+    return numberedSplit.map((s) => s.trim()).filter((s) => s.length > 10);
+  }
+  return [text.trim()];
+}
+
+// ── Video URL extraction ───────────────────────────────────
+
+function extractVideoUrl(html: string): string | undefined {
+  // YouTube iframe embed
+  const ytIframe = html.match(
+    /src="(https?:\/\/(?:www\.)?youtube\.com\/embed\/([\w-]+)[^"]*)"/
+  );
+  if (ytIframe?.[2]) return `https://www.youtube.com/watch?v=${ytIframe[2]}`;
+
+  // YouTube watch link
+  const ytLink = html.match(
+    /href="(https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([\w-]+)[^"]*)"/
+  );
+  if (ytLink?.[1]) return ytLink[1];
+
+  // youtu.be short link
+  const ytShort = html.match(
+    /href="(https?:\/\/youtu\.be\/([\w-]+)[^"]*)"/
+  );
+  if (ytShort?.[1]) return ytShort[1];
+
+  return undefined;
 }
 
 function parseDuration(iso: string | undefined): number | undefined {

@@ -1,5 +1,103 @@
 # Changelog
 
+## [0.3.0] - 2026-03-04
+
+### Import & Scraping Overhaul
+
+**Multi-Format Import**
+- Rewritten Import page accepts CSV, TSV (Google Sheets paste), and plain text
+- AI-powered parsing fallback: paste unstructured recipe lists and AI extracts titles, URLs, notes, and categories
+- New `POST /api/import/parse` endpoint for AI text parsing
+- TSV auto-detection in CSV parser for Google Sheets clipboard support
+
+**Cloudflare Browser Rendering**
+- Two-tier URL scraping: regular fetch with Chrome-like headers first, headless browser fallback on 403
+- Uses Cloudflare Browser Rendering REST API (free tier, 10 min/day)
+- Challenge page detection filters out WAF "Just a moment..." responses
+- Graceful degradation: when scraping fails, switches to manual form with URL pre-filled as source
+
+**Recipe Source Tracking**
+- `lastCrawledAt` field tracks when each recipe was last fetched from its source URL
+- "Update from Source" option in recipe overflow menu to re-fetch and merge updates
+- "Last fetched" date displayed below source link in recipe detail
+- Recrawl script updated with Browser Rendering fallback
+
+### Discover Tab Redesign
+
+- Replaced AI-only Identify tab with Discover: a free, public-API-powered recipe browser
+- TheMealDB integration: random picks, category browsing, search, and area/region filters
+- One-tap "Add to Book" saves any discovered recipe directly to your collection
+- AI features (photo identify, chat) remain available as secondary options when configured
+
+### Recipe List Improvements
+
+- Category sort: groups recipes by meal type (Favorites first, then Breakfast through Side Dish)
+- Alphabetical sorting within each category group
+- AI auto-tagging: new recipes get automatic meal-type tags from AI during import
+- Ingredient sort toggle in recipe detail (alphabetical vs original order)
+
+### Settings & Theme
+
+- Color swatch previews replace emoji icons for seasonal theme picker
+- System theme icon updated to computer/monitor
+- Removed unused store preferences section
+- Streamlined AI provider list: removed DeepSeek and Mistral (unused), kept Groq, Gemini, Cerebras, OpenAI, Anthropic, xAI
+
+### Fixes
+
+- Dark mode: switched Tailwind 4 from `media` to `class`-based dark variant for reliable toggling
+- Seasonal theme label clarified to "Seasonal / Holiday"
+- Service worker cache improvements
+
+---
+
+## [0.2.0] - 2026-02-20
+
+### UX & Polish
+
+**Onboarding**
+- Live theme preview during setup with seasonal swatch selector
+- Show grams toggle during onboarding
+- Location auto-detect for zip code setting
+- Password visibility toggle on login screen
+
+**Shopping List Overhaul**
+- Store tags per item (assign items to specific stores)
+- Sort and filter by store
+- AI-powered item categorization
+- Abbreviation display for compact list view
+
+**Desktop Layout**
+- Responsive desktop layout with sidebar navigation
+- API request timeouts to prevent hung requests
+- JSON data export
+
+**Recipes**
+- "Made This" tracking with date history
+- Improved mobile keyboard handling in forms
+
+**Visual**
+- New app icon: green gradient tile with W, whisk, and sparkles
+- Green default accent theme
+- Scrollable cook mode for long recipes
+- Light mode theme fixes and dark mode accent improvements
+
+**Multi-User**
+- Household support with shared recipe books
+- Improved recipe CRUD and shopping list sync
+
+**AI**
+- Fixed AI hallucination issues in recipe suggestions
+- Per-feature AI model configuration in Settings (simple + advanced modes)
+
+### Fixes
+
+- Fixed "Join Book" error: prevented page reload on wrong password, parse error messages properly
+- Fixed light mode theme inconsistencies
+- Fixed dark mode accent color rendering
+
+---
+
 ## [0.1.0] - 2026-02-13
 
 ### Phase 1 MVP — Complete Implementation

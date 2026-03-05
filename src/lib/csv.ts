@@ -1,6 +1,15 @@
 import type { CsvRow } from "../types";
 
+/** Detect whether content uses tabs (Google Sheets paste) or commas. */
+export function detectDelimiter(content: string): "," | "\t" {
+  const firstLine = content.split("\n")[0] ?? "";
+  const tabs = (firstLine.match(/\t/g) ?? []).length;
+  const commas = (firstLine.match(/,/g) ?? []).length;
+  return tabs >= 2 ? "\t" : ",";
+}
+
 export function parseCsv(content: string): CsvRow[] {
+  const delimiter = detectDelimiter(content);
   const lines = content.split("\n");
   const rows: CsvRow[] = [];
 
@@ -9,7 +18,7 @@ export function parseCsv(content: string): CsvRow[] {
     const line = lines[i]?.trim();
     if (!line) continue;
 
-    const fields = parseCsvLine(line);
+    const fields = delimiter === "\t" ? line.split("\t") : parseCsvLine(line);
     if (fields.length < 2) continue;
 
     rows.push({
