@@ -377,7 +377,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
                 <button
                   onClick={handleGramsToggle}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                  className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
                     showGrams ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
                   }`}
                 >
