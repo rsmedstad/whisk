@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
+import type { SeasonalAccent } from "../lib/seasonal";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
 import { getSeasonalAccent } from "../lib/seasonal";
+import { ACCENT_OPTIONS } from "../hooks/useTheme";
 import { api } from "../lib/api";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -14,13 +16,15 @@ import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun, Globe, Share } from "./
 interface SettingsProps {
   theme: AppSettings["theme"];
   onSetTheme: (theme: AppSettings["theme"]) => void;
+  accentOverride: "auto" | SeasonalAccent;
+  onSetAccent: (accent: "auto" | SeasonalAccent) => void;
   style: AppStyle;
   onSetStyle: (style: AppStyle) => void;
   onLogout: () => void;
   capabilities: AICapabilities;
 }
 
-export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capabilities }: SettingsProps) {
+export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities }: SettingsProps) {
   const aiConfig = useAIConfig();
   const hh = useHousehold();
   const navigate = useNavigate();
@@ -196,76 +200,65 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
                 <label className="text-sm font-medium dark:text-stone-200 block mb-2">
                   Theme
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["system", "light", "dark", "seasonal"] as const).map((t) => {
-                    const ACCENT_LABELS: Record<string, string> = {
-                      valentine: "Valentine's Day", stpatrick: "St. Patrick's",
-                      easter: "Easter", july4th: "4th of July",
-                      halloween: "Halloween", thanksgiving: "Thanksgiving",
-                      christmas: "Christmas", spring: "Spring",
-                      summer: "Summer", fall: "Fall", winter: "Winter",
-                    };
-                    const ACCENT_SWATCHES: Record<string, [string, string]> = {
-                      valentine: ["#f43f5e", "#fda4af"],
-                      stpatrick: ["#10b981", "#6ee7b7"],
-                      easter: ["#8b5cf6", "#c4b5fd"],
-                      july4th: ["#3b82f6", "#93c5fd"],
-                      halloween: ["#f59e0b", "#fcd34d"],
-                      thanksgiving: ["#ca8a04", "#fde047"],
-                      christmas: ["#ef4444", "#fca5a5"],
-                      spring: ["#ec4899", "#f9a8d4"],
-                      summer: ["#0ea5e9", "#7dd3fc"],
-                      fall: ["#f59e0b", "#fcd34d"],
-                      winter: ["#6366f1", "#94a3b8"],
-                    };
-                    const THEME_ICONS: Record<string, typeof Sun> = {
-                      system: ComputerDesktop, light: Sun, dark: Moon,
-                    };
-                    const currentAccent = getSeasonalAccent();
-                    const ThemeIcon = THEME_ICONS[t];
-                    const accentLabel = ACCENT_LABELS[currentAccent] ?? "Auto";
-                    const isLongName = accentLabel.length > 10;
-                    const swatches = ACCENT_SWATCHES[currentAccent];
-                    return (
+                {(() => {
+                  const THEME_ICONS: Record<string, typeof Sun> = {
+                    system: ComputerDesktop, light: Sun, dark: Moon,
+                  };
+                  const isSeasonal = theme === "seasonal";
+                  return (
+                    <div className="grid grid-cols-[1fr_1fr] gap-2">
+                      {/* Left column: system / light / dark stacked */}
+                      <div className="flex flex-col gap-2">
+                        {(["system", "light", "dark"] as const).map((t) => {
+                          const ThemeIcon = THEME_ICONS[t];
+                          return (
+                            <button
+                              key={t}
+                              onClick={() => onSetTheme(t)}
+                              className={`py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex items-center justify-center gap-1.5 capitalize text-sm ${theme === t ? activeClass : inactiveClass}`}
+                            >
+                              {ThemeIcon && <ThemeIcon className="w-4 h-4" />}
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Right column: Seasonal tile with accent picker */}
                       <button
-                        key={t}
-                        onClick={() => onSetTheme(t)}
-                        className={`py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex items-center justify-center gap-1.5 ${
-                          t === "seasonal" ? "" : "capitalize text-sm "
-                        }${theme === t ? activeClass : inactiveClass}`}
+                        onClick={() => onSetTheme("seasonal")}
+                        className={`rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-2 p-3 ${isSeasonal ? activeClass : inactiveClass}`}
                       >
-                        {ThemeIcon && <ThemeIcon className="w-4 h-4" />}
-                        {t === "seasonal" ? (
-                          <>
-                            {swatches && (
-                              <span className="flex gap-0.5 shrink-0">
-                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: swatches[0] }} />
-                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: swatches[1] }} />
-                              </span>
-                            )}
-                            <span className={isLongName ? "text-xs leading-tight" : "text-sm"}>
-                              Seasonal ({accentLabel})
-                            </span>
-                          </>
-                        ) : t}
+                        <Globe className="w-5 h-5" />
+                        <span className="text-sm font-semibold">Seasonal</span>
+                        <span className="inline-block w-4 h-4 rounded-full bg-orange-500" />
+                        <span className="text-[10px] leading-tight text-center opacity-70">
+                          Colors adapt to holidays &amp; seasons
+                        </span>
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })()}
                 {theme === "seasonal" && (
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 rounded-full bg-orange-500" />
+                  <div className="mt-3 space-y-1.5">
+                    <label className="text-xs font-medium text-stone-500 dark:text-stone-400 block">
+                      Color palette
+                    </label>
+                    <select
+                      value={accentOverride}
+                      onChange={(e) => onSetAccent(e.target.value as "auto" | SeasonalAccent)}
+                      className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    >
+                      {ACCENT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                     <p className="text-xs text-stone-500 dark:text-stone-400">
-                      Colors change with holidays and seasons — currently <span className="font-medium text-orange-600 dark:text-orange-400">{(() => {
-                        const labels: Record<string, string> = {
-                          valentine: "Valentine's Day", stpatrick: "St. Patrick's",
-                          easter: "Easter", july4th: "4th of July",
-                          halloween: "Halloween", thanksgiving: "Thanksgiving",
-                          christmas: "Christmas", spring: "Spring",
-                          summer: "Summer", fall: "Fall", winter: "Winter",
-                        };
-                        return labels[getSeasonalAccent()] ?? "Auto";
-                      })()}</span>
+                      {accentOverride === "auto"
+                        ? "Changes automatically with the calendar"
+                        : "Locked — won't change with the date"}
                     </p>
                   </div>
                 )}

@@ -22,6 +22,8 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #166534;
   --color-orange-900: #14532d;
   --color-orange-950: #052e16;
+  /* White — overridable so holiday themes can tint bg-white surfaces */
+  --color-white: #ffffff;
 }
 
 /* ── Seasonal Accent Palettes ─────────────────────────────
@@ -29,12 +31,13 @@ input[type="search"]::-webkit-search-decoration {
    automatically pick up the seasonal accent color.
    Applied via data-accent attribute on <html>. */
 
-/* Valentine's Day — rose/pink */
+/* Valentine's Day — rose/pink — immersive pink-tinted UI */
 [data-accent="valentine"] {
-  --color-orange-50: #fff1f2;
-  --color-orange-100: #ffe4e6;
-  --color-orange-200: #fecdd3;
-  --color-orange-300: #fda4af;
+  --color-white: #fff5f7;
+  --color-orange-50: #fff0f3;
+  --color-orange-100: #ffe4e9;
+  --color-orange-200: #fecdd5;
+  --color-orange-300: #fda4b2;
   --color-orange-400: #fb7185;
   --color-orange-500: #f43f5e;
   --color-orange-600: #e11d48;
@@ -42,22 +45,23 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #9f1239;
   --color-orange-900: #881337;
   --color-orange-950: #4c0519;
-  --color-stone-50: #fdf7f8;
-  --color-stone-100: #faf0f2;
-  --color-stone-200: #f0dce0;
-  --color-stone-300: #d4b5bc;
-  --color-stone-400: #b08e97;
-  --color-stone-500: #8d6e76;
-  --color-stone-600: #6b5359;
-  --color-stone-700: #4d3a3f;
-  --color-stone-800: #33252a;
-  --color-stone-900: #1c1618;
-  --color-stone-950: #100b0c;
+  --color-stone-50: #fcecf0;
+  --color-stone-100: #f8dde4;
+  --color-stone-200: #efc5d0;
+  --color-stone-300: #d4a0af;
+  --color-stone-400: #b87a8d;
+  --color-stone-500: #96596c;
+  --color-stone-600: #744352;
+  --color-stone-700: #53303b;
+  --color-stone-800: #3d1926;
+  --color-stone-900: #2a0e19;
+  --color-stone-950: #1a060f;
 }
 
-/* St. Patrick's Day — emerald */
+/* St. Patrick's Day — emerald — immersive green-tinted UI */
 [data-accent="stpatrick"] {
-  --color-orange-50: #ecfdf5;
+  --color-white: #f2fdf8;
+  --color-orange-50: #e8fbf0;
   --color-orange-100: #d1fae5;
   --color-orange-200: #a7f3d0;
   --color-orange-300: #6ee7b7;
@@ -68,24 +72,25 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #065f46;
   --color-orange-900: #064e3b;
   --color-orange-950: #022c22;
-  --color-stone-50: #f7fdfb;
-  --color-stone-100: #f0faf6;
-  --color-stone-200: #dceee7;
-  --color-stone-300: #b5d4c6;
-  --color-stone-400: #8eb5a2;
-  --color-stone-500: #6e8d7e;
-  --color-stone-600: #536b5f;
-  --color-stone-700: #3a4d43;
-  --color-stone-800: #25332c;
-  --color-stone-900: #151c1a;
-  --color-stone-950: #0a100e;
+  --color-stone-50: #e5f5ed;
+  --color-stone-100: #d0ebde;
+  --color-stone-200: #a8d5bf;
+  --color-stone-300: #7db89c;
+  --color-stone-400: #5a9a7d;
+  --color-stone-500: #437a62;
+  --color-stone-600: #335c4b;
+  --color-stone-700: #254336;
+  --color-stone-800: #162e22;
+  --color-stone-900: #0c1e14;
+  --color-stone-950: #05120b;
 }
 
-/* Easter — violet/lavender */
+/* Easter — violet/lavender — immersive pastel-tinted UI */
 [data-accent="easter"] {
-  --color-orange-50: #f5f3ff;
-  --color-orange-100: #ede9fe;
-  --color-orange-200: #ddd6fe;
+  --color-white: #f8f5ff;
+  --color-orange-50: #f0ebff;
+  --color-orange-100: #e5defe;
+  --color-orange-200: #d5ccfe;
   --color-orange-300: #c4b5fd;
   --color-orange-400: #a78bfa;
   --color-orange-500: #8b5cf6;
@@ -94,24 +99,25 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #5b21b6;
   --color-orange-900: #4c1d95;
   --color-orange-950: #2e1065;
-  --color-stone-50: #f9f7fd;
-  --color-stone-100: #f3f0fa;
-  --color-stone-200: #e4dff0;
-  --color-stone-300: #c4bbd8;
-  --color-stone-400: #9f96b5;
-  --color-stone-500: #7d7492;
-  --color-stone-600: #5e576e;
-  --color-stone-700: #433d50;
-  --color-stone-800: #2d2938;
-  --color-stone-900: #191620;
-  --color-stone-950: #0d0b14;
+  --color-stone-50: #eee8fa;
+  --color-stone-100: #e0d6f4;
+  --color-stone-200: #c9bbe4;
+  --color-stone-300: #a895cc;
+  --color-stone-400: #8872b0;
+  --color-stone-500: #6b5590;
+  --color-stone-600: #503f6e;
+  --color-stone-700: #3a2d52;
+  --color-stone-800: #271c3a;
+  --color-stone-900: #181025;
+  --color-stone-950: #0e0818;
 }
 
-/* 4th of July — blue/red patriotic */
+/* 4th of July — blue/red patriotic — immersive navy-tinted UI */
 [data-accent="july4th"] {
-  --color-orange-50: #eff6ff;
-  --color-orange-100: #dbeafe;
-  --color-orange-200: #bfdbfe;
+  --color-white: #f0f5ff;
+  --color-orange-50: #e8f0ff;
+  --color-orange-100: #d5e3fe;
+  --color-orange-200: #b8d1fe;
   --color-orange-300: #93c5fd;
   --color-orange-400: #60a5fa;
   --color-orange-500: #3b82f6;
@@ -120,101 +126,105 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #1e40af;
   --color-orange-900: #1e3a8a;
   --color-orange-950: #172554;
-  --color-stone-50: #f7f9fd;
-  --color-stone-100: #f0f3fa;
-  --color-stone-200: #dde3ee;
-  --color-stone-300: #b5bed4;
-  --color-stone-400: #8e98b3;
-  --color-stone-500: #6e7790;
-  --color-stone-600: #535a6d;
-  --color-stone-700: #3a3f4f;
-  --color-stone-800: #262a36;
-  --color-stone-900: #15181c;
-  --color-stone-950: #0a0c10;
+  --color-stone-50: #e0e8f5;
+  --color-stone-100: #ced9ec;
+  --color-stone-200: #a8b8d6;
+  --color-stone-300: #8096bb;
+  --color-stone-400: #5e77a0;
+  --color-stone-500: #475c80;
+  --color-stone-600: #354562;
+  --color-stone-700: #263248;
+  --color-stone-800: #182132;
+  --color-stone-900: #0e1420;
+  --color-stone-950: #060a12;
 }
 
-/* Halloween — deep orange/amber */
+/* Halloween — orange & black — immersive spooky UI */
 [data-accent="halloween"] {
-  --color-orange-50: #fffbeb;
-  --color-orange-100: #fef3c7;
-  --color-orange-200: #fde68a;
-  --color-orange-300: #fcd34d;
-  --color-orange-400: #fbbf24;
-  --color-orange-500: #f59e0b;
-  --color-orange-600: #d97706;
-  --color-orange-700: #b45309;
-  --color-orange-800: #92400e;
-  --color-orange-900: #78350f;
-  --color-orange-950: #451a03;
-  --color-stone-50: #fdfbf7;
-  --color-stone-100: #faf6f0;
-  --color-stone-200: #ede5d8;
-  --color-stone-300: #d4c4ae;
-  --color-stone-400: #b3a088;
-  --color-stone-500: #8d7e68;
-  --color-stone-600: #6b5f4e;
-  --color-stone-700: #4d4438;
-  --color-stone-800: #332e25;
-  --color-stone-900: #1c1a15;
-  --color-stone-950: #100e0a;
+  --color-white: #fdf6ec;
+  --color-orange-50: #fef0db;
+  --color-orange-100: #fde4b8;
+  --color-orange-200: #fcd078;
+  --color-orange-300: #fbba3c;
+  --color-orange-400: #f9a00a;
+  --color-orange-500: #e88506;
+  --color-orange-600: #c66a04;
+  --color-orange-700: #a45207;
+  --color-orange-800: #87400d;
+  --color-orange-900: #6e320f;
+  --color-orange-950: #3d1903;
+  --color-stone-50: #f5e8d2;
+  --color-stone-100: #e8d5b5;
+  --color-stone-200: #d1b88e;
+  --color-stone-300: #b3956a;
+  --color-stone-400: #93744c;
+  --color-stone-500: #735838;
+  --color-stone-600: #56412a;
+  --color-stone-700: #3e2e1d;
+  --color-stone-800: #2a1d10;
+  --color-stone-900: #1a1008;
+  --color-stone-950: #0e0804;
 }
 
-/* Thanksgiving — warm amber/brown */
+/* Thanksgiving — warm amber/brown — immersive harvest UI */
 [data-accent="thanksgiving"] {
-  --color-orange-50: #fefce8;
-  --color-orange-100: #fef9c3;
-  --color-orange-200: #fef08a;
-  --color-orange-300: #fde047;
-  --color-orange-400: #facc15;
+  --color-white: #fdf8ee;
+  --color-orange-50: #fdf2dc;
+  --color-orange-100: #fce8be;
+  --color-orange-200: #f8d48a;
+  --color-orange-300: #f2bc52;
+  --color-orange-400: #e8a020;
   --color-orange-500: #ca8a04;
   --color-orange-600: #a16207;
   --color-orange-700: #854d0e;
   --color-orange-800: #713f12;
   --color-orange-900: #422006;
   --color-orange-950: #271306;
-  --color-stone-50: #fdfcf7;
-  --color-stone-100: #faf8f0;
-  --color-stone-200: #ede8d8;
-  --color-stone-300: #d4cbae;
-  --color-stone-400: #b3a588;
-  --color-stone-500: #8d8168;
-  --color-stone-600: #6b624e;
-  --color-stone-700: #4d4638;
-  --color-stone-800: #332f25;
-  --color-stone-900: #1c1b15;
-  --color-stone-950: #100f0a;
+  --color-stone-50: #f2e8d0;
+  --color-stone-100: #e5d5b2;
+  --color-stone-200: #ceba8e;
+  --color-stone-300: #b09868;
+  --color-stone-400: #90784c;
+  --color-stone-500: #705c38;
+  --color-stone-600: #54442a;
+  --color-stone-700: #3c301e;
+  --color-stone-800: #281f12;
+  --color-stone-900: #18120a;
+  --color-stone-950: #0e0a05;
 }
 
-/* Christmas — red/green (red primary) */
+/* Christmas — red & green — immersive festive UI */
 [data-accent="christmas"] {
-  --color-orange-50: #fef2f2;
-  --color-orange-100: #fee2e2;
-  --color-orange-200: #fecaca;
-  --color-orange-300: #fca5a5;
-  --color-orange-400: #f87171;
-  --color-orange-500: #ef4444;
-  --color-orange-600: #dc2626;
-  --color-orange-700: #b91c1c;
-  --color-orange-800: #991b1b;
-  --color-orange-900: #7f1d1d;
-  --color-orange-950: #450a0a;
-  --color-stone-50: #fdf7f7;
-  --color-stone-100: #faf0f0;
-  --color-stone-200: #f0dcdc;
-  --color-stone-300: #d4b5b5;
-  --color-stone-400: #b08e8e;
-  --color-stone-500: #8d6e6e;
-  --color-stone-600: #6b5353;
-  --color-stone-700: #4d3a3a;
-  --color-stone-800: #332525;
-  --color-stone-900: #1c1515;
-  --color-stone-950: #100a0a;
+  --color-white: #fdf3f3;
+  --color-orange-50: #fce8e8;
+  --color-orange-100: #fad5d5;
+  --color-orange-200: #f5b0b0;
+  --color-orange-300: #f08888;
+  --color-orange-400: #e85555;
+  --color-orange-500: #dc2626;
+  --color-orange-600: #b91c1c;
+  --color-orange-700: #991b1b;
+  --color-orange-800: #7f1d1d;
+  --color-orange-900: #661a1a;
+  --color-orange-950: #3b0a0a;
+  --color-stone-50: #f0e5e5;
+  --color-stone-100: #e2cece;
+  --color-stone-200: #c9a8a8;
+  --color-stone-300: #a88080;
+  --color-stone-400: #8a5e5e;
+  --color-stone-500: #6e4545;
+  --color-stone-600: #533333;
+  --color-stone-700: #3d2222;
+  --color-stone-800: #2e1414;
+  --color-stone-900: #200c0c;
+  --color-stone-950: #130606;
 }
 
 /* ── Season defaults (when no holiday is near) ──────────── */
 
 /* Spring — cherry blossom pink */
 [data-accent="spring"] {
+  --color-white: #fef9fb;
   --color-orange-50: #fdf2f8;
   --color-orange-100: #fce7f3;
   --color-orange-200: #fbcfe8;
@@ -226,11 +236,11 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #9d174d;
   --color-orange-900: #831843;
   --color-orange-950: #500724;
-  --color-stone-50: #fdf7fa;
-  --color-stone-100: #faf0f4;
-  --color-stone-200: #f0dce4;
-  --color-stone-300: #d4b5c2;
-  --color-stone-400: #b08e9d;
+  --color-stone-50: #f8eef3;
+  --color-stone-100: #f2e2ea;
+  --color-stone-200: #e6ccd8;
+  --color-stone-300: #d0aebb;
+  --color-stone-400: #b48e9d;
   --color-stone-500: #8d6e7c;
   --color-stone-600: #6b535e;
   --color-stone-700: #4d3a44;
@@ -241,6 +251,7 @@ input[type="search"]::-webkit-search-decoration {
 
 /* Summer — sky blue */
 [data-accent="summer"] {
+  --color-white: #f5faff;
   --color-orange-50: #f0f9ff;
   --color-orange-100: #e0f2fe;
   --color-orange-200: #bae6fd;
@@ -252,50 +263,52 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #075985;
   --color-orange-900: #0c4a6e;
   --color-orange-950: #082f49;
-  --color-stone-50: #f7fbfd;
-  --color-stone-100: #f0f6fa;
-  --color-stone-200: #dce8ee;
-  --color-stone-300: #b5c8d4;
-  --color-stone-400: #8ea6b5;
-  --color-stone-500: #6e8592;
-  --color-stone-600: #53656e;
-  --color-stone-700: #3a484f;
-  --color-stone-800: #253035;
+  --color-stone-50: #eaf4fa;
+  --color-stone-100: #daeaf4;
+  --color-stone-200: #c0d8e8;
+  --color-stone-300: #a0bed0;
+  --color-stone-400: #7ea2b5;
+  --color-stone-500: #5f8495;
+  --color-stone-600: #476470;
+  --color-stone-700: #33484f;
+  --color-stone-800: #223035;
   --color-stone-900: #151a1c;
   --color-stone-950: #0a0e10;
 }
 
 /* Fall — warm amber (the app's natural orange, slightly warmer) */
 [data-accent="fall"] {
-  --color-orange-50: #fffbeb;
-  --color-orange-100: #fef3c7;
-  --color-orange-200: #fde68a;
-  --color-orange-300: #fcd34d;
-  --color-orange-400: #fbbf24;
-  --color-orange-500: #f59e0b;
-  --color-orange-600: #d97706;
-  --color-orange-700: #b45309;
-  --color-orange-800: #92400e;
-  --color-orange-900: #78350f;
-  --color-orange-950: #451a03;
-  --color-stone-50: #fdfbf7;
-  --color-stone-100: #faf6f0;
-  --color-stone-200: #ede5d8;
-  --color-stone-300: #d4c4ae;
-  --color-stone-400: #b3a088;
-  --color-stone-500: #8d7e68;
-  --color-stone-600: #6b5f4e;
-  --color-stone-700: #4d4438;
-  --color-stone-800: #332e25;
-  --color-stone-900: #1c1a15;
+  --color-white: #fefaf2;
+  --color-orange-50: #fdf5e4;
+  --color-orange-100: #fcecc8;
+  --color-orange-200: #f9d98e;
+  --color-orange-300: #f5c152;
+  --color-orange-400: #efa622;
+  --color-orange-500: #d98c08;
+  --color-orange-600: #b87006;
+  --color-orange-700: #955808;
+  --color-orange-800: #7a450d;
+  --color-orange-900: #613510;
+  --color-orange-950: #381c05;
+  --color-stone-50: #f5eedf;
+  --color-stone-100: #e8ddc8;
+  --color-stone-200: #d4c4a5;
+  --color-stone-300: #bba580;
+  --color-stone-400: #9c8560;
+  --color-stone-500: #7d6948;
+  --color-stone-600: #5e4f36;
+  --color-stone-700: #443928;
+  --color-stone-800: #2e261a;
+  --color-stone-900: #1c1a12;
   --color-stone-950: #100e0a;
 }
 
 /* Winter — cool slate blue */
 [data-accent="winter"] {
-  --color-orange-50: #f8fafc;
-  --color-orange-100: #f1f5f9;
-  --color-orange-200: #e2e8f0;
+  --color-white: #f5f6fc;
+  --color-orange-50: #eef0fa;
+  --color-orange-100: #e0e3f5;
+  --color-orange-200: #c8cde8;
   --color-orange-300: #94a3b8;
   --color-orange-400: #64748b;
   --color-orange-500: #6366f1;
@@ -304,17 +317,17 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #3730a3;
   --color-orange-900: #312e81;
   --color-orange-950: #1e1b4b;
-  --color-stone-50: #f8f7fd;
-  --color-stone-100: #f2f0fa;
-  --color-stone-200: #e2dfee;
-  --color-stone-300: #bfbad4;
-  --color-stone-400: #9893b3;
-  --color-stone-500: #767192;
-  --color-stone-600: #59556e;
-  --color-stone-700: #3f3c50;
-  --color-stone-800: #2a2838;
-  --color-stone-900: #18161c;
-  --color-stone-950: #0c0a10;
+  --color-stone-50: #eceaf5;
+  --color-stone-100: #dedbed;
+  --color-stone-200: #c5c0de;
+  --color-stone-300: #a5a0c5;
+  --color-stone-400: #8682aa;
+  --color-stone-500: #6a6690;
+  --color-stone-600: #504d70;
+  --color-stone-700: #3a3852;
+  --color-stone-800: #272538;
+  --color-stone-900: #181620;
+  --color-stone-950: #0c0a14;
 }
 
 /* ── Design Style Tokens ──────────────────────────────────

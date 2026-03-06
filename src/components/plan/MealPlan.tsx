@@ -197,7 +197,7 @@ export function MealPlan({
           <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
             <WhiskLogo className="w-5 h-5 text-orange-500" />
             <span className="text-lg font-bold text-orange-500">W</span>
-            <span className="text-stone-300 dark:text-stone-600 font-light">|</span>
+            <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Plan</h1>
           </button>
           <div className="flex items-center gap-2">

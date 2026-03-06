@@ -143,9 +143,10 @@ export function RecipeList({
     // Favorites first, then category order, then "other"
     const ordered: { label: string; recipes: RecipeIndexEntry[] }[] = [];
     if (favorites.length > 0) ordered.push({ label: "Favorites", recipes: favorites });
+    const cap = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
     for (const cat of CATEGORY_ORDER) {
       const list = groups.get(cat);
-      if (list) ordered.push({ label: cat, recipes: list });
+      if (list) ordered.push({ label: cap(cat), recipes: list });
     }
     const other = groups.get("other");
     if (other) ordered.push({ label: "Other", recipes: other });
@@ -179,7 +180,7 @@ export function RecipeList({
           <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
             <WhiskLogo className="w-5 h-5 text-orange-500" />
             <span className="text-lg font-bold text-orange-500">W</span>
-            <span className="text-stone-300 dark:text-stone-600 font-light">|</span>
+            <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Recipes</h1>
           </button>
           <div className="flex items-center gap-1">
@@ -387,7 +388,7 @@ export function RecipeList({
             {groupedRecipes.map((group) => (
               <section key={group.label}>
                 <h2 className={classNames(
-                  "text-sm font-semibold tracking-wide mb-2 capitalize",
+                  "text-sm font-semibold tracking-wide mb-2",
                   group.label === "Favorites"
                     ? "text-red-500 dark:text-red-400 flex items-center gap-1"
                     : "text-stone-500 dark:text-orange-300/50"

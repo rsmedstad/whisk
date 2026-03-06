@@ -57,7 +57,7 @@ function RouteSkeleton() {
 
 export function App() {
   const auth = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, accentOverride, setAccentOverride } = useTheme();
   const { style, setStyle } = useStyle();
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
@@ -117,6 +117,8 @@ export function App() {
       <AppShell
         theme={theme}
         onSetTheme={setTheme}
+        accentOverride={accentOverride}
+        onSetAccent={setAccentOverride}
         style={style}
         onSetStyle={setStyle}
         onLogout={auth.logout}
@@ -128,12 +130,16 @@ export function App() {
 function AppShell({
   theme,
   onSetTheme,
+  accentOverride,
+  onSetAccent,
   style,
   onSetStyle,
   onLogout,
 }: {
   theme: AppSettings["theme"];
   onSetTheme: (t: AppSettings["theme"]) => void;
+  accentOverride: "auto" | import("./lib/seasonal").SeasonalAccent;
+  onSetAccent: (a: "auto" | import("./lib/seasonal").SeasonalAccent) => void;
   style: AppStyle;
   onSetStyle: (s: AppStyle) => void;
   onLogout: () => void;
@@ -273,6 +279,8 @@ function AppShell({
               <Settings
                 theme={theme}
                 onSetTheme={onSetTheme}
+                accentOverride={accentOverride}
+                onSetAccent={onSetAccent}
                 style={style}
                 onSetStyle={onSetStyle}
                 onLogout={onLogout}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { AppSettings } from "../types";
-import { getSeasonalAccent } from "../lib/seasonal";
+import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 
 type Theme = AppSettings["theme"];
 
@@ -22,9 +22,28 @@ function applyAccent(accent: string | null) {
   }
 }
 
+export const ACCENT_OPTIONS: { value: "auto" | SeasonalAccent; label: string }[] = [
+  { value: "auto", label: "Auto (date-based)" },
+  { value: "spring", label: "Spring" },
+  { value: "summer", label: "Summer" },
+  { value: "fall", label: "Fall" },
+  { value: "winter", label: "Winter" },
+  { value: "valentine", label: "Valentine's Day" },
+  { value: "stpatrick", label: "St. Patrick's Day" },
+  { value: "easter", label: "Easter" },
+  { value: "july4th", label: "4th of July" },
+  { value: "halloween", label: "Halloween" },
+  { value: "thanksgiving", label: "Thanksgiving" },
+  { value: "christmas", label: "Christmas" },
+];
+
 export function useTheme() {
   const [preference, setPreference] = useState<Theme>(() => {
     return (localStorage.getItem("whisk_theme") as Theme) ?? "seasonal";
+  });
+
+  const [accentOverride, setAccentOverrideState] = useState<"auto" | SeasonalAccent>(() => {
+    return (localStorage.getItem("whisk_accent") as SeasonalAccent) || "auto";
   });
 
   // Resolve dark/light mode
@@ -40,23 +59,26 @@ export function useTheme() {
   // Apply seasonal accent when theme is "seasonal"
   useEffect(() => {
     if (preference === "seasonal") {
-      applyAccent(getSeasonalAccent());
+      const accent = accentOverride !== "auto" ? accentOverride : getSeasonalAccent();
+      applyAccent(accent);
 
-      // Recheck accent at midnight in case the date changes
-      const now = new Date();
-      const msUntilMidnight =
-        new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() -
-        now.getTime();
+      // If auto, recheck accent at midnight in case the date changes
+      if (accentOverride === "auto") {
+        const now = new Date();
+        const msUntilMidnight =
+          new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() -
+          now.getTime();
 
-      const timer = setTimeout(() => {
-        applyAccent(getSeasonalAccent());
-      }, msUntilMidnight);
+        const timer = setTimeout(() => {
+          applyAccent(getSeasonalAccent());
+        }, msUntilMidnight);
 
-      return () => clearTimeout(timer);
+        return () => clearTimeout(timer);
+      }
     } else {
       applyAccent(null);
     }
-  }, [preference]);
+  }, [preference, accentOverride]);
 
   // Listen for system theme changes (for system + seasonal modes)
   useEffect(() => {
@@ -73,5 +95,14 @@ export function useTheme() {
     localStorage.setItem("whisk_theme", theme);
   }, []);
 
-  return { theme: preference, resolved, setTheme };
+  const setAccentOverride = useCallback((accent: "auto" | SeasonalAccent) => {
+    setAccentOverrideState(accent);
+    if (accent === "auto") {
+      localStorage.removeItem("whisk_accent");
+    } else {
+      localStorage.setItem("whisk_accent", accent);
+    }
+  }, []);
+
+  return { theme: preference, resolved, setTheme, accentOverride, setAccentOverride };
 }
