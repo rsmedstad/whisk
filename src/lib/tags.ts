@@ -44,9 +44,6 @@ export const PRESET_TAGS: TagDefinition[] = [
   { name: "stir-fry", type: "preset", group: "method", usageCount: 0 },
 
   // Speed
-  { name: "under 30 min", type: "preset", group: "speed", usageCount: 0 },
-  { name: "quick", type: "preset", group: "speed", usageCount: 0 },
-  { name: "weeknight", type: "preset", group: "speed", usageCount: 0 },
   { name: "meal prep", type: "preset", group: "speed", usageCount: 0 },
 
   // Season
@@ -86,22 +83,13 @@ export const TAG_GROUP_ORDER: TagGroup[] = [
   "custom",
 ];
 
-// Speed tags that are auto-derived from time data (not "meal prep" — that's a style choice)
-const AUTO_SPEED_TAGS = new Set(["under 30 min", "quick", "weeknight"]);
-
-export function deriveSpeedTags(prepTime?: number, cookTime?: number): string[] {
-  const total = (prepTime ?? 0) + (cookTime ?? 0);
-  if (total <= 0) return [];
-  if (total <= 30) return ["under 30 min", "quick", "weeknight"];
-  if (total <= 45) return ["weeknight"];
-  return [];
-}
-
-export function mergeSpeedTags(existingTags: string[], prepTime?: number, cookTime?: number): string[] {
-  const filtered = existingTags.filter((t) => !AUTO_SPEED_TAGS.has(t));
-  const derived = deriveSpeedTags(prepTime, cookTime);
-  return [...new Set([...filtered, ...derived])];
-}
+// Time-based filter ranges for the Speed dropdown (filter by actual recipe time, not tags)
+export const TIME_RANGES: { label: string; maxMinutes: number }[] = [
+  { label: "< 30 min", maxMinutes: 30 },
+  { label: "< 45 min", maxMinutes: 45 },
+  { label: "< 60 min", maxMinutes: 60 },
+  { label: "60+ min", maxMinutes: Infinity },
+];
 
 export const PRESET_TAG_NAMES = PRESET_TAGS.map((t) => t.name);
 

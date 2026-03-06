@@ -197,6 +197,7 @@ export function filterAndSortRecipes(
     tags?: string[];
     favoritesOnly?: boolean;
     sort?: SortOption;
+    maxTime?: number;
   }
 ): RecipeIndexEntry[] {
   let filtered = [...recipes];
@@ -220,6 +221,21 @@ export function filterAndSortRecipes(
 
   if (options.favoritesOnly) {
     filtered = filtered.filter((r) => r.favorite);
+  }
+
+  if (options.maxTime != null) {
+    if (options.maxTime === Infinity) {
+      // 60+ min: show recipes with total time > 60 or no time data
+      filtered = filtered.filter((r) => {
+        const total = (r.prepTime ?? 0) + (r.cookTime ?? 0);
+        return total > 60 || total === 0;
+      });
+    } else {
+      filtered = filtered.filter((r) => {
+        const total = (r.prepTime ?? 0) + (r.cookTime ?? 0);
+        return total > 0 && total <= options.maxTime!;
+      });
+    }
   }
 
   switch (options.sort) {

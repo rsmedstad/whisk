@@ -4,7 +4,6 @@ import type { Recipe, RecipePhoto, Ingredient, Step } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { compressImage } from "../../lib/compress";
-import { mergeSpeedTags } from "../../lib/tags";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { TextArea } from "../ui/TextArea";
@@ -181,9 +180,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         // Auto-tag from imported data
         const importedPrep = data.prepTime ? Number(data.prepTime) : undefined;
         const importedCook = data.cookTime ? Number(data.cookTime) : undefined;
-        if (importedPrep || importedCook) {
-          setTags((prev) => mergeSpeedTags(prev, importedPrep, importedCook));
-        }
+        // Speed tags are no longer auto-derived; filtering is time-based now
         if (data.title) {
           fetchAutoTags(
             data.title as string,
@@ -216,7 +213,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         favorite: false,
         photos,
         thumbnailUrl: photos.find((p) => p.isPrimary)?.url ?? photos[0]?.url,
-        tags: mergeSpeedTags(tags, prepTime ? parseInt(prepTime) : undefined, cookTime ? parseInt(cookTime) : undefined),
+        tags,
         cuisine: cuisine.trim() || undefined,
         prepTime: prepTime ? parseInt(prepTime) : undefined,
         cookTime: cookTime ? parseInt(cookTime) : undefined,
@@ -414,9 +411,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       // Auto-tag from imported data
       const importedPrep = data.prepTime ? Number(data.prepTime) : undefined;
       const importedCook = data.cookTime ? Number(data.cookTime) : undefined;
-      if (importedPrep || importedCook) {
-        setTags((prev) => mergeSpeedTags(prev, importedPrep, importedCook));
-      }
+      // Speed tags removed — time-based filtering handles this now
       if (data.title) {
         fetchAutoTags(
           data.title as string,

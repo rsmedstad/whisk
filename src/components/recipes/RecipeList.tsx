@@ -5,7 +5,7 @@ import type { RecipeIndexEntry } from "../../types";
 import { filterAndSortRecipes } from "../../hooks/useRecipes";
 import { formatTotalTime } from "../../lib/utils";
 import { classNames } from "../../lib/utils";
-import { PRESET_TAGS } from "../../lib/tags";
+import { PRESET_TAGS, TIME_RANGES } from "../../lib/tags";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
@@ -36,7 +36,7 @@ export function RecipeList({
   const saved = useRef(() => {
     try {
       const raw = sessionStorage.getItem("whisk_recipe_view");
-      if (raw) return JSON.parse(raw) as { search?: string; tags?: string[]; fav?: boolean; sort?: SortOption };
+      if (raw) return JSON.parse(raw) as { search?: string; tags?: string[]; fav?: boolean; sort?: SortOption; maxTime?: number };
     } catch { /* ignore */ }
     return null;
   });
@@ -46,14 +46,15 @@ export function RecipeList({
   const [selectedTags, setSelectedTags] = useState<string[]>(restored?.tags ?? []);
   const [favoritesOnly, setFavoritesOnly] = useState(restored?.fav ?? false);
   const [sort, setSort] = useState<SortOption>(restored?.sort ?? "category");
+  const [maxTime, setMaxTime] = useState<number | null>(restored?.maxTime ?? null);
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
 
   // Save filter state to sessionStorage whenever it changes
   useEffect(() => {
-    sessionStorage.setItem("whisk_recipe_view", JSON.stringify({ search, tags: selectedTags, fav: favoritesOnly, sort }));
-  }, [search, selectedTags, favoritesOnly, sort]);
+    sessionStorage.setItem("whisk_recipe_view", JSON.stringify({ search, tags: selectedTags, fav: favoritesOnly, sort, maxTime }));
+  }, [search, selectedTags, favoritesOnly, sort, maxTime]);
 
   // Restore scroll position after recipes render
   useLayoutEffect(() => {
@@ -72,8 +73,9 @@ export function RecipeList({
         tags: selectedTags,
         favoritesOnly,
         sort,
+        maxTime: maxTime ?? undefined,
       }),
-    [recipes, search, selectedTags, favoritesOnly, sort]
+    [recipes, search, selectedTags, favoritesOnly, sort, maxTime]
   );
 
   const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish"];
@@ -103,7 +105,6 @@ export function RecipeList({
       ["cuisine", "Cuisine"],
       ["diet", "Diet"],
       ["method", "Method"],
-      ["speed", "Speed"],
       ["season", "Season"],
       ["custom", "Other"],
     ];
@@ -238,7 +239,8 @@ export function RecipeList({
                   setOpenDropdown(null);
                 } else {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                  const right = Math.max(8, window.innerWidth - rect.right);
+                  setDropdownPos({ top: rect.bottom + 4, left: 0, right });
                   setOpenDropdown("sort");
                 }
               }}
@@ -259,7 +261,14 @@ export function RecipeList({
                       setOpenDropdown(null);
                     } else {
                       const rect = e.currentTarget.getBoundingClientRect();
-                      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                      const minDropdownWidth = 140;
+                      const wouldOverflow = rect.left + minDropdownWidth > window.innerWidth;
+                      if (wouldOverflow) {
+                        const right = Math.max(8, window.innerWidth - rect.right);
+                        setDropdownPos({ top: rect.bottom + 4, left: 0, right });
+                      } else {
+                        setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                      }
                       setOpenDropdown(group.key);
                     }
                   }}
@@ -278,6 +287,41 @@ export function RecipeList({
               </div>
             );
           })}
+          {/* Time filter */}
+          <div className="shrink-0">
+            <button
+              onClick={(e) => {
+                if (openDropdown === "time") {
+                  setOpenDropdown(null);
+                } else {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const minDropdownWidth = 140;
+                  const wouldOverflow = rect.left + minDropdownWidth > window.innerWidth;
+                  if (wouldOverflow) {
+                    const right = Math.max(8, window.innerWidth - rect.right);
+                    setDropdownPos({ top: rect.bottom + 4, left: 0, right });
+                  } else {
+                    setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                  }
+                  setOpenDropdown("time");
+                }
+              }}
+              className={classNames(
+                "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                maxTime != null
+                  ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                  : openDropdown === "time"
+                    ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+              )}
+            >
+              <Clock className="w-3 h-3" />
+              {maxTime != null
+                ? TIME_RANGES.find((r) => r.maxMinutes === maxTime)?.label ?? "Time"
+                : "Time"}
+              <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "time" && "rotate-180")} />
+            </button>
+          </div>
         </div>
         {/* Dropdown panel — portaled to body to escape backdrop-blur containing block */}
         {openDropdown && dropdownPos && createPortal((() => {
@@ -289,8 +333,9 @@ export function RecipeList({
             ["mostCooked", "Most cooked"],
           ];
           const isSort = openDropdown === "sort";
-          const group = isSort ? null : filterGroups.find((g) => g.key === openDropdown);
-          if (!isSort && !group) return null;
+          const isTime = openDropdown === "time";
+          const group = !isSort && !isTime ? filterGroups.find((g) => g.key === openDropdown) : null;
+          if (!isSort && !isTime && !group) return null;
           return (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
@@ -319,24 +364,48 @@ export function RecipeList({
                         {sort === value && <Check className="w-4 h-4 text-orange-500" />}
                       </button>
                     ))
-                  : group!.tags.map((tag) => {
-                      const isActive = selectedTags.includes(tag);
-                      return (
-                        <button
-                          key={tag}
-                          onClick={() => toggleTag(tag)}
-                          className={classNames(
-                            "w-full px-3 py-2 text-left text-sm capitalize flex items-center justify-between gap-2 transition-colors",
-                            isActive
-                              ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
-                              : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                          )}
-                        >
-                          {tag}
-                          {isActive && <Check className="w-4 h-4 text-orange-500" />}
-                        </button>
-                      );
-                    })}
+                  : isTime
+                    ? <>
+                        {TIME_RANGES.map((range) => {
+                          const isActive = maxTime === range.maxMinutes;
+                          return (
+                            <button
+                              key={range.maxMinutes}
+                              onClick={() => {
+                                setMaxTime(isActive ? null : range.maxMinutes);
+                                setOpenDropdown(null);
+                              }}
+                              className={classNames(
+                                "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                                isActive
+                                  ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                                  : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                              )}
+                            >
+                              {range.label}
+                              {isActive && <Check className="w-4 h-4 text-orange-500" />}
+                            </button>
+                          );
+                        })}
+                      </>
+                    : group!.tags.map((tag) => {
+                        const isActive = selectedTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            onClick={() => toggleTag(tag)}
+                            className={classNames(
+                              "w-full px-3 py-2 text-left text-sm capitalize flex items-center justify-between gap-2 transition-colors",
+                              isActive
+                                ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                                : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                            )}
+                          >
+                            {tag}
+                            {isActive && <Check className="w-4 h-4 text-orange-500" />}
+                          </button>
+                        );
+                      })}
               </div>
             </>
           );

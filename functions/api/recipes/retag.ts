@@ -25,21 +25,11 @@ interface Recipe {
   [key: string]: unknown;
 }
 
-// Speed tags auto-derived from time data (not "meal prep" — that's a style choice)
-const AUTO_SPEED_TAGS = new Set(["under 30 min", "quick", "weeknight"]);
+// Legacy speed tags to remove (replaced by time-based filtering)
+const LEGACY_SPEED_TAGS = new Set(["under 30 min", "quick", "weeknight"]);
 
-function deriveSpeedTags(prepTime?: number, cookTime?: number): string[] {
-  const total = (prepTime ?? 0) + (cookTime ?? 0);
-  if (total <= 0) return [];
-  if (total <= 30) return ["under 30 min", "quick", "weeknight"];
-  if (total <= 45) return ["weeknight"];
-  return [];
-}
-
-function recomputeTags(existingTags: string[], prepTime?: number, cookTime?: number): string[] {
-  const filtered = existingTags.filter((t) => !AUTO_SPEED_TAGS.has(t));
-  const derived = deriveSpeedTags(prepTime, cookTime);
-  return [...new Set([...filtered, ...derived])];
+function recomputeTags(existingTags: string[]): string[] {
+  return existingTags.filter((t) => !LEGACY_SPEED_TAGS.has(t));
 }
 
 function tagsEqual(a: string[], b: string[]): boolean {
@@ -59,7 +49,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
     if (!raw) continue;
 
     const recipe = JSON.parse(raw) as Recipe;
-    const newTags = recomputeTags(recipe.tags, recipe.prepTime, recipe.cookTime);
+    const newTags = recomputeTags(recipe.tags);
 
     if (!tagsEqual(recipe.tags, newTags)) {
       recipe.tags = newTags;
