@@ -148,8 +148,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
 
   return (
     <div className="flex flex-col h-full">
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 py-3 pt-[calc(var(--sat)+0.75rem)]">
-        <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
+        <div className="flex items-center justify-between py-3">
           <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
             <WhiskLogo className="w-5 h-5 text-orange-500" />
             <span className="text-lg font-bold text-orange-500">W</span>
