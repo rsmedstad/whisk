@@ -193,23 +193,24 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                   AI knows your {recipeCount} recipe{recipeCount !== 1 ? "s" : ""} and can suggest from your collection
                 </p>
               )}
-              {seasonal.upcomingHolidays.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {seasonal.upcomingHolidays.slice(0, 3).map((h) => (
-                    <span
-                      key={h.name}
-                      className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-950 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300"
-                    >
-                      {h.name}
-                      {h.daysAway > 0 && (
-                        <span className="ml-1 text-orange-500/70">
-                          {h.daysAway}d
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-300 capitalize">
+                  {seasonal.season}
+                </span>
+                {seasonal.upcomingHolidays.slice(0, 3).map((h) => (
+                  <span
+                    key={h.name}
+                    className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-950 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300"
+                  >
+                    {h.name}
+                    {h.daysAway > 0 && (
+                      <span className="ml-1 text-orange-500/70">
+                        {h.daysAway}d
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
               {seasonal.seasonalIngredients.length > 0 && (
                 <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
                   In season: {seasonal.seasonalIngredients.slice(0, 6).join(", ")}
@@ -387,7 +388,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
       {/* Input */}
       <div className={classNames(
         "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
-        isKeyboardOpen ? "bottom-0 pb-1" : "bottom-16 pb-[calc(var(--sab)+4.5rem)]"
+        isKeyboardOpen ? "bottom-0 pb-1" : "bottom-0 pb-3"
       )}>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
