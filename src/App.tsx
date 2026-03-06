@@ -15,16 +15,33 @@ import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
 import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs } from "./types";
 
+// Retry dynamic imports on failure (stale chunks after deploy) by reloading once
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyRetry(factory: () => Promise<any>, pick: string) {
+  return lazy(() =>
+    factory()
+      .then((m: Record<string, unknown>) => ({ default: m[pick] as React.ComponentType<any> })) // eslint-disable-line @typescript-eslint/no-explicit-any
+      .catch(() => {
+        const key = "whisk_chunk_retry";
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          window.location.reload();
+        }
+        return { default: (() => null) as React.ComponentType<any> }; // eslint-disable-line @typescript-eslint/no-explicit-any
+      }),
+  );
+}
+
 // Lazy-load everything except the home tab (RecipeList) for instant first paint
-const RecipeDetail = lazy(() => import("./components/recipes/RecipeDetail").then(m => ({ default: m.RecipeDetail })));
-const RecipeForm = lazy(() => import("./components/recipes/RecipeForm").then(m => ({ default: m.RecipeForm })));
-const CookMode = lazy(() => import("./components/recipes/CookMode").then(m => ({ default: m.CookMode })));
-const ShoppingList = lazy(() => import("./components/list/ShoppingList").then(m => ({ default: m.ShoppingList })));
-const MealPlan = lazy(() => import("./components/plan/MealPlan").then(m => ({ default: m.MealPlan })));
-const Discover = lazy(() => import("./components/discover/Discover").then(m => ({ default: m.Discover })));
-const SuggestChat = lazy(() => import("./components/suggest/SuggestChat").then(m => ({ default: m.SuggestChat })));
-const Settings = lazy(() => import("./components/Settings").then(m => ({ default: m.Settings })));
-const ImportRecipes = lazy(() => import("./components/import/ImportRecipes").then(m => ({ default: m.ImportRecipes })));
+const RecipeDetail = lazyRetry(() => import("./components/recipes/RecipeDetail"), "RecipeDetail");
+const RecipeForm = lazyRetry(() => import("./components/recipes/RecipeForm"), "RecipeForm");
+const CookMode = lazyRetry(() => import("./components/recipes/CookMode"), "CookMode");
+const ShoppingList = lazyRetry(() => import("./components/list/ShoppingList"), "ShoppingList");
+const MealPlan = lazyRetry(() => import("./components/plan/MealPlan"), "MealPlan");
+const Discover = lazyRetry(() => import("./components/discover/Discover"), "Discover");
+const SuggestChat = lazyRetry(() => import("./components/suggest/SuggestChat"), "SuggestChat");
+const Settings = lazyRetry(() => import("./components/Settings"), "Settings");
+const ImportRecipes = lazyRetry(() => import("./components/import/ImportRecipes"), "ImportRecipes");
 
 // Minimal skeleton for lazy-loaded routes — no layout shift
 function RouteSkeleton() {
@@ -178,7 +195,7 @@ function AppShell({
             element={
               <RecipeForm
                 allTags={tags.allTagNames}
-                onAddTag={async (name) => { await tags.addCustomTag(name); }}
+                onAddTag={async (name: string) => { await tags.addCustomTag(name); }}
                 chatEnabled={capabilities.chat}
               />
             }
@@ -199,7 +216,7 @@ function AppShell({
             element={
               <RecipeForm
                 allTags={tags.allTagNames}
-                onAddTag={async (name) => { await tags.addCustomTag(name); }}
+                onAddTag={async (name: string) => { await tags.addCustomTag(name); }}
                 chatEnabled={capabilities.chat}
               />
             }
@@ -219,7 +236,7 @@ function AppShell({
               <ShoppingList
                 list={shoppingList.list}
                 isLoading={shoppingList.isLoading}
-                onAddItem={(name) => shoppingList.addItem(name)}
+                onAddItem={(name: string) => shoppingList.addItem(name)}
                 onToggleItem={shoppingList.toggleItem}
                 onRemoveItem={shoppingList.removeItem}
                 onClearChecked={shoppingList.clearChecked}
