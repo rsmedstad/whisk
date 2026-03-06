@@ -366,13 +366,13 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
                   <label className="text-sm font-medium dark:text-stone-200 block">
                     Show gram weights
                   </label>
                   <p className="text-xs text-stone-500 dark:text-stone-400">
-                    Show estimated gram weights next to volume measurements. Weights are approximate, based on common densities for each ingredient type.
+                    Estimated grams next to volume measurements
                   </p>
                 </div>
                 <button
