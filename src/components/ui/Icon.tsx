@@ -351,3 +351,16 @@ export function CalendarPlus(props: IconProps) {
     </Icon>
   );
 }
+
+export function Dice(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25a1.5 1.5 0 0 1 1.5-1.5h13.5a1.5 1.5 0 0 1 1.5 1.5v13.5a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V5.25Z" />
+      <circle cx="8.25" cy="8.25" r="0.75" fill="currentColor" stroke="none" />
+      <circle cx="15.75" cy="8.25" r="0.75" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="0.75" fill="currentColor" stroke="none" />
+      <circle cx="8.25" cy="15.75" r="0.75" fill="currentColor" stroke="none" />
+      <circle cx="15.75" cy="15.75" r="0.75" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}

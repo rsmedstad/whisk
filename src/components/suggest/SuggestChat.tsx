@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, ChevronRight } from "../ui/Icon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
@@ -13,9 +13,46 @@ interface Message {
   content: string;
 }
 
+type PickCategory = "any" | "dinner" | "drinks" | "desserts";
+
+const PICK_CATEGORIES: { value: PickCategory; label: string }[] = [
+  { value: "any", label: "Any" },
+  { value: "dinner", label: "Dinner" },
+  { value: "drinks", label: "Drinks" },
+  { value: "desserts", label: "Desserts" },
+];
+
+function filterByCategory(recipes: RecipeIndexEntry[], category: PickCategory): RecipeIndexEntry[] {
+  if (category === "any") return recipes;
+  if (category === "dinner") {
+    return recipes.filter((r) => {
+      const tags = r.tags.map((t) => t.toLowerCase());
+      // Exclude drinks and desserts
+      const isDrink = tags.some((t) => t === "drinks" || t === "cocktail" || t === "cocktails");
+      const isDessert = tags.some((t) => t === "dessert" || t === "desserts" || t === "baking");
+      return !isDrink && !isDessert;
+    });
+  }
+  if (category === "drinks") {
+    return recipes.filter((r) =>
+      r.tags.some((t) => {
+        const l = t.toLowerCase();
+        return l === "drinks" || l === "cocktail" || l === "cocktails";
+      })
+    );
+  }
+  // desserts
+  return recipes.filter((r) =>
+    r.tags.some((t) => {
+      const l = t.toLowerCase();
+      return l === "dessert" || l === "desserts" || l === "baking";
+    })
+  );
+}
+
 interface SuggestChatProps {
   chatEnabled?: boolean;
-  recipeCount?: number;
+  recipes?: RecipeIndexEntry[];
 }
 
 const URL_REGEX = /https?:\/\/[^\s,)}\]"']+/g;
@@ -29,13 +66,16 @@ function extractUrls(text: string): string[] {
   });
 }
 
-export function SuggestChat({ chatEnabled = false, recipeCount = 0 }: SuggestChatProps) {
+export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatProps) {
+  const recipeCount = recipes.length;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isKeyboardOpen } = useKeyboard();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pickCategory, setPickCategory] = useState<PickCategory>("any");
+  const [pickedRecipe, setPickedRecipe] = useState<RecipeIndexEntry | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoSentRef = useRef(false);
 
@@ -113,8 +153,16 @@ export function SuggestChat({ chatEnabled = false, recipeCount = 0 }: SuggestCha
 
   const handleNewChat = () => {
     setMessages([]);
+    setPickedRecipe(null);
     autoSentRef.current = false;
   };
+
+  const handleRandomPick = useCallback(() => {
+    const pool = filterByCategory(recipes, pickCategory);
+    if (pool.length === 0) return;
+    const idx = Math.floor(Math.random() * pool.length);
+    setPickedRecipe(pool[idx] ?? null);
+  }, [recipes, pickCategory]);
 
   return (
     <div className="flex flex-col h-full">
@@ -186,6 +234,85 @@ export function SuggestChat({ chatEnabled = false, recipeCount = 0 }: SuggestCha
                 </p>
               )}
             </Card>
+
+            {/* Random pick */}
+            {recipeCount > 0 && (
+              <Card>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
+                    Pick for me
+                  </p>
+                  <div className="flex gap-1">
+                    {PICK_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.value}
+                        onClick={() => { setPickCategory(cat.value); setPickedRecipe(null); }}
+                        className={classNames(
+                          "px-2 py-0.5 rounded-full text-xs font-medium transition-colors",
+                          pickCategory === cat.value
+                            ? "bg-orange-500 text-white"
+                            : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700"
+                        )}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {!pickedRecipe ? (
+                  <button
+                    onClick={handleRandomPick}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-300 dark:border-stone-600 py-4 text-stone-500 dark:text-stone-400 hover:border-orange-400 hover:text-orange-500 dark:hover:border-orange-600 dark:hover:text-orange-400 transition-colors"
+                  >
+                    <Dice className="w-5 h-5" />
+                    <span className="text-sm font-medium">Roll the dice</span>
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+                    <button
+                      onClick={() => navigate(`/recipes/${pickedRecipe.id}`)}
+                      className="w-full flex items-center gap-3 p-3 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors"
+                    >
+                      {pickedRecipe.thumbnailUrl ? (
+                        <img
+                          src={pickedRecipe.thumbnailUrl}
+                          alt=""
+                          className="w-14 h-14 rounded-lg object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg bg-stone-100 dark:bg-stone-800 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
+                          {pickedRecipe.title}
+                        </p>
+                        {pickedRecipe.tags.length > 0 && (
+                          <p className="text-xs text-stone-400 dark:text-stone-500 truncate mt-0.5">
+                            {pickedRecipe.tags.slice(0, 3).join(" · ")}
+                          </p>
+                        )}
+                        {(pickedRecipe.prepTime ?? 0) + (pickedRecipe.cookTime ?? 0) > 0 && (
+                          <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">
+                            {(pickedRecipe.prepTime ?? 0) + (pickedRecipe.cookTime ?? 0)} min
+                          </p>
+                        )}
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-stone-300 dark:text-stone-600 shrink-0" />
+                    </button>
+                    <div className="border-t border-stone-200 dark:border-stone-700 px-3 py-2 flex justify-end">
+                      <button
+                        onClick={handleRandomPick}
+                        className="flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                      >
+                        <Dice className="w-3.5 h-3.5" />
+                        Roll again
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
 
             {/* Quick actions */}
             <Card>
