@@ -29,22 +29,22 @@ const BROWSER_HEADERS = {
 interface RecipeImport {
   url: string;
   overrideTitle?: string;
+  tags?: string[];
 }
 
 const RECIPES_TO_IMPORT: RecipeImport[] = [
-  {
-    url: "https://smittenkitchen.com/2024/10/glazed-apple-cider-doughnut-cake/",
-  },
-  {
-    url: "https://smittenkitchen.com/2014/05/carrot-salad-with-tahini-and-crisped-chickpeas/",
-    overrideTitle: "Carrot Salad with Tahini and Crisped Chickpeas",
-  },
-  {
-    url: "https://www.caileeeats.com/recipes/citrus-salmon-with-creamy-feta-sauce",
-  },
-  {
-    url: "https://steamykitchen.com/14806-flank-steak-on-goat-cheese-toast.html",
-  },
+  // Round 2: alternative sources for liquor.com (403) + paloma
+  { url: "https://www.acouplecooks.com/manhattan-cocktail/", tags: ["drinks"] },
+  { url: "https://www.thekitchn.com/paper-plane-cocktail-recipe-23549303", tags: ["drinks"] },
+  { url: "https://www.thekitchn.com/aperol-spritz-recipe-23664007", tags: ["drinks"] },
+  { url: "https://www.acouplecooks.com/sazerac-cocktail/", tags: ["drinks"] },
+  { url: "https://www.thekitchn.com/sidecar-cocktail-recipe-23675943", tags: ["drinks"] },
+  { url: "https://www.acouplecooks.com/moscow-mule-recipe/", tags: ["drinks"] },
+  { url: "https://www.acouplecooks.com/corpse-reviver/", tags: ["drinks"] },
+  { url: "https://www.thekitchn.com/mojito-recipe-23667328", tags: ["drinks"] },
+  { url: "https://www.thekitchn.com/gimlet-recipe-23680090", tags: ["drinks"] },
+  { url: "https://www.thekitchn.com/mint-julep-recipe-23521957", tags: ["drinks"] },
+  { url: "https://www.thekitchn.com/paloma-recipe-23665218", tags: ["drinks"] },
 ];
 
 // ── Shared helpers ──────────────────────────────────────
@@ -661,14 +661,51 @@ async function main() {
 
   const newRecipes: Array<Record<string, unknown>> = [];
 
-  for (const { url, overrideTitle } of RECIPES_TO_IMPORT) {
+  for (const { url, overrideTitle, tags: importTags } of RECIPES_TO_IMPORT) {
     console.log(`\nImporting: ${url}`);
     try {
       // Fetch the page
       console.log("  Fetching...");
+      let html: string | null = null;
       const res = await fetch(url, { headers: BROWSER_HEADERS });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const html = await res.text();
+      if (res.ok) {
+        html = await res.text();
+        console.log(`  Got ${html.length} bytes`);
+      }
+
+      // Fallback to Browser Rendering if direct fetch failed
+      if ((!html || html.length < 500) && CF_ACCOUNT_ID && CF_BR_TOKEN) {
+        console.log(`  Direct fetch failed (${res.status}), trying Browser Rendering...`);
+        const brRes = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/browser-rendering/content`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${CF_BR_TOKEN}`,
+            },
+            body: JSON.stringify({
+              url,
+              gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+              rejectResourceTypes: ["font", "media"],
+            }),
+          }
+        );
+        if (brRes.ok) {
+          const brBody = await brRes.text();
+          const brHtml = brBody.startsWith("{") ? (JSON.parse(brBody) as { result?: string }).result ?? "" : brBody;
+          if (brHtml.length > 500 && !brHtml.includes("<title>Just a moment...</title>")) {
+            html = brHtml;
+            console.log(`  Browser Rendering succeeded (${brHtml.length} chars)`);
+          } else {
+            console.log(`  Browser Rendering returned challenge page or empty`);
+          }
+        } else {
+          console.log(`  Browser Rendering failed: ${brRes.status}`);
+        }
+      }
+
+      if (!html || html.length < 500) throw new Error(`Failed to fetch (HTTP ${res.status}, no BR fallback)`);
       console.log(`  Got ${html.length} bytes`);
 
       const data = await scrapeRecipe(url, html);
@@ -713,7 +750,7 @@ async function main() {
         description: data.description ? stripHtml(data.description) : "",
         ingredients: parseIngredients(data.recipeIngredient ?? []),
         steps: parseSteps(data.recipeInstructions ?? []),
-        tags: [],
+        tags: importTags ?? [],
         cuisine: "",
         prepTime: parseDuration(data.prepTime) ?? parseDuration(data.totalTime),
         cookTime: parseDuration(data.cookTime),
@@ -740,7 +777,7 @@ async function main() {
       newRecipes.push({
         id,
         title,
-        tags: [],
+        tags: importTags ?? [],
         favorite: false,
         updatedAt: now,
         thumbnailUrl,

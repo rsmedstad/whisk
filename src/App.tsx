@@ -210,7 +210,7 @@ function AppShell({
           />
 
           {/* Other tabs — lazy loaded */}
-          <Route path="/discover" element={<Discover chatEnabled={capabilities.chat} unsplashEnabled={capabilities.unsplash} />} />
+          <Route path="/discover" element={<Discover chatEnabled={capabilities.chat} unsplashEnabled={capabilities.unsplash} onSaveRecipe={recipes.createRecipe} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
           <Route path="/suggest" element={<SuggestChat chatEnabled={capabilities.chat} />} />
           <Route

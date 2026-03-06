@@ -37,6 +37,7 @@ interface IndexEntry {
   lastCookedAt?: string;
   avgRating?: number;
   ratingCount?: number;
+  spirits?: string[];
 }
 
 const index: IndexEntry[] = [];
@@ -64,6 +65,7 @@ for (const key of recipeKeys) {
       lastCookedAt: d.lastCookedAt,
       avgRating: d.ratings ? Math.round((Object.values(d.ratings as Record<string, number>).reduce((a: number, b: number) => a + b, 0) / Object.values(d.ratings as Record<string, number>).length) * 10) / 10 : undefined,
       ratingCount: d.ratings ? Object.keys(d.ratings as Record<string, number>).length : undefined,
+      spirits: d.spirits,
     });
   } catch (e) {
     console.log(`  SKIP ${key}: parse error`);

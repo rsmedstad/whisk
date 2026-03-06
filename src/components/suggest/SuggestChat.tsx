@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Plus } from "../ui/Icon";
@@ -30,11 +30,13 @@ function extractUrls(text: string): string[] {
 
 export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isKeyboardOpen } = useKeyboard();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const autoSentRef = useRef(false);
 
   const householdSize = useMemo(() => {
     return parseInt(localStorage.getItem("whisk_household_size") ?? "4", 10);
@@ -51,6 +53,16 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
       behavior: "smooth",
     });
   }, [messages, isKeyboardOpen]);
+
+  // Auto-send query from URL param (e.g., from Discover card click)
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q && !autoSentRef.current && messages.length === 0) {
+      autoSentRef.current = true;
+      setSearchParams({}, { replace: true });
+      sendMessage(q);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = async (text: string) => {
     const userMsg: Message = { role: "user", content: text };

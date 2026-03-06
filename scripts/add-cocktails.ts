@@ -18,7 +18,7 @@ async function uploadPhoto(localPath: string, recipeId: string): Promise<string 
   try {
     const file = Bun.file(localPath);
     const body = await file.arrayBuffer();
-    const filename = `import-${recipeId}.jpg`;
+    const filename = `photos/import-${recipeId}.jpg`;
     const uploadRes = await fetch(`${r2Base}/${filename}`, {
       method: "PUT",
       headers: { ...headers, "Content-Type": "image/jpeg" },
