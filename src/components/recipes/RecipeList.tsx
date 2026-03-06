@@ -6,7 +6,6 @@ import { filterAndSortRecipes } from "../../hooks/useRecipes";
 import { formatTotalTime } from "../../lib/utils";
 import { classNames } from "../../lib/utils";
 import { PRESET_TAGS } from "../../lib/tags";
-import { TagChip } from "../ui/TagChip";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
@@ -14,7 +13,7 @@ import { InstallPrompt } from "../InstallPrompt";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown } from "../ui/Icon";
 
-type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category";
+type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked";
 
 
 interface RecipeListProps {
@@ -219,20 +218,36 @@ export function RecipeList({
 
         {/* Filter bar */}
         <div className="flex items-center gap-2 pb-2 overflow-x-auto no-scrollbar">
-          <TagChip
-            label="All"
-            selected={!favoritesOnly && selectedTags.length === 0}
-            onToggle={() => {
-              setSelectedTags([]);
-              setFavoritesOnly(false);
-              setOpenDropdown(null);
-            }}
-          />
-          <TagChip
-            label="Favs"
-            selected={favoritesOnly}
-            onToggle={() => { setFavoritesOnly(!favoritesOnly); setOpenDropdown(null); }}
-          />
+          {/* Favorites toggle + Sort — grouped together */}
+          <button
+            onClick={() => { setFavoritesOnly(!favoritesOnly); setOpenDropdown(null); }}
+            className={classNames(
+              "shrink-0 p-1.5 rounded-full transition-colors",
+              favoritesOnly
+                ? "text-red-500 bg-red-50 dark:bg-red-950/50"
+                : "text-stone-400 hover:text-red-400 dark:text-stone-500 dark:hover:text-red-400"
+            )}
+            title={favoritesOnly ? "Show all recipes" : "Show favorites only"}
+          >
+            {favoritesOnly ? <HeartFilled className="w-5 h-5" /> : <Heart className="w-5 h-5" />}
+          </button>
+          <div className="shrink-0">
+            <button
+              onClick={(e) => {
+                if (openDropdown === "sort") {
+                  setOpenDropdown(null);
+                } else {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                  setOpenDropdown("sort");
+                }
+              }}
+              className="p-1.5 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 transition-colors"
+              title={`Sort: ${({ category: "Category", recent: "Recent", alpha: "A-Z", cookTime: "Cook time", mostCooked: "Most cooked", lastViewed: "Last viewed" } as Record<SortOption, string>)[sort]}`}
+            >
+              <ArrowUpDown className="w-4.5 h-4.5" />
+            </button>
+          </div>
           <span className="text-stone-300 dark:text-stone-600 text-sm select-none">|</span>
           {filterGroups.map((group) => {
             const activeCount = group.tags.filter((t) => selectedTags.includes(t)).length;
@@ -263,25 +278,6 @@ export function RecipeList({
               </div>
             );
           })}
-          {/* Sort — pushed to far right, icon only */}
-          <div className="shrink-0 ml-auto">
-            <button
-              onClick={(e) => {
-                if (openDropdown === "sort") {
-                  setOpenDropdown(null);
-                } else {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const right = window.innerWidth - rect.right;
-                  setDropdownPos({ top: rect.bottom + 4, left: 0, right: Math.max(8, right) });
-                  setOpenDropdown("sort");
-                }
-              }}
-              className="p-1.5 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 transition-colors"
-              title={`Sort: ${({ category: "Category", recent: "Recent", alpha: "A-Z", cookTime: "Cook time" } as Record<SortOption, string>)[sort]}`}
-            >
-              <ArrowUpDown className="w-4.5 h-4.5" />
-            </button>
-          </div>
         </div>
         {/* Dropdown panel — portaled to body to escape backdrop-blur containing block */}
         {openDropdown && dropdownPos && createPortal((() => {
@@ -290,6 +286,7 @@ export function RecipeList({
             ["recent", "Recent"],
             ["alpha", "A-Z"],
             ["cookTime", "Cook time"],
+            ["mostCooked", "Most cooked"],
           ];
           const isSort = openDropdown === "sort";
           const group = isSort ? null : filterGroups.find((g) => g.key === openDropdown);

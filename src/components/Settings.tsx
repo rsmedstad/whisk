@@ -11,7 +11,8 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
-import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun, Globe, Share } from "./ui/Icon";
+import { classNames } from "../lib/utils";
+import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun, Globe, Share, Check, ChevronDown } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -206,7 +207,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   };
                   const isSeasonal = theme === "seasonal";
                   return (
-                    <div className="grid grid-cols-[1fr_1fr] gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {/* Left column: system / light / dark stacked */}
                       <div className="flex flex-col gap-2">
                         {(["system", "light", "dark"] as const).map((t) => {
@@ -215,7 +216,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                             <button
                               key={t}
                               onClick={() => onSetTheme(t)}
-                              className={`py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex items-center justify-center gap-1.5 capitalize text-sm ${theme === t ? activeClass : inactiveClass}`}
+                              className={`py-2.5 px-3 rounded-[var(--wk-radius-btn)] font-medium border flex items-center gap-2 text-sm capitalize ${theme === t ? activeClass : inactiveClass}`}
                             >
                               {ThemeIcon && <ThemeIcon className="w-4 h-4" />}
                               {t}
@@ -224,16 +225,15 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                         })}
                       </div>
 
-                      {/* Right column: Seasonal tile with accent picker */}
+                      {/* Right column: Seasonal tile */}
                       <button
                         onClick={() => onSetTheme("seasonal")}
-                        className={`rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-2 p-3 ${isSeasonal ? activeClass : inactiveClass}`}
+                        className={`rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-1.5 p-3 ${isSeasonal ? activeClass : inactiveClass}`}
                       >
-                        <Globe className="w-5 h-5" />
+                        <Globe className="w-6 h-6" />
                         <span className="text-sm font-semibold">Seasonal</span>
-                        <span className="inline-block w-4 h-4 rounded-full bg-orange-500" />
                         <span className="text-[10px] leading-tight text-center opacity-70">
-                          Colors adapt to holidays &amp; seasons
+                          Colors shift with holidays &amp; seasons
                         </span>
                       </button>
                     </div>
@@ -366,15 +366,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <label className="text-sm font-medium dark:text-stone-200 block">
-                    Show gram weights
-                  </label>
-                  <p className="text-xs text-stone-500 dark:text-stone-400">
-                    Estimated grams next to volume measurements
-                  </p>
-                </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium dark:text-stone-200">
+                  Show gram weights
+                </label>
                 <button
                   onClick={handleGramsToggle}
                   className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
@@ -480,39 +475,13 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                  Preferred Stores
-                </label>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-                  Used for deal scanning and shopping list store tags
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["Jewel", "Trader Joe's", "Walmart", "Whole Foods", "Other"] as const).map((store) => {
-                    const checked = preferredStores.includes(store);
-                    return (
-                      <label
-                        key={store}
-                        className="flex items-center gap-3 px-3 py-2 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            const updated = checked
-                              ? preferredStores.filter((s) => s !== store)
-                              : [...preferredStores, store];
-                            setPreferredStores(updated);
-                            localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
-                          }}
-                          className="w-4 h-4 rounded border-stone-300 text-orange-500 accent-orange-500"
-                        />
-                        <span className="text-sm dark:text-stone-200">{store}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
+              <PreferredStoresDropdown
+                stores={preferredStores}
+                onChange={(updated) => {
+                  setPreferredStores(updated);
+                  localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
+                }}
+              />
             </div>
           </Card>
         </section>
@@ -862,6 +831,65 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const STORE_OPTIONS = ["Jewel", "Trader Joe's", "Walmart", "Whole Foods", "Costco", "Aldi", "Target", "Other"];
+
+function PreferredStoresDropdown({ stores, onChange }: { stores: string[]; onChange: (stores: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+
+  const toggle = (store: string) => {
+    const updated = stores.includes(store)
+      ? stores.filter((s) => s !== store)
+      : [...stores, store];
+    onChange(updated);
+  };
+
+  return (
+    <div>
+      <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+        Preferred Stores
+      </label>
+      <div className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+        >
+          <span className={stores.length === 0 ? "text-stone-400 dark:text-stone-500" : ""}>
+            {stores.length === 0 ? "Select stores..." : stores.join(", ")}
+          </span>
+          <ChevronDown className={classNames("w-4 h-4 text-stone-400 transition-transform", open && "rotate-180")} />
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1 max-h-60 overflow-y-auto">
+              {STORE_OPTIONS.map((store) => {
+                const checked = stores.includes(store);
+                return (
+                  <button
+                    key={store}
+                    onClick={() => toggle(store)}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors"
+                  >
+                    <span className={classNames(
+                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                      checked
+                        ? "bg-orange-500 border-orange-500 text-white"
+                        : "border-stone-300 dark:border-stone-600"
+                    )}>
+                      {checked && <Check className="w-3 h-3" />}
+                    </span>
+                    <span className="dark:text-stone-200">{store}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
