@@ -245,6 +245,8 @@ function AppShell({
                 onClearCategory={shoppingList.clearCategory}
                 onClassifyUncategorized={shoppingList.classifyUncategorized}
                 recipeIndex={recipes.recipes}
+                visionEnabled={capabilities.vision}
+                chatEnabled={capabilities.chat}
               />
             }
           />
@@ -260,8 +262,6 @@ function AppShell({
                 onPrevWeek={mealPlan.goToPrevWeek}
                 onToday={mealPlan.goToToday}
                 isLoading={mealPlan.isLoading}
-                visionEnabled={capabilities.vision}
-                chatEnabled={capabilities.chat}
                 recipeIndex={recipes.recipes}
                 onGenerateShoppingList={shoppingList.addFromRecipe}
               />

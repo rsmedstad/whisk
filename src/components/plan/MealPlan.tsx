@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList } from "../ui/Icon";
-import { DealsScanner } from "./DealsScanner";
 
 const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
@@ -31,8 +30,6 @@ interface MealPlanProps {
   onPrevWeek: () => void;
   onToday: () => void;
   isLoading: boolean;
-  visionEnabled?: boolean;
-  chatEnabled?: boolean;
   recipeIndex?: RecipeIndexEntry[];
   onGenerateShoppingList?: (ingredients: Ingredient[], recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
 }
@@ -46,8 +43,6 @@ export function MealPlan({
   onPrevWeek,
   onToday,
   isLoading,
-  visionEnabled = false,
-  chatEnabled = false,
   recipeIndex = [],
   onGenerateShoppingList,
 }: MealPlanProps) {
@@ -69,7 +64,10 @@ export function MealPlan({
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const [shoppingListStatus, setShoppingListStatus] = useState<string | null>(null);
   const [planLayout, setPlanLayout] = useState<"list" | "tiles">(() => {
-    return (localStorage.getItem("whisk_plan_layout") as "list" | "tiles") ?? "list";
+    const saved = localStorage.getItem("whisk_plan_layout") as "list" | "tiles" | null;
+    if (saved) return saved;
+    // Default to tiles unless all 3 meal slots are enabled
+    return enabledSlots.length >= 3 ? "list" : "tiles";
   });
 
   const today = toDateString(new Date());
@@ -262,11 +260,6 @@ export function MealPlan({
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-24">
-        {/* Deals Scanner — collapsible */}
-        <DealsScanner visionEnabled={visionEnabled} chatEnabled={chatEnabled} />
-        <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
-
-        {/* Day-by-day */}
         {planLayout === "tiles" ? (
           /* Tile view — compact grid */
           <div className="grid grid-cols-2 gap-2 px-4 py-3">
@@ -275,6 +268,7 @@ export function MealPlan({
               const isToday = dateStr === today;
               const meals = getMealsForDate(date);
               const filledMeals = meals.filter((m) => mealSlots.some((s) => s.slot === m.slot));
+              const tileAdding = addingSlot?.date.getTime() === date.getTime();
 
               return (
                 <div
@@ -292,7 +286,7 @@ export function MealPlan({
                   )}>
                     {isToday ? "Today" : formatDateShort(date)}
                   </p>
-                  {filledMeals.length > 0 ? (
+                  {filledMeals.length > 0 && (
                     <div className="space-y-1">
                       {filledMeals.map((meal) => (
                         <div key={meal.id} className="flex items-center justify-between gap-1">
@@ -316,10 +310,58 @@ export function MealPlan({
                         </div>
                       ))}
                     </div>
+                  )}
+                  {tileAdding ? (
+                    <div className="mt-1 relative">
+                      <input
+                        ref={inputRef}
+                        className="w-full rounded border border-stone-300 bg-white px-2 py-1 text-xs dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                        placeholder="Search or type..."
+                        value={mealInput}
+                        onChange={(e) => {
+                          setMealInput(e.target.value);
+                          setShowSuggestions(e.target.value.trim().length > 0);
+                        }}
+                        onFocus={() => { if (mealInput.trim()) setShowSuggestions(true); }}
+                        onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
+                        onKeyDown={handleKeyDown}
+                        autoFocus
+                      />
+                      {showSuggestions && suggestions.length > 0 && (
+                        <div
+                          ref={suggestionsRef}
+                          className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden max-h-36 overflow-y-auto"
+                        >
+                          {suggestions.map((recipe, i) => (
+                            <button
+                              key={recipe.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleSelectSuggestion(recipe)}
+                              className={classNames(
+                                "w-full px-2 py-1.5 text-left text-xs flex items-center gap-2",
+                                i === selectedSuggestionIndex
+                                  ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300"
+                                  : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
+                              )}
+                            >
+                              {recipe.thumbnailUrl ? (
+                                <img src={recipe.thumbnailUrl} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-6 h-6 rounded bg-stone-100 dark:bg-stone-700 flex-shrink-0" />
+                              )}
+                              <span className="truncate">{recipe.title}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <button
                       onClick={() => setAddingSlot({ date, slot: mealSlots[0]?.slot ?? "dinner" })}
-                      className="text-[10px] text-orange-500 font-medium"
+                      className={classNames(
+                        "text-[10px] text-orange-500 font-medium",
+                        filledMeals.length > 0 && "mt-1"
+                      )}
                     >
                       + add
                     </button>

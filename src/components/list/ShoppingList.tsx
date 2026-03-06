@@ -5,6 +5,7 @@ import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
 import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash } from "../ui/Icon";
+import { DealsScanner } from "../plan/DealsScanner";
 
 type SortMode = "department" | "alphabetical" | "unchecked-first";
 
@@ -20,6 +21,8 @@ interface ShoppingListProps {
   onClearCategory: (category: ShoppingCategory) => void;
   onClassifyUncategorized: () => Promise<void>;
   recipeIndex?: RecipeIndexEntry[];
+  visionEnabled?: boolean;
+  chatEnabled?: boolean;
 }
 
 export function ShoppingList({
@@ -34,6 +37,8 @@ export function ShoppingList({
   onClearCategory,
   onClassifyUncategorized,
   recipeIndex = [],
+  visionEnabled = false,
+  chatEnabled = false,
 }: ShoppingListProps) {
   const [newItem, setNewItem] = useState("");
   const [showOverflow, setShowOverflow] = useState(false);
@@ -368,6 +373,9 @@ export function ShoppingList({
           </button>
         </form>
       </div>
+
+      {/* Deals Scanner */}
+      <DealsScanner visionEnabled={visionEnabled} chatEnabled={chatEnabled} />
 
       {/* List */}
       <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
