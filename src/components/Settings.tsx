@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
 import type { SeasonalAccent } from "../lib/seasonal";
@@ -6,6 +6,7 @@ import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
 import { getSeasonalAccent } from "../lib/seasonal";
 import { ACCENT_OPTIONS } from "../hooks/useTheme";
+import { PRESET_TAGS } from "../lib/tags";
 import { api } from "../lib/api";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -77,11 +78,17 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const [showShareModal, setShowShareModal] = useState(false);
   const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [exportExcludeTags, setExportExcludeTags] = useState<string[]>([]);
+  const [exportIncludeNotes, setExportIncludeNotes] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [isRetagging, setIsRetagging] = useState(false);
   const [retagResult, setRetagResult] = useState<string | null>(null);
   const [isFixingText, setIsFixingText] = useState(false);
   const [fixTextResult, setFixTextResult] = useState<string | null>(null);
+  const [importFile, setImportFile] = useState<{ recipes: Record<string, unknown>[]; name: string } | null>(null);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const handleUnitsChange = (u: "imperial" | "metric") => {
     setUnits(u);
@@ -133,12 +140,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     onLogout();
   };
 
-  const handleExport = async () => {
+  const handleExportBook = async () => {
     setIsExporting(true);
     try {
       const index = await api.get<RecipeIndexEntry[]>("/recipes");
       const recipes: Recipe[] = [];
       for (const entry of index) {
+        // Skip recipes that have an excluded tag
+        if (exportExcludeTags.length > 0 && entry.tags.some((t) => exportExcludeTags.includes(t))) continue;
         try {
           const recipe = await api.get<Recipe>(`/recipes/${entry.id}`);
           recipes.push(recipe);
@@ -146,16 +155,44 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
           // Skip recipes that fail to load
         }
       }
+
+      const origin = window.location.origin;
+      const exportRecipes = recipes.map((r) => {
+        // Make photo URLs absolute so importers can download them
+        const absUrl = (u?: string) => u && u.startsWith("/") ? `${origin}${u}` : u;
+        const cleaned: Record<string, unknown> = {
+          title: r.title,
+          description: r.description,
+          ingredients: r.ingredients,
+          steps: r.steps,
+          photos: r.photos.map((p) => ({ ...p, url: absUrl(p.url) ?? p.url })),
+          thumbnailUrl: absUrl(r.thumbnailUrl),
+          videoUrl: r.videoUrl,
+          source: r.source,
+          tags: r.tags,
+          cuisine: r.cuisine,
+          prepTime: r.prepTime,
+          cookTime: r.cookTime,
+          servings: r.servings,
+          yield: r.yield,
+          difficulty: r.difficulty,
+        };
+        if (exportIncludeNotes && r.notes) cleaned.notes = r.notes;
+        return cleaned;
+      });
+
       const exportData = {
+        whiskVersion: 1,
         exportedAt: new Date().toISOString(),
-        version: "0.1.0",
-        recipes,
+        source: origin,
+        recipeCount: exportRecipes.length,
+        recipes: exportRecipes,
       };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `whisk-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `whisk-book-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -163,6 +200,40 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleImportBook = async () => {
+    if (!importFile) return;
+    const { recipes } = importFile;
+    setImportProgress({ done: 0, total: recipes.length, errors: 0 });
+    let errors = 0;
+    for (let i = 0; i < recipes.length; i++) {
+      try {
+        await api.post("/import/book", recipes[i]);
+      } catch {
+        errors++;
+      }
+      setImportProgress({ done: i + 1, total: recipes.length, errors });
+    }
+  };
+
+  const handleImportFileChange = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string) as Record<string, unknown>;
+        const recipes = (data.recipes ?? []) as Record<string, unknown>[];
+        if (!Array.isArray(recipes) || recipes.length === 0) {
+          alert("No recipes found in this file.");
+          return;
+        }
+        setImportFile({ recipes, name: file.name });
+        setImportProgress(null);
+      } catch {
+        alert("Could not read this file. Make sure it's a valid Whisk export.");
+      }
+    };
+    reader.readAsText(file);
   };
 
   const activeClass = "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300";
@@ -592,12 +663,145 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
           </h2>
           <Card>
             <div className="space-y-3">
-              <Button variant="secondary" fullWidth onClick={handleExport} disabled={isExporting}>
-                {isExporting ? "Exporting..." : "Export All (JSON)"}
-              </Button>
-              <Button variant="secondary" fullWidth onClick={() => navigate("/settings/import")}>
-                Import Recipes
-              </Button>
+              {/* Export Book */}
+              <div>
+                <Button variant="secondary" fullWidth onClick={() => setShowExportPanel(!showExportPanel)}>
+                  {showExportPanel ? "Hide Export Options" : "Export Book"}
+                </Button>
+                {showExportPanel && (
+                  <div className="mt-3 space-y-3 border border-stone-200 dark:border-stone-700 rounded-lg p-3">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      Export recipes as a shareable file. Personal data (favorites, ratings, cook history) is not included.
+                    </p>
+                    <div>
+                      <label className="text-xs font-medium text-stone-600 dark:text-stone-300 block mb-1.5">
+                        Exclude by meal type
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PRESET_TAGS.filter((t) => t.group === "meal").map((tag) => {
+                          const excluded = exportExcludeTags.includes(tag.name);
+                          return (
+                            <button
+                              key={tag.name}
+                              onClick={() => setExportExcludeTags(
+                                excluded
+                                  ? exportExcludeTags.filter((t) => t !== tag.name)
+                                  : [...exportExcludeTags, tag.name]
+                              )}
+                              className={classNames(
+                                "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors capitalize",
+                                excluded
+                                  ? "border-red-300 bg-red-50 text-red-600 dark:border-red-700 dark:bg-red-950 dark:text-red-400 line-through"
+                                  : "border-stone-200 text-stone-600 dark:border-stone-600 dark:text-stone-300"
+                              )}
+                            >
+                              {tag.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {exportExcludeTags.length > 0 && (
+                        <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                          Recipes tagged {exportExcludeTags.map((t) => `"${t}"`).join(", ")} will be excluded
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-stone-600 dark:text-stone-300">
+                        Include personal notes
+                      </label>
+                      <button
+                        onClick={() => setExportIncludeNotes(!exportIncludeNotes)}
+                        className={`relative w-9 h-5 shrink-0 rounded-full transition-colors ${
+                          exportIncludeNotes ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                            exportIncludeNotes ? "translate-x-4" : ""
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <Button variant="primary" fullWidth onClick={handleExportBook} disabled={isExporting}>
+                      {isExporting ? "Exporting..." : "Download Book"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Import Book */}
+              <div>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportFileChange(file);
+                    e.target.value = "";
+                  }}
+                />
+                {!importFile ? (
+                  <Button variant="secondary" fullWidth onClick={() => importFileRef.current?.click()}>
+                    Import Book
+                  </Button>
+                ) : (
+                  <div className="border border-stone-200 dark:border-stone-700 rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium dark:text-stone-200">
+                          {importFile.recipes.length} recipe{importFile.recipes.length !== 1 ? "s" : ""} found
+                        </p>
+                        <p className="text-xs text-stone-400 dark:text-stone-500">{importFile.name}</p>
+                      </div>
+                      <button
+                        onClick={() => { setImportFile(null); setImportProgress(null); }}
+                        className="text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      Recipes will be added to your book. Existing recipes won't be overwritten. Photos will be copied to your storage.
+                    </p>
+                    {importProgress ? (
+                      <div className="space-y-2">
+                        <div className="w-full bg-stone-200 dark:bg-stone-700 rounded-full h-2">
+                          <div
+                            className="bg-orange-500 h-2 rounded-full transition-all"
+                            style={{ width: `${(importProgress.done / importProgress.total) * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-center text-stone-500 dark:text-stone-400">
+                          {importProgress.done === importProgress.total
+                            ? `Done! Imported ${importProgress.done - importProgress.errors} recipe${importProgress.done - importProgress.errors !== 1 ? "s" : ""}${importProgress.errors > 0 ? `, ${importProgress.errors} failed` : ""}`
+                            : `Importing ${importProgress.done} of ${importProgress.total}...`}
+                        </p>
+                        {importProgress.done === importProgress.total && (
+                          <Button variant="secondary" fullWidth onClick={() => { setImportFile(null); setImportProgress(null); window.location.reload(); }}>
+                            Done
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <Button variant="primary" fullWidth onClick={handleImportBook}>
+                        Import {importFile.recipes.length} Recipe{importFile.recipes.length !== 1 ? "s" : ""}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
+                <Button variant="secondary" fullWidth onClick={() => navigate("/settings/import")}>
+                  Import from URL / Text
+                </Button>
+                <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
+                  Import individual recipes from websites or pasted text
+                </p>
+              </div>
               <div>
                 <Button
                   variant="secondary"
