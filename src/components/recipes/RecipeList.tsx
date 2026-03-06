@@ -239,8 +239,8 @@ export function RecipeList({
                   setOpenDropdown(null);
                 } else {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const right = Math.max(8, window.innerWidth - rect.right);
-                  setDropdownPos({ top: rect.bottom + 4, left: 0, right });
+                  const left = Math.max(8, rect.left);
+                  setDropdownPos({ top: rect.bottom + 4, left });
                   setOpenDropdown("sort");
                 }
               }}
@@ -454,9 +454,9 @@ export function RecipeList({
             {groupedRecipes.map((group) => (
               <section key={group.label}>
                 <h2 className={classNames(
-                  "text-sm font-semibold tracking-wide mb-2",
+                  "text-sm font-semibold tracking-wide mb-2 flex items-center gap-1",
                   group.label === "Favorites"
-                    ? "text-red-500 dark:text-red-400 flex items-center gap-1"
+                    ? "text-red-500 dark:text-red-400"
                     : "text-stone-500 dark:text-orange-300/50"
                 )}>
                   {group.label === "Favorites" && <HeartFilled className="w-3.5 h-3.5" />}
