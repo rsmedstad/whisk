@@ -2,17 +2,25 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
-import { EmptyState } from "../ui/EmptyState";
-import { Button } from "../ui/Button";
-import { ChevronLeft, ChevronRight, XMark, Sunrise, Sun, Moon, ShoppingCart, Sparkles } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList } from "../ui/Icon";
 import { DealsScanner } from "./DealsScanner";
-import type { ReactNode } from "react";
 
-const MEAL_SLOTS: { slot: MealSlot; icon: ReactNode; label: string }[] = [
-  { slot: "breakfast", icon: <Sunrise className="w-4 h-4 text-amber-500" />, label: "Breakfast" },
-  { slot: "lunch", icon: <Sun className="w-4 h-4 text-orange-500" />, label: "Lunch" },
-  { slot: "dinner", icon: <Moon className="w-4 h-4 text-indigo-500" />, label: "Dinner" },
+const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
+  { slot: "breakfast", label: "Breakfast" },
+  { slot: "lunch", label: "Lunch" },
+  { slot: "dinner", label: "Dinner" },
 ];
+
+function getEnabledSlots(): MealSlot[] {
+  try {
+    const raw = localStorage.getItem("whisk_meal_slots");
+    if (raw) {
+      const parsed = JSON.parse(raw) as MealSlot[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return ["dinner"];
+}
 
 interface MealPlanProps {
   currentDate: Date;
@@ -45,6 +53,11 @@ export function MealPlan({
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
+  const enabledSlots = useMemo(() => getEnabledSlots(), []);
+  const mealSlots = useMemo(
+    () => ALL_MEAL_SLOTS.filter((s) => enabledSlots.includes(s.slot)),
+    [enabledSlots]
+  );
   const [addingSlot, setAddingSlot] = useState<{
     date: Date;
     slot: MealSlot;
@@ -55,6 +68,9 @@ export function MealPlan({
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const [shoppingListStatus, setShoppingListStatus] = useState<string | null>(null);
+  const [planLayout, setPlanLayout] = useState<"list" | "tiles">(() => {
+    return (localStorage.getItem("whisk_plan_layout") as "list" | "tiles") ?? "list";
+  });
 
   const today = toDateString(new Date());
 
@@ -194,6 +210,21 @@ export function MealPlan({
               </button>
             )}
             <button
+              onClick={() => {
+                const next = planLayout === "list" ? "tiles" : "list";
+                setPlanLayout(next);
+                localStorage.setItem("whisk_plan_layout", next);
+              }}
+              className="p-1.5 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors"
+              title={planLayout === "list" ? "Switch to tiles" : "Switch to list"}
+            >
+              {planLayout === "list" ? (
+                <CalendarDays className="w-4.5 h-4.5" />
+              ) : (
+                <ClipboardList className="w-4.5 h-4.5" />
+              )}
+            </button>
+            <button
               onClick={onToday}
               className="text-xs font-medium text-orange-500 border border-orange-500 px-2 py-1 rounded-md"
             >
@@ -236,156 +267,223 @@ export function MealPlan({
         <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
 
         {/* Day-by-day */}
-        <div className="px-4 py-3 space-y-4">
-        {weekDates.map((date) => {
-          const dateStr = toDateString(date);
-          const isToday = dateStr === today;
-          const meals = getMealsForDate(date);
+        {planLayout === "tiles" ? (
+          /* Tile view — compact grid */
+          <div className="grid grid-cols-2 gap-2 px-4 py-3">
+            {weekDates.map((date) => {
+              const dateStr = toDateString(date);
+              const isToday = dateStr === today;
+              const meals = getMealsForDate(date);
+              const filledMeals = meals.filter((m) => mealSlots.some((s) => s.slot === m.slot));
 
-          return (
-            <section key={dateStr}>
-              <h3
-                className={classNames(
-                  "text-sm font-semibold mb-2",
-                  isToday
-                    ? "text-orange-500"
-                    : "text-stone-500 dark:text-orange-300/40"
-                )}
-              >
-                {isToday && "Today \u00B7 "}
-                {formatDateShort(date)}
-              </h3>
-
-              <div className="space-y-1.5">
-                {MEAL_SLOTS.map(({ slot, icon, label }) => {
-                  const meal = meals.find((m) => m.slot === slot);
-                  const isAdding =
-                    addingSlot?.date.getTime() === date.getTime() &&
-                    addingSlot?.slot === slot;
-
-                  return (
-                    <div
-                      key={slot}
-                      className="flex items-center gap-2 rounded-lg bg-stone-50 dark:bg-stone-900 dark:border dark:border-stone-800 px-3 py-2"
-                    >
-                      <span className="flex-shrink-0">{icon}</span>
-
-                      {meal ? (
-                        <div className="flex-1 flex items-center justify-between min-w-0">
+              return (
+                <div
+                  key={dateStr}
+                  className={classNames(
+                    "rounded-xl border p-3",
+                    isToday
+                      ? "border-orange-300 dark:border-orange-700 bg-orange-50/50 dark:bg-orange-950/20"
+                      : "border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900"
+                  )}
+                >
+                  <p className={classNames(
+                    "text-xs font-semibold mb-1.5",
+                    isToday ? "text-orange-500" : "text-stone-500 dark:text-stone-400"
+                  )}>
+                    {isToday ? "Today" : formatDateShort(date)}
+                  </p>
+                  {filledMeals.length > 0 ? (
+                    <div className="space-y-1">
+                      {filledMeals.map((meal) => (
+                        <div key={meal.id} className="flex items-center justify-between gap-1">
                           <button
-                            onClick={() => {
-                              if (meal.recipeId)
-                                navigate(`/recipes/${meal.recipeId}`);
-                            }}
+                            onClick={() => { if (meal.recipeId) navigate(`/recipes/${meal.recipeId}`); }}
                             className={classNames(
-                              "text-sm truncate",
+                              "text-xs truncate flex-1 text-left",
                               meal.recipeId
                                 ? "text-orange-600 dark:text-orange-400 font-medium"
-                                : "text-stone-700 dark:text-stone-300"
+                                : "text-stone-600 dark:text-stone-300"
                             )}
                           >
                             {meal.title}
                           </button>
                           <button
                             onClick={() => onRemoveMeal(meal.id)}
-                            className="text-stone-400 hover:text-red-500 ml-2 flex-shrink-0"
+                            className="text-stone-300 hover:text-red-500 dark:text-stone-600 flex-shrink-0"
                           >
-                            <XMark className="w-4 h-4" />
+                            <XMark className="w-3 h-3" />
                           </button>
                         </div>
-                      ) : isAdding ? (
-                        <div className="flex-1 relative">
-                          <div className="flex gap-2">
-                            <input
-                              ref={inputRef}
-                              className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                              placeholder={recipeIndex.length > 0 ? "Search recipes or type..." : "What's for dinner?"}
-                              value={mealInput}
-                              onChange={(e) => {
-                                setMealInput(e.target.value);
-                                setShowSuggestions(e.target.value.trim().length > 0);
-                              }}
-                              onFocus={() => {
-                                if (mealInput.trim()) setShowSuggestions(true);
-                              }}
-                              onBlur={() => {
-                                // Delay to allow click on suggestion
-                                setTimeout(() => setShowSuggestions(false), 200);
-                              }}
-                              onKeyDown={handleKeyDown}
-                              autoFocus
-                            />
+                      ))}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAddingSlot({ date, slot: mealSlots[0]?.slot ?? "dinner" })}
+                      className="text-[10px] text-orange-500 font-medium"
+                    >
+                      + add
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* List view — detailed day-by-day */
+          <div className="px-4 py-3 space-y-4">
+          {weekDates.map((date) => {
+            const dateStr = toDateString(date);
+            const isToday = dateStr === today;
+            const meals = getMealsForDate(date);
+
+            return (
+              <section key={dateStr}>
+                <h3
+                  className={classNames(
+                    "text-sm font-semibold mb-2",
+                    isToday
+                      ? "text-orange-500"
+                      : "text-stone-500 dark:text-orange-300/40"
+                  )}
+                >
+                  {isToday && "Today \u00B7 "}
+                  {formatDateShort(date)}
+                </h3>
+
+                <div className="space-y-1.5">
+                  {mealSlots.map(({ slot, label }) => {
+                    const meal = meals.find((m) => m.slot === slot);
+                    const isAdding =
+                      addingSlot?.date.getTime() === date.getTime() &&
+                      addingSlot?.slot === slot;
+
+                    return (
+                      <div
+                        key={slot}
+                        className="flex items-center gap-2 rounded-lg bg-stone-50 dark:bg-stone-900 dark:border dark:border-stone-800 px-3 py-2"
+                      >
+                        {mealSlots.length > 1 && (
+                          <span className="flex-shrink-0 text-[10px] font-semibold text-stone-400 dark:text-stone-500 uppercase w-4">
+                            {label.charAt(0)}
+                          </span>
+                        )}
+
+                        {meal ? (
+                          <div className="flex-1 flex items-center justify-between min-w-0">
                             <button
-                              onClick={() => handleAddMeal()}
-                              className="text-xs text-orange-500 font-medium"
+                              onClick={() => {
+                                if (meal.recipeId)
+                                  navigate(`/recipes/${meal.recipeId}`);
+                              }}
+                              className={classNames(
+                                "text-sm truncate",
+                                meal.recipeId
+                                  ? "text-orange-600 dark:text-orange-400 font-medium"
+                                  : "text-stone-700 dark:text-stone-300"
+                              )}
                             >
-                              Add
+                              {meal.title}
+                            </button>
+                            <button
+                              onClick={() => onRemoveMeal(meal.id)}
+                              className="text-stone-400 hover:text-red-500 ml-2 flex-shrink-0"
+                            >
+                              <XMark className="w-4 h-4" />
                             </button>
                           </div>
-
-                          {/* Recipe suggestions dropdown */}
-                          {showSuggestions && suggestions.length > 0 && (
-                            <div
-                              ref={suggestionsRef}
-                              className="absolute left-0 right-8 top-full mt-1 z-50 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden max-h-48 overflow-y-auto"
-                            >
-                              {suggestions.map((recipe, i) => (
-                                <button
-                                  key={recipe.id}
-                                  onMouseDown={(e) => e.preventDefault()}
-                                  onClick={() => handleSelectSuggestion(recipe)}
-                                  className={classNames(
-                                    "w-full px-3 py-2 text-left text-sm flex items-center gap-2",
-                                    i === selectedSuggestionIndex
-                                      ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300"
-                                      : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
-                                  )}
-                                >
-                                  {recipe.thumbnailUrl ? (
-                                    <img
-                                      src={recipe.thumbnailUrl}
-                                      alt=""
-                                      className="w-8 h-8 rounded object-cover flex-shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="w-8 h-8 rounded bg-stone-100 dark:bg-stone-700 flex-shrink-0" />
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-medium truncate">{recipe.title}</p>
-                                    {recipe.tags.length > 0 && (
-                                      <p className="text-[10px] text-stone-400 dark:text-stone-500 truncate">
-                                        {recipe.tags.slice(0, 3).join(", ")}
-                                      </p>
-                                    )}
-                                  </div>
-                                </button>
-                              ))}
+                        ) : isAdding ? (
+                          <div className="flex-1 relative">
+                            <div className="flex gap-2">
+                              <input
+                                ref={inputRef}
+                                className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                                placeholder={recipeIndex.length > 0 ? "Search recipes or type..." : "What's for dinner?"}
+                                value={mealInput}
+                                onChange={(e) => {
+                                  setMealInput(e.target.value);
+                                  setShowSuggestions(e.target.value.trim().length > 0);
+                                }}
+                                onFocus={() => {
+                                  if (mealInput.trim()) setShowSuggestions(true);
+                                }}
+                                onBlur={() => {
+                                  setTimeout(() => setShowSuggestions(false), 200);
+                                }}
+                                onKeyDown={handleKeyDown}
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleAddMeal()}
+                                className="text-xs text-orange-500 font-medium"
+                              >
+                                Add
+                              </button>
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex items-center justify-between">
-                          <span className="text-xs text-stone-400 dark:text-stone-500">
-                            {label}
-                          </span>
-                          <button
-                            onClick={() =>
-                              setAddingSlot({ date, slot })
-                            }
-                            className="text-xs text-orange-500 font-medium"
-                          >
-                            + add
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-        </div>
+
+                            {/* Recipe suggestions dropdown */}
+                            {showSuggestions && suggestions.length > 0 && (
+                              <div
+                                ref={suggestionsRef}
+                                className="absolute left-0 right-8 top-full mt-1 z-50 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden max-h-48 overflow-y-auto"
+                              >
+                                {suggestions.map((recipe, i) => (
+                                  <button
+                                    key={recipe.id}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => handleSelectSuggestion(recipe)}
+                                    className={classNames(
+                                      "w-full px-3 py-2 text-left text-sm flex items-center gap-2",
+                                      i === selectedSuggestionIndex
+                                        ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300"
+                                        : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
+                                    )}
+                                  >
+                                    {recipe.thumbnailUrl ? (
+                                      <img
+                                        src={recipe.thumbnailUrl}
+                                        alt=""
+                                        className="w-8 h-8 rounded object-cover flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded bg-stone-100 dark:bg-stone-700 flex-shrink-0" />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium truncate">{recipe.title}</p>
+                                      {recipe.tags.length > 0 && (
+                                        <p className="text-[10px] text-stone-400 dark:text-stone-500 truncate">
+                                          {recipe.tags.slice(0, 3).join(", ")}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex items-center justify-between">
+                            <span className="text-xs text-stone-400 dark:text-stone-500">
+                              {label}
+                            </span>
+                            <button
+                              onClick={() =>
+                                setAddingSlot({ date, slot })
+                              }
+                              className="text-xs text-orange-500 font-medium"
+                            >
+                              + add
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+          </div>
+        )}
       </div>
     </div>
   );

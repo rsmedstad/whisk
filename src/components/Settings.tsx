@@ -53,6 +53,17 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
 
+  const [mealSlots, setMealSlots] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("whisk_meal_slots");
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return ["dinner"];
+  });
+
   const handleRecipeLayoutChange = (layout: "horizontal" | "vertical") => {
     setRecipeLayout(layout);
     localStorage.setItem("whisk_recipe_layout", layout);
@@ -437,6 +448,42 @@ export function Settings({ theme, onSetTheme, style, onSetStyle, onLogout, capab
                   >
                     +
                   </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                  Meal Plan Slots
+                </label>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                  Which meals to show in your weekly plan
+                </p>
+                <div className="flex gap-2">
+                  {(["breakfast", "lunch", "dinner"] as const).map((slot) => {
+                    const enabled = mealSlots.includes(slot);
+                    return (
+                      <label
+                        key={slot}
+                        className="flex items-center gap-2 px-3 py-2 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={() => {
+                            const updated = enabled
+                              ? mealSlots.filter((s) => s !== slot)
+                              : [...mealSlots, slot];
+                            // Must have at least one slot
+                            if (updated.length === 0) return;
+                            setMealSlots(updated);
+                            localStorage.setItem("whisk_meal_slots", JSON.stringify(updated));
+                          }}
+                          className="w-4 h-4 rounded border-stone-300 text-orange-500 accent-orange-500"
+                        />
+                        <span className="text-sm dark:text-stone-200 capitalize">{slot}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
