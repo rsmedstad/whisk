@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } fro
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, ChevronRight } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, ChevronRight, WhiskLogo } from "../ui/Icon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
@@ -150,7 +150,10 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 py-3 pt-[calc(var(--sat)+0.75rem)]">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold dark:text-stone-100">Suggest</h1>
+          <div className="flex items-center gap-2">
+            <WhiskLogo className="w-6 h-6 text-orange-500" />
+            <h1 className="text-xl font-bold dark:text-stone-100">Suggest</h1>
+          </div>
           {messages.length > 0 && (
             <button
               onClick={handleNewChat}

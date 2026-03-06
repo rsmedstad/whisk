@@ -6,7 +6,7 @@ import { getLocal, setLocal } from "../../lib/cache";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
-import { ChevronLeft, ChevronRight, RefreshCw, Plus, Clock, Users } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, RefreshCw, Plus, Clock, Users, WhiskLogo } from "../ui/Icon";
 import type { InspirationIdea, Recipe, Ingredient, Step } from "../../types";
 
 interface DiscoverProps {
@@ -339,7 +339,10 @@ export function Discover({ chatEnabled = false, unsplashEnabled = false, onSaveR
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
         <div className="flex items-center justify-between py-3">
-          <h1 className="text-xl font-bold dark:text-stone-100">Discover</h1>
+          <div className="flex items-center gap-2">
+            <WhiskLogo className="w-6 h-6 text-orange-500" />
+            <h1 className="text-xl font-bold dark:text-stone-100">Discover</h1>
+          </div>
           <button
             onClick={() => loadIdeas(mealType, vibe, true)}
             className="p-2 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"

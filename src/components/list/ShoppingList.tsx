@@ -4,7 +4,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash } from "../ui/Icon";
+import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, WhiskLogo } from "../ui/Icon";
 import { DealsScanner } from "../plan/DealsScanner";
 
 type SortMode = "department" | "alphabetical" | "unchecked-first";
@@ -229,9 +229,10 @@ export function ShoppingList({
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
         <div className="flex items-center justify-between py-3">
-          <h1 className="text-xl font-bold dark:text-stone-100">
-            Shopping List
-          </h1>
+          <div className="flex items-center gap-2">
+            <WhiskLogo className="w-6 h-6 text-orange-500" />
+            <h1 className="text-xl font-bold dark:text-stone-100">List</h1>
+          </div>
           <div className="flex items-center gap-1">
             {/* Sort button */}
             <div className="relative">
