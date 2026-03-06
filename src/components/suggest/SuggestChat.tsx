@@ -13,40 +13,22 @@ interface Message {
   content: string;
 }
 
-type PickCategory = "any" | "dinner" | "drinks" | "desserts";
-
-const PICK_CATEGORIES: { value: PickCategory; label: string }[] = [
-  { value: "any", label: "Any" },
-  { value: "dinner", label: "Dinner" },
-  { value: "drinks", label: "Drinks" },
-  { value: "desserts", label: "Desserts" },
+const PICK_CATEGORIES = [
+  { value: "any", label: "Any", tags: [] as string[] },
+  { value: "dinner", label: "Dinner", tags: ["dinner"] },
+  { value: "breakfast", label: "Breakfast", tags: ["breakfast", "brunch"] },
+  { value: "appetizer", label: "Appetizer", tags: ["appetizer"] },
+  { value: "side dish", label: "Side Dish", tags: ["side dish", "salad"] },
+  { value: "dessert", label: "Dessert", tags: ["dessert", "desserts", "baking"] },
+  { value: "drinks", label: "Drinks", tags: ["drinks", "cocktail", "cocktails"] },
+  { value: "snack", label: "Snack", tags: ["snack"] },
 ];
 
-function filterByCategory(recipes: RecipeIndexEntry[], category: PickCategory): RecipeIndexEntry[] {
-  if (category === "any") return recipes;
-  if (category === "dinner") {
-    return recipes.filter((r) => {
-      const tags = r.tags.map((t) => t.toLowerCase());
-      // Exclude drinks and desserts
-      const isDrink = tags.some((t) => t === "drinks" || t === "cocktail" || t === "cocktails");
-      const isDessert = tags.some((t) => t === "dessert" || t === "desserts" || t === "baking");
-      return !isDrink && !isDessert;
-    });
-  }
-  if (category === "drinks") {
-    return recipes.filter((r) =>
-      r.tags.some((t) => {
-        const l = t.toLowerCase();
-        return l === "drinks" || l === "cocktail" || l === "cocktails";
-      })
-    );
-  }
-  // desserts
+function filterByCategory(recipes: RecipeIndexEntry[], categoryValue: string): RecipeIndexEntry[] {
+  const cat = PICK_CATEGORIES.find((c) => c.value === categoryValue);
+  if (!cat || cat.tags.length === 0) return recipes;
   return recipes.filter((r) =>
-    r.tags.some((t) => {
-      const l = t.toLowerCase();
-      return l === "dessert" || l === "desserts" || l === "baking";
-    })
+    r.tags.some((t) => cat.tags.includes(t.toLowerCase()))
   );
 }
 
@@ -74,7 +56,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [pickCategory, setPickCategory] = useState<PickCategory>("any");
+  const [pickCategory, setPickCategory] = useState("any");
   const [pickedRecipe, setPickedRecipe] = useState<RecipeIndexEntry | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoSentRef = useRef(false);
@@ -242,22 +224,15 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                   <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
                     Pick for me
                   </p>
-                  <div className="flex gap-1">
+                  <select
+                    value={pickCategory}
+                    onChange={(e) => { setPickCategory(e.target.value); setPickedRecipe(null); }}
+                    className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  >
                     {PICK_CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.value}
-                        onClick={() => { setPickCategory(cat.value); setPickedRecipe(null); }}
-                        className={classNames(
-                          "px-2 py-0.5 rounded-full text-xs font-medium transition-colors",
-                          pickCategory === cat.value
-                            ? "bg-orange-500 text-white"
-                            : "bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700"
-                        )}
-                      >
-                        {cat.label}
-                      </button>
+                      <option key={cat.value} value={cat.value}>{cat.label}</option>
                     ))}
-                  </div>
+                  </select>
                 </div>
 
                 {!pickedRecipe ? (
