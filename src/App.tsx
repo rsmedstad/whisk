@@ -212,7 +212,7 @@ function AppShell({
           {/* Other tabs — lazy loaded */}
           <Route path="/discover" element={<Discover chatEnabled={capabilities.chat} unsplashEnabled={capabilities.unsplash} onSaveRecipe={recipes.createRecipe} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
-          <Route path="/suggest" element={<SuggestChat chatEnabled={capabilities.chat} />} />
+          <Route path="/suggest" element={<SuggestChat chatEnabled={capabilities.chat} recipeCount={recipes.recipes.length} />} />
           <Route
             path="/list"
             element={
@@ -245,6 +245,8 @@ function AppShell({
                 isLoading={mealPlan.isLoading}
                 visionEnabled={capabilities.vision}
                 chatEnabled={capabilities.chat}
+                recipeIndex={recipes.recipes}
+                onGenerateShoppingList={shoppingList.addFromRecipe}
               />
             }
           />

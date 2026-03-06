@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { PlannedMeal, MealSlot } from "../../types";
+import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
 import { Button } from "../ui/Button";
-import { ChevronLeft, ChevronRight, XMark, Sunrise, Sun, Moon } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, Sunrise, Sun, Moon, ShoppingCart, Sparkles } from "../ui/Icon";
 import { DealsScanner } from "./DealsScanner";
 import type { ReactNode } from "react";
 
@@ -25,6 +25,8 @@ interface MealPlanProps {
   isLoading: boolean;
   visionEnabled?: boolean;
   chatEnabled?: boolean;
+  recipeIndex?: RecipeIndexEntry[];
+  onGenerateShoppingList?: (ingredients: Ingredient[], recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
 }
 
 export function MealPlan({
@@ -38,6 +40,8 @@ export function MealPlan({
   isLoading,
   visionEnabled = false,
   chatEnabled = false,
+  recipeIndex = [],
+  onGenerateShoppingList,
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
@@ -46,14 +50,129 @@ export function MealPlan({
     slot: MealSlot;
   } | null>(null);
   const [mealInput, setMealInput] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const [shoppingListStatus, setShoppingListStatus] = useState<string | null>(null);
 
   const today = toDateString(new Date());
 
-  const handleAddMeal = () => {
-    if (!addingSlot || !mealInput.trim()) return;
-    onAddMeal(addingSlot.date, addingSlot.slot, mealInput.trim());
+  // Filter recipes based on input for autocomplete
+  const suggestions = useMemo(() => {
+    if (!mealInput.trim() || recipeIndex.length === 0) return [];
+    const query = mealInput.toLowerCase();
+    return recipeIndex
+      .filter((r) => r.title.toLowerCase().includes(query))
+      .slice(0, 6);
+  }, [mealInput, recipeIndex]);
+
+  // Reset suggestion index when suggestions change
+  useEffect(() => {
+    setSelectedSuggestionIndex(-1);
+  }, [suggestions.length]);
+
+  const handleAddMeal = (title?: string, recipeId?: string) => {
+    if (!addingSlot) return;
+    const mealTitle = title ?? mealInput.trim();
+    if (!mealTitle) return;
+    onAddMeal(addingSlot.date, addingSlot.slot, mealTitle, recipeId);
     setMealInput("");
     setAddingSlot(null);
+    setShowSuggestions(false);
+  };
+
+  const handleSelectSuggestion = (recipe: RecipeIndexEntry) => {
+    handleAddMeal(recipe.title, recipe.id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) {
+      if (e.key === "Enter") handleAddMeal();
+      if (e.key === "Escape") setAddingSlot(null);
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedSuggestionIndex((prev) =>
+        prev < suggestions.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedSuggestionIndex((prev) =>
+        prev > 0 ? prev - 1 : suggestions.length - 1
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const selected = suggestions[selectedSuggestionIndex];
+      if (selected) {
+        handleSelectSuggestion(selected);
+      } else {
+        handleAddMeal();
+      }
+    } else if (e.key === "Escape") {
+      if (showSuggestions) {
+        setShowSuggestions(false);
+      } else {
+        setAddingSlot(null);
+      }
+    }
+  };
+
+  // Collect all planned meals for the week that have recipe IDs
+  const weekMeals = useMemo(() => {
+    const meals: PlannedMeal[] = [];
+    for (const date of weekDates) {
+      meals.push(...getMealsForDate(date));
+    }
+    return meals;
+  }, [weekDates, getMealsForDate]);
+
+  const linkedRecipeIds = useMemo(() => {
+    return [...new Set(weekMeals.filter((m) => m.recipeId).map((m) => m.recipeId!))];
+  }, [weekMeals]);
+
+  const handleGenerateShoppingList = async () => {
+    if (!onGenerateShoppingList || linkedRecipeIds.length === 0) return;
+
+    setShoppingListStatus("loading");
+    let totalAdded = 0;
+    let totalSkipped = 0;
+
+    try {
+      // Fetch full recipe details for each linked recipe and add ingredients
+      for (const recipeId of linkedRecipeIds) {
+        const recipe = recipeIndex.find((r) => r.id === recipeId);
+        if (!recipe) continue;
+
+        // We need to fetch the full recipe to get ingredients
+        const res = await fetch(`/api/recipes/${recipeId}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+          },
+        });
+        if (!res.ok) continue;
+        const fullRecipe = (await res.json()) as { ingredients: Ingredient[] };
+        if (!fullRecipe.ingredients?.length) continue;
+
+        const result = await onGenerateShoppingList(fullRecipe.ingredients, recipeId);
+        totalAdded += result.added;
+        totalSkipped += result.skippedDuplicates;
+      }
+
+      if (totalAdded > 0) {
+        setShoppingListStatus(`Added ${totalAdded} item${totalAdded !== 1 ? "s" : ""} to shopping list${totalSkipped > 0 ? ` (${totalSkipped} already on list)` : ""}`);
+      } else if (totalSkipped > 0) {
+        setShoppingListStatus("All ingredients already on your list");
+      } else {
+        setShoppingListStatus("No ingredients to add");
+      }
+      setTimeout(() => setShoppingListStatus(null), 4000);
+    } catch {
+      setShoppingListStatus("Failed to generate list");
+      setTimeout(() => setShoppingListStatus(null), 3000);
+    }
   };
 
   return (
@@ -62,13 +181,34 @@ export function MealPlan({
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
         <div className="flex items-center justify-between py-3">
           <h1 className="text-xl font-bold dark:text-stone-100">Meal Plan</h1>
-          <button
-            onClick={onToday}
-            className="text-xs font-medium text-orange-500 border border-orange-500 px-2 py-1 rounded-md"
-          >
-            Today
-          </button>
+          <div className="flex items-center gap-2">
+            {linkedRecipeIds.length > 0 && onGenerateShoppingList && (
+              <button
+                onClick={handleGenerateShoppingList}
+                disabled={shoppingListStatus === "loading"}
+                className="flex items-center gap-1.5 text-xs font-medium text-orange-500 border border-orange-500 px-2 py-1 rounded-md hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
+                title="Add ingredients from planned recipes to shopping list"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Shop
+              </button>
+            )}
+            <button
+              onClick={onToday}
+              className="text-xs font-medium text-orange-500 border border-orange-500 px-2 py-1 rounded-md"
+            >
+              Today
+            </button>
+          </div>
         </div>
+
+        {/* Shopping list status */}
+        {shoppingListStatus && shoppingListStatus !== "loading" && (
+          <div className="pb-2">
+            <p className="text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between pb-3">
           <button
             onClick={onPrevWeek}
@@ -154,24 +294,74 @@ export function MealPlan({
                           </button>
                         </div>
                       ) : isAdding ? (
-                        <div className="flex-1 flex gap-2">
-                          <input
-                            className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                            placeholder="What's for dinner?"
-                            value={mealInput}
-                            onChange={(e) => setMealInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleAddMeal();
-                              if (e.key === "Escape") setAddingSlot(null);
-                            }}
-                            autoFocus
-                          />
-                          <button
-                            onClick={handleAddMeal}
-                            className="text-xs text-orange-500 font-medium"
-                          >
-                            Add
-                          </button>
+                        <div className="flex-1 relative">
+                          <div className="flex gap-2">
+                            <input
+                              ref={inputRef}
+                              className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                              placeholder={recipeIndex.length > 0 ? "Search recipes or type..." : "What's for dinner?"}
+                              value={mealInput}
+                              onChange={(e) => {
+                                setMealInput(e.target.value);
+                                setShowSuggestions(e.target.value.trim().length > 0);
+                              }}
+                              onFocus={() => {
+                                if (mealInput.trim()) setShowSuggestions(true);
+                              }}
+                              onBlur={() => {
+                                // Delay to allow click on suggestion
+                                setTimeout(() => setShowSuggestions(false), 200);
+                              }}
+                              onKeyDown={handleKeyDown}
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleAddMeal()}
+                              className="text-xs text-orange-500 font-medium"
+                            >
+                              Add
+                            </button>
+                          </div>
+
+                          {/* Recipe suggestions dropdown */}
+                          {showSuggestions && suggestions.length > 0 && (
+                            <div
+                              ref={suggestionsRef}
+                              className="absolute left-0 right-8 top-full mt-1 z-50 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden max-h-48 overflow-y-auto"
+                            >
+                              {suggestions.map((recipe, i) => (
+                                <button
+                                  key={recipe.id}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleSelectSuggestion(recipe)}
+                                  className={classNames(
+                                    "w-full px-3 py-2 text-left text-sm flex items-center gap-2",
+                                    i === selectedSuggestionIndex
+                                      ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300"
+                                      : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
+                                  )}
+                                >
+                                  {recipe.thumbnailUrl ? (
+                                    <img
+                                      src={recipe.thumbnailUrl}
+                                      alt=""
+                                      className="w-8 h-8 rounded object-cover flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded bg-stone-100 dark:bg-stone-700 flex-shrink-0" />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium truncate">{recipe.title}</p>
+                                    {recipe.tags.length > 0 && (
+                                      <p className="text-[10px] text-stone-400 dark:text-stone-500 truncate">
+                                        {recipe.tags.slice(0, 3).join(", ")}
+                                      </p>
+                                    )}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="flex-1 flex items-center justify-between">

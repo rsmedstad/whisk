@@ -398,6 +398,14 @@ export function Discover({ chatEnabled = false, unsplashEnabled = false, onSaveR
               {v.label}
             </button>
           ))}
+          {(mealType !== "all" || vibe !== "seasonal") && (
+            <button
+              onClick={() => { setMealType("all"); setVibe("seasonal"); }}
+              className="px-3 py-1 rounded-full text-[11px] font-medium whitespace-nowrap text-stone-400 dark:text-stone-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 

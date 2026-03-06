@@ -2,10 +2,11 @@ import { useState, useRef, useEffect, useMemo, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus } from "../ui/Icon";
+import { Plus, RefreshCw } from "../ui/Icon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
+import type { RecipeIndexEntry } from "../../types";
 
 interface Message {
   role: "user" | "assistant";
@@ -14,6 +15,7 @@ interface Message {
 
 interface SuggestChatProps {
   chatEnabled?: boolean;
+  recipeCount?: number;
 }
 
 const URL_REGEX = /https?:\/\/[^\s,)}\]"']+/g;
@@ -21,14 +23,13 @@ const URL_REGEX = /https?:\/\/[^\s,)}\]"']+/g;
 function extractUrls(text: string): string[] {
   const matches = text.match(URL_REGEX);
   if (!matches) return [];
-  // Filter to likely recipe URLs (not images, not generic)
   return [...new Set(matches)].filter((url) => {
     const lower = url.toLowerCase();
     return !lower.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/);
   });
 }
 
-export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
+export function SuggestChat({ chatEnabled = false, recipeCount = 0 }: SuggestChatProps) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isKeyboardOpen } = useKeyboard();
@@ -110,10 +111,26 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
     sendMessage(input.trim());
   };
 
+  const handleNewChat = () => {
+    setMessages([]);
+    autoSentRef.current = false;
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 py-3 pt-[calc(var(--sat)+0.75rem)]">
-        <h1 className="text-xl font-bold dark:text-stone-100">Suggest</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold dark:text-stone-100">Suggest</h1>
+          {messages.length > 0 && (
+            <button
+              onClick={handleNewChat}
+              className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              New chat
+            </button>
+          )}
+        </div>
       </div>
 
       <div
@@ -141,6 +158,11 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
               <p className="text-base font-semibold dark:text-stone-100">
                 {seasonal.greeting}
               </p>
+              {recipeCount > 0 && (
+                <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">
+                  AI knows your {recipeCount} recipe{recipeCount !== 1 ? "s" : ""} and can suggest from your collection
+                </p>
+              )}
               {seasonal.upcomingHolidays.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {seasonal.upcomingHolidays.slice(0, 3).map((h) => (
@@ -165,12 +187,20 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
               )}
             </Card>
 
-            {/* Contextual quick actions */}
+            {/* Quick actions */}
             <Card>
               <p className="text-sm font-medium text-stone-600 dark:text-stone-300 mb-3">
                 What are you in the mood for?
               </p>
               <div className="flex flex-wrap gap-2">
+                {recipeCount > 0 && (
+                  <button
+                    onClick={() => sendMessage("What should I cook tonight from my recipes?")}
+                    className="rounded-lg border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 text-sm text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
+                  >
+                    What should I cook tonight?
+                  </button>
+                )}
                 {seasonal.contextualPrompts.map((prompt) => (
                   <button
                     key={prompt}
@@ -180,6 +210,22 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
                     {prompt}
                   </button>
                 ))}
+                {recipeCount > 0 && (
+                  <>
+                    <button
+                      onClick={() => sendMessage("What can I make with chicken?")}
+                      className="rounded-lg border border-stone-300 dark:border-stone-600 px-3 py-1.5 text-sm text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                    >
+                      What can I make with chicken?
+                    </button>
+                    <button
+                      onClick={() => sendMessage("Suggest a meal plan for this week using my recipes")}
+                      className="rounded-lg border border-stone-300 dark:border-stone-600 px-3 py-1.5 text-sm text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                    >
+                      Plan my week
+                    </button>
+                  </>
+                )}
               </div>
             </Card>
           </>
@@ -247,7 +293,7 @@ export function SuggestChat({ chatEnabled = false }: SuggestChatProps) {
             enterKeyHint="send"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your recipes..."
+            placeholder={recipeCount > 0 ? "Ask about your recipes..." : "Ask for recipe ideas..."}
             className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
           />
           <Button type="submit" size="sm" disabled={!input.trim() || isLoading}>
