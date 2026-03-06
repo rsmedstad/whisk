@@ -177,17 +177,12 @@ export function RecipeList({
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-2">
-            <WhiskLogo className="w-6 h-6 text-orange-500" />
+            <button onClick={() => navigate("/settings")} title="Settings">
+              <WhiskLogo className="w-6 h-6 text-orange-500 hover:text-orange-600 transition-colors" />
+            </button>
             <h1 className="text-xl font-bold dark:text-stone-100">Recipes</h1>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => navigate("/settings")}
-              className="p-2 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
-              title="Settings"
-            >
-              <Cog className="w-5 h-5" />
-            </button>
             <button
               onClick={() => navigate("/recipes/new")}
               className="p-2 text-orange-500 hover:text-orange-600"

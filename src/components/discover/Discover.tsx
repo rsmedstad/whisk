@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { getSeasonalContext } from "../../lib/seasonal";
 import { classNames } from "../../lib/utils";
 import { api } from "../../lib/api";
@@ -51,6 +52,7 @@ interface GeneratedRecipe {
 }
 
 export function Discover({ chatEnabled = false, unsplashEnabled = false, onSaveRecipe }: DiscoverProps) {
+  const navigate = useNavigate();
   const seasonal = getSeasonalContext();
 
   const [mealType, setMealType] = useState("all");
@@ -340,7 +342,9 @@ export function Discover({ chatEnabled = false, unsplashEnabled = false, onSaveR
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-2">
-            <WhiskLogo className="w-6 h-6 text-orange-500" />
+            <button onClick={() => navigate("/settings")} title="Settings">
+              <WhiskLogo className="w-6 h-6 text-orange-500 hover:text-orange-600 transition-colors" />
+            </button>
             <h1 className="text-xl font-bold dark:text-stone-100">Discover</h1>
           </div>
           <button
