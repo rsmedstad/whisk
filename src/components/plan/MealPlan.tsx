@@ -194,12 +194,12 @@ export function MealPlan({
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
         <div className="flex items-center justify-between py-3">
-          <div className="flex items-center gap-2">
-            <button onClick={() => navigate("/settings")} title="Settings">
-              <WhiskLogo className="w-6 h-6 text-orange-500 hover:text-orange-600 transition-colors" />
-            </button>
-            <h1 className="text-xl font-bold dark:text-stone-100">Plan</h1>
-          </div>
+          <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
+            <WhiskLogo className="w-5 h-5 text-orange-500" />
+            <span className="text-lg font-bold text-orange-500">W</span>
+            <span className="text-stone-300 dark:text-stone-600 font-light">|</span>
+            <h1 className="text-lg font-bold dark:text-stone-100">Plan</h1>
+          </button>
           <div className="flex items-center gap-2">
             {linkedRecipeIds.length > 0 && onGenerateShoppingList && (
               <button
