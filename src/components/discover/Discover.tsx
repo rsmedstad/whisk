@@ -351,11 +351,12 @@ export function Discover({
         });
         if (data?.title) {
           setImportedRecipe(data);
-          // Update the feed cache with the imported image when:
-          // - the feed item had no image, or
-          // - the imported image is different (feed image may be wrong/low-quality)
+          // Update the feed cache with imported image and totalTime
           const importedImage = data.thumbnailUrl ?? data.photos?.[0]?.url;
-          if (importedImage && importedImage !== item.imageUrl) {
+          const importedTotalTime = ((data.prepTime ?? 0) + (data.cookTime ?? 0)) || undefined;
+          const needsImageUpdate = importedImage && importedImage !== item.imageUrl;
+          const needsTimeUpdate = importedTotalTime && !item.totalTime;
+          if (needsImageUpdate || needsTimeUpdate) {
             setFeed((prev) => {
               if (!prev) return prev;
               const updated = { ...prev, categories: { ...prev.categories } };
@@ -365,7 +366,11 @@ export function Discover({
                 const idx = items.findIndex((i) => i.url === item.url);
                 if (idx !== -1) {
                   updated.categories[cat] = items.map((i, j) =>
-                    j === idx ? { ...i, imageUrl: importedImage } : i
+                    j === idx ? {
+                      ...i,
+                      ...(needsImageUpdate ? { imageUrl: importedImage } : {}),
+                      ...(needsTimeUpdate ? { totalTime: importedTotalTime } : {}),
+                    } : i
                   );
                   break;
                 }
