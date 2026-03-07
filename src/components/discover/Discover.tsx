@@ -9,7 +9,6 @@ import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { GroupedIngredients, StepsList } from "../recipes/RecipeComponents";
 import {
   ChevronLeft,
-  ChevronRight,
   RefreshCw,
   Plus,
   Clock,
@@ -255,6 +254,7 @@ export function Discover({
       setImportedRecipe(null);
       setImportError(null);
       setSavedFeedRecipeId(null);
+      setPhotoIndex(0);
       setIsImporting(true);
 
       try {

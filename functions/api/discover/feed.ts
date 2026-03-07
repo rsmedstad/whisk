@@ -140,15 +140,15 @@ interface CategoryFeed {
 // These align with the existing tag system's "meal" group.
 
 const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
-  ["breakfast", /\b(?:breakfast|pancake|waffle|french toast|omelette|omelet|scrambl|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|muffin|cereal|bagel)\b/i],
+  ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?)\b/i],
   ["soups", /\b(?:soup|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
   ["salad", /\b(?:salad|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
-  ["dessert", /\b(?:dessert|cake|cookie|brownie|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcake|cheesecake|tiramisu|macaron|fudge|candy|truffle|sorbet|panna cotta|souffl[eé]|pastry|danish|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
-  ["baking", /\b(?:bread|roll|biscuit|scone|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon roll|doughnut|donut)\b/i],
+  ["dessert", /\b(?:dessert|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
+  ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
   ["drinks", /\b(?:cocktail|drink|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
-  ["appetizer", /\b(?:appetizer|dip|hummus|bruschetta|crostini|spring roll|dumpling|wonton|empanada|quesadilla|nacho|slider|bite|crab cake|deviled egg|charcuterie)\b/i],
-  ["snack", /\b(?:snack|popcorn|trail mix|chip|cracker|energy ball|protein bar)\b/i],
-  ["side dish", /\b(?:side dish|mashed potato|roasted vegetable|rice pilaf|couscous|baked beans|corn bread|cornbread|mac and cheese|macaroni|stuffing|au gratin|roasted potato|french fries|fries|potato salad)\b/i],
+  ["appetizer", /\b(?:appetizer|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
+  ["snack", /\b(?:snack|popcorn|trail mix|chips?|crackers?|energy balls?|protein bars?)\b/i],
+  ["side dish", /\b(?:side dish|mashed potatoes?|roasted vegetables?|rice pilaf|couscous|baked beans|corn ?bread|mac and cheese|macaroni|stuffing|au gratin|roasted potatoes?|french fries|fries|potato salad)\b/i],
   // "dinner" is the default/catch-all for main dishes
 ];
 

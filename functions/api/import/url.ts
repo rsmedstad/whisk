@@ -702,9 +702,11 @@ function decodeHtmlEntities(str: string): string {
 
 function stripHtml(str: string): string {
   return decodeHtmlEntities(
-    // Replace tags with a zero-width space first to avoid merging adjacent text,
-    // then collapse into regular spaces only when needed
-    str.replace(/<\/?\w[^>]*>/g, "\u200B")
+    str
+      // Block-level and line-breaking tags → space (must come first)
+      .replace(/<\/?(p|br|div|li|ul|ol|tr|td|th|h[1-6]|blockquote|section|article|header|footer|dt|dd)\b[^>]*\/?>/gi, " ")
+      // Inline tags → zero-width space (allows adjacent text to merge)
+      .replace(/<\/?\w[^>]*>/g, "\u200B")
   )
     // Collapse zero-width spaces between single characters (fixes "l\u200Barge" → "large")
     .replace(/(\w)\u200B(\w)/g, "$1$2")
@@ -723,7 +725,7 @@ function cleanIngredientText(str: string): string {
     .replace(/\b(\w)\s+(\w{2,})\b/g, (match, first, rest) => {
       const combined = first + rest;
       // Only merge if it forms a known word (not "a cup" or "2 tablespoons")
-      const commonWords = /^(large|medium|small|fresh|dried|ground|chopped|minced|diced|sliced|peeled|grated|shredded|whole|thick|thin|packed|level|heaped|heaping|about|roughly|finely|coarsely|thinly|lightly)$/i;
+      const commonWords = /^(large|medium|small|fresh|dried|ground|chopped|minced|diced|sliced|peeled|grated|shredded|whole|thick|thin|packed|level|heaped|heaping|about|roughly|finely|coarsely|thinly|lightly|boneless|skinless|crushed|frozen|softened|melted|unsalted|salted|toasted|divided|optional|quartered|halved|trimmed|rinsed|drained|deveined|julienned|blanched|sifted|warmed|chilled|cubed|pitted|seeded|cored)$/i;
       return commonWords.test(combined) ? combined : match;
     })
     // Collapse multiple spaces
@@ -733,31 +735,60 @@ function cleanIngredientText(str: string): string {
 
 /** Convert decimal fractions to readable unicode fractions */
 function normalizeAmount(amount: string): string {
+  // Already a unicode fraction or contains one — return as-is
+  if (/[½⅓⅔¼¾⅛⅜⅝⅞]/.test(amount)) return amount;
+
+  // Handle slash fractions like "1/3", "1/2", "3 1/4"
+  const slashMatch = amount.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (slashMatch) {
+    const whole = parseInt(slashMatch[1]!, 10);
+    const num = parseInt(slashMatch[2]!, 10);
+    const den = parseInt(slashMatch[3]!, 10);
+    if (den > 0) {
+      const symbol = fractionToUnicode(num / den);
+      if (symbol) return whole > 0 ? `${whole} ${symbol}` : symbol;
+    }
+    return amount; // Can't convert, return as-is
+  }
+  const simpleSlash = amount.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (simpleSlash) {
+    const num = parseInt(simpleSlash[1]!, 10);
+    const den = parseInt(simpleSlash[2]!, 10);
+    if (den > 0) {
+      const symbol = fractionToUnicode(num / den);
+      if (symbol) return symbol;
+    }
+    return amount;
+  }
+
   // Handle decimals like "0.33333334326744" or "0.25" or "1.5"
   const num = parseFloat(amount);
   if (isNaN(num)) return amount;
 
-  // Common fraction mappings (with tolerance for floating point)
+  const whole = Math.floor(num);
+  const decimal = num - whole;
+
+  // Clean integer
+  if (Math.abs(decimal) < 0.01) return String(whole);
+
+  // Try to convert decimal part to unicode fraction
+  const symbol = fractionToUnicode(decimal);
+  if (symbol) return whole > 0 ? `${whole} ${symbol}` : symbol;
+
+  // No close fraction match — round to 2 decimal places
+  return num % 1 === 0 ? String(num) : num.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/** Map a decimal value (0-1) to a unicode fraction symbol, or null if no close match */
+function fractionToUnicode(value: number): string | null {
   const fractions: [number, string][] = [
     [0.125, "⅛"], [0.25, "¼"], [1/3, "⅓"], [0.375, "⅜"],
     [0.5, "½"], [0.625, "⅝"], [2/3, "⅔"], [0.75, "¾"], [0.875, "⅞"],
   ];
-
-  const whole = Math.floor(num);
-  const decimal = num - whole;
-
-  // If it's a clean integer, return as-is
-  if (Math.abs(decimal) < 0.01) return String(whole);
-
-  // Find the closest fraction
   for (const [frac, symbol] of fractions) {
-    if (Math.abs(decimal - frac) < 0.05) {
-      return whole > 0 ? `${whole} ${symbol}` : symbol;
-    }
+    if (Math.abs(value - frac) < 0.03) return symbol;
   }
-
-  // No close fraction match — round to 2 decimal places
-  return num % 1 === 0 ? String(num) : num.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return null;
 }
 
 function parseIngredients(
