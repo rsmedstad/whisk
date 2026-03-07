@@ -53,6 +53,44 @@ function proxyImageUrl(url: string | undefined): string | undefined {
   return `/api/image-proxy?url=${encodeURIComponent(url)}`;
 }
 
+/**
+ * Image component that tries loading directly first (with no-referrer to avoid
+ * hotlink blocks), then falls back to our image proxy if direct loading fails.
+ * Recipe site CDNs typically serve images without hotlink protection — the
+ * protection is on HTML pages, not image assets.
+ */
+function FeedImage({ src, alt, className, loading }: {
+  src: string;
+  alt: string;
+  className?: string;
+  loading?: "lazy" | "eager";
+}) {
+  const [useFallback, setUseFallback] = useState(false);
+  const isExternal = src.startsWith("http");
+
+  // Direct URL with no-referrer, or proxy URL as fallback
+  const displayUrl = !isExternal
+    ? src
+    : useFallback
+      ? proxyImageUrl(src) ?? src
+      : src;
+
+  return (
+    <img
+      src={displayUrl}
+      alt={alt}
+      className={className}
+      loading={loading}
+      referrerPolicy={isExternal && !useFallback ? "no-referrer" : undefined}
+      onError={() => {
+        if (isExternal && !useFallback) {
+          setUseFallback(true);
+        }
+      }}
+    />
+  );
+}
+
 interface ImportedRecipe {
   title: string;
   description?: string;
@@ -244,11 +282,11 @@ export function Discover({
   // ── Feed item detail view ──
 
   if (selectedFeedItem) {
-    const rawHeroImage =
+    const heroImage =
       importedRecipe?.thumbnailUrl ??
       importedRecipe?.photos?.[0]?.url ??
       selectedFeedItem.imageUrl;
-    const heroImage = proxyImageUrl(rawHeroImage);
+    const rawHeroImage = heroImage;
     const embedUrl = importedRecipe?.videoUrl
       ? getYouTubeEmbedUrl(importedRecipe.videoUrl)
       : null;
@@ -300,7 +338,7 @@ export function Discover({
           {/* Hero image */}
           {heroImage ? (
             <div className="relative aspect-video w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
-              <img
+              <FeedImage
                 src={heroImage}
                 alt={selectedFeedItem.title}
                 className="h-full w-full object-cover"
@@ -401,8 +439,8 @@ export function Discover({
                       key={i}
                       className="shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800"
                     >
-                      <img
-                        src={proxyImageUrl(photo.url)}
+                      <FeedImage
+                        src={photo.url}
                         alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
@@ -581,8 +619,8 @@ export function Discover({
                       >
                         <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
                           {item.imageUrl ? (
-                            <img
-                              src={proxyImageUrl(item.imageUrl)}
+                            <FeedImage
+                              src={item.imageUrl}
                               alt={item.title}
                               className="h-full w-full object-cover"
                               loading="lazy"
