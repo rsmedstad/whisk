@@ -364,3 +364,22 @@ export function Dice(props: IconProps) {
     </Icon>
   );
 }
+
+export function Leaf(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21c0 0-8-4-8-12 0-4.5 3.5-6 8-6s8 1.5 8 6c0 8-8 12-8 12Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21V9" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 13.5c1.5-1.5 3-2.5 4.5-3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5c-1.5 1-3 2-4.5 2.5" />
+    </Icon>
+  );
+}
+
+export function Send(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+    </Icon>
+  );
+}

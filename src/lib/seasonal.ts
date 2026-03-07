@@ -48,6 +48,38 @@ const SEASONAL_INGREDIENTS: Record<string, string[]> = {
   winter: ["citrus", "root vegetables", "cabbage", "kale", "pomegranate", "persimmon", "turnip", "leek", "beet", "cinnamon"],
 };
 
+export interface SeasonalCategory {
+  label: string;
+  items: string[];
+}
+
+export const SEASONAL_CATEGORIES: Record<string, SeasonalCategory[]> = {
+  spring: [
+    { label: "Fruit", items: ["strawberry", "rhubarb", "apricot"] },
+    { label: "Vegetables", items: ["asparagus", "peas", "radish", "artichoke", "arugula", "fennel", "fava beans"] },
+    { label: "Mains", items: ["lamb", "salmon", "shrimp", "chicken"] },
+    { label: "Sides", items: ["risotto", "grain salad", "spring rolls", "frittata"] },
+  ],
+  summer: [
+    { label: "Fruit", items: ["peach", "watermelon", "berries", "plum", "nectarine"] },
+    { label: "Vegetables", items: ["tomato", "corn", "zucchini", "cucumber", "bell pepper", "eggplant"] },
+    { label: "Mains", items: ["grilled fish", "kebabs", "ceviche", "pulled pork"] },
+    { label: "Sides", items: ["coleslaw", "caprese", "corn salad", "gazpacho"] },
+  ],
+  fall: [
+    { label: "Fruit", items: ["apple", "pear", "cranberry", "fig", "grape"] },
+    { label: "Vegetables", items: ["pumpkin", "squash", "sweet potato", "brussels sprouts", "cauliflower", "parsnip"] },
+    { label: "Mains", items: ["braised beef", "roast chicken", "pork chops", "stew"] },
+    { label: "Sides", items: ["stuffing", "mashed potatoes", "roasted root vegetables", "soup"] },
+  ],
+  winter: [
+    { label: "Fruit", items: ["citrus", "pomegranate", "persimmon", "blood orange"] },
+    { label: "Vegetables", items: ["cabbage", "kale", "turnip", "leek", "beet", "root vegetables"] },
+    { label: "Mains", items: ["pot roast", "short ribs", "beef stew", "cassoulet"] },
+    { label: "Sides", items: ["gratin", "creamed spinach", "bread pudding", "chowder"] },
+  ],
+};
+
 const SEASONAL_COOKING: Record<string, string[]> = {
   spring: ["light", "fresh", "salad", "grilling"],
   summer: ["grilling", "no-cook", "fresh", "cold", "ice cream", "smoothie"],
