@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { classNames } from "../../lib/utils";
 import { api } from "../../lib/api";
@@ -9,7 +9,6 @@ import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { GroupedIngredients, StepsList } from "../recipes/RecipeComponents";
 import {
   ChevronLeft,
-  ChevronRight,
   RefreshCw,
   Plus,
   Clock,
@@ -17,6 +16,7 @@ import {
   WhiskLogo,
   Share,
   Check,
+  PlayCircle,
 } from "../ui/Icon";
 import type {
   Recipe,
@@ -186,7 +186,8 @@ export function Discover({
   const [savedFeedRecipeId, setSavedFeedRecipeId] = useState<string | null>(
     null
   );
-
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const galleryRef = useRef<HTMLDivElement>(null);
 
   // ── Feed loading ──
 
@@ -253,6 +254,7 @@ export function Discover({
       setImportedRecipe(null);
       setImportError(null);
       setSavedFeedRecipeId(null);
+      setPhotoIndex(0);
       setIsImporting(true);
 
       try {
@@ -307,6 +309,7 @@ export function Discover({
     setImportedRecipe(null);
     setImportError(null);
     setSavedFeedRecipeId(null);
+    setPhotoIndex(0);
   };
 
   // ── Share handler for discover recipes ──
@@ -325,22 +328,46 @@ export function Discover({
 
   // ── Feed item detail view ──
 
+  // Deduplicate photos — match RecipeDetail logic
+  const detailPhotos = useMemo(() => {
+    if (!importedRecipe) return [];
+    const allPhotos: { url: string; isPrimary: boolean }[] = [];
+    // Add thumbnailUrl as first photo if present
+    if (importedRecipe.thumbnailUrl) {
+      allPhotos.push({ url: importedRecipe.thumbnailUrl, isPrimary: true });
+    }
+    // Add photos array
+    if (importedRecipe.photos?.length) {
+      for (const p of importedRecipe.photos) {
+        allPhotos.push(p);
+      }
+    }
+    // Deduplicate by URL
+    const seen = new Set<string>();
+    const deduped = allPhotos.filter((p) => {
+      // Normalize: strip trailing slashes, query params for comparison
+      const key = p.url.split("?")[0]?.replace(/\/$/, "") ?? p.url;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return deduped;
+  }, [importedRecipe]);
+
   if (selectedFeedItem) {
-    const heroImage =
-      importedRecipe?.thumbnailUrl ??
-      importedRecipe?.photos?.[0]?.url ??
-      selectedFeedItem.imageUrl;
-    const rawHeroImage = heroImage;
+    const hasVideo = !!importedRecipe?.videoUrl;
     const embedUrl = importedRecipe?.videoUrl
       ? getYouTubeEmbedUrl(importedRecipe.videoUrl)
       : null;
-
-    // Deduplicate photos: filter out the hero image from the carousel
-    const extraPhotos = importedRecipe?.photos
-      ? importedRecipe.photos
-          .filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i)
-          .filter((p) => p.url !== rawHeroImage)
-      : [];
+    const totalSlides = detailPhotos.length + (hasVideo ? 1 : 0);
+    const isVideoSlide = hasVideo && photoIndex === detailPhotos.length;
+    const scrollToSlide = (idx: number) => {
+      const el = galleryRef.current;
+      if (!el) return;
+      el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
+    };
+    // Fallback image from the feed item itself (before import loads)
+    const hasFeedImage = !!selectedFeedItem.imageUrl;
 
     return (
       <div className="flex flex-col h-full">
@@ -379,33 +406,132 @@ export function Discover({
         </div>
 
         <div className="flex-1 overflow-y-auto pb-24">
-          {/* Hero image */}
-          {heroImage ? (
-            <div className="relative aspect-video w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
-              <FeedImage
-                src={heroImage}
-                alt={selectedFeedItem.title}
-                className="h-full w-full object-cover"
-              />
+          {/* Hero gallery — scroll-snap carousel matching RecipeDetail */}
+          {(totalSlides > 0 || hasFeedImage) && (
+            <div className="relative group">
+              <div
+                ref={galleryRef}
+                className="flex snap-x snap-mandatory overflow-x-auto no-scrollbar"
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  const idx = Math.round(el.scrollLeft / el.clientWidth);
+                  setPhotoIndex(idx);
+                }}
+              >
+                {totalSlides > 0 ? (
+                  <>
+                    {detailPhotos.map((photo, i) => (
+                      <div
+                        key={i}
+                        className="aspect-video w-full shrink-0 snap-center bg-stone-100 dark:bg-stone-800"
+                      >
+                        <FeedImage
+                          src={photo.url}
+                          alt={`${selectedFeedItem.title} photo ${i + 1}`}
+                          className="h-full w-full object-cover"
+                          loading={i === 0 ? "eager" : "lazy"}
+                        />
+                      </div>
+                    ))}
+                    {hasVideo && (
+                      <div className="aspect-video w-full shrink-0 snap-center bg-stone-900 flex flex-col items-center justify-center">
+                        {embedUrl ? (
+                          <iframe
+                            src={embedUrl}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            title="Recipe video"
+                          />
+                        ) : (
+                          <a
+                            href={importedRecipe!.videoUrl!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center gap-2 text-white"
+                          >
+                            <PlayCircle className="w-12 h-12" />
+                            <span className="text-sm font-medium">Watch Recipe Video</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* Pre-import: show feed item image */
+                  <div className="aspect-video w-full shrink-0 snap-center bg-stone-100 dark:bg-stone-800">
+                    {hasFeedImage ? (
+                      <FeedImage
+                        src={selectedFeedItem.imageUrl!}
+                        alt={selectedFeedItem.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span className="text-4xl text-stone-300 dark:text-stone-600">
+                          {SOURCE_LABELS[selectedFeedItem.source]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* Desktop arrow buttons */}
+              {totalSlides > 1 && photoIndex > 0 && (
+                <button
+                  onClick={() => scrollToSlide(photoIndex - 1)}
+                  className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
+              {totalSlides > 1 && photoIndex < totalSlides - 1 && (
+                <button
+                  onClick={() => scrollToSlide(photoIndex + 1)}
+                  className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <ChevronLeft className="w-5 h-5 rotate-180" />
+                </button>
+              )}
+              {/* Dot indicators */}
+              {totalSlides > 1 && (
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                  {Array.from({ length: totalSlides }).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => scrollToSlide(i)}
+                      className={classNames(
+                        "h-2 w-2 rounded-full transition-colors",
+                        i === photoIndex ? "bg-white" : "bg-white/50"
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
+              {/* Slide counter */}
+              {totalSlides > 1 && !isVideoSlide && (
+                <div className="absolute top-3 right-3 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white pointer-events-none">
+                  {photoIndex + 1}/{totalSlides}
+                </div>
+              )}
+              {/* Video shortcut button */}
+              {hasVideo && !isVideoSlide && (
+                <button
+                  onClick={() => scrollToSlide(detailPhotos.length)}
+                  className="absolute bottom-3 right-3 rounded-full bg-black/60 px-3 py-1 text-xs text-white flex items-center gap-1"
+                >
+                  <PlayCircle className="w-4 h-4" /> Video &rarr;
+                </button>
+              )}
             </div>
-          ) : (
+          )}
+
+          {/* No image placeholder when no feed image and recipe not loaded */}
+          {totalSlides === 0 && !hasFeedImage && (
             <div className="aspect-video w-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center">
               <span className="text-4xl text-stone-300 dark:text-stone-600">
                 {SOURCE_LABELS[selectedFeedItem.source]}
               </span>
-            </div>
-          )}
-
-          {/* Video embed */}
-          {embedUrl && (
-            <div className="aspect-video w-full">
-              <iframe
-                src={embedUrl}
-                title="Recipe video"
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
             </div>
           )}
 
@@ -474,25 +600,6 @@ export function Discover({
                   </div>
                 )}
               </div>
-
-              {/* Additional photos carousel (deduplicated) */}
-              {extraPhotos.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
-                  {extraPhotos.slice(0, 6).map((photo, i) => (
-                    <div
-                      key={i}
-                      className="shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800"
-                    >
-                      <FeedImage
-                        src={photo.url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
 
               {/* Divider */}
               <div className="border-t border-stone-200 dark:border-stone-700" />

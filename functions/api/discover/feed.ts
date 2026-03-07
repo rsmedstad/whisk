@@ -140,15 +140,15 @@ interface CategoryFeed {
 // These align with the existing tag system's "meal" group.
 
 const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
-  ["breakfast", /\b(?:breakfast|pancake|waffle|french toast|omelette|omelet|scrambl|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|muffin|cereal|bagel)\b/i],
+  ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?)\b/i],
   ["soups", /\b(?:soup|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
   ["salad", /\b(?:salad|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
-  ["dessert", /\b(?:dessert|cake|cookie|brownie|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcake|cheesecake|tiramisu|macaron|fudge|candy|truffle|sorbet|panna cotta|souffl[eé]|pastry|danish|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
-  ["baking", /\b(?:bread|roll|biscuit|scone|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon roll|doughnut|donut)\b/i],
+  ["dessert", /\b(?:dessert|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
+  ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
   ["drinks", /\b(?:cocktail|drink|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
-  ["appetizer", /\b(?:appetizer|dip|hummus|bruschetta|crostini|spring roll|dumpling|wonton|empanada|quesadilla|nacho|slider|bite|crab cake|deviled egg|charcuterie)\b/i],
-  ["snack", /\b(?:snack|popcorn|trail mix|chip|cracker|energy ball|protein bar)\b/i],
-  ["side dish", /\b(?:side dish|mashed potato|roasted vegetable|rice pilaf|couscous|baked beans|corn bread|cornbread|mac and cheese|macaroni|stuffing|au gratin|roasted potato|french fries|fries|potato salad)\b/i],
+  ["appetizer", /\b(?:appetizer|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
+  ["snack", /\b(?:snack|popcorn|trail mix|chips?|crackers?|energy balls?|protein bars?)\b/i],
+  ["side dish", /\b(?:side dish|mashed potatoes?|roasted vegetables?|rice pilaf|couscous|baked beans|corn ?bread|mac and cheese|macaroni|stuffing|au gratin|roasted potatoes?|french fries|fries|potato salad)\b/i],
   // "dinner" is the default/catch-all for main dishes
 ];
 
@@ -222,9 +222,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   addItems(allrecipes, "allrecipes");
   addItems(seriouseats, "seriouseats");
 
+  // Clean up any existing archive items that have person/profile images
+  const cleanedExisting = (archive?.items ?? []).map((item) => ({
+    ...item,
+    imageUrl: sanitizeImageUrl(item.imageUrl),
+  }));
+
   const updatedArchive: Archive = {
     lastRefreshed: now,
-    items: [...(archive?.items ?? []), ...newItems],
+    items: [...cleanedExisting, ...newItems],
   };
 
   // Also save legacy format for backward compat
@@ -245,13 +251,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   return Response.json(archiveToCategoryFeed(updatedArchive));
 };
 
-/** Convert archive to category-grouped feed for the UI */
+/** Convert archive to category-grouped feed for the UI, sanitizing images */
 function archiveToCategoryFeed(archive: Archive): CategoryFeed {
   const categories: Partial<Record<DiscoverCategory, ArchiveItem[]>> = {};
   for (const item of archive.items) {
     const cat = item.category;
     if (!categories[cat]) categories[cat] = [];
-    categories[cat]!.push(item);
+    categories[cat]!.push({
+      ...item,
+      imageUrl: sanitizeImageUrl(item.imageUrl),
+    });
   }
   return { lastRefreshed: archive.lastRefreshed, categories };
 }
@@ -441,8 +450,11 @@ function findRecipesInJson(
   }
 }
 
-/** Extract an image URL from various JSON structures */
+/** Extract an image URL from various JSON structures, filtering out person photos */
 function extractImageFromJson(rec: Record<string, unknown>): string | undefined {
+  // Skip keys that typically contain author/person photos
+  const PERSON_KEYS = new Set(["author", "authorImage", "authorPhoto", "byline", "contributor", "profile"]);
+
   for (const key of [
     "image",
     "thumbnail",
@@ -453,24 +465,41 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
     "promotionalImage",
     "cardImage",
   ]) {
+    if (PERSON_KEYS.has(key)) continue;
     const val = rec[key];
-    if (typeof val === "string" && val.startsWith("http")) return val;
+    if (typeof val === "string" && val.startsWith("http")) {
+      const clean = sanitizeImageUrl(val);
+      if (clean) return clean;
+      continue;
+    }
 
     if (val && typeof val === "object" && !Array.isArray(val)) {
       const imgObj = val as Record<string, unknown>;
-      if (typeof imgObj.url === "string") return imgObj.url;
+      if (typeof imgObj.url === "string") {
+        const clean = sanitizeImageUrl(imgObj.url);
+        if (clean) return clean;
+      }
 
       // NYT Cooking: image.src.card or image.src (string)
       if (imgObj.src && typeof imgObj.src === "object") {
         const srcObj = imgObj.src as Record<string, unknown>;
-        if (typeof srcObj.card === "string") return srcObj.card;
+        if (typeof srcObj.card === "string") {
+          const clean = sanitizeImageUrl(srcObj.card);
+          if (clean) return clean;
+        }
         // Fall through to crops
         if (Array.isArray(srcObj.crops)) {
           const firstCrop = srcObj.crops[0] as Record<string, unknown> | undefined;
-          if (firstCrop && typeof firstCrop.url === "string") return firstCrop.url;
+          if (firstCrop && typeof firstCrop.url === "string") {
+            const clean = sanitizeImageUrl(firstCrop.url as string);
+            if (clean) return clean;
+          }
         }
       }
-      if (typeof imgObj.src === "string") return imgObj.src;
+      if (typeof imgObj.src === "string") {
+        const clean = sanitizeImageUrl(imgObj.src);
+        if (clean) return clean;
+      }
 
       // Generic crops/renditions
       for (const cropKey of ["crops", "renditions", "sizes"]) {
@@ -481,7 +510,10 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
           )) {
             if (crop && typeof crop === "object") {
               const c = crop as Record<string, unknown>;
-              if (typeof c.url === "string") return c.url;
+              if (typeof c.url === "string") {
+                const clean = sanitizeImageUrl(c.url);
+                if (clean) return clean;
+              }
             }
           }
         }
@@ -490,11 +522,20 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
 
     if (Array.isArray(val) && val.length > 0) {
       const first = val[0];
-      if (typeof first === "string" && first.startsWith("http")) return first;
+      if (typeof first === "string" && first.startsWith("http")) {
+        const clean = sanitizeImageUrl(first);
+        if (clean) return clean;
+      }
       if (first && typeof first === "object") {
         const f = first as Record<string, unknown>;
-        if (typeof f.url === "string") return f.url;
-        if (typeof f.src === "string") return f.src;
+        if (typeof f.url === "string") {
+          const clean = sanitizeImageUrl(f.url);
+          if (clean) return clean;
+        }
+        if (typeof f.src === "string") {
+          const clean = sanitizeImageUrl(f.src);
+          if (clean) return clean;
+        }
       }
     }
   }
@@ -797,16 +838,31 @@ function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: stri
   }
 }
 
-/** Extract image URL from a JSON-LD object */
+/** Extract image URL from a JSON-LD object, filtering out person photos */
 function extractJsonLdImage(obj: Record<string, unknown>): string | undefined {
   const img = obj.image;
-  if (typeof img === "string") return img;
-  if (Array.isArray(img) && typeof img[0] === "string") return img[0];
+  if (typeof img === "string") return sanitizeImageUrl(img);
+  if (Array.isArray(img)) {
+    // Try each image in the array — skip person photos
+    for (const candidate of img) {
+      if (typeof candidate === "string") {
+        const clean = sanitizeImageUrl(candidate);
+        if (clean) return clean;
+      }
+      if (candidate && typeof candidate === "object") {
+        const c = candidate as Record<string, unknown>;
+        if (typeof c.url === "string") {
+          const clean = sanitizeImageUrl(c.url);
+          if (clean) return clean;
+        }
+      }
+    }
+  }
   if (img && typeof img === "object" && typeof (img as Record<string, unknown>).url === "string") {
-    return (img as Record<string, unknown>).url as string;
+    return sanitizeImageUrl((img as Record<string, unknown>).url as string);
   }
   // Check thumbnailUrl as fallback
-  if (typeof obj.thumbnailUrl === "string") return obj.thumbnailUrl;
+  if (typeof obj.thumbnailUrl === "string") return sanitizeImageUrl(obj.thumbnailUrl);
   return undefined;
 }
 
@@ -909,14 +965,15 @@ function extractRecipeLinks(
     const mapImg = imgMap.get(title.toLowerCase());
     if (mapImg) allCtxImages.push(mapImg);
 
-    // Prefer /thmb/ images (actual recipe thumbnails, not profiles/ads)
-    const imageUrl = allCtxImages.find((u) => u.includes("/thmb/"))
-      ?? allCtxImages[0];
+    // Filter out person/profile images, then prefer /thmb/ images
+    const cleanImages = allCtxImages.filter((u) => !isPersonImage(u));
+    const imageUrl = cleanImages.find((u) => u.includes("/thmb/"))
+      ?? cleanImages[0];
 
     // Validate image URL belongs to a known domain (not tracking pixels)
     const validImage = imageUrl && isValidImageUrl(imageUrl, domain) ? imageUrl : undefined;
 
-    items.push({ title, url, imageUrl: validImage ?? imageUrl });
+    items.push({ title, url, imageUrl: validImage ?? sanitizeImageUrl(imageUrl) });
   }
 
   return items.slice(0, 30);
@@ -926,10 +983,53 @@ function extractRecipeLinks(
 function isValidImageUrl(url: string, _domain: string): boolean {
   // Skip tiny tracking pixels and data URIs
   if (url.includes("1x1") || url.includes("pixel") || url.startsWith("data:")) return false;
+  // Skip person/profile images
+  if (isPersonImage(url)) return false;
   // Must have an image extension or be from a known image CDN
   if (/\.(jpg|jpeg|png|webp|avif)/i.test(url)) return true;
   if (url.includes("/thmb/") || url.includes("/image/") || url.includes("imagesvc")) return true;
   return false;
+}
+
+/**
+ * Detect image URLs that are likely person/author photos rather than food.
+ * Common patterns: author headshots, avatars, profile pics, byline photos.
+ */
+function isPersonImage(url: string): boolean {
+  const lc = url.toLowerCase();
+
+  // URL path patterns for profile/person images
+  if (/(?:author|avatar|profile|headshot|byline|contributor|bio|staff|portrait|people|person|user)[\/-]/i.test(lc)) return true;
+
+  // Gravatar and similar avatar services
+  if (lc.includes("gravatar.com") || lc.includes("secure.gravatar")) return true;
+
+  // Very small image dimensions in the URL (typical for author avatars)
+  // Matches patterns like /60x60/, _60x60., -60x60. etc.
+  const dimMatch = lc.match(/[/_-](\d+)x(\d+)[./_-]/);
+  if (dimMatch) {
+    const w = parseInt(dimMatch[1]!, 10);
+    const h = parseInt(dimMatch[2]!, 10);
+    if (w <= 150 && h <= 150) return true;
+  }
+
+  // NYT-specific: author photos often in /images/... with small crop dimensions
+  if (lc.includes("nyt.com") && /author|byline/i.test(lc)) return true;
+
+  return false;
+}
+
+/**
+ * Sanitize an image URL — returns undefined if it looks like a person/profile photo.
+ * Use this as a single filter point for all image extraction paths.
+ */
+function sanitizeImageUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  if (!url.startsWith("http")) return undefined;
+  if (isPersonImage(url)) return undefined;
+  // Skip tracking pixels
+  if (url.includes("1x1") || url.includes("pixel")) return undefined;
+  return url;
 }
 
 // ── Extract recipe from meta / Open Graph tags ──────────
@@ -948,7 +1048,7 @@ function extractMetaTags(html: string, domain: string): FeedItem | null {
     return {
       title: ogTitle,
       url: ogUrl,
-      imageUrl: ogImage,
+      imageUrl: sanitizeImageUrl(ogImage),
       description: ogDesc?.slice(0, 200),
     };
   }
