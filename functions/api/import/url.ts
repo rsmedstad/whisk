@@ -55,8 +55,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "foodnetwork.com",   // Akamai WAF
       "food52.com",        // Vercel Security Checkpoint
       "thekitchn.com",     // PerimeterX
-      "allrecipes.com",    // Dotdash Meredith — bot detection
-      "seriouseats.com",   // Dotdash Meredith — bot detection
     ];
     const urlHost = new URL(url).hostname.replace(/^www\./, "");
     const isKnownBlocked = BLOCKED_DOMAINS.some(
@@ -88,8 +86,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
 
       regularFetchFailed = !res.ok;
-      if (res.ok) {
-        html = await res.text();
+      // Read body even on non-200 — many recipe sites (Dotdash Meredith)
+      // return full HTML with JSON-LD even on 403 responses
+      const body = await res.text();
+      if (body.length > 200) {
+        html = body;
       }
     } else {
       regularFetchFailed = true; // Skip to Browser Rendering
@@ -133,32 +134,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         }
       } catch {
         // Browser Rendering failed, continue with whatever we have
-      }
-    }
-
-    // If BR failed for a blocked domain, try direct fetch as last resort —
-    // even degraded responses may contain JSON-LD structured data
-    if ((!html || html.length < 500) && isKnownBlocked) {
-      try {
-        const fallbackRes = await fetch(url, {
-          signal: AbortSignal.timeout(10000),
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            Accept:
-              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-          },
-        });
-        if (fallbackRes.ok) {
-          const fallbackHtml = await fallbackRes.text();
-          // Accept any response — even challenge pages may have JSON-LD
-          if (fallbackHtml.length > 500) {
-            html = fallbackHtml;
-          }
-        }
-      } catch {
-        // Direct fetch also failed
       }
     }
 
