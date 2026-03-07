@@ -48,23 +48,40 @@ async function fetchWithBrowserRendering(
   }
 }
 
-/** Fetch a page with direct fetch first, falling back to Browser Rendering */
+/** Check if fetched HTML is a bot challenge / blocked page */
+function isBlockedPage(html: string): boolean {
+  return (
+    html.length < 500 ||
+    html.includes("<title>Just a moment...</title>") ||
+    html.includes("_cf_chl_opt") ||
+    html.includes("challenge-platform") ||
+    html.includes("Checking your browser") ||
+    html.includes("Vercel Security Checkpoint") ||
+    html.includes("Access Denied")
+  );
+}
+
+/**
+ * Fetch a page — try Browser Rendering first for bot-protected sites,
+ * with direct fetch as fallback. This order change is needed because
+ * Cloudflare's anti-bot protections (2025+) now block most server-side fetches.
+ */
 async function fetchPage(url: string, env: Env): Promise<string | null> {
-  // Try direct fetch first
+  // Try direct fetch first (fast, free)
   try {
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(10000),
       headers: BROWSER_HEADERS,
     });
     if (res.ok) {
       const html = await res.text();
-      if (html.length > 500) return html;
+      if (!isBlockedPage(html)) return html;
     }
   } catch {
     // Direct fetch failed
   }
 
-  // Fall back to Browser Rendering
+  // Fall back to Browser Rendering (handles bot protection)
   return fetchWithBrowserRendering(url, env);
 }
 
@@ -121,37 +138,118 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
     scrapeSeriousEats(env),
   ]);
 
+  // Keep previous source data if a scrape returned empty (transient failure)
   const feed: Feed = {
     lastRefreshed: new Date().toISOString(),
-    sources: { nyt, allrecipes, seriouseats },
+    sources: {
+      nyt: nyt.length > 0 ? nyt : (existing?.sources.nyt ?? []),
+      allrecipes: allrecipes.length > 0 ? allrecipes : (existing?.sources.allrecipes ?? []),
+      seriouseats: seriouseats.length > 0 ? seriouseats : (existing?.sources.seriouseats ?? []),
+    },
   };
 
   await env.WHISK_KV.put(KV_KEY, JSON.stringify(feed));
   return Response.json(feed);
 };
 
-// ── NYT Cooking (homepage __NEXT_DATA__ JSON) ───────────
+// ── NYT Cooking ─────────────────────────────────────────
+// NYT Cooking may use __NEXT_DATA__ (older Next.js) or RSC flight data
+// (newer Next.js with React Server Components). We try multiple strategies.
 
 async function scrapeNYTCooking(env: Env): Promise<FeedItem[]> {
   try {
     const html = await fetchPage("https://cooking.nytimes.com/", env);
     if (!html) return [];
 
-    // Extract __NEXT_DATA__ JSON blob
-    const match = html.match(
+    const items: FeedItem[] = [];
+
+    // Strategy 1: __NEXT_DATA__ JSON blob (classic Next.js)
+    const nextDataMatch = html.match(
       /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
     );
-    if (!match?.[1]) return [];
-
-    let data: unknown;
-    try {
-      data = JSON.parse(match[1]);
-    } catch {
-      return [];
+    if (nextDataMatch?.[1]) {
+      try {
+        const data = JSON.parse(nextDataMatch[1]);
+        findRecipesInJson(data, items);
+      } catch {
+        // Invalid JSON
+      }
     }
 
-    const items: FeedItem[] = [];
-    findRecipesInJson(data, items);
+    // Strategy 2: RSC flight data (Next.js with React Server Components)
+    // Flight data is embedded as self.__next_f.push([...]) calls
+    if (items.length === 0) {
+      const flightChunks: string[] = [];
+      const flightRegex = /self\.__next_f\.push\(\[[\d,]*"([^"]*)"\]\)/g;
+      let flightMatch;
+      while ((flightMatch = flightRegex.exec(html)) !== null) {
+        if (flightMatch[1]) {
+          flightChunks.push(flightMatch[1]);
+        }
+      }
+      if (flightChunks.length > 0) {
+        // Flight data contains embedded JSON objects — extract recipe-like URLs
+        const combined = flightChunks.join("");
+        // Look for recipe URLs and associated data in the flight stream
+        const recipeUrlRegex = /(?:cooking\.nytimes\.com)?\/recipes\/(\d+)[-a-z0-9]*/gi;
+        const recipeUrls = new Set<string>();
+        let urlMatch;
+        while ((urlMatch = recipeUrlRegex.exec(combined)) !== null) {
+          const fullUrl = urlMatch[0]!.startsWith("http")
+            ? urlMatch[0]!
+            : `https://cooking.nytimes.com${urlMatch[0]}`;
+          recipeUrls.add(normalizeUrl(fullUrl));
+        }
+
+        // Try to find JSON fragments in the flight data that contain recipe info
+        const jsonFragRegex = /\{[^{}]*"(?:name|title|headline)"[^{}]*"(?:url|path|slug)"[^{}]*\}/g;
+        let fragMatch;
+        while ((fragMatch = jsonFragRegex.exec(combined)) !== null) {
+          try {
+            const obj = JSON.parse(fragMatch[0]) as Record<string, unknown>;
+            findRecipesInJson(obj, items);
+          } catch {
+            // Not valid JSON
+          }
+        }
+
+        // If JSON parsing didn't work, create items from found URLs
+        if (items.length === 0 && recipeUrls.size > 0) {
+          for (const url of recipeUrls) {
+            const slugMatch = url.match(/\/recipes\/\d+-([a-z0-9-]+)/);
+            const slug = slugMatch?.[1];
+            if (slug) {
+              const title = slug
+                .replace(/-/g, " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+              items.push({ title, url });
+            }
+          }
+        }
+      }
+    }
+
+    // Strategy 3: JSON-LD structured data
+    if (items.length === 0) {
+      const jsonLdItems = extractJsonLdRecipes(html, "cooking.nytimes.com");
+      items.push(...jsonLdItems);
+    }
+
+    // Strategy 4: HTML link extraction (broadest fallback)
+    if (items.length === 0) {
+      const linkItems = extractRecipeLinks(
+        html,
+        /https?:\/\/cooking\.nytimes\.com\/recipes\/\d+[-a-z0-9]*/gi,
+        "cooking.nytimes.com"
+      );
+      items.push(...linkItems);
+    }
+
+    // Strategy 5: Open Graph / meta tag extraction for at least the featured recipe
+    if (items.length === 0) {
+      const metaItem = extractMetaTags(html, "cooking.nytimes.com");
+      if (metaItem) items.push(metaItem);
+    }
 
     // Deduplicate by URL
     const seen = new Set<string>();
@@ -286,7 +384,6 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
 // ── AllRecipes (homepage + trending) ─────────────────────
 
 async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
-  // Try multiple pages to maximize results
   const urls = [
     "https://www.allrecipes.com/",
     "https://www.allrecipes.com/recipes/",
@@ -302,22 +399,21 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
 
       // Try JSON-LD extraction first (most reliable)
       const jsonLdItems = extractJsonLdRecipes(html, "allrecipes.com");
-      if (jsonLdItems.length > 0) {
-        for (const item of jsonLdItems) {
-          const key = normalizeUrl(item.url);
-          if (!seen.has(key)) {
-            seen.add(key);
-            allItems.push(item);
-          }
+      for (const item of jsonLdItems) {
+        const key = normalizeUrl(item.url);
+        if (!seen.has(key)) {
+          seen.add(key);
+          allItems.push(item);
         }
       }
 
-      // Also try regex-based extraction with broader pattern
-      const regexItems = extractRecipeCards(
+      // HTML link extraction — broader pattern that also catches newer URL formats
+      const linkItems = extractRecipeLinks(
         html,
-        /https?:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+\/?/gi
+        /https?:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+\/?/gi,
+        "allrecipes.com"
       );
-      for (const item of regexItems) {
+      for (const item of linkItems) {
         const key = normalizeUrl(item.url);
         if (!seen.has(key)) {
           seen.add(key);
@@ -352,30 +448,25 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
 
       // Try JSON-LD extraction first
       const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
-      if (jsonLdItems.length > 0) {
-        for (const item of jsonLdItems) {
-          const key = normalizeUrl(item.url);
-          if (!seen.has(key)) {
-            seen.add(key);
-            allItems.push(item);
-          }
+      for (const item of jsonLdItems) {
+        const key = normalizeUrl(item.url);
+        if (!seen.has(key)) {
+          seen.add(key);
+          allItems.push(item);
         }
       }
 
-      // Broader regex: match any seriouseats.com slug that looks like a recipe
-      // (contains a hyphenated slug, not just a category page)
-      const regexItems = extractRecipeCards(
+      // HTML link extraction with slug-based patterns
+      const linkItems = extractRecipeLinks(
         html,
-        /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi
+        /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi,
+        "seriouseats.com"
       );
-      // Filter out non-recipe pages (categories, about, etc.)
-      const filtered = regexItems.filter((item) => {
+      // Filter out non-recipe pages
+      const filtered = linkItems.filter((item) => {
         const path = new URL(item.url).pathname;
-        // Skip category/section pages (single segment like /recipes, /about, etc.)
         if (path.split("/").filter(Boolean).length < 1) return false;
-        // Skip known non-recipe paths
         if (/^\/(recipes|about|contact|newsletter|culture|equipment|ingredients)\/?$/i.test(path)) return false;
-        // Skip roundup pages
         if (path.includes("-recipes-")) return false;
         return true;
       });
@@ -400,7 +491,6 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
 
 function extractJsonLdRecipes(html: string, domain: string): FeedItem[] {
   const items: FeedItem[] = [];
-  // Find all JSON-LD script blocks
   const jsonLdRegex = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let match;
   while ((match = jsonLdRegex.exec(html)) !== null) {
@@ -438,11 +528,7 @@ function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: stri
         const itemUrl = typeof e.url === "string" ? e.url : undefined;
         const itemName = typeof e.name === "string" ? e.name : undefined;
         if (itemUrl && itemName && itemUrl.includes(domain)) {
-          const imageUrl = typeof e.image === "string" ? e.image
-            : (Array.isArray(e.image) && typeof e.image[0] === "string") ? e.image[0]
-            : (e.image && typeof e.image === "object" && typeof (e.image as Record<string, unknown>).url === "string")
-              ? (e.image as Record<string, unknown>).url as string
-              : undefined;
+          const imageUrl = extractJsonLdImage(e);
           items.push({ title: itemName, url: itemUrl, imageUrl, description: typeof e.description === "string" ? e.description.slice(0, 200) : undefined });
         }
       }
@@ -461,11 +547,7 @@ function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: stri
     if (url && !url.startsWith("http")) url = `https://www.${domain}${url}`;
 
     if (name && url) {
-      const imageUrl = typeof obj.image === "string" ? obj.image
-        : (Array.isArray(obj.image) && typeof obj.image[0] === "string") ? obj.image[0]
-        : (obj.image && typeof obj.image === "object" && typeof (obj.image as Record<string, unknown>).url === "string")
-          ? (obj.image as Record<string, unknown>).url as string
-          : undefined;
+      const imageUrl = extractJsonLdImage(obj);
       items.push({
         title: name,
         url,
@@ -477,19 +559,32 @@ function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: stri
   }
 }
 
-// ── Shared: extract recipe cards from HTML ──────────────
+/** Extract image URL from a JSON-LD object */
+function extractJsonLdImage(obj: Record<string, unknown>): string | undefined {
+  const img = obj.image;
+  if (typeof img === "string") return img;
+  if (Array.isArray(img) && typeof img[0] === "string") return img[0];
+  if (img && typeof img === "object" && typeof (img as Record<string, unknown>).url === "string") {
+    return (img as Record<string, unknown>).url as string;
+  }
+  // Check thumbnailUrl as fallback
+  if (typeof obj.thumbnailUrl === "string") return obj.thumbnailUrl;
+  return undefined;
+}
 
-function extractRecipeCards(
+// ── Extract recipe links from HTML with context-based title/image ──
+
+function extractRecipeLinks(
   html: string,
-  urlPattern: RegExp
+  urlPattern: RegExp,
+  domain: string
 ): FeedItem[] {
-  // Find all matching URLs
   const rawUrls = html.match(urlPattern) ?? [];
   const seen = new Set<string>();
   const items: FeedItem[] = [];
 
-  // Build image map: scan all <img> tags for src+alt pairs
-  const imgMap = new Map<string, string>(); // lowercase alt → src URL
+  // Build image map: scan for <img> tags (src, data-src, srcset)
+  const imgMap = new Map<string, string>();
   const imgRegex =
     /<img[^>]+?(?:alt="([^"]*)"[^>]*?(?:src|data-src)="([^"]+)"|(?:src|data-src)="([^"]+)"[^>]*?alt="([^"]*)")/gi;
   let imgMatch;
@@ -504,26 +599,38 @@ function extractRecipeCards(
   for (const rawUrl of rawUrls) {
     const url = rawUrl.replace(/\/$/, "");
     if (seen.has(url)) continue;
-    // Filter out Serious Eats roundup pages ("-recipes-" plural)
     if (url.includes("-recipes-")) continue;
     seen.add(url);
 
-    // Get context around this URL occurrence for title/image extraction
+    // Get context around this URL for title/image extraction
     const idx = html.indexOf(url);
     if (idx === -1) continue;
-    const ctxStart = Math.max(0, idx - 1500);
-    const ctxEnd = Math.min(html.length, idx + url.length + 1500);
+    const ctxStart = Math.max(0, idx - 2000);
+    const ctxEnd = Math.min(html.length, idx + url.length + 2000);
     const ctx = html.slice(ctxStart, ctxEnd);
 
-    // Find title: try alt text, heading, or link text near the URL
+    // Find title from multiple sources
+    // 1. Link text: <a href="...url...">Title</a>
+    const linkTextMatch = ctx.match(
+      new RegExp(`href="${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"]*"[^>]*>\\s*(?:<[^>]+>)*\\s*([^<]{3,100})`, "i")
+    );
+    // 2. Alt text on nearby img
     const altText = ctx.match(
       /<img[^>]+alt="([^"]{5,100})"[^>]*>/i
     )?.[1]?.trim();
+    // 3. Heading text with title/card class
     const headingText = ctx.match(
-      /<(?:span|h[2-4])[^>]*class="[^"]*(?:title|heading|name|card__title)[^"]*"[^>]*>\s*([^<]{5,100})/i
+      /<(?:span|h[1-4]|div|a)[^>]*class="[^"]*(?:title|heading|name|card__title|card-title|mntl-card__title)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,100})/i
     )?.[1]?.trim();
-
-    // Fallback: generate title from URL slug
+    // 4. Any nearby heading
+    const genericHeading = ctx.match(
+      /<h[2-4][^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,100})/i
+    )?.[1]?.trim();
+    // 5. data-title or aria-label attribute
+    const dataTitle = ctx.match(
+      /(?:data-title|aria-label)="([^"]{3,100})"/i
+    )?.[1]?.trim();
+    // 6. Fallback: generate title from URL slug
     const slugMatch = url.match(/\/([a-z0-9][a-z0-9-]+[a-z0-9])(?:\/?$)/);
     const slug = slugMatch?.[1]
       ?.replace(/-recipe.*$/, "")
@@ -532,17 +639,65 @@ function extractRecipeCards(
       ?.replace(/-/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
-    const title = altText ?? headingText ?? slugTitle;
+    const title = linkTextMatch?.[1]?.trim() ?? headingText ?? altText ?? genericHeading ?? dataTitle ?? slugTitle;
     if (!title || title.length < 3) continue;
 
-    // Find image: context-based or image map lookup
+    // Find image from context
     const ctxImgMatch = ctx.match(
       /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i
     );
-    const imageUrl = ctxImgMatch?.[1] ?? imgMap.get(title.toLowerCase());
+    // Also check for srcset
+    const srcsetMatch = ctx.match(
+      /srcset="(https?:\/\/[^"\s]+\.(?:jpg|jpeg|png|webp)[^"\s]*)[\s,]/i
+    );
+    // Check for CSS background-image
+    const bgImgMatch = ctx.match(
+      /background-image:\s*url\(["']?(https?:\/\/[^"')]+\.(?:jpg|jpeg|png|webp)[^"')]*)/i
+    );
+    // Check for data-src (lazy loading)
+    const dataSrcMatch = ctx.match(
+      /data-src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i
+    );
+    const imageUrl = ctxImgMatch?.[1] ?? srcsetMatch?.[1] ?? dataSrcMatch?.[1] ?? bgImgMatch?.[1] ?? imgMap.get(title.toLowerCase());
 
-    items.push({ title, url, imageUrl });
+    // Validate image URL belongs to a known domain (not tracking pixels)
+    const validImage = imageUrl && isValidImageUrl(imageUrl, domain) ? imageUrl : undefined;
+
+    items.push({ title, url, imageUrl: validImage ?? imageUrl });
   }
 
   return items.slice(0, 30);
+}
+
+/** Check if an image URL looks like a real recipe image (not a tracker/pixel) */
+function isValidImageUrl(url: string, _domain: string): boolean {
+  // Skip tiny tracking pixels and data URIs
+  if (url.includes("1x1") || url.includes("pixel") || url.startsWith("data:")) return false;
+  // Must have an image extension or be from a known image CDN
+  if (/\.(jpg|jpeg|png|webp|avif)/i.test(url)) return true;
+  if (url.includes("/thmb/") || url.includes("/image/") || url.includes("imagesvc")) return true;
+  return false;
+}
+
+// ── Extract recipe from meta / Open Graph tags ──────────
+
+function extractMetaTags(html: string, domain: string): FeedItem | null {
+  const ogTitle = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i)?.[1]
+    ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i)?.[1];
+  const ogUrl = html.match(/<meta[^>]+property="og:url"[^>]+content="([^"]+)"/i)?.[1]
+    ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:url"/i)?.[1];
+  const ogImage = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i)?.[1]
+    ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i)?.[1];
+  const ogDesc = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]+)"/i)?.[1]
+    ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:description"/i)?.[1];
+
+  if (ogTitle && ogUrl && ogUrl.includes(domain)) {
+    return {
+      title: ogTitle,
+      url: ogUrl,
+      imageUrl: ogImage,
+      description: ogDesc?.slice(0, 200),
+    };
+  }
+  return null;
 }
