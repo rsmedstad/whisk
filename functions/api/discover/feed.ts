@@ -62,27 +62,36 @@ function isBlockedPage(html: string): boolean {
 }
 
 /**
- * Fetch a page — try Browser Rendering first for bot-protected sites,
- * with direct fetch as fallback. This order change is needed because
- * Cloudflare's anti-bot protections (2025+) now block most server-side fetches.
+ * Fetch a page — try direct fetch first, then Browser Rendering.
+ * Reads body even on non-200 responses since many recipe sites
+ * (Dotdash Meredith: AllRecipes, Serious Eats) return full HTML
+ * with JSON-LD structured data even on 403 responses.
  */
 async function fetchPage(url: string, env: Env): Promise<string | null> {
+  let directHtml: string | null = null;
+
   // Try direct fetch first (fast, free)
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(10000),
       headers: BROWSER_HEADERS,
     });
-    if (res.ok) {
-      const html = await res.text();
-      if (!isBlockedPage(html)) return html;
-    }
+    // Read body even on non-200 — may contain recipe data
+    const html = await res.text();
+    if (res.ok && !isBlockedPage(html)) return html;
+    // Keep the HTML for fallback (may have JSON-LD even in challenge pages)
+    if (html.length > 500) directHtml = html;
   } catch {
     // Direct fetch failed
   }
 
-  // Fall back to Browser Rendering (handles bot protection)
-  return fetchWithBrowserRendering(url, env);
+  // Try Browser Rendering (handles bot protection)
+  const brHtml = await fetchWithBrowserRendering(url, env);
+  if (brHtml) return brHtml;
+
+  // Fall back to direct fetch HTML — even blocked pages may have
+  // JSON-LD or enough link structure for recipe extraction
+  return directHtml;
 }
 
 /** Normalize a URL for dedup: strip trailing slash and protocol variation */
