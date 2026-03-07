@@ -124,6 +124,15 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
     if (val && typeof val === "object" && !Array.isArray(val)) {
       const imgObj = val as Record<string, unknown>;
       if (typeof imgObj.url === "string") return imgObj.url;
+      // NYT Cooking: image.src.card
+      if (imgObj.src && typeof imgObj.src === "object") {
+        const srcObj = imgObj.src as Record<string, unknown>;
+        if (typeof srcObj.card === "string") return srcObj.card;
+        if (Array.isArray(srcObj.crops)) {
+          const firstCrop = srcObj.crops[0] as Record<string, unknown> | undefined;
+          if (firstCrop && typeof firstCrop.url === "string") return firstCrop.url;
+        }
+      }
       if (typeof imgObj.src === "string") return imgObj.src;
       for (const cropKey of ["crops", "renditions", "sizes"]) {
         const crops = imgObj[cropKey];

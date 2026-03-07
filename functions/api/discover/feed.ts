@@ -159,7 +159,7 @@ function findRecipesInJson(
   }
 }
 
-/** Extract an image URL from various JSON structures (crops, renditions, etc.) */
+/** Extract an image URL from various JSON structures */
 function extractImageFromJson(rec: Record<string, unknown>): string | undefined {
   for (const key of [
     "image",
@@ -177,9 +177,20 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
     if (val && typeof val === "object" && !Array.isArray(val)) {
       const imgObj = val as Record<string, unknown>;
       if (typeof imgObj.url === "string") return imgObj.url;
+
+      // NYT Cooking: image.src.card or image.src (string)
+      if (imgObj.src && typeof imgObj.src === "object") {
+        const srcObj = imgObj.src as Record<string, unknown>;
+        if (typeof srcObj.card === "string") return srcObj.card;
+        // Fall through to crops
+        if (Array.isArray(srcObj.crops)) {
+          const firstCrop = srcObj.crops[0] as Record<string, unknown> | undefined;
+          if (firstCrop && typeof firstCrop.url === "string") return firstCrop.url;
+        }
+      }
       if (typeof imgObj.src === "string") return imgObj.src;
 
-      // Try crops/renditions (NYT pattern)
+      // Generic crops/renditions
       for (const cropKey of ["crops", "renditions", "sizes"]) {
         const crops = imgObj[cropKey];
         if (crops && typeof crops === "object") {
@@ -189,7 +200,6 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
             if (crop && typeof crop === "object") {
               const c = crop as Record<string, unknown>;
               if (typeof c.url === "string") return c.url;
-              if (typeof c.src === "string") return c.src;
             }
           }
         }
