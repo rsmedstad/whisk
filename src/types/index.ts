@@ -283,6 +283,22 @@ export interface InspirationResponse {
   greeting: string;
 }
 
+// ── Discover Feed ──────────────────────────────────────
+
+export type DiscoverSource = "nyt" | "allrecipes" | "seriouseats";
+
+export interface DiscoverFeedItem {
+  title: string;
+  url: string;
+  imageUrl?: string;
+  description?: string;
+}
+
+export interface DiscoverFeed {
+  lastRefreshed: string;
+  sources: Record<DiscoverSource, DiscoverFeedItem[]>;
+}
+
 // ── Import ─────────────────────────────────────────────
 
 export interface CsvRow {
