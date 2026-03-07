@@ -1524,14 +1524,16 @@ function FeedCard({
         <h4 className="text-xs font-medium line-clamp-2 dark:text-stone-100 leading-snug">
           {item.title}
         </h4>
-        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-stone-400 dark:text-stone-500">
-          {item.source && (
-            <span>{SOURCE_LABELS[item.source ?? "nyt"]}</span>
-          )}
-          {item.totalTime && item.totalTime > 0 && (
+        <div className="flex items-center justify-between mt-1 text-[10px] text-stone-400 dark:text-stone-500">
+          {item.totalTime && item.totalTime > 0 ? (
             <span className="flex items-center gap-0.5">
               <Clock className="w-3 h-3" /> {formatTime(item.totalTime)}
             </span>
+          ) : (
+            <span />
+          )}
+          {item.source && (
+            <span className="truncate ml-1">{SOURCE_LABELS[item.source ?? "nyt"]}</span>
           )}
         </div>
       </div>
