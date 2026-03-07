@@ -24,6 +24,9 @@ interface RecipeData {
   cookTime?: string;
   totalTime?: string;
   recipeYield?: string | string[];
+  recipeCategory?: string | string[];
+  recipeCuisine?: string | string[];
+  keywords?: string | string[];
 }
 
 // POST /api/import/url - Scrape recipe from URL
@@ -142,16 +145,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (env.APIFY_API_TOKEN) {
         const apifyData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
         if (apifyData) {
+          const apifyIngredients = parseIngredients(apifyData.recipeIngredient ?? []);
           const recipe = {
             title: apifyData.name ?? "",
             description: apifyData.description ?? "",
-            ingredients: parseIngredients(apifyData.recipeIngredient ?? []),
+            ingredients: apifyIngredients,
             steps: parseSteps(apifyData.recipeInstructions ?? []),
             prepTime: parseDuration(apifyData.prepTime) ?? parseDuration(apifyData.totalTime),
             cookTime: parseDuration(apifyData.cookTime),
             servings: parseServings(apifyData.recipeYield),
             thumbnailUrl: extractImageUrl(apifyData.image),
             photos: [] as { url: string; isPrimary: boolean }[],
+            tags: generateTags(apifyData, apifyIngredients),
             lastCrawledAt: new Date().toISOString(),
           };
           return new Response(JSON.stringify(recipe), {
@@ -255,10 +260,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Extract video URL from the page
     const videoUrl = extractVideoUrl(html);
 
+    const parsedIngredients = parseIngredients(recipeData.recipeIngredient ?? []);
+    const tags = generateTags(recipeData, parsedIngredients);
+
     const recipe = {
       title: recipeData.name ?? "",
       description: recipeData.description ?? "",
-      ingredients: parseIngredients(recipeData.recipeIngredient ?? []),
+      ingredients: parsedIngredients,
       steps: parseSteps(recipeData.recipeInstructions ?? []),
       prepTime:
         parseDuration(recipeData.prepTime) ??
@@ -268,6 +276,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       thumbnailUrl,
       photos,
       videoUrl,
+      tags,
       lastCrawledAt: new Date().toISOString(),
     };
 
@@ -283,6 +292,125 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
   }
 };
+
+// ── Auto-tag generation ─────────────────────────────────────
+
+/** Generate tags from recipe metadata using keyword matching against preset tags */
+function generateTags(data: RecipeData, ingredients: { name: string }[]): string[] {
+  const tags = new Set<string>();
+  const title = (data.name ?? "").toLowerCase();
+  const desc = (data.description ?? "").toLowerCase();
+  const text = `${title} ${desc}`;
+  const ingredientText = ingredients.map((i) => i.name.toLowerCase()).join(" ");
+
+  // Use recipeCategory from JSON-LD
+  const categories = Array.isArray(data.recipeCategory)
+    ? data.recipeCategory
+    : data.recipeCategory ? [data.recipeCategory] : [];
+  for (const cat of categories) {
+    const lc = cat.toLowerCase().trim();
+    if (MEAL_TAGS[lc]) tags.add(MEAL_TAGS[lc]!);
+  }
+
+  // Use recipeCuisine from JSON-LD
+  const cuisines = Array.isArray(data.recipeCuisine)
+    ? data.recipeCuisine
+    : data.recipeCuisine ? [data.recipeCuisine] : [];
+  for (const c of cuisines) {
+    const lc = c.toLowerCase().trim();
+    if (CUISINE_TAGS.has(lc)) tags.add(lc);
+  }
+
+  // Use keywords from JSON-LD
+  const keywords = Array.isArray(data.keywords)
+    ? data.keywords
+    : typeof data.keywords === "string"
+      ? data.keywords.split(",").map((k) => k.trim())
+      : [];
+  for (const kw of keywords) {
+    const lc = kw.toLowerCase().trim();
+    if (CUISINE_TAGS.has(lc)) tags.add(lc);
+    if (MEAL_TAGS[lc]) tags.add(MEAL_TAGS[lc]!);
+    if (DIET_TAGS.has(lc)) tags.add(lc);
+  }
+
+  // Meal type from title/description
+  const MEAL_PATTERNS: [string, RegExp][] = [
+    ["breakfast", /\b(?:breakfast|brunch|pancake|waffle|omelette?|frittata|granola|oatmeal)\b/],
+    ["dessert", /\b(?:dessert|cake|cookies?|brownies?|pie|tart|ice cream|pudding|mousse|cheesecake|fudge|candy|souffl[eé])\b/],
+    ["appetizer", /\b(?:appetizer|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|sliders?)\b/],
+    ["salad", /\b(?:salad|slaw|coleslaw)\b/],
+    ["side dish", /\b(?:side dish|mashed potatoes?|roasted (?:vegetables|potatoes)|rice pilaf|couscous)\b/],
+    ["drinks", /\b(?:cocktail|smoothie|lemonade|margarita|sangria|spritz|mojito)\b/],
+    ["snack", /\b(?:snack|popcorn|trail mix|energy balls?)\b/],
+  ];
+  for (const [tag, pattern] of MEAL_PATTERNS) {
+    if (pattern.test(text)) tags.add(tag);
+  }
+
+  // Cuisine from title
+  const CUISINE_PATTERNS: [string, RegExp][] = [
+    ["italian", /\b(?:italian|pasta|risotto|lasagna|parm(?:esan|igian)|prosciutto|bruschetta|gnocchi|marinara|bolognese)\b/],
+    ["mexican", /\b(?:mexican|taco|burrito|enchilada|quesadilla|salsa|guacamole|pozole|churros?|mole)\b/],
+    ["chinese", /\b(?:chinese|stir[- ]?fry|wok|kung pao|lo mein|fried rice|dim sum|szechuan|sichuan)\b/],
+    ["thai", /\b(?:thai|pad thai|curry paste|lemongrass|galangal|tom (?:yum|kha))\b/],
+    ["indian", /\b(?:indian|curry|tikka|masala|naan|biryani|dal|samosa|tandoori|paneer)\b/],
+    ["japanese", /\b(?:japanese|sushi|ramen|teriyaki|miso|tempura|udon|soba|gyoza)\b/],
+    ["korean", /\b(?:korean|kimchi|bibimbap|bulgogi|gochujang|japchae)\b/],
+    ["mediterranean", /\b(?:mediterranean|hummus|falafel|tahini|pita|tzatziki|shawarma)\b/],
+    ["french", /\b(?:french|cr[eê]pe|croissant|souffl[eé]|gratin|ratatouille|bouillabaisse|quiche|brioche)\b/],
+  ];
+  for (const [tag, pattern] of CUISINE_PATTERNS) {
+    if (pattern.test(text)) tags.add(tag);
+  }
+
+  // Method from title
+  if (/\b(?:instant pot|pressure cook)/i.test(text)) tags.add("instant pot");
+  if (/\b(?:slow cook|crock[- ]?pot)/i.test(text)) tags.add("slow cook");
+  if (/\b(?:air fr[yi])/i.test(text)) tags.add("air fryer");
+  if (/\bgrill/i.test(text)) tags.add("grilling");
+  if (/\b(?:one[- ]pot|one[- ]pan|sheet pan)/i.test(text)) tags.add("one-pot");
+  if (/\bno[- ](?:cook|bake)/i.test(text)) tags.add("no-cook");
+  if (/\bstir[- ]?fry/i.test(text)) tags.add("stir-fry");
+  if (/\b(?:bak(?:e|ed|ing)|oven)\b/i.test(text) && !tags.has("dessert")) tags.add("baking");
+
+  // Diet from ingredients
+  const hasMeat = /\b(?:chicken|beef|pork|lamb|bacon|sausage|turkey|steak|ham|veal|duck|prosciutto)\b/i.test(ingredientText);
+  const hasDairy = /\b(?:butter|cheese|cream|milk|yogurt|sour cream)\b/i.test(ingredientText);
+  if (!hasMeat && !hasDairy) tags.add("vegan");
+  else if (!hasMeat) tags.add("vegetarian");
+
+  // Season based on current date
+  const month = new Date().getMonth(); // 0-indexed
+  if (month >= 2 && month <= 4) tags.add("spring");
+  else if (month >= 5 && month <= 7) tags.add("summer");
+  else if (month >= 8 && month <= 10) tags.add("fall");
+  else tags.add("winter");
+
+  return [...tags];
+}
+
+const MEAL_TAGS: Record<string, string> = {
+  "main course": "dinner", "main dish": "dinner", "dinner": "dinner", "lunch": "dinner",
+  "breakfast": "breakfast", "brunch": "brunch",
+  "dessert": "dessert", "desserts": "dessert",
+  "appetizer": "appetizer", "appetizers": "appetizer", "starter": "appetizer",
+  "side dish": "side dish", "side": "side dish",
+  "salad": "salad", "salads": "salad",
+  "snack": "snack", "snacks": "snack",
+  "drink": "drinks", "drinks": "drinks", "beverage": "drinks", "cocktail": "drinks",
+  "soup": "dinner", "soups": "dinner",
+  "baking": "baking", "bread": "baking",
+};
+
+const CUISINE_TAGS = new Set([
+  "italian", "mexican", "chinese", "thai", "indian", "japanese",
+  "korean", "mediterranean", "american", "french",
+]);
+
+const DIET_TAGS = new Set([
+  "vegetarian", "vegan", "gluten-free", "dairy-free", "keto", "low-carb", "healthy",
+]);
 
 // ── Strategy 1: JSON-LD ─────────────────────────────────────
 
@@ -708,8 +836,9 @@ function stripHtml(str: string): string {
       // Inline tags → zero-width space (allows adjacent text to merge)
       .replace(/<\/?\w[^>]*>/g, "\u200B")
   )
-    // Collapse zero-width spaces between single characters (fixes "l\u200Barge" → "large")
-    .replace(/(\w)\u200B(\w)/g, "$1$2")
+    // Collapse zero-width spaces between word characters (fixes "l\u200Barge" → "large")
+    // Apply repeatedly to handle multiple consecutive zero-width spaces
+    .replace(/(\w)(?:\u200B)+(\w)/g, "$1$2")
     // Replace remaining zero-width spaces with actual spaces
     .replace(/\u200B/g, " ")
     .replace(/\s+/g, " ")
@@ -720,13 +849,13 @@ function cleanIngredientText(str: string): string {
   return str
     // Fix "teaspoon s" / "tablespoon s" / "cup s" artifacts from HTML stripping
     .replace(/\b(teaspoon|tablespoon|cup|ounce|pound|clove|pinch|dash|slice|piece|stick|bunch|can|package|head|stalk|sprig)\s+s\b/gi, "$1s")
-    // Fix single-letter spacing artifacts from HTML tag stripping
-    // e.g. "l arge" → "large", "m edium" → "medium", "s mall" → "small"
-    .replace(/\b(\w)\s+(\w{2,})\b/g, (match, first, rest) => {
-      const combined = first + rest;
-      // Only merge if it forms a known word (not "a cup" or "2 tablespoons")
-      const commonWords = /^(large|medium|small|fresh|dried|ground|chopped|minced|diced|sliced|peeled|grated|shredded|whole|thick|thin|packed|level|heaped|heaping|about|roughly|finely|coarsely|thinly|lightly|boneless|skinless|crushed|frozen|softened|melted|unsalted|salted|toasted|divided|optional|quartered|halved|trimmed|rinsed|drained|deveined|julienned|blanched|sifted|warmed|chilled|cubed|pitted|seeded|cored)$/i;
-      return commonWords.test(combined) ? combined : match;
+    // Fix multi-letter spacing artifacts from HTML tag stripping
+    // e.g. "l arge" → "large", "m edium" → "medium", "un salted" → "unsalted"
+    .replace(/\b(\w{1,3})\s+(\w{2,})\b/g, (match, prefix, rest) => {
+      const combined = (prefix as string).toLowerCase() + (rest as string).toLowerCase();
+      // Only merge if it forms a known ingredient/cooking word
+      const commonWords = /^(large|medium|small|fresh|dried|ground|chopped|minced|diced|sliced|peeled|grated|shredded|whole|thick|thin|packed|level|heaped|heaping|about|roughly|finely|coarsely|thinly|lightly|boneless|skinless|crushed|frozen|softened|melted|unsalted|salted|toasted|divided|optional|quartered|halved|trimmed|rinsed|drained|deveined|julienned|blanched|sifted|warmed|chilled|cubed|pitted|seeded|cored|light|brown|sugar|butter|cream|flour|water|olive|extra|virgin|vegetable|canola|coconut|sesame|vanilla|extract|baking|powder|soda|salt|pepper|black|white|red|green|yellow|orange|chicken|turkey|beef|pork|lamb|onion|garlic|ginger|lemon|lime|juice|zest|heavy|whipping|sour|plain|greek|yogurt|milk|egg|eggs|yolk|yolks|purpose|bread|cake|wheat|oat|corn|starch|sauce|paste|tomato|canned|fresh)$/i;
+      return commonWords.test(combined) ? (prefix as string) + (rest as string) : match;
     })
     // Collapse multiple spaces
     .replace(/\s{2,}/g, " ")

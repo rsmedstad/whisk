@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { classNames } from "../../lib/utils";
+import { classNames, formatTotalTime } from "../../lib/utils";
 import { api } from "../../lib/api";
 import { getLocal, setLocal } from "../../lib/cache";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { GroupedIngredients, StepsList } from "../recipes/RecipeComponents";
+import { TagChip } from "../ui/TagChip";
 import {
   ChevronLeft,
   RefreshCw,
@@ -263,6 +264,28 @@ export function Discover({
         });
         if (data?.title) {
           setImportedRecipe(data);
+          // If the feed item was missing an image but the import found one,
+          // update the cached feed so the card shows the image next time
+          const importedImage = data.thumbnailUrl ?? data.photos?.[0]?.url;
+          if (!item.imageUrl && importedImage) {
+            setFeed((prev) => {
+              if (!prev) return prev;
+              const updated = { ...prev, categories: { ...prev.categories } };
+              for (const cat of Object.keys(updated.categories) as DiscoverCategory[]) {
+                const items = updated.categories[cat];
+                if (!items) continue;
+                const idx = items.findIndex((i) => i.url === item.url);
+                if (idx !== -1) {
+                  updated.categories[cat] = items.map((i, j) =>
+                    j === idx ? { ...i, imageUrl: importedImage } : i
+                  );
+                  break;
+                }
+              }
+              setLocal(FEED_CACHE_KEY, updated);
+              return updated;
+            });
+          }
         } else {
           setImportError("Could not parse recipe from this page.");
         }
@@ -576,9 +599,7 @@ export function Discover({
                   {(importedRecipe.prepTime || importedRecipe.cookTime) && (
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      {importedRecipe.prepTime && importedRecipe.cookTime
-                        ? `${importedRecipe.prepTime + importedRecipe.cookTime}m total`
-                        : `${importedRecipe.prepTime ?? importedRecipe.cookTime}m`}
+                      {formatTotalTime(importedRecipe.prepTime, importedRecipe.cookTime)}
                     </span>
                   )}
                   {importedRecipe.servings && (
@@ -590,12 +611,11 @@ export function Discover({
                 {importedRecipe.tags && importedRecipe.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {importedRecipe.tags.map((tag) => (
-                      <span
+                      <TagChip
                         key={tag}
-                        className="rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs text-stone-500 dark:text-stone-400"
-                      >
-                        {tag.charAt(0).toUpperCase() + tag.slice(1)}
-                      </span>
+                        label={tag.charAt(0).toUpperCase() + tag.slice(1)}
+                        size="sm"
+                      />
                     ))}
                   </div>
                 )}
@@ -632,17 +652,24 @@ export function Discover({
                 </div>
               )}
 
-              {/* Source link */}
-              <div className="border-t border-stone-200 dark:border-stone-700 pt-4 text-sm text-stone-400 dark:text-stone-500">
-                Source:{" "}
-                <a
-                  href={selectedFeedItem.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-orange-500 hover:underline"
-                >
-                  {SOURCE_LABELS[selectedFeedItem.source]}
-                </a>
+              {/* Source link + added date */}
+              <div className="border-t border-stone-200 dark:border-stone-700 pt-4 text-sm text-stone-400 dark:text-stone-500 space-y-1">
+                <div>
+                  Source:{" "}
+                  <a
+                    href={selectedFeedItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-orange-500 hover:underline"
+                  >
+                    {SOURCE_LABELS[selectedFeedItem.source]}
+                  </a>
+                </div>
+                {selectedFeedItem.addedAt && (
+                  <div>
+                    Added {new Date(selectedFeedItem.addedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                )}
               </div>
             </div>
           )}
