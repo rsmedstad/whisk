@@ -55,6 +55,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "foodnetwork.com",   // Akamai WAF
       "food52.com",        // Vercel Security Checkpoint
       "thekitchn.com",     // PerimeterX
+      "allrecipes.com",    // Dotdash Meredith — bot detection
+      "seriouseats.com",   // Dotdash Meredith — bot detection
     ];
     const urlHost = new URL(url).hostname.replace(/^www\./, "");
     const isKnownBlocked = BLOCKED_DOMAINS.some(
@@ -93,8 +95,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       regularFetchFailed = true; // Skip to Browser Rendering
     }
 
-    // If regular fetch failed (403, small response, or known-blocked), try Browser Rendering
-    const needsBrowser = regularFetchFailed || (html !== null && html.length < 500);
+    // If regular fetch failed, returned a small/challenge page, or is known-blocked → try Browser Rendering
+    const isChallengePage = html !== null && (
+      html.includes("<title>Just a moment...</title>") ||
+      html.includes("_cf_chl_opt") ||
+      html.includes("challenge-platform")
+    );
+    const needsBrowser = regularFetchFailed || (html !== null && html.length < 500) || isChallengePage;
     if (needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
       try {
         const brRes = await fetch(

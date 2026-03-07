@@ -64,6 +64,14 @@ const VIBES = [
 const CACHE_KEY = "discover_ideas";
 const FEED_CACHE_KEY = "discover_feed";
 
+/** Proxy external recipe images through our backend to avoid hotlinking blocks */
+function proxyImageUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  // Don't proxy our own R2 images
+  if (url.startsWith("/photos/") || url.includes("whisk")) return url;
+  return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
 interface CachedIdeas {
   ideas: InspirationIdea[];
   mealType: string;
@@ -412,10 +420,11 @@ export function Discover({
   // ── Feed item detail view ──
 
   if (selectedFeedItem) {
-    const heroImage =
+    const rawHeroImage =
       importedRecipe?.thumbnailUrl ??
       importedRecipe?.photos?.[0]?.url ??
       selectedFeedItem.imageUrl;
+    const heroImage = proxyImageUrl(rawHeroImage);
     const embedUrl = importedRecipe?.videoUrl
       ? getYouTubeEmbedUrl(importedRecipe.videoUrl)
       : null;
@@ -424,7 +433,7 @@ export function Discover({
     const extraPhotos = importedRecipe?.photos
       ? importedRecipe.photos
           .filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i)
-          .filter((p) => p.url !== heroImage)
+          .filter((p) => p.url !== rawHeroImage)
       : [];
 
     return (
@@ -441,6 +450,25 @@ export function Discover({
             <button onClick={handleShareFeed} className="p-2">
               <Share className="w-5 h-5 text-stone-500 dark:text-stone-400" />
             </button>
+            {onSaveRecipe && importedRecipe && !savedFeedRecipeId && (
+              <button
+                onClick={handleSaveFeedRecipe}
+                disabled={isSavingFeed}
+                className="p-2 text-orange-500 dark:text-orange-400"
+                title="Add to My Recipes"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            )}
+            {savedFeedRecipeId && (
+              <button
+                onClick={() => navigate(`/recipes/${savedFeedRecipeId}`)}
+                className="p-2 text-green-500 dark:text-green-400"
+                title="View saved recipe"
+              >
+                <Check className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -550,7 +578,7 @@ export function Discover({
                       className="shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800"
                     >
                       <img
-                        src={photo.url}
+                        src={proxyImageUrl(photo.url)}
                         alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
@@ -598,35 +626,6 @@ export function Discover({
                       </li>
                     ))}
                   </ol>
-                </div>
-              )}
-
-              {/* Divider */}
-              <div className="border-t border-stone-200 dark:border-stone-700" />
-
-              {/* Save button */}
-              {onSaveRecipe && (
-                <div className="pt-2 pb-4">
-                  {savedFeedRecipeId ? (
-                    <Button
-                      fullWidth
-                      variant="secondary"
-                      onClick={() => {
-                        navigate(`/recipes/${savedFeedRecipeId}`);
-                      }}
-                    >
-                      Saved — View Recipe
-                    </Button>
-                  ) : (
-                    <Button
-                      fullWidth
-                      onClick={handleSaveFeedRecipe}
-                      disabled={isSavingFeed}
-                    >
-                      <Plus className="w-4 h-4 mr-1.5" />
-                      {isSavingFeed ? "Saving..." : "Add to My Recipes"}
-                    </Button>
-                  )}
                 </div>
               )}
 
@@ -964,7 +963,7 @@ export function Discover({
                         <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
                           {item.imageUrl ? (
                             <img
-                              src={item.imageUrl}
+                              src={proxyImageUrl(item.imageUrl)}
                               alt={item.title}
                               className="h-full w-full object-cover"
                               loading="lazy"
@@ -976,9 +975,6 @@ export function Discover({
                               </span>
                             </div>
                           )}
-                          <div className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-orange-500 shadow-sm">
-                            <Plus className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                          </div>
                         </div>
                         <div className="p-2.5">
                           <h4 className="text-xs font-medium line-clamp-2 dark:text-stone-100 leading-snug">
