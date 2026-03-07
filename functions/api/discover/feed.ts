@@ -897,27 +897,32 @@ function extractRecipeLinks(
     seen.add(url);
 
     // Get context around this URL for title/image extraction
+    // Use a tight context (500 chars) to avoid cross-contamination between recipes,
+    // with a wider fallback (1500 chars) only for images
     const idx = html.indexOf(url);
     if (idx === -1) continue;
-    const ctxStart = Math.max(0, idx - 2000);
-    const ctxEnd = Math.min(html.length, idx + url.length + 2000);
-    const ctx = html.slice(ctxStart, ctxEnd);
+    const tightStart = Math.max(0, idx - 500);
+    const tightEnd = Math.min(html.length, idx + url.length + 500);
+    const tightCtx = html.slice(tightStart, tightEnd);
+    const wideStart = Math.max(0, idx - 1500);
+    const wideEnd = Math.min(html.length, idx + url.length + 1500);
+    const ctx = html.slice(wideStart, wideEnd);
 
     // Find title from multiple sources (ordered by reliability)
-    // 1. Link text: <a href="...url...">Title</a>
-    const linkTextMatch = ctx.match(
+    // 1. Link text: <a href="...url...">Title</a> (most reliable — directly associated)
+    const linkTextMatch = tightCtx.match(
       new RegExp(`href="${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"]*"[^>]*>\\s*(?:<[^>]+>)*\\s*([^<]{3,100})`, "i")
     );
-    // 2. Heading text with title/card class (AllRecipes uses mntl-card__title)
-    const headingText = ctx.match(
+    // 2. Heading text with title/card class (tight context only)
+    const headingText = tightCtx.match(
       /<(?:span|h[1-4]|div|a)[^>]*class="[^"]*(?:title|heading|name|card__title|card-title|mntl-card__title)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,100})/i
     )?.[1]?.trim();
-    // 3. data-title or aria-label attribute (more reliable than img alt)
-    const dataTitle = ctx.match(
+    // 3. data-title or aria-label attribute (tight context only)
+    const dataTitle = tightCtx.match(
       /(?:data-title|aria-label)="([^"]{3,100})"/i
     )?.[1]?.trim();
-    // 4. Any nearby heading
-    const genericHeading = ctx.match(
+    // 4. Any nearby heading (tight context only)
+    const genericHeading = tightCtx.match(
       /<h[2-4][^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,100})/i
     )?.[1]?.trim();
     // 5. Fallback: generate title from URL slug (better than img alt text)
