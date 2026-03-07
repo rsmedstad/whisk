@@ -11,6 +11,63 @@ const BROWSER_HEADERS: Record<string, string> = {
   "Accept-Language": "en-US,en;q=0.9",
 };
 
+/** Fetch HTML via Cloudflare Browser Rendering (headless browser) */
+async function fetchWithBrowserRendering(
+  url: string,
+  env: Env
+): Promise<string | null> {
+  if (!env.CF_ACCOUNT_ID || !env.CF_BR_TOKEN) return null;
+  try {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.CF_BR_TOKEN}`,
+        },
+        body: JSON.stringify({
+          url,
+          gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+          rejectResourceTypes: ["font", "media"],
+          setExtraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+        }),
+      }
+    );
+    if (!res.ok) return null;
+    const body = await res.text();
+    const html = body.startsWith("{")
+      ? ((JSON.parse(body) as { result?: string }).result ?? "")
+      : body;
+    if (html.length > 500 && !html.includes("<title>Just a moment...</title>")) {
+      return html;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch a page with direct fetch first, falling back to Browser Rendering */
+async function fetchPage(url: string, env: Env): Promise<string | null> {
+  // Try direct fetch first
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: BROWSER_HEADERS,
+    });
+    if (res.ok) {
+      const html = await res.text();
+      if (html.length > 500) return html;
+    }
+  } catch {
+    // Direct fetch failed
+  }
+
+  // Fall back to Browser Rendering
+  return fetchWithBrowserRendering(url, env);
+}
+
 interface FeedItem {
   title: string;
   url: string;
@@ -50,9 +107,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
 
   // Scrape all three in parallel — each handles its own errors
   const [nyt, allrecipes, seriouseats] = await Promise.all([
-    scrapeNYTCooking(),
-    scrapeAllRecipes(),
-    scrapeSeriousEats(),
+    scrapeNYTCooking(env),
+    scrapeAllRecipes(env),
+    scrapeSeriousEats(env),
   ]);
 
   const feed: Feed = {
@@ -66,14 +123,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
 
 // ── NYT Cooking (homepage __NEXT_DATA__ JSON) ───────────
 
-async function scrapeNYTCooking(): Promise<FeedItem[]> {
+async function scrapeNYTCooking(env: Env): Promise<FeedItem[]> {
   try {
-    const res = await fetch("https://cooking.nytimes.com/", {
-      signal: AbortSignal.timeout(15000),
-      headers: BROWSER_HEADERS,
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
+    const html = await fetchPage("https://cooking.nytimes.com/", env);
+    if (!html) return [];
 
     // Extract __NEXT_DATA__ JSON blob
     const match = html.match(
@@ -222,7 +275,7 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
 
 // ── AllRecipes (homepage + trending) ─────────────────────
 
-async function scrapeAllRecipes(): Promise<FeedItem[]> {
+async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
   // Try multiple pages to maximize results
   const urls = [
     "https://www.allrecipes.com/",
@@ -234,12 +287,8 @@ async function scrapeAllRecipes(): Promise<FeedItem[]> {
 
   for (const pageUrl of urls) {
     try {
-      const res = await fetch(pageUrl, {
-        signal: AbortSignal.timeout(15000),
-        headers: BROWSER_HEADERS,
-      });
-      if (!res.ok) continue;
-      const html = await res.text();
+      const html = await fetchPage(pageUrl, env);
+      if (!html) continue;
 
       // Try JSON-LD extraction first (most reliable)
       const jsonLdItems = extractJsonLdRecipes(html, "allrecipes.com");
@@ -275,7 +324,7 @@ async function scrapeAllRecipes(): Promise<FeedItem[]> {
 
 // ── Serious Eats (/recipes page + homepage) ─────────────
 
-async function scrapeSeriousEats(): Promise<FeedItem[]> {
+async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
   const urls = [
     "https://www.seriouseats.com/",
     "https://www.seriouseats.com/recipes",
@@ -286,12 +335,8 @@ async function scrapeSeriousEats(): Promise<FeedItem[]> {
 
   for (const pageUrl of urls) {
     try {
-      const res = await fetch(pageUrl, {
-        signal: AbortSignal.timeout(15000),
-        headers: BROWSER_HEADERS,
-      });
-      if (!res.ok) continue;
-      const html = await res.text();
+      const html = await fetchPage(pageUrl, env);
+      if (!html) continue;
 
       // Try JSON-LD extraction first
       const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
