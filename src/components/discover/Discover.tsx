@@ -25,6 +25,7 @@ import type {
   DiscoverFeed,
   DiscoverFeedItem,
   DiscoverSource,
+  DiscoverCategory,
 } from "../../types";
 
 // ── Props ───────────────────────────────────────────────
@@ -42,6 +43,33 @@ const SOURCE_LABELS: Record<DiscoverSource, string> = {
   allrecipes: "AllRecipes",
   seriouseats: "Serious Eats",
 };
+
+const CATEGORY_LABELS: Record<DiscoverCategory, string> = {
+  dinner: "Dinner",
+  breakfast: "Breakfast",
+  "side dish": "Side Dishes",
+  salad: "Salads",
+  soups: "Soups & Stews",
+  dessert: "Desserts",
+  appetizer: "Appetizers",
+  drinks: "Drinks",
+  snack: "Snacks",
+  baking: "Baking",
+};
+
+/** Display order for categories */
+const CATEGORY_ORDER: DiscoverCategory[] = [
+  "dinner",
+  "soups",
+  "salad",
+  "side dish",
+  "appetizer",
+  "breakfast",
+  "baking",
+  "dessert",
+  "drinks",
+  "snack",
+];
 
 const FEED_CACHE_KEY = "discover_feed";
 
@@ -162,11 +190,12 @@ export function Discover({
 
   // ── Feed loading ──
 
-  const refreshFeed = useCallback(async () => {
+  const refreshFeed = useCallback(async (force = false) => {
     setFeedLoading(true);
     setFeedError(null);
     try {
-      const data = await api.post<DiscoverFeed>("/discover/feed", {});
+      const url = force ? "/discover/feed?force=true" : "/discover/feed";
+      const data = await api.post<DiscoverFeed>(url, {});
       if (data) {
         setFeed(data);
         setLocal(FEED_CACHE_KEY, data);
@@ -179,9 +208,18 @@ export function Discover({
   }, []);
 
   useEffect(() => {
+    const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+
     async function init() {
-      // If we have a cache hit, show it immediately
-      if (feed?.lastRefreshed) return;
+      // If we have cached data, show it immediately
+      if (feed?.lastRefreshed) {
+        // Auto-refresh in background if feed is stale (>2 days old)
+        const age = Date.now() - new Date(feed.lastRefreshed).getTime();
+        if (age > TWO_DAYS_MS) {
+          refreshFeed(); // Background refresh — cached data shows meanwhile
+        }
+        return;
+      }
 
       // No cache — fetch from KV
       try {
@@ -189,6 +227,11 @@ export function Discover({
         if (data?.lastRefreshed) {
           setFeed(data);
           setLocal(FEED_CACHE_KEY, data);
+          // Check staleness of server-side data too
+          const age = Date.now() - new Date(data.lastRefreshed).getTime();
+          if (age > TWO_DAYS_MS) {
+            refreshFeed();
+          }
         }
         // First visit with no feed — auto-scrape
         else {
@@ -204,7 +247,8 @@ export function Discover({
   // ── Feed item click → import recipe ──
 
   const handleFeedItemClick = useCallback(
-    async (item: DiscoverFeedItem, source: DiscoverSource) => {
+    async (item: DiscoverFeedItem) => {
+      const source = item.source ?? "nyt";
       setSelectedFeedItem({ ...item, source });
       setImportedRecipe(null);
       setImportError(null);
@@ -504,9 +548,8 @@ export function Discover({
 
   const hasFeedContent =
     feed?.lastRefreshed &&
-    (feed.sources.nyt.length > 0 ||
-      feed.sources.allrecipes.length > 0 ||
-      feed.sources.seriouseats.length > 0);
+    feed.categories &&
+    Object.values(feed.categories).some((items) => items && items.length > 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -524,7 +567,7 @@ export function Discover({
             <h1 className="text-lg font-bold dark:text-stone-100">Discover</h1>
           </button>
           <button
-            onClick={refreshFeed}
+            onClick={() => refreshFeed(true)}
             disabled={feedLoading}
             className="p-2 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
             title="Refresh trending recipes"
@@ -554,7 +597,7 @@ export function Discover({
                 <p className="text-sm text-stone-500 dark:text-stone-400">
                   {feedError}
                 </p>
-                <Button size="sm" onClick={refreshFeed} disabled={feedLoading}>
+                <Button size="sm" onClick={() => refreshFeed(true)} disabled={feedLoading}>
                   Try Again
                 </Button>
               </div>
@@ -573,9 +616,9 @@ export function Discover({
                   See trending recipes from NYT Cooking, AllRecipes, and Serious
                   Eats
                 </p>
-                <Button onClick={refreshFeed} disabled={feedLoading}>
+                <Button onClick={() => refreshFeed(true)} disabled={feedLoading}>
                   <RefreshCw className="w-4 h-4 mr-1.5" />
-                  Load Trending Recipes
+                  Load Recipes
                 </Button>
               </div>
             </Card>
@@ -587,7 +630,7 @@ export function Discover({
             {/* Feed header */}
             <div className="px-4 flex items-center justify-between">
               <h2 className="text-base font-bold dark:text-stone-100">
-                What&apos;s Trending
+                Discover Recipes
               </h2>
               {feed?.lastRefreshed && (
                 <span className="text-xs text-stone-400 dark:text-stone-500">
@@ -596,25 +639,33 @@ export function Discover({
               )}
             </div>
 
-            {/* Source sections */}
-            {(
-              ["nyt", "allrecipes", "seriouseats"] as const
-            ).map((source) => {
-              const items = feed?.sources[source] ?? [];
+            {/* Category sections */}
+            {CATEGORY_ORDER.map((category) => {
+              const items = feed?.categories[category] ?? [];
               if (items.length === 0) return null;
+              // Check for new items (added in the last 3 days)
+              const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+              const newCount = items.filter(
+                (i) => i.addedAt && new Date(i.addedAt).getTime() > threeDaysAgo
+              ).length;
               return (
-                <div key={source}>
+                <div key={category}>
                   <h3 className="px-4 text-sm font-semibold text-stone-600 dark:text-stone-300 mb-2">
-                    {SOURCE_LABELS[source]}
+                    {CATEGORY_LABELS[category]}
                     <span className="ml-1.5 text-xs font-normal text-stone-400 dark:text-stone-500">
                       {items.length} recipes
                     </span>
+                    {newCount > 0 && (
+                      <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
+                        {newCount} new
+                      </span>
+                    )}
                   </h3>
                   <div className="flex gap-3 overflow-x-auto no-scrollbar px-4">
                     {items.map((item, i) => (
                       <button
-                        key={`${source}-${i}`}
-                        onClick={() => handleFeedItemClick(item, source)}
+                        key={`${category}-${i}`}
+                        onClick={() => handleFeedItemClick(item)}
                         className="shrink-0 w-44 text-left rounded-[var(--wk-radius-card)] border border-stone-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
                       >
                         <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
@@ -628,7 +679,7 @@ export function Discover({
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-stone-300 dark:text-stone-600">
                               <span className="text-xs font-medium">
-                                {SOURCE_LABELS[source]}
+                                {CATEGORY_LABELS[category]}
                               </span>
                             </div>
                           )}
@@ -637,6 +688,11 @@ export function Discover({
                           <h4 className="text-xs font-medium line-clamp-2 dark:text-stone-100 leading-snug">
                             {item.title}
                           </h4>
+                          {item.source && (
+                            <p className="text-[10px] text-stone-400 dark:text-stone-500 mt-0.5">
+                              {SOURCE_LABELS[item.source]}
+                            </p>
+                          )}
                         </div>
                       </button>
                     ))}

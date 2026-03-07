@@ -287,16 +287,38 @@ export interface InspirationResponse {
 
 export type DiscoverSource = "nyt" | "allrecipes" | "seriouseats";
 
+export type DiscoverCategory =
+  | "dinner"
+  | "breakfast"
+  | "side dish"
+  | "salad"
+  | "soups"
+  | "dessert"
+  | "appetizer"
+  | "drinks"
+  | "snack"
+  | "baking";
+
 export interface DiscoverFeedItem {
   title: string;
   url: string;
   imageUrl?: string;
   description?: string;
+  source?: DiscoverSource;
+  category?: DiscoverCategory;
+  addedAt?: string;
 }
 
-export interface DiscoverFeed {
+/** Legacy format: grouped by source (used by scraper, converted for UI) */
+export interface DiscoverFeedRaw {
   lastRefreshed: string;
   sources: Record<DiscoverSource, DiscoverFeedItem[]>;
+}
+
+/** New format: grouped by category (used by archive + UI) */
+export interface DiscoverFeed {
+  lastRefreshed: string;
+  categories: Partial<Record<DiscoverCategory, DiscoverFeedItem[]>>;
 }
 
 // ── Import ─────────────────────────────────────────────
