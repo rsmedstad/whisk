@@ -1,7 +1,8 @@
-import type { Env } from "../../../src/types";
+import type { Env, DiscoverCategory, DiscoverSource } from "../../../src/types";
 
 const KV_KEY = "discover_feed";
-const MIN_REFRESH_MS = 60 * 60 * 1000; // 1 hour minimum between refreshes
+const ARCHIVE_KEY = "discover_archive";
+const MIN_REFRESH_MS = 2 * 24 * 60 * 60 * 1000; // 2 days between refreshes
 
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
@@ -106,6 +107,19 @@ interface FeedItem {
   description?: string;
 }
 
+/** A feed item enriched with source, category, and archive timestamp */
+interface ArchiveItem extends FeedItem {
+  source: DiscoverSource;
+  category: DiscoverCategory;
+  addedAt: string;
+}
+
+interface Archive {
+  lastRefreshed: string;
+  items: ArchiveItem[];
+}
+
+/** Legacy scraper format (grouped by source) */
 interface Feed {
   lastRefreshed: string;
   sources: {
@@ -115,28 +129,65 @@ interface Feed {
   };
 }
 
-// ── GET: return cached feed from KV ─────────────────────
+/** Category-grouped output for the UI */
+interface CategoryFeed {
+  lastRefreshed: string;
+  categories: Partial<Record<DiscoverCategory, ArchiveItem[]>>;
+}
+
+// ── Category classifier ─────────────────────────────────
+// Maps recipe titles to meal categories using keyword matching.
+// These align with the existing tag system's "meal" group.
+
+const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
+  ["breakfast", /\b(?:breakfast|pancake|waffle|french toast|omelette|omelet|scrambl|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|muffin|cereal|bagel)\b/i],
+  ["soups", /\b(?:soup|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
+  ["salad", /\b(?:salad|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
+  ["dessert", /\b(?:dessert|cake|cookie|brownie|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcake|cheesecake|tiramisu|macaron|fudge|candy|truffle|sorbet|panna cotta|souffl[eé]|pastry|danish|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
+  ["baking", /\b(?:bread|roll|biscuit|scone|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon roll|doughnut|donut)\b/i],
+  ["drinks", /\b(?:cocktail|drink|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
+  ["appetizer", /\b(?:appetizer|dip|hummus|bruschetta|crostini|spring roll|dumpling|wonton|empanada|quesadilla|nacho|slider|bite|crab cake|deviled egg|charcuterie)\b/i],
+  ["snack", /\b(?:snack|popcorn|trail mix|chip|cracker|energy ball|protein bar)\b/i],
+  ["side dish", /\b(?:side dish|mashed potato|roasted vegetable|rice pilaf|couscous|baked beans|corn bread|cornbread|mac and cheese|macaroni|stuffing|au gratin|roasted potato|french fries|fries|potato salad)\b/i],
+  // "dinner" is the default/catch-all for main dishes
+];
+
+function classifyRecipe(title: string, description?: string): DiscoverCategory {
+  const text = `${title} ${description ?? ""}`;
+  for (const [category, pattern] of CATEGORY_KEYWORDS) {
+    if (pattern.test(text)) return category;
+  }
+  return "dinner"; // Default: main dish / entrée
+}
+
+// ── GET: return category-grouped feed from archive ──────
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-  const feed = await env.WHISK_KV.get<Feed>(KV_KEY, "json");
-  return Response.json(
-    feed ?? { lastRefreshed: null, sources: { nyt: [], allrecipes: [], seriouseats: [] } }
-  );
+  const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+  if (!archive || archive.items.length === 0) {
+    // Try legacy format for backward compat
+    const legacy = await env.WHISK_KV.get<Feed>(KV_KEY, "json");
+    if (legacy) return Response.json(migrateLegacyFeed(legacy));
+    return Response.json({ lastRefreshed: null, categories: {} });
+  }
+  return Response.json(archiveToCategoryFeed(archive));
 };
 
-// ── POST: refresh feed by scraping all sources ──────────
+// ── POST: refresh feed by scraping, merge into archive ──
+// Pass ?force=true to bypass 2-day rate limit (still respects 1-hour minimum)
 
-export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
-  // Rate limit: no more than once per hour (skip if any source is empty — likely a failed scrape)
-  const existing = await env.WHISK_KV.get<Feed>(KV_KEY, "json");
-  if (existing?.lastRefreshed) {
-    const hasAllSources =
-      existing.sources.nyt.length > 0 &&
-      existing.sources.allrecipes.length > 0 &&
-      existing.sources.seriouseats.length > 0;
-    const elapsed = Date.now() - new Date(existing.lastRefreshed).getTime();
-    if (hasAllSources && elapsed < MIN_REFRESH_MS) {
-      return Response.json(existing);
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+  const { searchParams } = new URL(request.url);
+  const force = searchParams.get("force") === "true";
+  const MIN_FORCE_MS = 60 * 60 * 1000; // 1 hour minimum even on force
+
+  // Rate limit: 2 days auto, 1 hour on manual force
+  if (archive?.lastRefreshed && archive.items.length > 10) {
+    const elapsed = Date.now() - new Date(archive.lastRefreshed).getTime();
+    const limit = force ? MIN_FORCE_MS : MIN_REFRESH_MS;
+    if (elapsed < limit) {
+      return Response.json(archiveToCategoryFeed(archive));
     }
   }
 
@@ -147,19 +198,80 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
     scrapeSeriousEats(env),
   ]);
 
-  // Keep previous source data if a scrape returned empty (transient failure)
-  const feed: Feed = {
-    lastRefreshed: new Date().toISOString(),
+  // Merge new items into archive (dedup by URL)
+  const now = new Date().toISOString();
+  const existingUrls = new Set(archive?.items.map((i) => normalizeUrl(i.url)) ?? []);
+  const newItems: ArchiveItem[] = [];
+
+  const addItems = (items: FeedItem[], source: DiscoverSource) => {
+    for (const item of items) {
+      const key = normalizeUrl(item.url);
+      if (!existingUrls.has(key)) {
+        existingUrls.add(key);
+        newItems.push({
+          ...item,
+          source,
+          category: classifyRecipe(item.title, item.description),
+          addedAt: now,
+        });
+      }
+    }
+  };
+
+  addItems(nyt, "nyt");
+  addItems(allrecipes, "allrecipes");
+  addItems(seriouseats, "seriouseats");
+
+  const updatedArchive: Archive = {
+    lastRefreshed: now,
+    items: [...(archive?.items ?? []), ...newItems],
+  };
+
+  // Also save legacy format for backward compat
+  const legacyFeed: Feed = {
+    lastRefreshed: now,
     sources: {
-      nyt: nyt.length > 0 ? nyt : (existing?.sources.nyt ?? []),
-      allrecipes: allrecipes.length > 0 ? allrecipes : (existing?.sources.allrecipes ?? []),
-      seriouseats: seriouseats.length > 0 ? seriouseats : (existing?.sources.seriouseats ?? []),
+      nyt: nyt.length > 0 ? nyt : (archive?.items.filter((i) => i.source === "nyt") ?? []).slice(0, 30),
+      allrecipes: allrecipes.length > 0 ? allrecipes : (archive?.items.filter((i) => i.source === "allrecipes") ?? []).slice(0, 30),
+      seriouseats: seriouseats.length > 0 ? seriouseats : (archive?.items.filter((i) => i.source === "seriouseats") ?? []).slice(0, 30),
     },
   };
 
-  await env.WHISK_KV.put(KV_KEY, JSON.stringify(feed));
-  return Response.json(feed);
+  await Promise.all([
+    env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive)),
+    env.WHISK_KV.put(KV_KEY, JSON.stringify(legacyFeed)),
+  ]);
+
+  return Response.json(archiveToCategoryFeed(updatedArchive));
 };
+
+/** Convert archive to category-grouped feed for the UI */
+function archiveToCategoryFeed(archive: Archive): CategoryFeed {
+  const categories: Partial<Record<DiscoverCategory, ArchiveItem[]>> = {};
+  for (const item of archive.items) {
+    const cat = item.category;
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat]!.push(item);
+  }
+  return { lastRefreshed: archive.lastRefreshed, categories };
+}
+
+/** Migrate legacy source-grouped feed to category feed (one-time) */
+function migrateLegacyFeed(feed: Feed): CategoryFeed {
+  const now = feed.lastRefreshed;
+  const categories: Partial<Record<DiscoverCategory, ArchiveItem[]>> = {};
+  const addItems = (items: FeedItem[], source: DiscoverSource) => {
+    for (const item of items) {
+      const cat = classifyRecipe(item.title, item.description);
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat]!.push({ ...item, source, category: cat, addedAt: now });
+    }
+  };
+  addItems(feed.sources.nyt, "nyt");
+  addItems(feed.sources.allrecipes, "allrecipes");
+  addItems(feed.sources.seriouseats, "seriouseats");
+  return { lastRefreshed: now, categories };
+}
 
 // ── NYT Cooking ─────────────────────────────────────────
 // NYT Cooking may use __NEXT_DATA__ (older Next.js) or RSC flight data
