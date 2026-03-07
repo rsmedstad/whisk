@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Send } from "../ui/Icon";
+import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext, SEASONAL_CATEGORIES } from "../../lib/seasonal";
@@ -240,10 +241,10 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
 
   return (
     <div className="flex flex-col h-full">
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)] wk-header-decor relative">
         <div className="flex items-center justify-between py-3">
           <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
-            <WhiskLogo className="w-5 h-5 text-orange-500" />
+            <SeasonalBrandIcon />
             <span className="text-lg font-bold text-orange-500">W</span>
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Suggest</h1>

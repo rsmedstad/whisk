@@ -17,29 +17,66 @@ export interface Holiday {
   keywords: string[];
 }
 
-const HOLIDAYS: {
+interface HolidayDef {
   name: string;
-  month: number;
-  day: number;
   tags: string[];
   keywords: string[];
-}[] = [
-  { name: "New Year's Day", month: 0, day: 1, tags: ["appetizer", "holiday"], keywords: ["party", "brunch", "champagne"] },
-  { name: "Super Bowl", month: 1, day: 9, tags: ["appetizer", "snack", "american"], keywords: ["wings", "dip", "nachos", "game day", "party food"] },
-  { name: "Valentine's Day", month: 1, day: 14, tags: ["dinner", "dessert", "french", "italian"], keywords: ["romantic", "chocolate", "steak", "date night"] },
-  { name: "St. Patrick's Day", month: 2, day: 17, tags: ["dinner", "holiday"], keywords: ["irish", "corned beef", "soda bread", "stew", "green"] },
-  { name: "Easter", month: 3, day: 20, tags: ["brunch", "dinner", "baking", "holiday"], keywords: ["ham", "lamb", "deviled eggs", "hot cross buns", "brunch"] },
-  { name: "Cinco de Mayo", month: 4, day: 5, tags: ["mexican", "dinner"], keywords: ["tacos", "margarita", "guacamole", "fiesta"] },
-  { name: "Mother's Day", month: 4, day: 11, tags: ["brunch", "dessert", "baking"], keywords: ["brunch", "cake", "special", "tea"] },
-  { name: "Memorial Day", month: 4, day: 26, tags: ["grilling", "summer", "american"], keywords: ["bbq", "burgers", "cookout", "picnic"] },
-  { name: "Father's Day", month: 5, day: 15, tags: ["grilling", "dinner"], keywords: ["steak", "bbq", "grilling", "ribs"] },
-  { name: "4th of July", month: 6, day: 4, tags: ["grilling", "summer", "american"], keywords: ["bbq", "picnic", "red white blue", "cookout", "watermelon"] },
-  { name: "Labor Day", month: 8, day: 1, tags: ["grilling", "summer"], keywords: ["bbq", "cookout", "end of summer", "picnic"] },
-  { name: "Halloween", month: 9, day: 31, tags: ["dessert", "baking", "fall"], keywords: ["pumpkin", "spooky", "candy", "party", "fall treats"] },
-  { name: "Thanksgiving", month: 10, day: 27, tags: ["dinner", "fall", "holiday", "baking"], keywords: ["turkey", "stuffing", "pie", "cranberry", "sides", "gravy"] },
-  { name: "Christmas", month: 11, day: 25, tags: ["dinner", "dessert", "baking", "holiday", "winter"], keywords: ["cookies", "ham", "roast", "gingerbread", "festive"] },
-  { name: "New Year's Eve", month: 11, day: 31, tags: ["appetizer", "holiday"], keywords: ["party", "appetizers", "cocktails", "celebration"] },
+  /** Returns the date of this holiday for a given year */
+  getDate: (year: number) => Date;
+}
+
+const HOLIDAYS: HolidayDef[] = [
+  { name: "New Year's Day", tags: ["appetizer", "holiday"], keywords: ["party", "brunch", "champagne"], getDate: (y) => new Date(y, 0, 1) },
+  { name: "Super Bowl", tags: ["appetizer", "snack", "american"], keywords: ["wings", "dip", "nachos", "game day", "party food"], getDate: (y) => nthWeekdayOfMonth(y, 1, 0, 2) }, // 2nd Sunday in February
+  { name: "Valentine's Day", tags: ["dinner", "dessert", "french", "italian"], keywords: ["romantic", "chocolate", "steak", "date night"], getDate: (y) => new Date(y, 1, 14) },
+  { name: "St. Patrick's Day", tags: ["dinner", "holiday"], keywords: ["irish", "corned beef", "soda bread", "stew", "green"], getDate: (y) => new Date(y, 2, 17) },
+  { name: "Easter", tags: ["brunch", "dinner", "baking", "holiday"], keywords: ["ham", "lamb", "deviled eggs", "hot cross buns", "brunch"], getDate: computeEasterForHolidays },
+  { name: "Cinco de Mayo", tags: ["mexican", "dinner"], keywords: ["tacos", "margarita", "guacamole", "fiesta"], getDate: (y) => new Date(y, 4, 5) },
+  { name: "Mother's Day", tags: ["brunch", "dessert", "baking"], keywords: ["brunch", "cake", "special", "tea"], getDate: (y) => nthWeekdayOfMonth(y, 4, 0, 2) }, // 2nd Sunday in May
+  { name: "Memorial Day", tags: ["grilling", "summer", "american"], keywords: ["bbq", "burgers", "cookout", "picnic"], getDate: (y) => lastWeekdayOfMonth(y, 4, 1) }, // Last Monday in May
+  { name: "Father's Day", tags: ["grilling", "dinner"], keywords: ["steak", "bbq", "grilling", "ribs"], getDate: (y) => nthWeekdayOfMonth(y, 5, 0, 3) }, // 3rd Sunday in June
+  { name: "4th of July", tags: ["grilling", "summer", "american"], keywords: ["bbq", "picnic", "red white blue", "cookout", "watermelon"], getDate: (y) => new Date(y, 6, 4) },
+  { name: "Labor Day", tags: ["grilling", "summer"], keywords: ["bbq", "cookout", "end of summer", "picnic"], getDate: (y) => nthWeekdayOfMonth(y, 8, 1, 1) }, // 1st Monday in September
+  { name: "Halloween", tags: ["dessert", "baking", "fall"], keywords: ["pumpkin", "spooky", "candy", "party", "fall treats"], getDate: (y) => new Date(y, 9, 31) },
+  { name: "Thanksgiving", tags: ["dinner", "fall", "holiday", "baking"], keywords: ["turkey", "stuffing", "pie", "cranberry", "sides", "gravy"], getDate: (y) => nthWeekdayOfMonth(y, 10, 4, 4) }, // 4th Thursday in November
+  { name: "Christmas", tags: ["dinner", "dessert", "baking", "holiday", "winter"], keywords: ["cookies", "ham", "roast", "gingerbread", "festive"], getDate: (y) => new Date(y, 11, 25) },
+  { name: "New Year's Eve", tags: ["appetizer", "holiday"], keywords: ["party", "appetizers", "cocktails", "celebration"], getDate: (y) => new Date(y, 11, 31) },
 ];
+
+/** Placeholder — the real computeEaster is defined later, this avoids forward-reference issues */
+function computeEasterForHolidays(year: number): Date {
+  // Anonymous Gregorian algorithm (duplicated to avoid circular dep with function defined below)
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31) - 1;
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month, day);
+}
+
+/** Last occurrence of a weekday in a month (e.g. last Monday of May = Memorial Day) */
+function lastWeekdayOfMonth(year: number, month: number, weekday: number): Date {
+  const last = new Date(year, month + 1, 0); // last day of month
+  const diff = (last.getDay() - weekday + 7) % 7;
+  return new Date(year, month, last.getDate() - diff);
+}
+
+/** Nth weekday of a month (e.g. 4th Thursday of November = Thanksgiving) */
+function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date {
+  const first = new Date(year, month, 1);
+  let dayOfMonth = 1 + ((weekday - first.getDay() + 7) % 7);
+  dayOfMonth += (n - 1) * 7;
+  return new Date(year, month, dayOfMonth);
+}
 
 const SEASONAL_INGREDIENTS: Record<string, string[]> = {
   spring: ["asparagus", "peas", "radish", "artichoke", "strawberry", "rhubarb", "mint", "arugula", "fennel", "fava beans"],
@@ -102,7 +139,7 @@ function getUpcomingHolidays(date: Date, windowDays = 21): Holiday[] {
   for (const h of HOLIDAYS) {
     // Check this year and next year
     for (const yearOffset of [0, 1]) {
-      const holidayDate = new Date(date.getFullYear() + yearOffset, h.month, h.day);
+      const holidayDate = h.getDate(date.getFullYear() + yearOffset);
       const diff = holidayDate.getTime() - now;
       const daysAway = Math.ceil(diff / (1000 * 60 * 60 * 24));
 
@@ -221,31 +258,95 @@ export type SeasonalAccent =
   | "fall"
   | "winter";
 
-// Holiday name → CSS accent name. Holidays take priority when within range.
-const HOLIDAY_ACCENT_MAP: { name: string; accent: SeasonalAccent; startMonth: number; startDay: number; endMonth: number; endDay: number }[] = [
-  { name: "Christmas",       accent: "christmas",    startMonth: 11, startDay: 1,  endMonth: 11, endDay: 26 },
-  { name: "Valentine's Day", accent: "valentine",    startMonth: 1,  startDay: 1,  endMonth: 1,  endDay: 15 },
-  { name: "St. Patrick's Day", accent: "stpatrick",  startMonth: 2,  startDay: 10, endMonth: 2,  endDay: 17 },
-  { name: "Easter",          accent: "easter",       startMonth: 3,  startDay: 7,  endMonth: 3,  endDay: 21 },
-  { name: "4th of July",     accent: "july4th",      startMonth: 5,  startDay: 25, endMonth: 6,  endDay: 5 },
-  { name: "Halloween",       accent: "halloween",    startMonth: 9,  startDay: 15, endMonth: 9,  endDay: 31 },
-  { name: "Thanksgiving",    accent: "thanksgiving", startMonth: 10, startDay: 18, endMonth: 10, endDay: 28 },
-];
+// ── Dynamic holiday accent ranges ──────────────────────────
+
+interface HolidayAccentRange {
+  accent: SeasonalAccent;
+  start: Date;
+  end: Date;
+}
+
+/**
+ * Build dynamic holiday accent ranges for a given year.
+ * Major holidays (Christmas, Halloween) get the longest windows.
+ * Minor holidays get shorter windows. Variable-date holidays are computed dynamically.
+ */
+function getHolidayAccentRanges(year: number): HolidayAccentRange[] {
+  const easter = computeEasterForHolidays(year);
+  const thanksgiving = nthWeekdayOfMonth(year, 10, 4, 4); // 4th Thursday of November
+
+  return [
+    // Christmas: Dec 1 - Dec 26 (major — full month buildup)
+    { accent: "christmas",    start: new Date(year, 11, 1),  end: new Date(year, 11, 26) },
+    // Halloween: Oct 10 - Nov 1 (major — 3+ weeks of spooky)
+    { accent: "halloween",    start: new Date(year, 9, 10),  end: new Date(year, 10, 1) },
+    // Thanksgiving: 10 days before through day after (dynamic date)
+    { accent: "thanksgiving", start: addDays(thanksgiving, -10), end: addDays(thanksgiving, 1) },
+    // Valentine's Day: Feb 1 - Feb 15 (2 weeks of romance)
+    { accent: "valentine",    start: new Date(year, 1, 1),   end: new Date(year, 1, 15) },
+    // St. Patrick's Day: Mar 10 - Mar 18 (1 week buildup + day)
+    { accent: "stpatrick",    start: new Date(year, 2, 10),  end: new Date(year, 2, 18) },
+    // Easter: 7 days before through day after (dynamic date)
+    { accent: "easter",       start: addDays(easter, -7),    end: addDays(easter, 1) },
+    // 4th of July: Jun 25 - Jul 5 (10 days patriotic)
+    { accent: "july4th",      start: new Date(year, 5, 25),  end: new Date(year, 6, 5) },
+  ];
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
 
 /** Returns the current accent palette name based on date. Holiday > season fallback. */
 export function getSeasonalAccent(date: Date = new Date()): SeasonalAccent {
-  const month = date.getMonth();
-  const day = date.getDate();
+  const year = date.getFullYear();
+  const time = date.getTime();
 
   // Check holidays first — they override the season default
-  for (const h of HOLIDAY_ACCENT_MAP) {
-    const afterStart = month > h.startMonth || (month === h.startMonth && day >= h.startDay);
-    const beforeEnd = month < h.endMonth || (month === h.endMonth && day <= h.endDay);
-    if (afterStart && beforeEnd) return h.accent;
+  // Check current year and next year (for late December checking into Jan holidays)
+  for (const y of [year, year + 1]) {
+    for (const h of getHolidayAccentRanges(y)) {
+      if (time >= h.start.getTime() && time <= h.end.getTime()) {
+        return h.accent;
+      }
+    }
   }
 
   // Fall back to season
   return getSeason(date);
+}
+
+/** Maps an accent to a brand icon name for the header. */
+export type HolidayBrandIcon =
+  | "whisk"
+  | "pumpkin"
+  | "christmas-tree"
+  | "snowflake"
+  | "heart-arrow"
+  | "shamrock"
+  | "easter-egg"
+  | "firework"
+  | "turkey-leg";
+
+const BRAND_ICON_MAP: Record<SeasonalAccent, HolidayBrandIcon> = {
+  halloween: "pumpkin",
+  christmas: "christmas-tree",
+  winter: "snowflake",
+  valentine: "heart-arrow",
+  stpatrick: "shamrock",
+  easter: "easter-egg",
+  july4th: "firework",
+  thanksgiving: "turkey-leg",
+  spring: "whisk",
+  summer: "whisk",
+  fall: "whisk",
+};
+
+/** Returns which icon to show as the app brand for the current accent */
+export function getBrandIcon(accent: SeasonalAccent): HolidayBrandIcon {
+  return BRAND_ICON_MAP[accent];
 }
 
 /** Build a context string for AI system prompts */

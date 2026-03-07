@@ -383,3 +383,207 @@ export function Send(props: IconProps) {
     </Icon>
   );
 }
+
+/* ── Holiday-themed brand icons ──────────────────────────── */
+
+/** Pumpkin icon for Halloween branding */
+export function Pumpkin(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Stem */}
+      <path d="M12 2 C12 2, 10 3, 11 5 C11.5 5, 12.5 5, 13 5 C14 3, 12 2, 12 2Z" strokeWidth={1.2} fill="currentColor" opacity={0.6} />
+      {/* Left lobe */}
+      <path d="M6 13 C6 7, 9 5, 12 5 C8 5.5, 4 8, 4 13 C4 18, 8 21, 12 21 C9 21, 6 18, 6 13Z" strokeWidth={1.2} />
+      {/* Right lobe */}
+      <path d="M18 13 C18 7, 15 5, 12 5 C16 5.5, 20 8, 20 13 C20 18, 16 21, 12 21 C15 21, 18 18, 18 13Z" strokeWidth={1.2} />
+      {/* Center */}
+      <ellipse cx="12" cy="13" rx="5" ry="8" strokeWidth={1.2} />
+      {/* Left eye */}
+      <path d="M9 11 L10 9.5 L11 11" strokeWidth={1.5} />
+      {/* Right eye */}
+      <path d="M13 11 L14 9.5 L15 11" strokeWidth={1.5} />
+      {/* Mouth */}
+      <path d="M8.5 14.5 C9.5 16, 14.5 16, 15.5 14.5" strokeWidth={1.3} />
+    </svg>
+  );
+}
+
+/** Christmas tree for Christmas branding */
+export function ChristmasTree(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Star */}
+      <path d="M12 1 L12.8 3.5 L12 3 L11.2 3.5 Z" strokeWidth={1} fill="currentColor" />
+      {/* Top tier */}
+      <path d="M12 3 L8 8 L16 8 Z" strokeWidth={1.2} />
+      {/* Middle tier */}
+      <path d="M12 6 L6 13 L18 13 Z" strokeWidth={1.2} />
+      {/* Bottom tier */}
+      <path d="M12 10 L4 19 L20 19 Z" strokeWidth={1.2} />
+      {/* Trunk */}
+      <rect x="10" y="19" width="4" height="3" rx="0.5" strokeWidth={1.2} />
+      {/* Ornaments */}
+      <circle cx="10" cy="11" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="14" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="16" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="17" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** Snowflake for winter branding */
+export function Snowflake(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Main axes */}
+      <line x1="12" y1="2" x2="12" y2="22" strokeWidth={1.5} />
+      <line x1="3.34" y1="7" x2="20.66" y2="17" strokeWidth={1.5} />
+      <line x1="3.34" y1="17" x2="20.66" y2="7" strokeWidth={1.5} />
+      {/* Top branches */}
+      <path d="M12 2 L10 4.5 M12 2 L14 4.5" strokeWidth={1.2} />
+      {/* Bottom branches */}
+      <path d="M12 22 L10 19.5 M12 22 L14 19.5" strokeWidth={1.2} />
+      {/* Upper-right branches */}
+      <path d="M20.66 7 L17.8 7.2 M20.66 7 L19.5 9.5" strokeWidth={1.2} />
+      {/* Lower-right branches */}
+      <path d="M20.66 17 L19.5 14.5 M20.66 17 L17.8 16.8" strokeWidth={1.2} />
+      {/* Lower-left branches */}
+      <path d="M3.34 17 L4.5 14.5 M3.34 17 L6.2 16.8" strokeWidth={1.2} />
+      {/* Upper-left branches */}
+      <path d="M3.34 7 L6.2 7.2 M3.34 7 L4.5 9.5" strokeWidth={1.2} />
+      {/* Center diamond */}
+      <circle cx="12" cy="12" r="1.5" strokeWidth={1} />
+    </svg>
+  );
+}
+
+/** Heart with arrow for Valentine's Day branding */
+export function HeartArrow(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Heart */}
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" strokeWidth={1.5} />
+      {/* Arrow */}
+      <line x1="4" y1="4" x2="19" y2="16" strokeWidth={1.2} />
+      <path d="M19 16 L16 15.5 M19 16 L18.5 13" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+/** Shamrock/clover for St. Patrick's Day branding */
+export function Shamrock(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Top leaf */}
+      <path d="M12 3 C9 3, 7 5, 7 7.5 C7 10, 9 11, 12 11 C15 11, 17 10, 17 7.5 C17 5, 15 3, 12 3Z" strokeWidth={1.3} />
+      {/* Left leaf */}
+      <path d="M5 8 C3 10, 3 13, 5.5 14.5 C8 16, 10 14.5, 11.5 12 C9 13, 6 13, 5.5 11 C5 9.5, 5.5 8.5, 5 8Z" strokeWidth={1.3} />
+      {/* Right leaf */}
+      <path d="M19 8 C21 10, 21 13, 18.5 14.5 C16 16, 14 14.5, 12.5 12 C15 13, 18 13, 18.5 11 C19 9.5, 18.5 8.5, 19 8Z" strokeWidth={1.3} />
+      {/* Stem */}
+      <path d="M12 11 C12 14, 11.5 17, 12 21" strokeWidth={1.8} />
+    </svg>
+  );
+}
+
+/** Easter egg for Easter branding */
+export function EasterEgg(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Egg shape */}
+      <path d="M12 2 C7.5 2, 4 8, 4 14 C4 19, 7.5 22, 12 22 C16.5 22, 20 19, 20 14 C20 8, 16.5 2, 12 2Z" strokeWidth={1.3} />
+      {/* Zigzag decoration band */}
+      <path d="M5.5 10 L7.5 8 L9.5 10 L11.5 8 L13.5 10 L15.5 8 L17.5 10" strokeWidth={1.2} />
+      {/* Wavy decoration band */}
+      <path d="M6 15 C7.5 13.5, 9 16, 12 14.5 C15 13, 16.5 16, 18 15" strokeWidth={1.2} />
+      {/* Dots */}
+      <circle cx="9" cy="12" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="18" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** Firework/sparkler for 4th of July branding */
+export function Firework(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Center burst */}
+      <circle cx="12" cy="10" r="1" fill="currentColor" strokeWidth={0} />
+      {/* Rays */}
+      <line x1="12" y1="10" x2="12" y2="3" strokeWidth={1.5} />
+      <line x1="12" y1="10" x2="17" y2="5" strokeWidth={1.3} />
+      <line x1="12" y1="10" x2="19" y2="10" strokeWidth={1.3} />
+      <line x1="12" y1="10" x2="17" y2="15" strokeWidth={1.3} />
+      <line x1="12" y1="10" x2="7" y2="15" strokeWidth={1.3} />
+      <line x1="12" y1="10" x2="5" y2="10" strokeWidth={1.3} />
+      <line x1="12" y1="10" x2="7" y2="5" strokeWidth={1.3} />
+      {/* Sparkle tips */}
+      <circle cx="12" cy="3" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="5" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="10" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="7" cy="5" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="10" r="0.5" fill="currentColor" stroke="none" />
+      {/* Stick */}
+      <line x1="12" y1="13" x2="12" y2="22" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+/** Turkey leg for Thanksgiving branding */
+export function TurkeyLeg(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Drumstick body */}
+      <path d="M15 3 C11 3, 7 6, 6 10 C5 14, 6 16, 8 17 L5 22" strokeWidth={2} />
+      {/* Meat round part */}
+      <path d="M15 3 C19 3, 21 6, 20 10 C19 14, 16 16, 12 17 C10 17.5, 8 17, 8 17" strokeWidth={1.5} />
+      {/* Bone end frills */}
+      <path d="M5 22 C4 21, 3.5 22.5, 4.5 23 M5 22 C6 21, 6.5 22.5, 5.5 23" strokeWidth={1.2} />
+    </svg>
+  );
+}
+
+/** Spider for Halloween decorative accent */
+export function Spider(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Web thread */}
+      <line x1="12" y1="1" x2="12" y2="8" strokeWidth={0.8} />
+      {/* Body */}
+      <ellipse cx="12" cy="10" rx="2.5" ry="2" strokeWidth={1.3} fill="currentColor" opacity={0.3} />
+      <ellipse cx="12" cy="14" rx="3" ry="3.5" strokeWidth={1.3} fill="currentColor" opacity={0.3} />
+      {/* Legs — left */}
+      <path d="M9.5 10 C7 8, 4 6, 2 5" strokeWidth={1.1} />
+      <path d="M9.5 11 C7 10, 4 10, 2 9" strokeWidth={1.1} />
+      <path d="M9.5 13 C7 14, 4 16, 2 18" strokeWidth={1.1} />
+      <path d="M9.5 14.5 C7 16, 4 18, 3 21" strokeWidth={1.1} />
+      {/* Legs — right */}
+      <path d="M14.5 10 C17 8, 20 6, 22 5" strokeWidth={1.1} />
+      <path d="M14.5 11 C17 10, 20 10, 22 9" strokeWidth={1.1} />
+      <path d="M14.5 13 C17 14, 20 16, 22 18" strokeWidth={1.1} />
+      <path d="M14.5 14.5 C17 16, 20 18, 21 21" strokeWidth={1.1} />
+      {/* Eyes */}
+      <circle cx="11" cy="9.5" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="13" cy="9.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** Witch hat for Halloween decorative accent */
+export function WitchHat(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Hat cone */}
+      <path d="M12 1 L7 16 L17 16 Z" strokeWidth={1.3} />
+      {/* Brim */}
+      <path d="M3 16 C3 16, 5 19, 12 19 C19 19, 21 16, 21 16" strokeWidth={1.5} />
+      <line x1="3" y1="16" x2="7" y2="16" strokeWidth={1.3} />
+      <line x1="17" y1="16" x2="21" y2="16" strokeWidth={1.3} />
+      {/* Hat band */}
+      <line x1="7.8" y1="14" x2="16.2" y2="14" strokeWidth={1.5} />
+      {/* Buckle */}
+      <rect x="10.5" y="13" width="3" height="2.5" rx="0.3" strokeWidth={1} />
+    </svg>
+  );
+}
