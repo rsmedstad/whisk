@@ -53,7 +53,7 @@ const SOURCE_LABELS: Record<DiscoverSource, string> = {
   seriouseats: "Serious Eats",
 };
 
-const CATEGORY_LABELS: Record<DiscoverCategory, string> = {
+const TYPE_LABELS: Record<DiscoverCategory, string> = {
   dinner: "Dinner",
   breakfast: "Breakfast",
   "side dish": "Side Dishes",
@@ -65,6 +65,50 @@ const CATEGORY_LABELS: Record<DiscoverCategory, string> = {
   snack: "Snacks",
   baking: "Baking",
 };
+
+/** Cuisine keywords for text-matching against discover item titles/descriptions */
+const CUISINE_OPTIONS = [
+  "italian", "mexican", "chinese", "thai", "indian",
+  "japanese", "korean", "mediterranean", "american", "french",
+] as const;
+type CuisineOption = typeof CUISINE_OPTIONS[number];
+
+const CUISINE_LABELS: Record<CuisineOption, string> = {
+  italian: "Italian",
+  mexican: "Mexican",
+  chinese: "Chinese",
+  thai: "Thai",
+  indian: "Indian",
+  japanese: "Japanese",
+  korean: "Korean",
+  mediterranean: "Mediterranean",
+  american: "American",
+  french: "French",
+};
+
+/** Cuisine keyword sets for text matching (includes related terms) */
+const CUISINE_KEYWORDS: Record<CuisineOption, string[]> = {
+  italian: ["italian", "pasta", "risotto", "pizza", "lasagna", "pesto", "marinara", "bolognese", "gnocchi", "tiramisu", "bruschetta", "carbonara", "parmesan"],
+  mexican: ["mexican", "taco", "burrito", "enchilada", "salsa", "guacamole", "quesadilla", "tamale", "mole", "tortilla", "pozole", "elote", "churro"],
+  chinese: ["chinese", "stir-fry", "wok", "dumpling", "dim sum", "lo mein", "kung pao", "szechuan", "sichuan", "mapo", "fried rice", "chow"],
+  thai: ["thai", "curry", "pad thai", "satay", "tom yum", "green curry", "red curry", "coconut", "basil chicken", "larb"],
+  indian: ["indian", "tandoori", "tikka", "masala", "naan", "biryani", "samosa", "paneer", "dal", "chutney", "vindaloo", "korma", "chapati"],
+  japanese: ["japanese", "sushi", "ramen", "teriyaki", "tempura", "miso", "sashimi", "udon", "yakitori", "gyoza", "katsu", "onigiri", "edamame"],
+  korean: ["korean", "bibimbap", "kimchi", "bulgogi", "gochujang", "japchae", "tteokbokki", "galbi", "banchan", "jjigae", "kimbap"],
+  mediterranean: ["mediterranean", "falafel", "hummus", "tzatziki", "pita", "shawarma", "tabbouleh", "dolma", "olive oil", "couscous", "baba ganoush"],
+  american: ["american", "burger", "bbq", "mac and cheese", "fried chicken", "buffalo", "grilled cheese", "hot dog", "coleslaw", "cornbread", "biscuits"],
+  french: ["french", "soufflé", "crêpe", "croissant", "ratatouille", "coq au vin", "beurre", "gratin", "béarnaise", "quiche", "bouillabaisse", "crème"],
+};
+
+function matchesCuisine(item: DiscoverFeedItem, cuisine: CuisineOption): boolean {
+  // Prefer stored tags from AI classification
+  if (item.tags && item.tags.length > 0) {
+    return item.tags.includes(cuisine);
+  }
+  // Fallback to keyword matching for untagged items
+  const text = `${item.title} ${item.description ?? ""}`.toLowerCase();
+  return CUISINE_KEYWORDS[cuisine].some((kw) => text.includes(kw));
+}
 
 /** Display order for categories */
 const CATEGORY_ORDER: DiscoverCategory[] = [
@@ -91,12 +135,6 @@ function isNewItem(item: DiscoverFeedItem): boolean {
   if (!item.addedAt) return false;
   return Date.now() - new Date(item.addedAt).getTime() < NEW_THRESHOLD_MS;
 }
-
-const SOURCE_FILTER_LABELS: Record<DiscoverSource, string> = {
-  nyt: "NYT",
-  allrecipes: "AllRecipes",
-  seriouseats: "Serious Eats",
-};
 
 /** Proxy external recipe images through our backend to avoid hotlinking blocks */
 function proxyImageUrl(url: string | undefined): string | undefined {
@@ -194,8 +232,8 @@ export function Discover({
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<DiscoverSort>("category");
   const [newOnly, setNewOnly] = useState(false);
-  const [selectedSource, setSelectedSource] = useState<DiscoverSource | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<DiscoverCategory | null>(null);
+  const [selectedType, setSelectedType] = useState<DiscoverCategory | null>(null);
+  const [selectedCuisine, setSelectedCuisine] = useState<CuisineOption | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number } | null>(null);
 
@@ -352,6 +390,11 @@ export function Discover({
     if (!importedRecipe || !onSaveRecipe) return;
     setIsSavingFeed(true);
     try {
+      // Merge tags from discover item + imported recipe (deduped)
+      const mergedTags = [...new Set([
+        ...(importedRecipe.tags ?? []),
+        ...(selectedFeedItem?.tags ?? []),
+      ])];
       const recipe = await onSaveRecipe({
         title: importedRecipe.title,
         description: importedRecipe.description,
@@ -361,7 +404,7 @@ export function Discover({
         photos: importedRecipe.photos ?? [],
         thumbnailUrl: importedRecipe.thumbnailUrl,
         videoUrl: importedRecipe.videoUrl,
-        tags: importedRecipe.tags ?? [],
+        tags: mergedTags,
         prepTime: importedRecipe.prepTime,
         cookTime: importedRecipe.cookTime,
         servings: importedRecipe.servings,
@@ -465,14 +508,14 @@ export function Discover({
       items = items.filter(isNewItem);
     }
 
-    // Source filter
-    if (selectedSource) {
-      items = items.filter((i) => i.source === selectedSource);
+    // Type filter (maps to category field)
+    if (selectedType) {
+      items = items.filter((i) => i.category === selectedType);
     }
 
-    // Category filter
-    if (selectedCategory) {
-      items = items.filter((i) => i.category === selectedCategory);
+    // Cuisine filter (text match)
+    if (selectedCuisine) {
+      items = items.filter((i) => matchesCuisine(i, selectedCuisine));
     }
 
     // Sort
@@ -487,13 +530,13 @@ export function Discover({
     }
 
     return items;
-  }, [allItems, search, newOnly, selectedSource, selectedCategory, sort]);
+  }, [allItems, search, newOnly, selectedType, selectedCuisine, sort]);
 
   // Count new items for the badge
   const newCount = useMemo(() => allItems.filter(isNewItem).length, [allItems]);
 
   // Check if any filters are active (to switch from carousel to grid)
-  const hasActiveFilters = search || newOnly || selectedSource !== null || selectedCategory !== null;
+  const hasActiveFilters = search || newOnly || selectedType !== null || selectedCuisine !== null;
 
   // Group filtered items by category for carousel view
   const groupedItems = useMemo(() => {
@@ -506,15 +549,15 @@ export function Discover({
       .filter((g) => g.items.length > 0);
   }, [filteredItems, hasActiveFilters, sort]);
 
-  // Available categories and sources for filter dropdowns (must be before early return)
-  const availableCategories = useMemo(() =>
+  // Available types and cuisines for filter dropdowns (must be before early return)
+  const availableTypes = useMemo(() =>
     CATEGORY_ORDER.filter((cat) => allItems.some((i) => i.category === cat)),
     [allItems]
   );
-  const availableSources = useMemo(() => {
-    const sources = new Set(allItems.map((i) => i.source));
-    return (["nyt", "allrecipes", "seriouseats"] as DiscoverSource[]).filter((s) => sources.has(s));
-  }, [allItems]);
+  const availableCuisines = useMemo(() =>
+    CUISINE_OPTIONS.filter((cuisine) => allItems.some((i) => matchesCuisine(i, cuisine))),
+    [allItems]
+  );
 
   if (selectedFeedItem) {
     const hasVideo = !!importedRecipe?.videoUrl;
@@ -1097,39 +1140,39 @@ export function Discover({
 
               <span className="text-stone-300 dark:text-stone-600 text-sm select-none">|</span>
 
-              {/* Source filter */}
-              {availableSources.length > 1 && (
-                <button
-                  onClick={(e) => openDropdownAt("source", e)}
-                  className={classNames(
-                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
-                    selectedSource
-                      ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
-                      : openDropdown === "source"
-                        ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
-                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                  )}
-                >
-                  {selectedSource ? SOURCE_FILTER_LABELS[selectedSource] : "Source"}
-                  <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "source" && "rotate-180")} />
-                </button>
-              )}
-
-              {/* Category filter */}
+              {/* Type filter (meal type) */}
               <button
-                onClick={(e) => openDropdownAt("category", e)}
+                onClick={(e) => openDropdownAt("type", e)}
                 className={classNames(
                   "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
-                  selectedCategory
+                  selectedType
                     ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
-                    : openDropdown === "category"
+                    : openDropdown === "type"
                       ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
                       : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
                 )}
               >
-                {selectedCategory ? CATEGORY_LABELS[selectedCategory] : "Category"}
-                <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "category" && "rotate-180")} />
+                {selectedType ? TYPE_LABELS[selectedType] : "Type"}
+                <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "type" && "rotate-180")} />
               </button>
+
+              {/* Cuisine filter */}
+              {availableCuisines.length > 0 && (
+                <button
+                  onClick={(e) => openDropdownAt("cuisine", e)}
+                  className={classNames(
+                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                    selectedCuisine
+                      ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      : openDropdown === "cuisine"
+                        ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                  )}
+                >
+                  {selectedCuisine ? CUISINE_LABELS[selectedCuisine] : "Cuisine"}
+                  <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "cuisine" && "rotate-180")} />
+                </button>
+              )}
             </div>
 
             {/* Dropdown panel — portaled to body */}
@@ -1162,34 +1205,34 @@ export function Discover({
                       {sort === value && <Check className="w-4 h-4 text-orange-500" />}
                     </button>
                   ))}
-                  {openDropdown === "source" && availableSources.map((src) => (
-                    <button
-                      key={src}
-                      onClick={() => { setSelectedSource(selectedSource === src ? null : src); setOpenDropdown(null); }}
-                      className={classNames(
-                        "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
-                        selectedSource === src
-                          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
-                          : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                      )}
-                    >
-                      {SOURCE_FILTER_LABELS[src]}
-                      {selectedSource === src && <Check className="w-4 h-4 text-orange-500" />}
-                    </button>
-                  ))}
-                  {openDropdown === "category" && availableCategories.map((cat) => (
+                  {openDropdown === "type" && availableTypes.map((cat) => (
                     <button
                       key={cat}
-                      onClick={() => { setSelectedCategory(selectedCategory === cat ? null : cat); setOpenDropdown(null); }}
+                      onClick={() => { setSelectedType(selectedType === cat ? null : cat); setOpenDropdown(null); }}
                       className={classNames(
                         "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
-                        selectedCategory === cat
+                        selectedType === cat
                           ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
                           : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
                       )}
                     >
-                      {CATEGORY_LABELS[cat]}
-                      {selectedCategory === cat && <Check className="w-4 h-4 text-orange-500" />}
+                      {TYPE_LABELS[cat]}
+                      {selectedType === cat && <Check className="w-4 h-4 text-orange-500" />}
+                    </button>
+                  ))}
+                  {openDropdown === "cuisine" && availableCuisines.map((cuisine) => (
+                    <button
+                      key={cuisine}
+                      onClick={() => { setSelectedCuisine(selectedCuisine === cuisine ? null : cuisine); setOpenDropdown(null); }}
+                      className={classNames(
+                        "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                        selectedCuisine === cuisine
+                          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                          : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      )}
+                    >
+                      {CUISINE_LABELS[cuisine]}
+                      {selectedCuisine === cuisine && <Check className="w-4 h-4 text-orange-500" />}
                     </button>
                   ))}
                 </div>
@@ -1198,30 +1241,30 @@ export function Discover({
             )}
 
             {/* Active filter chips */}
-            {(selectedSource || selectedCategory) && (
+            {(selectedType || selectedCuisine) && (
               <div className="flex items-center gap-1.5 pb-2">
                 <div className="flex flex-wrap gap-1.5 flex-1">
-                  {selectedSource && (
+                  {selectedType && (
                     <button
-                      onClick={() => setSelectedSource(null)}
+                      onClick={() => setSelectedType(null)}
                       className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                     >
-                      {SOURCE_FILTER_LABELS[selectedSource]}
+                      {TYPE_LABELS[selectedType]}
                       <XMark className="w-3 h-3" />
                     </button>
                   )}
-                  {selectedCategory && (
+                  {selectedCuisine && (
                     <button
-                      onClick={() => setSelectedCategory(null)}
+                      onClick={() => setSelectedCuisine(null)}
                       className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 capitalize"
                     >
-                      {CATEGORY_LABELS[selectedCategory]}
+                      {CUISINE_LABELS[selectedCuisine]}
                       <XMark className="w-3 h-3" />
                     </button>
                   )}
                 </div>
                 <button
-                  onClick={() => { setSelectedSource(null); setSelectedCategory(null); }}
+                  onClick={() => { setSelectedType(null); setSelectedCuisine(null); }}
                   className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 shrink-0 transition-colors"
                 >
                   Clear all
@@ -1294,7 +1337,7 @@ export function Discover({
               return (
                 <div key={category}>
                   <h3 className="px-4 text-sm font-semibold text-stone-600 dark:text-stone-300 mb-2">
-                    {CATEGORY_LABELS[category]}
+                    {TYPE_LABELS[category]}
                     <span className="ml-1.5 text-xs font-normal text-stone-400 dark:text-stone-500">
                       {items.length} recipes
                     </span>
@@ -1342,7 +1385,7 @@ export function Discover({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => { setSearch(""); setNewOnly(false); setSelectedSource(null); setSelectedCategory(null); }}
+                    onClick={() => { setSearch(""); setNewOnly(false); setSelectedType(null); setSelectedCuisine(null); }}
                   >
                     Clear filters
                   </Button>
@@ -1396,7 +1439,7 @@ function FeedCard({
         ) : (
           <div className="flex h-full w-full items-center justify-center text-stone-300 dark:text-stone-600">
             <span className="text-xs font-medium">
-              {CATEGORY_LABELS[category]}
+              {TYPE_LABELS[category]}
             </span>
           </div>
         )}
