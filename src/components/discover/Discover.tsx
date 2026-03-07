@@ -485,6 +485,16 @@ export function Discover({
       .filter((g) => g.items.length > 0);
   }, [filteredItems, hasActiveFilters, sort]);
 
+  // Available categories and sources for filter dropdowns (must be before early return)
+  const availableCategories = useMemo(() =>
+    CATEGORY_ORDER.filter((cat) => allItems.some((i) => i.category === cat)),
+    [allItems]
+  );
+  const availableSources = useMemo(() => {
+    const sources = new Set(allItems.map((i) => i.source));
+    return (["nyt", "allrecipes", "seriouseats"] as DiscoverSource[]).filter((s) => sources.has(s));
+  }, [allItems]);
+
   if (selectedFeedItem) {
     const hasVideo = !!importedRecipe?.videoUrl;
     const embedUrl = importedRecipe?.videoUrl
@@ -792,16 +802,6 @@ export function Discover({
     feed?.lastRefreshed &&
     feed.categories &&
     Object.values(feed.categories).some((items) => items && items.length > 0);
-
-  // Available categories and sources for filter dropdowns (only those with items)
-  const availableCategories = useMemo(() =>
-    CATEGORY_ORDER.filter((cat) => allItems.some((i) => i.category === cat)),
-    [allItems]
-  );
-  const availableSources = useMemo(() => {
-    const sources = new Set(allItems.map((i) => i.source));
-    return (["nyt", "allrecipes", "seriouseats"] as DiscoverSource[]).filter((s) => sources.has(s));
-  }, [allItems]);
 
   const openDropdownAt = (key: string, e: React.MouseEvent<HTMLButtonElement>) => {
     if (openDropdown === key) {
