@@ -440,21 +440,23 @@ export function RecipeList({
       <InstallPrompt />
 
       {/* Recipe cards */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 pb-24">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 pb-24">
         {recipes.length === 0 && !search && selectedTags.length === 0 ? (
-          <FirstRunGuide />
+          <div className="px-4"><FirstRunGuide /></div>
         ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={<WhiskLogo className="w-12 h-12" />}
-            title="No results"
-            description="Try a different search or filter"
-          />
+          <div className="px-4">
+            <EmptyState
+              icon={<WhiskLogo className="w-12 h-12" />}
+              title="No results"
+              description="Try a different search or filter"
+            />
+          </div>
         ) : groupedRecipes ? (
           <div className="space-y-6">
             {groupedRecipes.map((group) => (
               <section key={group.label}>
                 <h2 className={classNames(
-                  "text-sm font-semibold tracking-wide mb-2 flex items-center gap-1",
+                  "px-4 text-sm font-semibold tracking-wide mb-2 flex items-center gap-1",
                   group.label === "Favorites"
                     ? "text-red-500 dark:text-red-400"
                     : "text-stone-500 dark:text-orange-300/50"
@@ -480,7 +482,7 @@ export function RecipeList({
                     <div className="shrink-0 w-1" aria-hidden />
                   </CarouselRow>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  <div className="px-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {group.recipes.map((recipe) => (
                       <RecipeCard
                         key={recipe.id}
@@ -495,7 +497,7 @@ export function RecipeList({
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="px-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filtered.map((recipe) => (
               <RecipeCard
                 key={recipe.id}
@@ -513,7 +515,7 @@ export function RecipeList({
 
 function CarouselRow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden -mx-4">
+    <div className="overflow-hidden">
       <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 px-4">
         {children}
       </div>
