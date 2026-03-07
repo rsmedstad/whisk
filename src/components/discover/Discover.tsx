@@ -293,10 +293,11 @@ export function Discover({
         });
         if (data?.title) {
           setImportedRecipe(data);
-          // If the feed item was missing an image but the import found one,
-          // update the cached feed so the card shows the image next time
+          // Update the feed cache with the imported image when:
+          // - the feed item had no image, or
+          // - the imported image is different (feed image may be wrong/low-quality)
           const importedImage = data.thumbnailUrl ?? data.photos?.[0]?.url;
-          if (!item.imageUrl && importedImage) {
+          if (importedImage && importedImage !== item.imageUrl) {
             setFeed((prev) => {
               if (!prev) return prev;
               const updated = { ...prev, categories: { ...prev.categories } };
