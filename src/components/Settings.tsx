@@ -25,13 +25,14 @@ interface SettingsProps {
   capabilities: AICapabilities;
 }
 
-type SettingsTab = "general" | "account" | "ai" | "data";
+type SettingsTab = "general" | "account" | "ai" | "data" | "about";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "account", label: "Account" },
   { id: "ai", label: "AI" },
   { id: "data", label: "Data" },
+  { id: "about", label: "About" },
 ];
 
 export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities }: SettingsProps) {
@@ -1001,11 +1002,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </Card>
             </section>
+          </>
+        )}
 
-            {/* About & Updates */}
+        {activeTab === "about" && (
+          <>
             <section>
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
-                About & Updates
+                About
               </h2>
               <Card>
                 <div className="space-y-4">
@@ -1013,13 +1017,22 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     <p className="font-medium dark:text-stone-300">Whisk v0.3.1</p>
                     <p>Personal Recipe Manager</p>
                   </div>
+                </div>
+              </Card>
+            </section>
 
-                  <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Updates
+              </h2>
+              <Card>
+                <div className="space-y-4">
+                  <div>
                     <p className="text-sm font-medium dark:text-stone-300 mb-1">
                       Check for Updates
                     </p>
                     <p className="text-xs text-stone-500 dark:text-stone-400 mb-3">
-                      If you self-host Whisk, you can pull the latest features from the main repo. Go to your fork on GitHub, click "Sync fork", then "Update branch". Cloudflare Pages will automatically rebuild and deploy.
+                      If you self-host Whisk, you can pull the latest features from the main repo. Go to your fork on GitHub, click &ldquo;Sync fork&rdquo;, then &ldquo;Update branch&rdquo;. Cloudflare Pages will automatically rebuild and deploy.
                     </p>
                     <div className="flex gap-2">
                       <a

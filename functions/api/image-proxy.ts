@@ -9,17 +9,33 @@ export const onRequestGet: PagesFunction = async ({ request }) => {
     return new Response("Missing url parameter", { status: 400 });
   }
 
-  // Only allow proxying image URLs from known recipe sites
+  // Only allow proxying image URLs from known recipe sites and their CDNs
   const ALLOWED_DOMAINS = [
+    // Dotdash Meredith properties (AllRecipes, Serious Eats, Simply Recipes)
     "www.seriouseats.com",
     "seriouseats.com",
     "www.allrecipes.com",
     "allrecipes.com",
-    "imagesvc.meredithcorp.io",
-    "food.fnr.sndimg.com",
     "www.simplyrecipes.com",
+    "imagesvc.meredithcorp.io",
+    "dotdashmeredith.com",
+    "www.dotdashmeredith.com",
+    // Food Network / Scripps
+    "food.fnr.sndimg.com",
+    "sndimg.com",
+    // NYT Cooking
     "static01.nyt.com",
+    "static.nyt.com",
     "cooking.nytimes.com",
+    "nyt.com",
+    // Common recipe image CDNs
+    "img.sndimg.com",
+    "imagesvc.timeincapp.com",
+    "cdn.apartmenttherapy.info",
+    "www.foodnetwork.com",
+    "food52.com",
+    "www.food52.com",
+    "www.thekitchn.com",
   ];
 
   let hostname: string;
