@@ -101,6 +101,11 @@ const CUISINE_KEYWORDS: Record<CuisineOption, string[]> = {
 };
 
 function matchesCuisine(item: DiscoverFeedItem, cuisine: CuisineOption): boolean {
+  // Prefer stored tags from AI classification
+  if (item.tags && item.tags.length > 0) {
+    return item.tags.includes(cuisine);
+  }
+  // Fallback to keyword matching for untagged items
   const text = `${item.title} ${item.description ?? ""}`.toLowerCase();
   return CUISINE_KEYWORDS[cuisine].some((kw) => text.includes(kw));
 }
@@ -385,6 +390,11 @@ export function Discover({
     if (!importedRecipe || !onSaveRecipe) return;
     setIsSavingFeed(true);
     try {
+      // Merge tags from discover item + imported recipe (deduped)
+      const mergedTags = [...new Set([
+        ...(importedRecipe.tags ?? []),
+        ...(selectedFeedItem?.tags ?? []),
+      ])];
       const recipe = await onSaveRecipe({
         title: importedRecipe.title,
         description: importedRecipe.description,
@@ -394,7 +404,7 @@ export function Discover({
         photos: importedRecipe.photos ?? [],
         thumbnailUrl: importedRecipe.thumbnailUrl,
         videoUrl: importedRecipe.videoUrl,
-        tags: importedRecipe.tags ?? [],
+        tags: mergedTags,
         prepTime: importedRecipe.prepTime,
         cookTime: importedRecipe.cookTime,
         servings: importedRecipe.servings,

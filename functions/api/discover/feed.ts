@@ -1,4 +1,9 @@
 import type { Env, DiscoverCategory, DiscoverSource } from "../../../src/types";
+import {
+  loadAIConfig,
+  resolveConfig,
+  callTextAI,
+} from "../../lib/ai-providers";
 
 const KV_KEY = "discover_feed";
 const ARCHIVE_KEY = "discover_archive";
@@ -107,11 +112,12 @@ interface FeedItem {
   description?: string;
 }
 
-/** A feed item enriched with source, category, and archive timestamp */
+/** A feed item enriched with source, category, tags, and archive timestamp */
 interface ArchiveItem extends FeedItem {
   source: DiscoverSource;
   category: DiscoverCategory;
   addedAt: string;
+  tags?: string[];
 }
 
 interface Archive {
@@ -158,6 +164,148 @@ function classifyRecipe(title: string, description?: string): DiscoverCategory {
     if (pattern.test(text)) return category;
   }
   return "dinner"; // Default: main dish / entrée
+}
+
+// ── AI batch-tagging for discover items ─────────────────
+// Uses Groq (fast) to tag items with cuisine, meal type, and diet.
+// Falls back to keyword matching when no AI provider is available.
+
+/** Tags allowed for discover items — kept tight to avoid bloat */
+const DISCOVER_TAGS = [
+  // Meal (maps to DiscoverCategory — but AI may be more accurate)
+  "breakfast", "brunch", "dinner", "salad", "dessert", "appetizer", "snack", "side dish", "drinks",
+  // Cuisine
+  "italian", "mexican", "chinese", "thai", "indian", "japanese", "korean", "mediterranean", "american", "french",
+  // Diet
+  "vegetarian", "vegan", "gluten-free", "keto", "healthy",
+  // Method
+  "grilling", "baking", "slow cook", "instant pot", "one-pot", "air fryer", "no-cook", "stir-fry",
+] as const;
+
+const DISCOVER_TAG_SET = new Set<string>(DISCOVER_TAGS);
+
+/** Batch-tag items using AI. Processes up to 20 items per call for efficiency. */
+async function batchTagItems(
+  items: ArchiveItem[],
+  env: Env
+): Promise<void> {
+  const untagged = items.filter((i) => !i.tags || i.tags.length === 0);
+  if (untagged.length === 0) return;
+
+  const config = await loadAIConfig(env.WHISK_KV);
+  const fnConfig = resolveConfig(config, "chat", env);
+
+  if (!fnConfig) {
+    // No AI available — fall back to keyword matching
+    for (const item of untagged) {
+      item.tags = keywordTagItem(item);
+    }
+    return;
+  }
+
+  // Process in batches of 20
+  const BATCH_SIZE = 20;
+  for (let i = 0; i < untagged.length; i += BATCH_SIZE) {
+    const batch = untagged.slice(i, i + BATCH_SIZE);
+    try {
+      const numbered = batch.map((item, idx) => `${idx + 1}. "${item.title}"${item.description ? ` — ${item.description}` : ""}`).join("\n");
+
+      const content = await callTextAI(fnConfig, env, [
+        {
+          role: "system",
+          content: [
+            "You are a recipe classifier. For each numbered recipe, assign 2-4 tags from this exact list:",
+            "",
+            DISCOVER_TAGS.join(", "),
+            "",
+            "Rules:",
+            "- Only use tags from the list above.",
+            "- Include the meal type (dinner, breakfast, dessert, etc.) and cuisine if identifiable.",
+            "- Include diet tags only when clearly applicable.",
+            '- Return JSON: { "results": [{ "index": 1, "tags": ["dinner", "italian"] }, ...] }',
+          ].join("\n"),
+        },
+        { role: "user", content: numbered },
+      ], { maxTokens: 1024, temperature: 0.2, jsonMode: true });
+
+      const parsed = JSON.parse(content) as { results?: { index: number; tags: string[] }[] };
+      if (parsed.results) {
+        for (const result of parsed.results) {
+          const item = batch[result.index - 1];
+          if (item) {
+            item.tags = result.tags.filter((t) => DISCOVER_TAG_SET.has(t));
+          }
+        }
+      }
+    } catch {
+      // AI call failed — fall back to keywords for this batch
+      for (const item of batch) {
+        if (!item.tags || item.tags.length === 0) {
+          item.tags = keywordTagItem(item);
+        }
+      }
+    }
+
+    // Fill in any items that didn't get tags from AI
+    for (const item of batch) {
+      if (!item.tags || item.tags.length === 0) {
+        item.tags = keywordTagItem(item);
+      }
+    }
+  }
+}
+
+/** Keyword-based fallback tagging when AI is unavailable */
+function keywordTagItem(item: ArchiveItem): string[] {
+  const text = `${item.title} ${item.description ?? ""}`.toLowerCase();
+  const tags: string[] = [];
+
+  // Add meal type from category classification
+  if (item.category && item.category !== "dinner") {
+    // Map DiscoverCategory to tag names (most are 1:1)
+    const catTag = item.category === "soups" ? "dinner" : item.category === "baking" ? "baking" : item.category;
+    if (DISCOVER_TAG_SET.has(catTag)) tags.push(catTag);
+  }
+  if (tags.length === 0 || item.category === "dinner") tags.push("dinner");
+
+  // Cuisine detection
+  const cuisineKeywords: [string, string[]][] = [
+    ["italian", ["italian", "pasta", "risotto", "pizza", "lasagna", "pesto", "marinara", "bolognese", "gnocchi", "bruschetta", "carbonara", "parmesan"]],
+    ["mexican", ["mexican", "taco", "burrito", "enchilada", "salsa", "guacamole", "quesadilla", "tamale", "tortilla", "elote"]],
+    ["chinese", ["chinese", "stir-fry", "wok", "dumpling", "dim sum", "lo mein", "kung pao", "szechuan", "sichuan", "fried rice"]],
+    ["thai", ["thai", "pad thai", "satay", "tom yum", "green curry", "red curry", "larb"]],
+    ["indian", ["indian", "tandoori", "tikka", "masala", "naan", "biryani", "samosa", "paneer", "dal", "vindaloo", "korma"]],
+    ["japanese", ["japanese", "sushi", "ramen", "teriyaki", "tempura", "miso", "udon", "yakitori", "gyoza", "katsu"]],
+    ["korean", ["korean", "bibimbap", "kimchi", "bulgogi", "gochujang", "japchae", "galbi"]],
+    ["mediterranean", ["mediterranean", "falafel", "hummus", "tzatziki", "pita", "shawarma", "tabbouleh", "couscous"]],
+    ["american", ["american", "burger", "bbq", "mac and cheese", "fried chicken", "buffalo", "hot dog", "cornbread"]],
+    ["french", ["french", "soufflé", "crêpe", "croissant", "ratatouille", "coq au vin", "gratin", "quiche", "bouillabaisse"]],
+  ];
+
+  for (const [cuisine, keywords] of cuisineKeywords) {
+    if (keywords.some((kw) => text.includes(kw))) {
+      tags.push(cuisine);
+      break; // One cuisine per item
+    }
+  }
+
+  // Method detection
+  if (/\b(?:grill|grilled|grilling|bbq|barbecue)\b/.test(text)) tags.push("grilling");
+  else if (/\b(?:slow cook|crockpot|crock pot)\b/.test(text)) tags.push("slow cook");
+  else if (/\b(?:instant pot|pressure cook)\b/.test(text)) tags.push("instant pot");
+  else if (/\b(?:air fr(?:y|yer|ied))\b/.test(text)) tags.push("air fryer");
+  else if (/\b(?:one[- ]pot|one[- ]pan|sheet pan)\b/.test(text)) tags.push("one-pot");
+  else if (/\b(?:no[- ]cook|no[- ]bake|raw)\b/.test(text)) tags.push("no-cook");
+  else if (/\b(?:stir[- ]fr(?:y|ied))\b/.test(text)) tags.push("stir-fry");
+
+  // Diet detection (only obvious ones from title/description)
+  if (/\bvegan\b/.test(text)) tags.push("vegan");
+  else if (/\bvegetarian\b/.test(text)) tags.push("vegetarian");
+  if (/\bgluten[- ]free\b/.test(text)) tags.push("gluten-free");
+  if (/\bketo\b/.test(text)) tags.push("keto");
+  if (/\bhealthy\b/.test(text)) tags.push("healthy");
+
+  return tags;
 }
 
 // ── GET: return category-grouped feed from archive ──────
@@ -221,6 +369,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   addItems(nyt, "nyt");
   addItems(allrecipes, "allrecipes");
   addItems(seriouseats, "seriouseats");
+
+  // AI-tag new items (uses Groq for speed, falls back to keyword matching)
+  if (newItems.length > 0) {
+    await batchTagItems(newItems, env);
+  }
+
+  // Also tag any existing items that don't have tags yet (backfill)
+  const untaggedExisting = (archive?.items ?? []).filter((i) => !i.tags || i.tags.length === 0);
+  if (untaggedExisting.length > 0) {
+    await batchTagItems(untaggedExisting, env);
+  }
 
   // Clean up any existing archive items that have person/profile images
   const cleanedExisting = (archive?.items ?? []).map((item) => ({

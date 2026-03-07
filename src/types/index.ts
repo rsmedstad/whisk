@@ -307,6 +307,7 @@ export interface DiscoverFeedItem {
   source?: DiscoverSource;
   category?: DiscoverCategory;
   addedAt?: string;
+  tags?: string[];
 }
 
 /** Legacy format: grouped by source (used by scraper, converted for UI) */
