@@ -405,6 +405,21 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
   const isRecipeUrl = (url: string): boolean =>
     /\/recipe\/\d+\/[a-z0-9-]+/i.test(url);
 
+  /** Derive a clean title from an AllRecipes URL slug */
+  const titleFromSlug = (url: string): string | undefined => {
+    const m = url.match(/\/recipe\/\d+\/([a-z0-9-]+)/i);
+    return m?.[1]
+      ?.replace(/-recipe$/, "")
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  /** Check if text is promotional rather than a recipe name */
+  const isPromoText = (text: string): boolean => {
+    const lc = text.toLowerCase();
+    return /\b(?:save|saving|sign up|subscribe|newsletter|featured|home cook|advertisement|start saving|join|log ?in|get the magazine)\b/.test(lc);
+  };
+
   for (const pageUrl of urls) {
     try {
       const html = await fetchPage(pageUrl, env);
@@ -441,7 +456,20 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
     }
   }
 
-  return allItems.slice(0, 30);
+  // Post-process: fix promotional titles and non-food images
+  return allItems.slice(0, 30).map((item) => {
+    // Replace promotional text titles with slug-derived recipe name
+    const slug = titleFromSlug(item.url);
+    const title = isPromoText(item.title) ? (slug ?? item.title) : item.title;
+
+    // Only keep /thmb/ images (recipe thumbnails) — filter out chef
+    // profile photos, social avatars, and promotional graphics
+    const imageUrl = item.imageUrl && item.imageUrl.includes("/thmb/")
+      ? item.imageUrl
+      : undefined;
+
+    return { ...item, title, imageUrl };
+  });
 }
 
 // ── Serious Eats (/recipes page + homepage) ─────────────
@@ -493,10 +521,47 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
     return true;
   };
 
+  /** Build a map of all /thmb/ images in the HTML keyed by nearby slug/alt */
+  const buildImageIndex = (html: string): Map<string, string> => {
+    const index = new Map<string, string>();
+    // Match img tags with /thmb/ URLs (Dotdash Meredith recipe thumbnails)
+    const imgRegex = /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]*\/thmb\/[^"]*)"/gi;
+    let m;
+    while ((m = imgRegex.exec(html)) !== null) {
+      const imgUrl = m[1]!;
+      // Look for alt text on this image
+      const tagEnd = html.indexOf(">", m.index);
+      const tag = html.slice(m.index, tagEnd);
+      const altMatch = tag.match(/alt="([^"]+)"/i);
+      if (altMatch?.[1]) {
+        index.set(altMatch[1].toLowerCase().trim(), imgUrl);
+      }
+      // Also look for nearby recipe URL to associate image
+      const ctx = html.slice(Math.max(0, m.index - 1000), m.index + 1000);
+      const urlMatch = ctx.match(/href="(https?:\/\/www\.seriouseats\.com\/[a-z0-9-]+\/?)"/) ;
+      if (urlMatch?.[1]) {
+        index.set(normalizeUrl(urlMatch[1]), imgUrl);
+      }
+    }
+    // Also try <source> inside <picture> elements
+    const srcRegex = /<source[^>]+srcset="(https?:\/\/[^"]*\/thmb\/[^"\s]*)/gi;
+    while ((m = srcRegex.exec(html)) !== null) {
+      const imgUrl = m[1]!;
+      const ctx = html.slice(Math.max(0, m.index - 1000), m.index + 1000);
+      const urlMatch = ctx.match(/href="(https?:\/\/www\.seriouseats\.com\/[a-z0-9-]+\/?)" /);
+      if (urlMatch?.[1]) {
+        index.set(normalizeUrl(urlMatch[1]), imgUrl);
+      }
+    }
+    return index;
+  };
+
   for (const pageUrl of urls) {
     try {
       const html = await fetchPage(pageUrl, env);
       if (!html) continue;
+
+      const imageIndex = buildImageIndex(html);
 
       // Try JSON-LD extraction first (most reliable — only returns @type: Recipe)
       const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
@@ -504,6 +569,11 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
         const key = normalizeUrl(item.url);
         if (!seen.has(key)) {
           seen.add(key);
+          // Fill in missing images from the HTML image index
+          if (!item.imageUrl) {
+            item.imageUrl = imageIndex.get(key)
+              ?? imageIndex.get(item.title.toLowerCase());
+          }
           allItems.push(item);
         }
       }
@@ -520,6 +590,11 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
           const key = normalizeUrl(item.url);
           if (!seen.has(key)) {
             seen.add(key);
+            // Fill in missing images from the HTML image index
+            if (!item.imageUrl) {
+              item.imageUrl = imageIndex.get(key)
+                ?? imageIndex.get(item.title.toLowerCase());
+            }
             allItems.push(item);
           }
         }
@@ -531,7 +606,11 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
     }
   }
 
-  return allItems.slice(0, 30);
+  // Only keep /thmb/ images (recipe thumbnails, not profiles/ads)
+  return allItems.slice(0, 30).map((item) => ({
+    ...item,
+    imageUrl: item.imageUrl && item.imageUrl.includes("/thmb/") ? item.imageUrl : undefined,
+  }));
 }
 
 // ── JSON-LD extraction (works for most modern recipe sites) ──
@@ -685,23 +764,42 @@ function extractRecipeLinks(
     const title = linkTextMatch?.[1]?.trim() ?? headingText ?? dataTitle ?? genericHeading ?? slugTitle;
     if (!title || title.length < 3) continue;
 
-    // Find image from context
-    const ctxImgMatch = ctx.match(
-      /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i
-    );
-    // Also check for srcset
+    // Find image from context — prefer /thmb/ images (Dotdash Meredith recipe thumbnails)
+    const allCtxImages: string[] = [];
+    // img src/data-src
+    const ctxImgRegex = /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/gi;
+    let ctxImgM;
+    while ((ctxImgM = ctxImgRegex.exec(ctx)) !== null) {
+      if (ctxImgM[1]) allCtxImages.push(ctxImgM[1]);
+    }
+    // srcset
     const srcsetMatch = ctx.match(
       /srcset="(https?:\/\/[^"\s]+\.(?:jpg|jpeg|png|webp)[^"\s]*)[\s,]/i
     );
-    // Check for CSS background-image
+    if (srcsetMatch?.[1]) allCtxImages.push(srcsetMatch[1]);
+    // <source> in <picture> elements (Dotdash Meredith uses these)
+    const sourceRegex = /<source[^>]+srcset="(https?:\/\/[^"\s]+\/thmb\/[^"\s]*)/gi;
+    let sourceM;
+    while ((sourceM = sourceRegex.exec(ctx)) !== null) {
+      if (sourceM[1]) allCtxImages.push(sourceM[1]);
+    }
+    // CSS background-image
     const bgImgMatch = ctx.match(
       /background-image:\s*url\(["']?(https?:\/\/[^"')]+\.(?:jpg|jpeg|png|webp)[^"')]*)/i
     );
-    // Check for data-src (lazy loading)
+    if (bgImgMatch?.[1]) allCtxImages.push(bgImgMatch[1]);
+    // data-src (lazy loading)
     const dataSrcMatch = ctx.match(
       /data-src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i
     );
-    const imageUrl = ctxImgMatch?.[1] ?? srcsetMatch?.[1] ?? dataSrcMatch?.[1] ?? bgImgMatch?.[1] ?? imgMap.get(title.toLowerCase());
+    if (dataSrcMatch?.[1]) allCtxImages.push(dataSrcMatch[1]);
+    // From alt-text image map
+    const mapImg = imgMap.get(title.toLowerCase());
+    if (mapImg) allCtxImages.push(mapImg);
+
+    // Prefer /thmb/ images (actual recipe thumbnails, not profiles/ads)
+    const imageUrl = allCtxImages.find((u) => u.includes("/thmb/"))
+      ?? allCtxImages[0];
 
     // Validate image URL belongs to a known domain (not tracking pixels)
     const validImage = imageUrl && isValidImageUrl(imageUrl, domain) ? imageUrl : undefined;
