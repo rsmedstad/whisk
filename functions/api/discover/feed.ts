@@ -228,12 +228,20 @@ async function batchTagItems(
         { role: "user", content: numbered },
       ], { maxTokens: 1024, temperature: 0.2, jsonMode: true });
 
-      const parsed = JSON.parse(content) as { results?: { index: number; tags: string[] }[] };
-      if (parsed.results) {
+      const parsed = JSON.parse(content) as { results?: { index: number; tags: unknown }[] };
+      if (Array.isArray(parsed.results)) {
         for (const result of parsed.results) {
+          if (typeof result.index !== "number" || !Array.isArray(result.tags)) continue;
           const item = batch[result.index - 1];
           if (item) {
-            item.tags = result.tags.filter((t) => DISCOVER_TAG_SET.has(t));
+            // Normalize to lowercase and validate against allowed set
+            const validTags = result.tags
+              .filter((t): t is string => typeof t === "string")
+              .map((t) => t.toLowerCase().trim())
+              .filter((t) => DISCOVER_TAG_SET.has(t));
+            if (validTags.length > 0) {
+              item.tags = [...new Set(validTags)]; // dedupe
+            }
           }
         }
       }
