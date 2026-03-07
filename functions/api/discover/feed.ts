@@ -220,45 +220,201 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
   return undefined;
 }
 
-// ── AllRecipes (homepage HTML) ──────────────────────────
+// ── AllRecipes (homepage + trending) ─────────────────────
 
 async function scrapeAllRecipes(): Promise<FeedItem[]> {
-  try {
-    const res = await fetch("https://www.allrecipes.com/", {
-      signal: AbortSignal.timeout(15000),
-      headers: BROWSER_HEADERS,
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
+  // Try multiple pages to maximize results
+  const urls = [
+    "https://www.allrecipes.com/",
+    "https://www.allrecipes.com/recipes/",
+  ];
 
-    return extractRecipeCards(
-      html,
-      /https?:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+\/?/gi
-    );
-  } catch {
-    return [];
+  const allItems: FeedItem[] = [];
+  const seen = new Set<string>();
+
+  for (const pageUrl of urls) {
+    try {
+      const res = await fetch(pageUrl, {
+        signal: AbortSignal.timeout(15000),
+        headers: BROWSER_HEADERS,
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+
+      // Try JSON-LD extraction first (most reliable)
+      const jsonLdItems = extractJsonLdRecipes(html, "allrecipes.com");
+      if (jsonLdItems.length > 0) {
+        for (const item of jsonLdItems) {
+          if (!seen.has(item.url)) {
+            seen.add(item.url);
+            allItems.push(item);
+          }
+        }
+      }
+
+      // Also try regex-based extraction with broader pattern
+      const regexItems = extractRecipeCards(
+        html,
+        /https?:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+\/?/gi
+      );
+      for (const item of regexItems) {
+        if (!seen.has(item.url)) {
+          seen.add(item.url);
+          allItems.push(item);
+        }
+      }
+
+      if (allItems.length >= 10) break;
+    } catch {
+      continue;
+    }
   }
+
+  return allItems.slice(0, 30);
 }
 
-// ── Serious Eats (/recipes page HTML) ───────────────────
+// ── Serious Eats (/recipes page + homepage) ─────────────
 
 async function scrapeSeriousEats(): Promise<FeedItem[]> {
-  try {
-    const res = await fetch("https://www.seriouseats.com/recipes", {
-      signal: AbortSignal.timeout(15000),
-      headers: BROWSER_HEADERS,
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
+  const urls = [
+    "https://www.seriouseats.com/",
+    "https://www.seriouseats.com/recipes",
+  ];
 
-    // Match individual recipe URLs (contain "-recipe-" or end with "-recipe")
-    // but NOT roundup pages (which have "-recipes-" plural)
-    return extractRecipeCards(
-      html,
-      /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]+-recipe(?:-\d+)?\/?/gi
-    );
-  } catch {
-    return [];
+  const allItems: FeedItem[] = [];
+  const seen = new Set<string>();
+
+  for (const pageUrl of urls) {
+    try {
+      const res = await fetch(pageUrl, {
+        signal: AbortSignal.timeout(15000),
+        headers: BROWSER_HEADERS,
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+
+      // Try JSON-LD extraction first
+      const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
+      if (jsonLdItems.length > 0) {
+        for (const item of jsonLdItems) {
+          if (!seen.has(item.url)) {
+            seen.add(item.url);
+            allItems.push(item);
+          }
+        }
+      }
+
+      // Broader regex: match any seriouseats.com slug that looks like a recipe
+      // (contains a hyphenated slug, not just a category page)
+      const regexItems = extractRecipeCards(
+        html,
+        /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi
+      );
+      // Filter out non-recipe pages (categories, about, etc.)
+      const filtered = regexItems.filter((item) => {
+        const path = new URL(item.url).pathname;
+        // Skip category/section pages (single segment like /recipes, /about, etc.)
+        if (path.split("/").filter(Boolean).length < 1) return false;
+        // Skip known non-recipe paths
+        if (/^\/(recipes|about|contact|newsletter|culture|equipment|ingredients)\/?$/i.test(path)) return false;
+        // Skip roundup pages
+        if (path.includes("-recipes-")) return false;
+        return true;
+      });
+      for (const item of filtered) {
+        if (!seen.has(item.url)) {
+          seen.add(item.url);
+          allItems.push(item);
+        }
+      }
+
+      if (allItems.length >= 10) break;
+    } catch {
+      continue;
+    }
+  }
+
+  return allItems.slice(0, 30);
+}
+
+// ── JSON-LD extraction (works for most modern recipe sites) ──
+
+function extractJsonLdRecipes(html: string, domain: string): FeedItem[] {
+  const items: FeedItem[] = [];
+  // Find all JSON-LD script blocks
+  const jsonLdRegex = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = jsonLdRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(match[1]!);
+      extractRecipesFromJsonLd(data, items, domain);
+    } catch {
+      // Invalid JSON, skip
+    }
+  }
+  return items;
+}
+
+function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: string): void {
+  if (!data || typeof data !== "object") return;
+
+  if (Array.isArray(data)) {
+    for (const item of data) extractRecipesFromJsonLd(item, items, domain);
+    return;
+  }
+
+  const obj = data as Record<string, unknown>;
+
+  // Check for @graph array (common wrapper)
+  if (Array.isArray(obj["@graph"])) {
+    for (const item of obj["@graph"]) extractRecipesFromJsonLd(item, items, domain);
+    return;
+  }
+
+  // Check for ItemList with itemListElement (recipe carousels)
+  if (obj["@type"] === "ItemList" && Array.isArray(obj.itemListElement)) {
+    for (const entry of obj.itemListElement) {
+      if (entry && typeof entry === "object") {
+        const e = entry as Record<string, unknown>;
+        const itemUrl = typeof e.url === "string" ? e.url : undefined;
+        const itemName = typeof e.name === "string" ? e.name : undefined;
+        if (itemUrl && itemName && itemUrl.includes(domain)) {
+          const imageUrl = typeof e.image === "string" ? e.image
+            : (Array.isArray(e.image) && typeof e.image[0] === "string") ? e.image[0]
+            : (e.image && typeof e.image === "object" && typeof (e.image as Record<string, unknown>).url === "string")
+              ? (e.image as Record<string, unknown>).url as string
+              : undefined;
+          items.push({ title: itemName, url: itemUrl, imageUrl, description: typeof e.description === "string" ? e.description.slice(0, 200) : undefined });
+        }
+      }
+    }
+    return;
+  }
+
+  // Check for Recipe type
+  const type = obj["@type"];
+  const isRecipe = type === "Recipe" || (Array.isArray(type) && type.includes("Recipe"));
+  if (isRecipe) {
+    const name = typeof obj.name === "string" ? obj.name : undefined;
+    let url = typeof obj.url === "string" ? obj.url
+      : typeof obj.mainEntityOfPage === "string" ? obj.mainEntityOfPage
+      : undefined;
+    if (url && !url.startsWith("http")) url = `https://www.${domain}${url}`;
+
+    if (name && url) {
+      const imageUrl = typeof obj.image === "string" ? obj.image
+        : (Array.isArray(obj.image) && typeof obj.image[0] === "string") ? obj.image[0]
+        : (obj.image && typeof obj.image === "object" && typeof (obj.image as Record<string, unknown>).url === "string")
+          ? (obj.image as Record<string, unknown>).url as string
+          : undefined;
+      items.push({
+        title: name,
+        url,
+        imageUrl,
+        description: typeof obj.description === "string" ? obj.description.slice(0, 200) : undefined,
+      });
+    }
+    return;
   }
 }
 

@@ -15,6 +15,8 @@ import {
   Clock,
   Users,
   WhiskLogo,
+  Share,
+  Check,
 } from "../ui/Icon";
 import type {
   InspirationIdea,
@@ -393,6 +395,20 @@ export function Discover({
     setSavedFeedRecipeId(null);
   };
 
+  // ── Share handler for discover recipes ──
+  const handleShareFeed = useCallback(async () => {
+    if (!selectedFeedItem) return;
+    const shareData: ShareData = {
+      title: selectedFeedItem.title,
+      url: selectedFeedItem.url,
+    };
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch { /* user cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(`${selectedFeedItem.title}\n${selectedFeedItem.url}`);
+    }
+  }, [selectedFeedItem]);
+
   // ── Feed item detail view ──
 
   if (selectedFeedItem) {
@@ -404,25 +420,27 @@ export function Discover({
       ? getYouTubeEmbedUrl(importedRecipe.videoUrl)
       : null;
 
+    // Deduplicate photos: filter out the hero image from the carousel
+    const extraPhotos = importedRecipe?.photos
+      ? importedRecipe.photos
+          .filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i)
+          .filter((p) => p.url !== heroImage)
+      : [];
+
     return (
       <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
-          <div className="flex items-center gap-3 py-3">
-            <button
-              onClick={handleFeedBack}
-              className="p-1 -ml-1 text-stone-500 dark:text-stone-400"
-            >
-              <ChevronLeft className="w-5 h-5" />
+        {/* Header — matches RecipeDetail style */}
+        <div className="sticky top-0 z-30 flex items-center justify-between bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 py-3 pt-[calc(var(--sat)+0.75rem)]">
+          <button
+            onClick={handleFeedBack}
+            className="flex items-center gap-1 text-stone-600 dark:text-stone-400 font-medium text-sm"
+          >
+            <ChevronLeft className="w-4 h-4" /> Back
+          </button>
+          <div className="flex items-center gap-0.5">
+            <button onClick={handleShareFeed} className="p-2">
+              <Share className="w-5 h-5 text-stone-500 dark:text-stone-400" />
             </button>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold dark:text-stone-100 truncate">
-                {selectedFeedItem.title}
-              </h1>
-              <p className="text-xs text-stone-400 dark:text-stone-500">
-                {SOURCE_LABELS[selectedFeedItem.source]}
-              </p>
-            </div>
           </div>
         </div>
 
@@ -481,41 +499,52 @@ export function Discover({
             </div>
           )}
 
-          {/* Recipe content */}
+          {/* Recipe content — styled like RecipeDetail */}
           {importedRecipe && (
-            <div className="px-4 py-4 space-y-4">
-              {importedRecipe.description && (
-                <p className="text-sm text-stone-600 dark:text-stone-400">
-                  {importedRecipe.description}
-                </p>
-              )}
-
-              {/* Meta bar */}
-              <div className="flex items-center gap-4 text-xs text-stone-500 dark:text-stone-400">
-                {importedRecipe.prepTime && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {importedRecipe.prepTime}m prep
-                  </span>
+            <div className="px-4 py-4 space-y-6">
+              {/* Title & meta */}
+              <div>
+                <h1 className="text-2xl font-bold dark:text-stone-100">
+                  {importedRecipe.title ?? selectedFeedItem.title}
+                </h1>
+                {importedRecipe.description && (
+                  <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+                    {importedRecipe.description}
+                  </p>
                 )}
-                {importedRecipe.cookTime && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {importedRecipe.cookTime}m cook
-                  </span>
-                )}
-                {importedRecipe.servings && (
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" />
-                    {importedRecipe.servings} servings
-                  </span>
+                <div className="flex flex-wrap gap-3 mt-2 text-sm text-stone-500 dark:text-stone-400">
+                  {(importedRecipe.prepTime || importedRecipe.cookTime) && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {importedRecipe.prepTime && importedRecipe.cookTime
+                        ? `${importedRecipe.prepTime + importedRecipe.cookTime}m total`
+                        : `${importedRecipe.prepTime ?? importedRecipe.cookTime}m`}
+                    </span>
+                  )}
+                  {importedRecipe.servings && (
+                    <span className="flex items-center gap-1">
+                      <Users className="w-4 h-4" /> {importedRecipe.servings} servings
+                    </span>
+                  )}
+                </div>
+                {importedRecipe.tags && importedRecipe.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {importedRecipe.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs text-stone-500 dark:text-stone-400"
+                      >
+                        {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
 
-              {/* Additional photos carousel */}
-              {importedRecipe.photos.length > 1 && (
+              {/* Additional photos carousel (deduplicated) */}
+              {extraPhotos.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
-                  {importedRecipe.photos.slice(0, 6).map((photo, i) => (
+                  {extraPhotos.slice(0, 6).map((photo, i) => (
                     <div
                       key={i}
                       className="shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800"
@@ -531,42 +560,39 @@ export function Discover({
                 </div>
               )}
 
-              {/* Ingredients */}
+              {/* Divider */}
+              <div className="border-t border-stone-200 dark:border-stone-700" />
+
+              {/* Ingredients — checkbox style like RecipeDetail */}
               {importedRecipe.ingredients.length > 0 && (
                 <div>
-                  <h2 className="text-sm font-semibold dark:text-stone-100 mb-2">
+                  <h2 className="text-sm font-semibold dark:text-stone-100 mb-3">
                     Ingredients
                   </h2>
-                  <ul className="space-y-1.5">
+                  <ul className="space-y-2">
                     {importedRecipe.ingredients.map((ing, i) => (
-                      <li
-                        key={i}
-                        className="text-sm dark:text-stone-300 flex gap-2"
-                      >
-                        <span className="text-stone-400 dark:text-stone-500 shrink-0">
-                          {[ing.amount, ing.unit].filter(Boolean).join(" ") ||
-                            "\u2022"}
-                        </span>
-                        <span>{ing.name}</span>
-                      </li>
+                      <DiscoverIngredientRow key={i} ingredient={ing} />
                     ))}
                   </ul>
                 </div>
               )}
 
-              {/* Steps */}
+              {/* Divider */}
+              <div className="border-t border-stone-200 dark:border-stone-700" />
+
+              {/* Steps — numbered circle style like RecipeDetail */}
               {importedRecipe.steps.length > 0 && (
                 <div>
-                  <h2 className="text-sm font-semibold dark:text-stone-100 mb-2">
-                    Instructions
+                  <h2 className="text-sm font-semibold dark:text-stone-100 mb-3">
+                    Steps
                   </h2>
-                  <ol className="space-y-3">
+                  <ol className="space-y-4">
                     {importedRecipe.steps.map((step, i) => (
-                      <li key={i} className="flex gap-3 text-sm">
-                        <span className="shrink-0 w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400 flex items-center justify-center text-xs font-medium">
+                      <li key={i} className="flex gap-3">
+                        <span className="shrink-0 h-6 w-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center dark:bg-orange-900 dark:text-orange-300">
                           {i + 1}
                         </span>
-                        <p className="dark:text-stone-300 flex-1">
+                        <p className="text-sm leading-relaxed dark:text-stone-200 flex-1">
                           {step.text}
                         </p>
                       </li>
@@ -574,6 +600,9 @@ export function Discover({
                   </ol>
                 </div>
               )}
+
+              {/* Divider */}
+              <div className="border-t border-stone-200 dark:border-stone-700" />
 
               {/* Save button */}
               {onSaveRecipe && (
@@ -602,14 +631,15 @@ export function Discover({
               )}
 
               {/* Source link */}
-              <div className="text-center pb-2">
+              <div className="border-t border-stone-200 dark:border-stone-700 pt-4 text-sm text-stone-400 dark:text-stone-500">
+                Source:{" "}
                 <a
                   href={selectedFeedItem.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-stone-400 hover:text-orange-500 transition-colors"
+                  className="text-orange-500 hover:underline"
                 >
-                  View on {SOURCE_LABELS[selectedFeedItem.source]}
+                  {SOURCE_LABELS[selectedFeedItem.source]}
                 </a>
               </div>
             </div>
@@ -931,7 +961,7 @@ export function Discover({
                         onClick={() => handleFeedItemClick(item, source)}
                         className="shrink-0 w-44 text-left rounded-[var(--wk-radius-card)] border border-stone-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
                       >
-                        <div className="aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
+                        <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
                           {item.imageUrl ? (
                             <img
                               src={item.imageUrl}
@@ -946,6 +976,9 @@ export function Discover({
                               </span>
                             </div>
                           )}
+                          <div className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-orange-500 shadow-sm">
+                            <Plus className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                          </div>
                         </div>
                         <div className="p-2.5">
                           <h4 className="text-xs font-medium line-clamp-2 dark:text-stone-100 leading-snug">
@@ -1107,5 +1140,34 @@ export function Discover({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Ingredient row with checkbox (matches RecipeDetail style) ──
+
+function DiscoverIngredientRow({ ingredient }: { ingredient: { name: string; amount?: string; unit?: string } }) {
+  const [checked, setChecked] = useState(false);
+  const display = [ingredient.amount, ingredient.unit, ingredient.name].filter(Boolean).join(" ");
+
+  return (
+    <li
+      className={classNames(
+        "flex items-center gap-2 text-sm cursor-pointer",
+        checked && "line-through text-stone-400 dark:text-stone-500"
+      )}
+      onClick={() => setChecked(!checked)}
+    >
+      <span
+        className={classNames(
+          "h-4 w-4 rounded border shrink-0 flex items-center justify-center",
+          checked
+            ? "bg-orange-500 border-orange-500 text-white"
+            : "border-stone-300 dark:border-stone-600"
+        )}
+      >
+        {checked && <Check className="w-3 h-3" />}
+      </span>
+      <span className="dark:text-stone-200">{display}</span>
+    </li>
   );
 }

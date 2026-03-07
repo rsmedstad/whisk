@@ -516,7 +516,7 @@ export function RecipeList({
 function CarouselRow({ children }: { children: React.ReactNode }) {
   return (
     <div className="overflow-hidden">
-      <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 px-4">
+      <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 scroll-pl-4 pl-4">
         {children}
       </div>
     </div>
