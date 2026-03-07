@@ -228,6 +228,7 @@ export function Discover({
   const [hasCheckedIngredients, setHasCheckedIngredients] = useState(false);
   const [isGroupingSteps, setIsGroupingSteps] = useState(false);
   const [groupedSteps, setGroupedSteps] = useState<Step[] | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const wakeLock = useWakeLock();
 
   // ── Feed loading ──
@@ -298,6 +299,7 @@ export function Discover({
       setPhotoIndex(0);
       setActiveTab("ingredients");
       setGroupedSteps(null);
+      setCompletedSteps(new Set());
       setHasCheckedIngredients(false);
       setIngredientResetKey((k) => k + 1);
       setIsImporting(true);
@@ -850,8 +852,8 @@ export function Discover({
                 <section>
                   {importedRecipe.steps.length > 0 ? (
                     <>
-                      {importedRecipe.steps.length >= 3 && (
-                        <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        {importedRecipe.steps.length >= 3 && (
                           <button
                             onClick={async () => {
                               const steps = groupedSteps ?? importedRecipe.steps;
@@ -894,27 +896,32 @@ export function Discover({
                           >
                             {isGroupingSteps ? "Grouping..." : (groupedSteps ?? importedRecipe.steps).some((s) => s.group) ? "Grouped by Section" : "Group Sections"}
                           </button>
-                          <button
-                            onClick={async () => {
-                              if (wakeLock.isActive) {
-                                await wakeLock.release();
-                              } else {
-                                await wakeLock.request();
-                              }
-                            }}
-                            className={classNames(
-                              "ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors",
-                              wakeLock.isActive
-                                ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
-                                : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                            )}
-                          >
-                            <Sun className="w-3.5 h-3.5" />
-                            {wakeLock.isActive ? "Screen On" : "Keep Screen On"}
-                          </button>
-                        </div>
-                      )}
-                      <StepsList steps={groupedSteps ?? importedRecipe.steps} />
+                        )}
+                        {completedSteps.size > 0 && (
+                          <span className="text-xs text-stone-400 dark:text-stone-500">
+                            {completedSteps.size}/{importedRecipe.steps.length}
+                          </span>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (wakeLock.isActive) {
+                              await wakeLock.release();
+                            } else {
+                              await wakeLock.request();
+                            }
+                          }}
+                          className={classNames(
+                            "ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                            wakeLock.isActive
+                              ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                              : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                          )}
+                        >
+                          <Sun className="w-3.5 h-3.5" />
+                          {wakeLock.isActive ? "Screen On" : "Keep Screen On"}
+                        </button>
+                      </div>
+                      <StepsList steps={groupedSteps ?? importedRecipe.steps} completedSteps={completedSteps} onToggleStep={(i) => setCompletedSteps((prev) => { const next = new Set(prev); if (next.has(i)) next.delete(i); else next.add(i); return next; })} />
                     </>
                   ) : (
                     <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">

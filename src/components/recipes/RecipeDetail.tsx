@@ -14,7 +14,8 @@ import {
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { TagChip } from "../ui/TagChip";
-import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus } from "../ui/Icon";
+import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun } from "../ui/Icon";
+import { useWakeLock } from "../../hooks/useWakeLock";
 import { GroupedIngredients, StepsList } from "./RecipeComponents";
 
 interface RecipeDetailProps {
@@ -55,6 +56,8 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const showGrams = localStorage.getItem("whisk_show_grams") === "true";
   const [isRefetching, setIsRefetching] = useState(false);
   const [isGroupingSteps, setIsGroupingSteps] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const wakeLock = useWakeLock();
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [justPlanned, setJustPlanned] = useState(false);
@@ -688,8 +691,8 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           <section>
             {recipe.steps.length > 0 ? (
               <>
-                {recipe.steps.length >= 3 && (
-                  <div className="mb-3">
+                <div className="flex items-center gap-2 mb-3">
+                  {recipe.steps.length >= 3 && (
                     <button
                       onClick={handleGroupSteps}
                       disabled={isGroupingSteps}
@@ -702,20 +705,33 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                     >
                       {isGroupingSteps ? "Grouping..." : recipe.steps.some((s) => s.group) ? "Grouped by Section" : "Group Sections"}
                     </button>
-                  </div>
-                )}
+                  )}
+                  {completedSteps.size > 0 && (
+                    <span className="text-xs text-stone-400 dark:text-stone-500">
+                      {completedSteps.size}/{recipe.steps.length}
+                    </span>
+                  )}
+                  <button
+                    onClick={async () => {
+                      if (wakeLock.isActive) {
+                        await wakeLock.release();
+                      } else {
+                        await wakeLock.request();
+                      }
+                    }}
+                    className={classNames(
+                      "ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                      wakeLock.isActive
+                        ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                    )}
+                  >
+                    <Sun className="w-3.5 h-3.5" />
+                    {wakeLock.isActive ? "Screen On" : "Keep Screen On"}
+                  </button>
+                </div>
 
-                <StepsList steps={recipe.steps} recipeId={recipe.id} onStartTimer={onStartTimer} />
-
-                <Button
-                  fullWidth
-                  className="mt-4"
-                  onClick={() => navigate(`/recipes/${recipe.id}/cook`)}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <Fire className="w-5 h-5" /> Cook Mode
-                  </span>
-                </Button>
+                <StepsList steps={recipe.steps} recipeId={recipe.id} onStartTimer={onStartTimer} completedSteps={completedSteps} onToggleStep={(i) => setCompletedSteps((prev) => { const next = new Set(prev); if (next.has(i)) next.delete(i); else next.add(i); return next; })} />
               </>
             ) : (
               <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">
