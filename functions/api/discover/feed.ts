@@ -140,7 +140,7 @@ interface CategoryFeed {
 // These align with the existing tag system's "meal" group.
 
 const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
-  ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?)\b/i],
+  ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?|bostock|morning buns?|dutch baby|cr[eê]pes?|shakshuka|porridge|acai bowl)\b/i],
   ["soups", /\b(?:soup|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
   ["salad", /\b(?:salad|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
   ["dessert", /\b(?:dessert|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
@@ -251,14 +251,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   return Response.json(archiveToCategoryFeed(updatedArchive));
 };
 
-/** Convert archive to category-grouped feed for the UI, sanitizing images */
+/** Convert archive to category-grouped feed for the UI, sanitizing images.
+ *  Re-classifies items on every serve so improvements to the regex
+ *  automatically fix previously mis-categorised recipes (e.g. items that
+ *  defaulted to "dinner" because the keyword wasn't in the list yet). */
 function archiveToCategoryFeed(archive: Archive): CategoryFeed {
   const categories: Partial<Record<DiscoverCategory, ArchiveItem[]>> = {};
   for (const item of archive.items) {
-    const cat = item.category;
+    // Re-classify instead of using the frozen category from scrape time
+    const cat = classifyRecipe(item.title, item.description);
     if (!categories[cat]) categories[cat] = [];
     categories[cat]!.push({
       ...item,
+      category: cat,
       imageUrl: sanitizeImageUrl(item.imageUrl),
     });
   }

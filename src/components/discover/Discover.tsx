@@ -23,7 +23,9 @@ import {
   ArrowUpDown,
   XMark,
   ChevronDown,
+  Sun,
 } from "../ui/Icon";
+import { useWakeLock } from "../../hooks/useWakeLock";
 import type {
   Recipe,
   Ingredient,
@@ -218,6 +220,16 @@ export function Discover({
   );
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<"ingredients" | "steps">("ingredients");
+  const [ingredientSort, setIngredientSort] = useState<"recipe" | "category">(
+    () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
+  );
+  const [ingredientResetKey, setIngredientResetKey] = useState(0);
+  const [hasCheckedIngredients, setHasCheckedIngredients] = useState(false);
+  const [isGroupingSteps, setIsGroupingSteps] = useState(false);
+  const [groupedSteps, setGroupedSteps] = useState<Step[] | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const wakeLock = useWakeLock();
 
   // ── Feed loading ──
 
@@ -285,6 +297,11 @@ export function Discover({
       setImportError(null);
       setSavedFeedRecipeId(null);
       setPhotoIndex(0);
+      setActiveTab("ingredients");
+      setGroupedSteps(null);
+      setCompletedSteps(new Set());
+      setHasCheckedIngredients(false);
+      setIngredientResetKey((k) => k + 1);
       setIsImporting(true);
 
       try {
@@ -363,6 +380,8 @@ export function Discover({
     setImportError(null);
     setSavedFeedRecipeId(null);
     setPhotoIndex(0);
+    setGroupedSteps(null);
+    if (wakeLock.isActive) wakeLock.release();
   };
 
   // ── Share handler for discover recipes ──
@@ -740,34 +759,203 @@ export function Discover({
                 )}
               </div>
 
-              {/* Divider */}
+              {/* Tab bar — matches RecipeDetail */}
               <div className="border-t border-stone-200 dark:border-stone-700" />
+              <div className="flex border-b border-stone-200 dark:border-stone-700">
+                <button
+                  onClick={() => setActiveTab("ingredients")}
+                  className={classNames(
+                    "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
+                    activeTab === "ingredients"
+                      ? "text-orange-600 dark:text-orange-400"
+                      : "text-stone-500 dark:text-stone-400"
+                  )}
+                >
+                  Ingredients{importedRecipe.ingredients.length > 0 ? ` (${importedRecipe.ingredients.length})` : ""}
+                  {activeTab === "ingredients" && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("steps")}
+                  className={classNames(
+                    "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
+                    activeTab === "steps"
+                      ? "text-orange-600 dark:text-orange-400"
+                      : "text-stone-500 dark:text-stone-400"
+                  )}
+                >
+                  Steps{importedRecipe.steps.length > 0 ? ` (${importedRecipe.steps.length})` : ""}
+                  {activeTab === "steps" && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
+                  )}
+                </button>
+              </div>
 
-              {/* Ingredients — same as RecipeDetail */}
-              {importedRecipe.ingredients.length > 0 && (
-                <div>
-                  <h2 className="text-sm font-semibold dark:text-stone-100 mb-3">
-                    Ingredients
-                  </h2>
-                  <GroupedIngredients
-                    ingredients={importedRecipe.ingredients}
-                    sort="recipe"
-                    resetKey={0}
-                    showGrams={false}
-                  />
-                </div>
+              {/* Ingredients tab */}
+              {activeTab === "ingredients" && (
+                <section>
+                  {importedRecipe.ingredients.length > 0 ? (
+                    <>
+                      {/* Ingredient sort toggle + clear checked */}
+                      <div className="flex items-center gap-1.5 mb-3">
+                        {([
+                          { value: "recipe" as const, label: "Recipe order" },
+                          { value: "category" as const, label: "By category" },
+                        ]).map(({ value, label }) => (
+                          <button
+                            key={value}
+                            onClick={() => {
+                              setIngredientSort(value);
+                              localStorage.setItem("whisk_ingredient_sort", value);
+                            }}
+                            className={classNames(
+                              "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                              ingredientSort === value
+                                ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                                : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                        {hasCheckedIngredients && (
+                          <button
+                            onClick={() => {
+                              setIngredientResetKey((k) => k + 1);
+                              setHasCheckedIngredients(false);
+                            }}
+                            className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-medium border border-stone-300 text-stone-500 hover:border-orange-500 hover:text-orange-600 dark:border-stone-600 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
+                          >
+                            Clear checked
+                          </button>
+                        )}
+                      </div>
+                      <GroupedIngredients
+                        ingredients={importedRecipe.ingredients}
+                        sort={ingredientSort}
+                        resetKey={ingredientResetKey}
+                        showGrams={false}
+                        onCheckedChange={setHasCheckedIngredients}
+                      />
+                    </>
+                  ) : (
+                    <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">
+                      No ingredients listed
+                    </p>
+                  )}
+                </section>
               )}
 
-              {/* Divider */}
-              <div className="border-t border-stone-200 dark:border-stone-700" />
+              {/* Steps tab */}
+              {activeTab === "steps" && (
+                <section>
+                  {importedRecipe.steps.length > 0 ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-3">
+                        {importedRecipe.steps.length >= 3 && (
+                          <button
+                            onClick={async () => {
+                              const steps = groupedSteps ?? importedRecipe.steps;
+                              const hasGroups = steps.some((s) => s.group);
+                              if (hasGroups) {
+                                setGroupedSteps(importedRecipe.steps.map((s) => ({ ...s, group: undefined })));
+                                return;
+                              }
+                              setIsGroupingSteps(true);
+                              try {
+                                const res = await fetch("/api/ai/group-steps", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+                                  },
+                                  body: JSON.stringify({
+                                    title: importedRecipe.title,
+                                    steps: importedRecipe.steps.map((s) => s.text),
+                                  }),
+                                });
+                                if (!res.ok) throw new Error("Failed");
+                                const data = (await res.json()) as { groups: string[] };
+                                if (data.groups.length === importedRecipe.steps.length) {
+                                  setGroupedSteps(importedRecipe.steps.map((s, i) => ({ ...s, group: data.groups[i] })));
+                                }
+                              } catch {
+                                // Silent fail
+                              } finally {
+                                setIsGroupingSteps(false);
+                              }
+                            }}
+                            disabled={isGroupingSteps}
+                            className={classNames(
+                              "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                              (groupedSteps ?? importedRecipe.steps).some((s) => s.group)
+                                ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                                : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                            )}
+                          >
+                            {isGroupingSteps ? "Grouping..." : (groupedSteps ?? importedRecipe.steps).some((s) => s.group) ? "Grouped by Section" : "Group Sections"}
+                          </button>
+                        )}
+                        {completedSteps.size > 0 && (
+                          <span className="text-xs text-stone-400 dark:text-stone-500">
+                            {completedSteps.size}/{importedRecipe.steps.length}
+                          </span>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (wakeLock.isActive) {
+                              await wakeLock.release();
+                            } else {
+                              await wakeLock.request();
+                            }
+                          }}
+                          className={classNames(
+                            "ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                            wakeLock.isActive
+                              ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                              : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                          )}
+                        >
+                          <Sun className="w-3.5 h-3.5" />
+                          {wakeLock.isActive ? "Screen On" : "Keep Screen On"}
+                        </button>
+                      </div>
+                      <StepsList steps={groupedSteps ?? importedRecipe.steps} completedSteps={completedSteps} onToggleStep={(i) => setCompletedSteps((prev) => { const next = new Set(prev); if (next.has(i)) next.delete(i); else next.add(i); return next; })} />
+                    </>
+                  ) : (
+                    <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">
+                      No steps listed
+                    </p>
+                  )}
+                </section>
+              )}
 
-              {/* Steps — same as RecipeDetail */}
-              {importedRecipe.steps.length > 0 && (
-                <div>
-                  <h2 className="text-sm font-semibold dark:text-stone-100 mb-3">
-                    Steps
-                  </h2>
-                  <StepsList steps={importedRecipe.steps} />
+              {/* Add to Recipes CTA */}
+              {onSaveRecipe && !savedFeedRecipeId && (
+                <div className="border-t border-stone-200 dark:border-stone-700 pt-4">
+                  <Button
+                    fullWidth
+                    onClick={handleSaveFeedRecipe}
+                    disabled={isSavingFeed}
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <Plus className="w-5 h-5" /> Add to My Recipes
+                    </span>
+                  </Button>
+                </div>
+              )}
+              {savedFeedRecipeId && (
+                <div className="border-t border-stone-200 dark:border-stone-700 pt-4">
+                  <Button
+                    fullWidth
+                    variant="secondary"
+                    onClick={() => navigate(`/recipes/${savedFeedRecipeId}`)}
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <Check className="w-5 h-5" /> View Saved Recipe
+                    </span>
+                  </Button>
                 </div>
               )}
 

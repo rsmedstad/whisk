@@ -157,20 +157,37 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
 
 // ── Step Row ──
 
-export function StepRow({ step, index, recipeId, onStartTimer }: {
+export function StepRow({ step, index, recipeId, onStartTimer, completed, onToggle }: {
   step: Step;
   index: number;
   recipeId?: string;
   onStartTimer?: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
+  completed?: boolean;
+  onToggle?: () => void;
 }) {
   const timerMin = step.timerMinutes ?? parseTimerFromText(step.text);
   return (
-    <li className="flex gap-3">
-      <span className="shrink-0 h-6 w-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center dark:bg-orange-900 dark:text-orange-300">
-        {index + 1}
+    <li
+      className={classNames("flex gap-3", onToggle && "cursor-pointer")}
+      onClick={onToggle}
+    >
+      <span
+        className={classNames(
+          "shrink-0 h-6 w-6 rounded-full text-xs font-bold flex items-center justify-center transition-colors",
+          completed
+            ? "bg-orange-500 text-white"
+            : "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+        )}
+      >
+        {completed ? <Check className="w-3.5 h-3.5" /> : index + 1}
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm leading-relaxed dark:text-stone-200">
+        <p className={classNames(
+          "text-sm leading-relaxed",
+          completed
+            ? "text-stone-400 dark:text-stone-500"
+            : "dark:text-stone-200"
+        )}>
           {decodeEntities(step.text)}
         </p>
         {step.photoUrl && (
@@ -183,7 +200,7 @@ export function StepRow({ step, index, recipeId, onStartTimer }: {
         )}
         {timerMin && onStartTimer && recipeId && (
           <button
-            onClick={() => onStartTimer(`Step ${index + 1}`, timerMin, recipeId, index)}
+            onClick={(e) => { e.stopPropagation(); onStartTimer(`Step ${index + 1}`, timerMin, recipeId, index); }}
             className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-600 dark:bg-orange-950 dark:text-orange-400"
           >
             <Stopwatch className="w-3.5 h-3.5" /> {timerMin}:00
@@ -196,10 +213,12 @@ export function StepRow({ step, index, recipeId, onStartTimer }: {
 
 // ── Steps List ──
 
-export function StepsList({ steps, recipeId, onStartTimer }: {
+export function StepsList({ steps, recipeId, onStartTimer, completedSteps, onToggleStep }: {
   steps: Step[];
   recipeId?: string;
   onStartTimer?: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
+  completedSteps?: Set<number>;
+  onToggleStep?: (index: number) => void;
 }) {
   const hasGroups = steps.some((s) => s.group);
 
@@ -207,7 +226,7 @@ export function StepsList({ steps, recipeId, onStartTimer }: {
     return (
       <ol className="space-y-4">
         {steps.map((step, i) => (
-          <StepRow key={i} step={step} index={i} recipeId={recipeId} onStartTimer={onStartTimer} />
+          <StepRow key={i} step={step} index={i} recipeId={recipeId} onStartTimer={onStartTimer} completed={completedSteps?.has(i)} onToggle={onToggleStep ? () => onToggleStep(i) : undefined} />
         ))}
       </ol>
     );
@@ -236,7 +255,7 @@ export function StepsList({ steps, recipeId, onStartTimer }: {
           )}
           <ol className="space-y-4">
             {section.steps.map(({ step, originalIndex }) => (
-              <StepRow key={originalIndex} step={step} index={originalIndex} recipeId={recipeId} onStartTimer={onStartTimer} />
+              <StepRow key={originalIndex} step={step} index={originalIndex} recipeId={recipeId} onStartTimer={onStartTimer} completed={completedSteps?.has(originalIndex)} onToggle={onToggleStep ? () => onToggleStep(originalIndex) : undefined} />
             ))}
           </ol>
         </div>
