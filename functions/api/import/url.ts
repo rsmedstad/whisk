@@ -50,35 +50,50 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
-    // Try regular fetch first
+    // ── Known-blocked domains → skip straight to Browser Rendering ──
+    const BLOCKED_DOMAINS = [
+      "foodnetwork.com",   // Akamai WAF
+      "food52.com",        // Vercel Security Checkpoint
+      "thekitchn.com",     // PerimeterX
+    ];
+    const urlHost = new URL(url).hostname.replace(/^www\./, "");
+    const isKnownBlocked = BLOCKED_DOMAINS.some(
+      (d) => urlHost === d || urlHost.endsWith(`.${d}`)
+    );
+
+    // Try regular fetch first (unless known-blocked)
     let html: string | null = null;
-    let usedBrowserRendering = false;
+    let regularFetchFailed = false;
 
-    const pageAbort = AbortSignal.timeout(15000);
-    const res = await fetch(url, {
-      signal: pageAbort,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Cache-Control": "no-cache",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
-      },
-    });
+    if (!isKnownBlocked) {
+      const pageAbort = AbortSignal.timeout(15000);
+      const res = await fetch(url, {
+        signal: pageAbort,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Cache-Control": "no-cache",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+        },
+      });
 
-    const regularFetchFailed = !res.ok;
-    if (res.ok) {
-      html = await res.text();
+      regularFetchFailed = !res.ok;
+      if (res.ok) {
+        html = await res.text();
+      }
+    } else {
+      regularFetchFailed = true; // Skip to Browser Rendering
     }
 
-    // If regular fetch failed (403, small response), try Browser Rendering
+    // If regular fetch failed (403, small response, or known-blocked), try Browser Rendering
     const needsBrowser = regularFetchFailed || (html !== null && html.length < 500);
     if (needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
       try {
@@ -107,7 +122,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           const brHtml = brBody.startsWith("{") ? (JSON.parse(brBody) as { result?: string }).result ?? "" : brBody;
           if (brHtml.length > 500 && !brHtml.includes("<title>Just a moment...</title>")) {
             html = brHtml;
-            usedBrowserRendering = true;
           }
         }
       } catch {
@@ -116,17 +130,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     if (!html || html.length < 500) {
+      // Try Apify recipe scraper as last resort before giving up entirely
+      if (env.APIFY_API_TOKEN) {
+        const apifyData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
+        if (apifyData) {
+          const recipe = {
+            title: apifyData.name ?? "",
+            description: apifyData.description ?? "",
+            ingredients: parseIngredients(apifyData.recipeIngredient ?? []),
+            steps: parseSteps(apifyData.recipeInstructions ?? []),
+            prepTime: parseDuration(apifyData.prepTime) ?? parseDuration(apifyData.totalTime),
+            cookTime: parseDuration(apifyData.cookTime),
+            servings: parseServings(apifyData.recipeYield),
+            thumbnailUrl: extractImageUrl(apifyData.image),
+            photos: [] as { url: string; isPrimary: boolean }[],
+            lastCrawledAt: new Date().toISOString(),
+          };
+          return new Response(JSON.stringify(recipe), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
       return new Response(
         JSON.stringify({
           error: regularFetchFailed
-            ? `This site blocks automated access (HTTP ${res.status}). Try copying the recipe text from the page and pasting it manually.`
+            ? "This site blocks automated access. Try copying the recipe text from the page and pasting it manually."
             : "Received a very small response — site may be blocking automated requests",
         }),
         { status: 422, headers: { "Content-Type": "application/json" } }
       );
     }
-
-    void usedBrowserRendering;
 
     // Strategy 1: JSON-LD (most reliable when present)
     let recipeData = extractJsonLd(html);
@@ -139,6 +172,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Strategy 3: Plain text blog recipe (e.g. smittenkitchen)
     if (!recipeData) {
       recipeData = extractBlogRecipe(html);
+    }
+
+    // Strategy 4: Apify universal recipe scraper (last resort)
+    if (!recipeData && env.APIFY_API_TOKEN) {
+      recipeData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
     }
 
     if (!recipeData) {
@@ -218,12 +256,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         parseDuration(recipeData.prepTime) ??
         parseDuration(recipeData.totalTime),
       cookTime: parseDuration(recipeData.cookTime),
-      servings:
-        parseInt(
-          (Array.isArray(recipeData.recipeYield)
-            ? recipeData.recipeYield[0]
-            : recipeData.recipeYield) ?? "0"
-        ) || undefined,
+      servings: parseServings(recipeData.recipeYield),
       thumbnailUrl,
       photos,
       videoUrl,
@@ -760,14 +793,36 @@ function extractVideoUrl(html: string): string | undefined {
   return undefined;
 }
 
+function parseServings(yield_: string | string[] | undefined): number | undefined {
+  if (!yield_) return undefined;
+  // Array: ["4", "4 hamburgers"] — pick the first numeric-only entry, or first entry
+  const values = Array.isArray(yield_) ? yield_ : [yield_];
+  for (const v of values) {
+    const n = parseInt(v);
+    if (n > 0) return n;
+  }
+  return undefined;
+}
+
 function parseDuration(iso: string | undefined): number | undefined {
   if (!iso) return undefined;
-  // Parse ISO 8601 duration: PT30M, PT1H30M, PT45M
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-  if (!match) return undefined;
-  const hours = parseInt(match[1] ?? "0");
-  const minutes = parseInt(match[2] ?? "0");
-  return hours * 60 + minutes || undefined;
+
+  // ISO 8601 duration: PT30M, PT1H30M, PT45M, P0DT0H30M
+  const isoMatch = iso.match(/PT?(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?/);
+  if (isoMatch && (isoMatch[1] || isoMatch[2] || isoMatch[3])) {
+    const days = parseInt(isoMatch[1] ?? "0");
+    const hours = parseInt(isoMatch[2] ?? "0");
+    const minutes = parseInt(isoMatch[3] ?? "0");
+    return days * 1440 + hours * 60 + minutes || undefined;
+  }
+
+  // Free text: "30 minutes", "1 hour 30 minutes", "2 hours plus cooling"
+  let total = 0;
+  const hourMatch = iso.match(/(\d+)\s*hours?/i);
+  const minMatch = iso.match(/(\d+)\s*min(?:ute)?s?/i);
+  if (hourMatch?.[1]) total += parseInt(hourMatch[1]) * 60;
+  if (minMatch?.[1]) total += parseInt(minMatch[1]);
+  return total || undefined;
 }
 
 // ── Instagram via Apify ────────────────────────────────────
@@ -864,6 +919,48 @@ async function handleInstagramImport(
 
   const caption = post.caption ?? "";
   const author = post.ownerUsername ?? "";
+
+  // ── Try link-in-bio services to find actual recipe URL ──────
+  if (author && caption) {
+    const recipeUrl = await findRecipeUrlFromLinkInBio(author, caption);
+    if (recipeUrl) {
+      // Fetch the recipe URL and parse it using the same extraction logic
+      try {
+        const pageRes = await fetch(recipeUrl, {
+          signal: AbortSignal.timeout(15000),
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          },
+        });
+        if (pageRes.ok) {
+          const pageHtml = await pageRes.text();
+          const recipeData = extractJsonLd(pageHtml) ?? extractMicrodata(pageHtml);
+          if (recipeData) {
+            const allImageUrls = extractAllImageUrls(recipeData, pageHtml);
+            const recipe = {
+              title: recipeData.name ?? "",
+              description: recipeData.description ?? "",
+              ingredients: parseIngredients(recipeData.recipeIngredient ?? []),
+              steps: parseSteps(recipeData.recipeInstructions ?? []),
+              prepTime: parseDuration(recipeData.prepTime) ?? parseDuration(recipeData.totalTime),
+              cookTime: parseDuration(recipeData.cookTime),
+              servings: parseServings(recipeData.recipeYield),
+              thumbnailUrl: allImageUrls[0],
+              photos: allImageUrls.slice(0, 10).map((u, i) => ({ url: u, isPrimary: i === 0 })),
+              videoUrl: extractVideoUrl(pageHtml),
+              source: { type: "url", url, resolvedUrl: recipeUrl, domain: "instagram.com", attribution: `@${author}` },
+              lastCrawledAt: new Date().toISOString(),
+            };
+            return { status: 200, body: recipe };
+          }
+        }
+      } catch {
+        // Link-in-bio URL fetch failed, fall through to caption parsing
+      }
+    }
+  }
 
   // Collect images: carousel childPosts, images array, displayUrl fallback
   // For reels/videos, displayUrl is a portrait video frame — object-cover crops it on display
@@ -1026,6 +1123,204 @@ Return ONLY the JSON object, no markdown or explanation.`;
       prepTime: typeof parsed.prepTime === "number" ? parsed.prepTime : undefined,
       cookTime: typeof parsed.cookTime === "number" ? parsed.cookTime : undefined,
       servings: typeof parsed.servings === "number" ? parsed.servings : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── Link-in-Bio → Recipe URL resolution ────────────────────
+
+interface LikeShopItem {
+  comment?: string;
+  title?: string;
+  product_url?: string;
+  image_url?: string;
+}
+
+// Known food accounts and their link-in-bio services
+const LIKESHOP_ACCOUNTS: Record<string, string> = {
+  nytcooking: "nytcooking",
+  bonappetitmag: "bonappetitmag",
+};
+
+async function findRecipeUrlFromLinkInBio(
+  username: string,
+  caption: string
+): Promise<string | null> {
+  const lowerUser = username.toLowerCase();
+
+  // Try LikeShop.me (Dash Hudson)
+  const likeshopSlug = LIKESHOP_ACCOUNTS[lowerUser];
+  if (likeshopSlug) {
+    const url = await matchLikeShopRecipe(likeshopSlug, caption);
+    if (url) return url;
+  }
+
+  // Try Linktr.ee for any account (lightweight check)
+  const linktreeUrl = await matchLinktreeRecipe(lowerUser, caption);
+  if (linktreeUrl) return linktreeUrl;
+
+  return null;
+}
+
+async function matchLikeShopRecipe(
+  slug: string,
+  caption: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.likeshop.me/api/accounts/${slug}/galleries/likeshop`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as { data?: { items?: LikeShopItem[] } };
+    const items = data.data?.items;
+    if (!items || items.length === 0) return null;
+
+    // Fuzzy match: compare first ~60 chars of caption against each item's comment
+    const captionStart = caption
+      .replace(/[^\w\s]/g, "")
+      .slice(0, 60)
+      .toLowerCase()
+      .trim();
+
+    for (const item of items) {
+      if (!item.product_url || !item.comment) continue;
+      const itemComment = item.comment
+        .replace(/[^\w\s]/g, "")
+        .slice(0, 60)
+        .toLowerCase()
+        .trim();
+      // Check if the caption start matches the item comment start
+      if (
+        captionStart.startsWith(itemComment.slice(0, 30)) ||
+        itemComment.startsWith(captionStart.slice(0, 30))
+      ) {
+        return item.product_url;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function matchLinktreeRecipe(
+  username: string,
+  caption: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(`https://linktr.ee/${username}`, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+      },
+    });
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    // Extract __NEXT_DATA__ JSON blob
+    const nextDataMatch = html.match(
+      /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
+    );
+    if (!nextDataMatch?.[1]) return null;
+
+    const nextData = JSON.parse(nextDataMatch[1]) as {
+      props?: {
+        pageProps?: {
+          account?: {
+            links?: { url?: string; title?: string }[];
+          };
+        };
+      };
+    };
+
+    const links = nextData.props?.pageProps?.account?.links;
+    if (!links || links.length === 0) return null;
+
+    // Extract a recipe name hint from the caption (first line, stripped of emoji/hashtags)
+    const captionFirstLine = caption
+      .split("\n")[0]
+      ?.replace(/[#@]\S+/g, "")
+      .replace(/[^\w\s]/g, "")
+      .trim()
+      .toLowerCase() ?? "";
+
+    if (!captionFirstLine) return null;
+
+    // Look for links whose title fuzzy-matches the caption
+    for (const link of links) {
+      if (!link.url || !link.title) continue;
+      const linkTitle = link.title.toLowerCase();
+      // Check if link title contains key words from caption
+      const captionWords = captionFirstLine.split(/\s+/).filter((w) => w.length > 3);
+      const matchCount = captionWords.filter((w) => linkTitle.includes(w)).length;
+      if (matchCount >= 2 || (captionWords.length <= 3 && matchCount >= 1)) {
+        // Verify it looks like a recipe URL (not a shop link, etc.)
+        if (link.url.match(/recipe|cooking|food|kitchen|bon|nyt|epicurious|allrecipes|serious/i) ||
+            !link.url.match(/shop|store|merch|subscribe|newsletter/i)) {
+          return link.url;
+        }
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Apify Universal Recipe Scraper (final fallback) ─────────
+
+interface ApifyRecipeResult {
+  name?: string;
+  description?: string;
+  image?: unknown;
+  ingredients?: string[];
+  instructions?: string[];
+  prepTime?: string;
+  cookTime?: string;
+  totalTime?: string;
+  yield?: string;
+  url?: string;
+}
+
+async function tryApifyRecipeScraper(
+  url: string,
+  apiToken: string
+): Promise<RecipeData | null> {
+  try {
+    const res = await fetch(
+      `https://api.apify.com/v2/acts/vulnv~recipe-scraper/run-sync-get-dataset-items?token=${apiToken}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startUrls: [{ url }],
+          maxItems: 1,
+        }),
+        signal: AbortSignal.timeout(45000),
+      }
+    );
+
+    if (!res.ok) return null;
+
+    const results = (await res.json()) as ApifyRecipeResult[];
+    const recipe = results[0];
+    if (!recipe?.name) return null;
+
+    return {
+      name: recipe.name,
+      description: recipe.description,
+      image: recipe.image,
+      recipeIngredient: recipe.ingredients,
+      recipeInstructions: recipe.instructions,
+      prepTime: recipe.prepTime,
+      cookTime: recipe.cookTime,
+      totalTime: recipe.totalTime,
+      recipeYield: recipe.yield,
     };
   } catch {
     return null;
