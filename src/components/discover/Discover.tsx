@@ -1525,15 +1525,13 @@ function FeedCard({
           {item.title}
         </h4>
         <div className="flex items-center justify-between mt-1 text-[10px] text-stone-400 dark:text-stone-500">
-          {item.totalTime && item.totalTime > 0 ? (
-            <span className="flex items-center gap-0.5">
-              <Clock className="w-3 h-3" /> {formatTime(item.totalTime)}
-            </span>
-          ) : (
-            <span />
-          )}
+          <span className="flex items-center gap-0.5">
+            {item.totalTime && item.totalTime > 0 ? (
+              <><Clock className="w-3 h-3" /> {formatTime(item.totalTime)}</>
+            ) : null}
+          </span>
           {item.source && (
-            <span className="truncate ml-1">{SOURCE_LABELS[item.source ?? "nyt"]}</span>
+            <span className="truncate">{SOURCE_LABELS[item.source ?? "nyt"]}</span>
           )}
         </div>
       </div>

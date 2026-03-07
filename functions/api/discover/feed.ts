@@ -273,6 +273,49 @@ async function batchTagItems(
   }
 }
 
+/** Estimate totalTime for items that have tags but are missing time */
+async function batchEstimateTimes(
+  items: ArchiveItem[],
+  env: Env
+): Promise<void> {
+  const config = await loadAIConfig(env.WHISK_KV);
+  const fnConfig = resolveConfig(config, "chat", env);
+  if (!fnConfig) return;
+
+  const BATCH_SIZE = 30;
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    try {
+      const numbered = batch.map((item, idx) => `${idx + 1}. "${item.title}"${item.description ? ` — ${item.description}` : ""}`).join("\n");
+
+      const content = await callTextAI(fnConfig, env, [
+        {
+          role: "system",
+          content: [
+            "Estimate the total cook time in minutes (prep + cooking combined) for each numbered recipe.",
+            "Use your knowledge of typical recipes.",
+            '- Return JSON: { "results": [{ "index": 1, "totalTime": 45 }, ...] }',
+          ].join("\n"),
+        },
+        { role: "user", content: numbered },
+      ], { maxTokens: 512, temperature: 0.2, jsonMode: true });
+
+      const parsed = JSON.parse(content) as { results?: { index: number; totalTime?: unknown }[] };
+      if (Array.isArray(parsed.results)) {
+        for (const result of parsed.results) {
+          if (typeof result.index !== "number") continue;
+          const item = batch[result.index - 1];
+          if (item && !item.totalTime && typeof result.totalTime === "number" && result.totalTime > 0 && result.totalTime < 1440) {
+            item.totalTime = Math.round(result.totalTime);
+          }
+        }
+      }
+    } catch {
+      // AI call failed — skip this batch
+    }
+  }
+}
+
 /** Keyword-based fallback tagging when AI is unavailable */
 function keywordTagItem(item: ArchiveItem): string[] {
   const text = `${item.title} ${item.description ?? ""}`.toLowerCase();
@@ -397,6 +440,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const untaggedExisting = (archive?.items ?? []).filter((i) => !i.tags || i.tags.length === 0);
   if (untaggedExisting.length > 0) {
     await batchTagItems(untaggedExisting, env);
+  }
+
+  // Backfill totalTime for items that have tags but no time estimate
+  const allItems = [...(archive?.items ?? []), ...newItems];
+  const missingTime = allItems.filter((i) => !i.totalTime && i.tags && i.tags.length > 0);
+  if (missingTime.length > 0) {
+    await batchEstimateTimes(missingTime, env);
   }
 
   // Clean up any existing archive items that have person/profile images
