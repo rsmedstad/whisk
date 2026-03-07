@@ -110,6 +110,7 @@ interface FeedItem {
   url: string;
   imageUrl?: string;
   description?: string;
+  totalTime?: number; // total time in minutes
 }
 
 /** A feed item enriched with source, category, tags, and archive timestamp */
@@ -118,6 +119,7 @@ interface ArchiveItem extends FeedItem {
   category: DiscoverCategory;
   addedAt: string;
   tags?: string[];
+  totalTime?: number;
 }
 
 interface Archive {
@@ -184,7 +186,8 @@ const DISCOVER_TAGS = [
 
 const DISCOVER_TAG_SET = new Set<string>(DISCOVER_TAGS);
 
-/** Batch-tag items using AI. Processes up to 20 items per call for efficiency. */
+/** Batch-tag items using AI. Processes up to 20 items per call for efficiency.
+ *  Also estimates totalTime for items missing it. */
 async function batchTagItems(
   items: ArchiveItem[],
   env: Env
@@ -218,17 +221,20 @@ async function batchTagItems(
             "",
             DISCOVER_TAGS.join(", "),
             "",
+            "Also estimate the total cook time in minutes (prep + cooking combined).",
+            "",
             "Rules:",
             "- Only use tags from the list above.",
             "- Include the meal type (dinner, breakfast, dessert, etc.) and cuisine if identifiable.",
             "- Include diet tags only when clearly applicable.",
-            '- Return JSON: { "results": [{ "index": 1, "tags": ["dinner", "italian"] }, ...] }',
+            "- Estimate totalTime as a number in minutes. Use your knowledge of typical recipes.",
+            '- Return JSON: { "results": [{ "index": 1, "tags": ["dinner", "italian"], "totalTime": 45 }, ...] }',
           ].join("\n"),
         },
         { role: "user", content: numbered },
       ], { maxTokens: 1024, temperature: 0.2, jsonMode: true });
 
-      const parsed = JSON.parse(content) as { results?: { index: number; tags: unknown }[] };
+      const parsed = JSON.parse(content) as { results?: { index: number; tags: unknown; totalTime?: unknown }[] };
       if (Array.isArray(parsed.results)) {
         for (const result of parsed.results) {
           if (typeof result.index !== "number" || !Array.isArray(result.tags)) continue;
@@ -241,6 +247,10 @@ async function batchTagItems(
               .filter((t) => DISCOVER_TAG_SET.has(t));
             if (validTags.length > 0) {
               item.tags = [...new Set(validTags)]; // dedupe
+            }
+            // Store estimated total time (only if item doesn't already have it from JSON-LD)
+            if (!item.totalTime && typeof result.totalTime === "number" && result.totalTime > 0 && result.totalTime < 1440) {
+              item.totalTime = Math.round(result.totalTime);
             }
           }
         }
@@ -612,8 +622,11 @@ function findRecipesInJson(
         : typeof rec.topnote === "string"
           ? rec.topnote.replace(/<[^>]+>/g, "").slice(0, 200)
           : undefined;
+    // Try to extract time from the JSON object
+    const totalTime = parseIsoDuration(rec.totalTime)
+      ?? ((parseIsoDuration(rec.prepTime) ?? 0) + (parseIsoDuration(rec.cookTime) ?? 0)) || undefined;
 
-    results.push({ title: name, url: recipeUrl, imageUrl, description });
+    results.push({ title: name, url: recipeUrl, imageUrl, description, totalTime });
     return; // Don't recurse into children of a matched recipe
   }
 
@@ -999,15 +1012,38 @@ function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: stri
 
     if (name && url) {
       const imageUrl = extractJsonLdImage(obj);
+      const totalTime = extractJsonLdTime(obj);
       items.push({
         title: name,
         url,
         imageUrl,
         description: typeof obj.description === "string" ? obj.description.slice(0, 200) : undefined,
+        totalTime,
       });
     }
     return;
   }
+}
+
+/** Parse ISO 8601 duration (e.g. "PT45M", "PT1H30M", "PT2H") to minutes */
+function parseIsoDuration(val: unknown): number | undefined {
+  if (typeof val !== "string") return undefined;
+  const match = val.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
+  if (!match) return undefined;
+  const hours = parseInt(match[1] ?? "0", 10);
+  const minutes = parseInt(match[2] ?? "0", 10);
+  const total = hours * 60 + minutes;
+  return total > 0 ? total : undefined;
+}
+
+/** Extract total time from JSON-LD Recipe: prefer totalTime, fall back to prep+cook */
+function extractJsonLdTime(obj: Record<string, unknown>): number | undefined {
+  const total = parseIsoDuration(obj.totalTime);
+  if (total) return total;
+  const prep = parseIsoDuration(obj.prepTime) ?? 0;
+  const cook = parseIsoDuration(obj.cookTime) ?? 0;
+  const sum = prep + cook;
+  return sum > 0 ? sum : undefined;
 }
 
 /** Extract image URL from a JSON-LD object, filtering out person photos */
