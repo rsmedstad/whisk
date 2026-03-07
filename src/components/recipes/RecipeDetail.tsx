@@ -190,11 +190,12 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     setShowNoteInput(false);
   }, [recipe, noteText, updateRecipe]);
 
-  const handlePlanThis = useCallback(async () => {
+  const handlePlanThis = useCallback(async (date: string, slot: MealSlot) => {
     if (!recipe || !onAddMeal || justPlanned) return;
-    // Plan for today's dinner by default
-    await onAddMeal(new Date(), "dinner", recipe.title, recipe.id);
+    const d = new Date(date + "T12:00:00");
+    await onAddMeal(d, slot, recipe.title, recipe.id);
     setJustPlanned(true);
+    setShowPlanDate(false);
     setTimeout(() => setJustPlanned(false), 2000);
   }, [recipe, onAddMeal, justPlanned]);
 
@@ -784,19 +785,14 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               </h3>
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
-                    if (recipe && !justCooked) {
-                      markCooked(recipe.id);
-                      setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: new Date().toISOString() } : r);
-                      setJustCooked(true);
-                      setTimeout(() => setJustCooked(false), 2000);
-                    }
-                  }}
+                  onClick={() => setShowMadeDate(!showMadeDate)}
                   className={classNames(
                     "flex-1 flex items-center justify-center gap-2 rounded-(--wk-radius-btn) border px-4 py-2.5 text-sm font-medium transition-colors",
                     justCooked
                       ? "border-orange-500 bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400"
-                      : "border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400"
+                      : showMadeDate
+                        ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                        : "border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400"
                   )}
                 >
                   <Check className="w-4 h-4" />
@@ -804,12 +800,14 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 </button>
                 {onAddMeal && (
                   <button
-                    onClick={handlePlanThis}
+                    onClick={() => setShowPlanDate(!showPlanDate)}
                     className={classNames(
                       "flex-1 flex items-center justify-center gap-2 rounded-(--wk-radius-btn) border px-4 py-2.5 text-sm font-medium transition-colors",
                       justPlanned
                         ? "border-orange-500 bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400"
-                        : "border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400"
+                        : showPlanDate
+                          ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                          : "border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400"
                     )}
                   >
                     <CalendarPlus className="w-4 h-4" />
@@ -817,6 +815,55 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   </button>
                 )}
               </div>
+              {showMadeDate && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="date"
+                    value={madeDate}
+                    onChange={(e) => setMadeDate(e.target.value)}
+                    className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (recipe && !justCooked) {
+                        const d = new Date(madeDate + "T12:00:00");
+                        markCooked(recipe.id);
+                        setRecipe((r) => r ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1, lastCookedAt: d.toISOString() } : r);
+                        updateRecipe(recipe.id, { lastCookedAt: d.toISOString() });
+                        setJustCooked(true);
+                        setShowMadeDate(false);
+                        setTimeout(() => setJustCooked(false), 2000);
+                      }
+                    }}
+                  >
+                    Log
+                  </Button>
+                </div>
+              )}
+              {showPlanDate && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="date"
+                    value={planDate}
+                    onChange={(e) => setPlanDate(e.target.value)}
+                    className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <select
+                    value={planSlot}
+                    onChange={(e) => setPlanSlot(e.target.value as MealSlot)}
+                    className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  >
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner">Dinner</option>
+                    <option value="snack">Snack</option>
+                  </select>
+                  <Button size="sm" onClick={() => handlePlanThis(planDate, planSlot)}>
+                    Add
+                  </Button>
+                </div>
+              )}
               {(recipe.cookedCount || recipe.lastCookedAt) && (
                 <div className="flex items-center justify-center gap-2 text-xs text-stone-400 dark:text-stone-500">
                   {recipe.cookedCount ? (

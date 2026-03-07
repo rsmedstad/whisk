@@ -360,6 +360,26 @@ export function ShoppingList({
           </div>
         )}
 
+        {/* Clear action pills */}
+        {totalCount > 0 && (
+          <div className="flex gap-1.5 pb-2">
+            {checkedCount > 0 && (
+              <button
+                onClick={onClearChecked}
+                className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 transition-colors"
+              >
+                Clear selected ({checkedCount})
+              </button>
+            )}
+            <button
+              onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
+              className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:border-stone-600 dark:hover:bg-stone-800 transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
+
         {/* Quick add */}
         <form onSubmit={handleAdd} className="flex gap-2 pb-3">
           <input
@@ -438,7 +458,7 @@ export function ShoppingList({
                         className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
                         title={`Clear all ${CATEGORY_LABELS[cat]}`}
                       >
-                        clear
+                        clear category
                       </button>
                     </div>
                   </div>

@@ -440,7 +440,7 @@ export function RecipeList({
       <InstallPrompt />
 
       {/* Recipe cards */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 pb-24">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 pb-24">
         {recipes.length === 0 && !search && selectedTags.length === 0 ? (
           <FirstRunGuide />
         ) : filtered.length === 0 ? (
