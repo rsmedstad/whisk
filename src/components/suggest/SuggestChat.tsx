@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } fro
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, ChevronRight, WhiskLogo } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Send } from "../ui/Icon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
-import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
+import { getSeasonalContext, buildSeasonalSystemContext, SEASONAL_CATEGORIES } from "../../lib/seasonal";
 import type { RecipeIndexEntry } from "../../types";
 
 interface Message {
@@ -14,8 +14,8 @@ interface Message {
 }
 
 const PICK_CATEGORIES = [
-  { value: "any", label: "Any", tags: [] as string[] },
   { value: "dinner", label: "Dinner", tags: ["dinner"] },
+  { value: "any", label: "Any", tags: [] as string[] },
   { value: "breakfast", label: "Breakfast", tags: ["breakfast", "brunch"] },
   { value: "appetizer", label: "Appetizer", tags: ["appetizer"] },
   { value: "side dish", label: "Side Dish", tags: ["side dish", "salad"] },
@@ -48,6 +48,39 @@ function extractUrls(text: string): string[] {
   });
 }
 
+/** Category icon (inline SVG for small custom icons) */
+function CategoryIcon({ category, className }: { category: string; className?: string }) {
+  const cn = className ?? "w-3.5 h-3.5";
+  switch (category) {
+    case "Fruit":
+      return (
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 2c1 2 0 4-1 5 3-1 6 1 7 4s-1 8-6 10c-5-2-7-7-6-10s4-5 7-4c-1-1-2-3-1-5Z" />
+        </svg>
+      );
+    case "Vegetables":
+      return (
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 2c-1 2-3 3-3 3s2 1 3 3c1-2 3-3 3-3s-2-1-3-3ZM7 8c-3 2-5 6-4 10 1 3 4 4 9 4s8-1 9-4c1-4-1-8-4-10" />
+        </svg>
+      );
+    case "Mains":
+      return (
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 14h18M5 14c0-4 3-8 7-8s7 4 7 8M4 14v2a1 1 0 001 1h14a1 1 0 001-1v-2M12 18v3" />
+        </svg>
+      );
+    case "Sides":
+      return (
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 0116 0M3 12h18M5 12c0 4 3 7 7 7s7-3 7-7" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatProps) {
   const recipeCount = recipes.length;
   const navigate = useNavigate();
@@ -59,9 +92,10 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
   const [pickCategory, setPickCategory] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("whisk_daily_pick") ?? "{}") as { cat?: string };
-      return saved.cat ?? "any";
-    } catch { return "any"; }
+      return saved.cat ?? "dinner";
+    } catch { return "dinner"; }
   });
+  const [seasonFilter, setSeasonFilter] = useState<string>("current");
   const [pickedRecipe, setPickedRecipe] = useState<RecipeIndexEntry | null>(null);
   const [diceAnimating, setDiceAnimating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -76,6 +110,22 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
     () => getSeasonalContext(new Date(), householdSize),
     [householdSize]
   );
+
+  // Build season/holiday dropdown options
+  const seasonOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [
+      { value: "current", label: `${seasonal.season.charAt(0).toUpperCase() + seasonal.season.slice(1)}` },
+    ];
+    for (const h of seasonal.upcomingHolidays.slice(0, 3)) {
+      options.push({ value: h.name.toLowerCase(), label: h.name });
+    }
+    return options;
+  }, [seasonal]);
+
+  // Get seasonal categories for display
+  const categories = useMemo(() => {
+    return SEASONAL_CATEGORIES[seasonal.season] ?? [];
+  }, [seasonal.season]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -157,7 +207,6 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
     const pick = pool[idx] ?? null;
     setPickedRecipe(pick);
     if (animate) animateDice();
-    // Save to localStorage with 1-day TTL
     if (pick) {
       localStorage.setItem("whisk_daily_pick", JSON.stringify({
         id: pick.id,
@@ -186,7 +235,6 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
       }
     } catch { /* ignore */ }
 
-    // No valid cached pick — roll a new one with animation
     setTimeout(() => handleRandomPick(true), 300);
   }, [recipes]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -223,141 +271,151 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
               AI suggestions — limited mode
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-              Chat requires an AI API key (GROQ_API_KEY, OPENAI_API_KEY, or similar).
-              You can still browse recipes by season and use the quick actions below.
+              Chat requires an AI API key. You can still browse recipes by season and use quick actions below.
             </p>
           </div>
         )}
 
-        {/* Seasonal context + quick actions */}
+        {/* Landing state: seasonal info + suggestion + mood */}
         {messages.length === 0 && (
           <>
-            {/* Seasonal greeting */}
+            {/* What's in Season */}
             <Card>
-              <p className="text-base font-semibold dark:text-stone-100">
-                {seasonal.greeting}
-              </p>
-              {recipeCount > 0 && (
-                <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">
-                  AI knows your {recipeCount} recipe{recipeCount !== 1 ? "s" : ""} and can suggest from your collection
-                </p>
-              )}
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="inline-flex items-center rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-300 capitalize">
-                  {seasonal.season}
-                </span>
-                {seasonal.upcomingHolidays.slice(0, 3).map((h) => (
-                  <span
-                    key={h.name}
-                    className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-950 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300"
-                  >
-                    {h.name}
-                    {h.daysAway > 0 && (
-                      <span className="ml-1 text-orange-500/70">
-                        {h.daysAway}d
-                      </span>
+              <div className="flex items-center gap-2 mb-3">
+                <Leaf className="w-4.5 h-4.5 text-green-600 dark:text-green-400" />
+                <h2 className="text-base font-semibold dark:text-stone-100">
+                  What&apos;s in Season
+                </h2>
+                {seasonal.upcomingHolidays.length > 0 && (
+                  <span className="ml-auto inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-950 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300">
+                    {seasonal.upcomingHolidays[0]!.name}
+                    {seasonal.upcomingHolidays[0]!.daysAway > 0 && (
+                      <span className="ml-1 text-orange-500/70">{seasonal.upcomingHolidays[0]!.daysAway}d</span>
                     )}
                   </span>
+                )}
+              </div>
+              <div className="space-y-2.5">
+                {categories.map((cat) => (
+                  <div key={cat.label} className="flex items-start gap-2">
+                    <CategoryIcon category={cat.label} className="w-4 h-4 text-stone-400 dark:text-stone-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-stone-600 dark:text-stone-300">
+                        {cat.label}
+                      </p>
+                      <p className="text-xs text-stone-400 dark:text-stone-500">
+                        {cat.items.join(", ")}
+                      </p>
+                    </div>
+                  </div>
                 ))}
               </div>
-              {seasonal.seasonalIngredients.length > 0 && (
-                <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-                  In season: {seasonal.seasonalIngredients.slice(0, 6).join(", ")}
-                </p>
-              )}
             </Card>
 
-            {/* Random pick */}
+            {/* Suggestion */}
             {recipeCount > 0 && (
               <Card>
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Dice className={classNames("w-5 h-5 text-orange-500", diceAnimating && "animate-dice")} />
-                    <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
-                      Pick for me
-                    </p>
+                  <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+                    Suggestion
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={seasonFilter}
+                      onChange={(e) => setSeasonFilter(e.target.value)}
+                      className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    >
+                      {seasonOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={pickCategory}
+                      onChange={(e) => {
+                        setPickCategory(e.target.value);
+                        setPickedRecipe(null);
+                        setTimeout(() => {
+                          const pool = filterByCategory(recipes, e.target.value);
+                          if (pool.length === 0) return;
+                          const idx = Math.floor(Math.random() * pool.length);
+                          const pick = pool[idx] ?? null;
+                          setPickedRecipe(pick);
+                          animateDice();
+                          if (pick) {
+                            localStorage.setItem("whisk_daily_pick", JSON.stringify({
+                              id: pick.id, cat: e.target.value, ts: Date.now(),
+                            }));
+                          }
+                        }, 0);
+                      }}
+                      className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    >
+                      {PICK_CATEGORIES.map((cat) => (
+                        <option key={cat.value} value={cat.value}>{cat.label}</option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    value={pickCategory}
-                    onChange={(e) => {
-                      setPickCategory(e.target.value);
-                      setPickedRecipe(null);
-                      // Re-roll with new category after state update
-                      setTimeout(() => {
-                        const pool = filterByCategory(recipes, e.target.value);
-                        if (pool.length === 0) return;
-                        const idx = Math.floor(Math.random() * pool.length);
-                        const pick = pool[idx] ?? null;
-                        setPickedRecipe(pick);
-                        animateDice();
-                        if (pick) {
-                          localStorage.setItem("whisk_daily_pick", JSON.stringify({
-                            id: pick.id, cat: e.target.value, ts: Date.now(),
-                          }));
-                        }
-                      }, 0);
-                    }}
-                    className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  >
-                    {PICK_CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
                 </div>
 
                 {pickedRecipe ? (
-                  <div className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
-                    <button
-                      onClick={() => navigate(`/recipes/${pickedRecipe.id}`)}
-                      className="w-full flex items-center gap-3 p-3 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors"
-                    >
-                      {pickedRecipe.thumbnailUrl ? (
+                  <button
+                    onClick={() => navigate(`/recipes/${pickedRecipe.id}`)}
+                    className={classNames(
+                      "w-full rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden text-left",
+                      "hover:border-orange-300 dark:hover:border-orange-700 transition-colors",
+                      diceAnimating && "animate-pulse"
+                    )}
+                  >
+                    {pickedRecipe.thumbnailUrl ? (
+                      <div className="relative aspect-[16/9] w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
                         <img
                           src={pickedRecipe.thumbnailUrl}
                           alt=""
-                          className="w-14 h-14 rounded-lg object-cover shrink-0"
+                          className="h-full w-full object-cover"
                         />
-                      ) : (
-                        <div className="w-14 h-14 rounded-lg bg-stone-100 dark:bg-stone-800 shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
-                          {pickedRecipe.title}
-                        </p>
+                      </div>
+                    ) : (
+                      <div className="aspect-[16/9] w-full bg-stone-100 dark:bg-stone-800" />
+                    )}
+                    <div className="p-3">
+                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                        {pickedRecipe.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
                         {pickedRecipe.tags.length > 0 && (
-                          <p className="text-xs text-stone-400 dark:text-stone-500 truncate mt-0.5">
+                          <p className="text-xs text-stone-400 dark:text-stone-500 truncate">
                             {pickedRecipe.tags.slice(0, 3).join(" · ")}
                           </p>
                         )}
                         {(pickedRecipe.prepTime ?? 0) + (pickedRecipe.cookTime ?? 0) > 0 && (
-                          <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">
+                          <p className="text-xs text-stone-400 dark:text-stone-500 shrink-0">
                             {(pickedRecipe.prepTime ?? 0) + (pickedRecipe.cookTime ?? 0)} min
                           </p>
                         )}
                       </div>
-                      <ChevronRight className="w-4 h-4 text-stone-300 dark:text-stone-600 shrink-0" />
-                    </button>
-                    <div className="border-t border-stone-200 dark:border-stone-700 px-3 py-2 flex justify-end">
-                      <button
-                        onClick={() => handleRandomPick()}
-                        className="flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                      >
-                        <Dice className={classNames("w-3.5 h-3.5", diceAnimating && "animate-dice")} />
-                        Roll again
-                      </button>
                     </div>
-                  </div>
+                  </button>
                 ) : (
-                  <div className="flex items-center justify-center py-4">
-                    <Dice className={classNames("w-6 h-6 text-stone-300 dark:text-stone-600", diceAnimating && "animate-dice")} />
+                  <div className="flex items-center justify-center py-8 text-stone-300 dark:text-stone-600">
+                    <p className="text-sm">No {pickCategory !== "any" ? pickCategory : ""} recipes found</p>
                   </div>
                 )}
+
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={() => handleRandomPick()}
+                    className="flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  >
+                    <Dice className={classNames("w-3.5 h-3.5", diceAnimating && "animate-dice")} />
+                    Roll again
+                  </button>
+                </div>
               </Card>
             )}
 
-            {/* Quick actions */}
+            {/* What are you in the mood for? */}
             <Card>
-              <p className="text-sm font-medium text-stone-600 dark:text-stone-300 mb-3">
+              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-3">
                 What are you in the mood for?
               </p>
               <div className="flex flex-wrap gap-2">
@@ -369,7 +427,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                     What should I cook tonight?
                   </button>
                 )}
-                {seasonal.contextualPrompts.map((prompt) => (
+                {seasonal.contextualPrompts.slice(0, recipeCount > 0 ? 3 : 4).map((prompt) => (
                   <button
                     key={prompt}
                     onClick={() => sendMessage(prompt)}
@@ -378,23 +436,25 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                     {prompt}
                   </button>
                 ))}
-                {recipeCount > 0 && (
-                  <>
-                    <button
-                      onClick={() => sendMessage("What can I make with chicken?")}
-                      className="rounded-lg border border-stone-300 dark:border-stone-600 px-3 py-1.5 text-sm text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                    >
-                      What can I make with chicken?
-                    </button>
-                    <button
-                      onClick={() => sendMessage("Suggest a meal plan for this week using my recipes")}
-                      className="rounded-lg border border-stone-300 dark:border-stone-600 px-3 py-1.5 text-sm text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                    >
-                      Plan my week
-                    </button>
-                  </>
-                )}
               </div>
+              {/* Visible text input for custom prompts */}
+              <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
+                <input
+                  type="text"
+                  enterKeyHint="send"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={recipeCount > 0 ? "Ask about your recipes..." : "Ask for recipe ideas..."}
+                  className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  className="rounded-lg bg-orange-500 px-3 py-2 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
             </Card>
           </>
         )}
@@ -450,25 +510,27 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
         )}
       </div>
 
-      {/* Input */}
-      <div className={classNames(
-        "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
-        isKeyboardOpen ? "bottom-0 pb-1" : "bottom-0 pb-3"
-      )}>
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="text"
-            enterKeyHint="send"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={recipeCount > 0 ? "Ask about your recipes..." : "Ask for recipe ideas..."}
-            className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-          />
-          <Button type="submit" size="sm" disabled={!input.trim() || isLoading}>
-            Send
-          </Button>
-        </form>
-      </div>
+      {/* Input — always visible at bottom when in chat mode */}
+      {messages.length > 0 && (
+        <div className={classNames(
+          "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
+          isKeyboardOpen ? "bottom-0 pb-1" : "bottom-0 pb-3"
+        )}>
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="text"
+              enterKeyHint="send"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={recipeCount > 0 ? "Ask about your recipes..." : "Ask for recipe ideas..."}
+              className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+            />
+            <Button type="submit" size="sm" disabled={!input.trim() || isLoading}>
+              Send
+            </Button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
