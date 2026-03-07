@@ -68,6 +68,11 @@ async function fetchPage(url: string, env: Env): Promise<string | null> {
   return fetchWithBrowserRendering(url, env);
 }
 
+/** Normalize a URL for dedup: strip trailing slash and protocol variation */
+function normalizeUrl(url: string): string {
+  return url.replace(/\/$/, "").replace(/^http:/, "https:");
+}
+
 interface FeedItem {
   title: string;
   url: string;
@@ -96,11 +101,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 // ── POST: refresh feed by scraping all sources ──────────
 
 export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
-  // Rate limit: no more than once per hour
+  // Rate limit: no more than once per hour (skip if any source is empty — likely a failed scrape)
   const existing = await env.WHISK_KV.get<Feed>(KV_KEY, "json");
   if (existing?.lastRefreshed) {
+    const hasAllSources =
+      existing.sources.nyt.length > 0 &&
+      existing.sources.allrecipes.length > 0 &&
+      existing.sources.seriouseats.length > 0;
     const elapsed = Date.now() - new Date(existing.lastRefreshed).getTime();
-    if (elapsed < MIN_REFRESH_MS) {
+    if (hasAllSources && elapsed < MIN_REFRESH_MS) {
       return Response.json(existing);
     }
   }
@@ -148,8 +157,9 @@ async function scrapeNYTCooking(env: Env): Promise<FeedItem[]> {
     const seen = new Set<string>();
     return items
       .filter((item) => {
-        if (seen.has(item.url)) return false;
-        seen.add(item.url);
+        const key = normalizeUrl(item.url);
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       })
       .slice(0, 40);
@@ -294,8 +304,9 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
       const jsonLdItems = extractJsonLdRecipes(html, "allrecipes.com");
       if (jsonLdItems.length > 0) {
         for (const item of jsonLdItems) {
-          if (!seen.has(item.url)) {
-            seen.add(item.url);
+          const key = normalizeUrl(item.url);
+          if (!seen.has(key)) {
+            seen.add(key);
             allItems.push(item);
           }
         }
@@ -307,8 +318,9 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
         /https?:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+\/?/gi
       );
       for (const item of regexItems) {
-        if (!seen.has(item.url)) {
-          seen.add(item.url);
+        const key = normalizeUrl(item.url);
+        if (!seen.has(key)) {
+          seen.add(key);
           allItems.push(item);
         }
       }
@@ -342,8 +354,9 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
       const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
       if (jsonLdItems.length > 0) {
         for (const item of jsonLdItems) {
-          if (!seen.has(item.url)) {
-            seen.add(item.url);
+          const key = normalizeUrl(item.url);
+          if (!seen.has(key)) {
+            seen.add(key);
             allItems.push(item);
           }
         }
@@ -367,8 +380,9 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
         return true;
       });
       for (const item of filtered) {
-        if (!seen.has(item.url)) {
-          seen.add(item.url);
+        const key = normalizeUrl(item.url);
+        if (!seen.has(key)) {
+          seen.add(key);
           allItems.push(item);
         }
       }
