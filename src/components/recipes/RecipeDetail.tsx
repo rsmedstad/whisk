@@ -60,6 +60,11 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [justPlanned, setJustPlanned] = useState(false);
+  const [showMadeDate, setShowMadeDate] = useState(false);
+  const [madeDate, setMadeDate] = useState(() => new Date().toISOString().split("T")[0]!);
+  const [showPlanDate, setShowPlanDate] = useState(false);
+  const [planDate, setPlanDate] = useState(() => new Date().toISOString().split("T")[0]!);
+  const [planSlot, setPlanSlot] = useState<MealSlot>("dinner");
   const galleryRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -253,7 +258,14 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
   const photos = useMemo(() => {
     if (recipe?.photos?.length) {
-      return recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
+      // Deduplicate by URL
+      let deduped = recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
+      // If we have local R2 photos, filter out external URLs (likely duplicates from import)
+      const hasLocal = deduped.some((p) => p.url.startsWith("/"));
+      if (hasLocal) {
+        deduped = deduped.filter((p) => p.url.startsWith("/"));
+      }
+      return deduped;
     }
     // Fall back to thumbnailUrl if no photos array
     if (recipe?.thumbnailUrl) {
@@ -553,6 +565,9 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           )}
         </div>
 
+        {/* Divider between tags and ingredients/steps */}
+        <div className="border-t border-stone-200 dark:border-stone-700" />
+
         {/* Tab bar */}
         <div className="flex border-b border-stone-200 dark:border-stone-700">
           <button
@@ -588,42 +603,40 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         {/* Ingredients tab */}
         {activeTab === "ingredients" && (
           <section>
-            {recipe.servings && (
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-sm text-stone-500 dark:text-stone-400 shrink-0">
-                  Scale:
-                </span>
-                <div className="flex gap-1.5">
-                  {[
-                    { label: "½×", mult: 0.5 },
-                    { label: "1×", mult: 1 },
-                    { label: "2×", mult: 2 },
-                    { label: "3×", mult: 3 },
-                    { label: "4×", mult: 4 },
-                  ].map(({ label, mult }) => {
-                    const target = Math.round(originalServings * mult);
-                    const isActive = servings === target;
-                    return (
-                      <button
-                        key={mult}
-                        onClick={() => setScaledServings(target)}
-                        className={classNames(
-                          "px-3 py-1 rounded-full text-sm font-medium transition-colors",
-                          isActive
-                            ? "bg-orange-500 text-white"
-                            : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
-                        )}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span className="text-xs text-stone-400 dark:text-stone-500 shrink-0">
-                  {servings} servings
-                </span>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-sm text-stone-500 dark:text-stone-400 shrink-0">
+                Scale:
+              </span>
+              <div className="flex gap-1.5">
+                {[
+                  { label: "½×", mult: 0.5 },
+                  { label: "1×", mult: 1 },
+                  { label: "2×", mult: 2 },
+                  { label: "3×", mult: 3 },
+                  { label: "4×", mult: 4 },
+                ].map(({ label, mult }) => {
+                  const target = originalServings * mult;
+                  const isActive = servings === target;
+                  return (
+                    <button
+                      key={mult}
+                      onClick={() => setScaledServings(target)}
+                      className={classNames(
+                        "px-3 py-1 rounded-full text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-orange-500 text-white"
+                          : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
-            )}
+              <span className="text-xs text-stone-400 dark:text-stone-500 shrink-0">
+                {servings} servings
+              </span>
+            </div>
 
             {/* Ingredient sort toggle + clear checked */}
             <div className="flex items-center gap-1.5 mb-3">

@@ -70,8 +70,11 @@ async function downloadPhoto(
 }
 
 // POST /api/import/book — Import a single recipe from a book export
+// Query params: mode=add|skip|overwrite (default: add)
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    const url = new URL(request.url);
+    const mode = (url.searchParams.get("mode") ?? "add") as "add" | "skip" | "overwrite";
     const recipe = (await request.json()) as ImportedRecipe;
 
     if (!recipe.title) {
@@ -79,6 +82,32 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
+    }
+
+    // Load index for duplicate detection
+    const index =
+      ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
+
+    const normalizedTitle = recipe.title.trim().toLowerCase();
+    const existingIdx = index.findIndex(
+      (e) => e.title.trim().toLowerCase() === normalizedTitle
+    );
+    const existingEntry = existingIdx >= 0 ? index[existingIdx] : undefined;
+
+    // Handle duplicate based on mode
+    if (existingEntry) {
+      if (mode === "skip") {
+        return new Response(
+          JSON.stringify({ skipped: true, title: recipe.title, reason: "duplicate" }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      // mode === "overwrite": delete the old recipe, then continue to create new
+      if (mode === "overwrite") {
+        await env.WHISK_KV.delete(`recipe:${existingEntry.id}`);
+        index.splice(existingIdx, 1);
+      }
+      // mode === "add": fall through and create a new entry regardless
     }
 
     const id = `r_${crypto.randomUUID().split("-")[0]}`;
@@ -135,9 +164,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(newRecipe));
 
     // Update index
-    const index =
-      ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
-
     index.unshift({
       id,
       title: newRecipe.title,

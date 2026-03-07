@@ -64,7 +64,7 @@ export function InstallPrompt() {
   };
 
   return (
-    <div className="px-4 pb-3">
+    <div className="px-4 pt-3 pb-3">
       <Card>
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
