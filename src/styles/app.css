@@ -161,7 +161,7 @@ input[type="search"]::-webkit-search-decoration {
 
 /* Halloween — vibrant orange, purple-black, spooky green — max immersion */
 [data-accent="halloween"] {
-  --color-white: #1a1025;
+  --color-white: #1e1428;
   --color-orange-50: #fff0d4;
   --color-orange-100: #ffe0a8;
   --color-orange-200: #ffcc66;
@@ -173,24 +173,24 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-800: #993000;
   --color-orange-900: #6b2200;
   --color-orange-950: #401500;
-  --color-stone-50: #2d1f3d;
-  --color-stone-100: #261a35;
-  --color-stone-200: #20152e;
-  --color-stone-300: #8b6aad;
-  --color-stone-400: #7a5c9e;
-  --color-stone-500: #6b4f8a;
-  --color-stone-600: #4a3666;
-  --color-stone-700: #352550;
-  --color-stone-800: #1e1330;
-  --color-stone-900: #140c22;
-  --color-stone-950: #0a0612;
+  --color-stone-50: #e8ddf0;
+  --color-stone-100: #d5c5e2;
+  --color-stone-200: #c0a8d4;
+  --color-stone-300: #a88cc0;
+  --color-stone-400: #9070aa;
+  --color-stone-500: #7a5c96;
+  --color-stone-600: #5c4070;
+  --color-stone-700: #3d2a50;
+  --color-stone-800: #2a1a3a;
+  --color-stone-900: #1a1028;
+  --color-stone-950: #0e0818;
 }
-/* Halloween dark mode: even darker purple-black base */
+/* Halloween dark mode: even darker purple-black base, keep text light */
 html.dark[data-accent="halloween"] {
   --color-white: #0d0818;
-  --color-stone-50: #1e1330;
-  --color-stone-100: #180e28;
-  --color-stone-200: #140c22;
+  --color-stone-50: #e8ddf0;
+  --color-stone-100: #d5c5e2;
+  --color-stone-200: #c0a8d4;
 }
 /* Halloween secondary accent colors */
 [data-accent="halloween"] {
@@ -300,31 +300,31 @@ html.dark[data-accent="christmas"] {
   --color-stone-950: #100a0d;
 }
 
-/* Summer — bright sky blue with warm golden sand undertones */
+/* Summer — warm sunshine gold, coral, bright and vibrant */
 [data-accent="summer"] {
-  --color-white: #f3f9ff;
-  --color-orange-50: #e5f3ff;
-  --color-orange-100: #c8e5ff;
-  --color-orange-200: #88ccff;
-  --color-orange-300: #44aaff;
-  --color-orange-400: #1188ee;
-  --color-orange-500: #0070d0;
-  --color-orange-600: #005aaa;
-  --color-orange-700: #004888;
-  --color-orange-800: #003866;
-  --color-orange-900: #002a4d;
-  --color-orange-950: #001a33;
-  --color-stone-50: #e8f0f5;
-  --color-stone-100: #d5e2ec;
-  --color-stone-200: #b0c8d8;
-  --color-stone-300: #88aac0;
-  --color-stone-400: #6690a8;
-  --color-stone-500: #4d7488;
-  --color-stone-600: #385868;
-  --color-stone-700: #28404c;
-  --color-stone-800: #1c2c34;
-  --color-stone-900: #101a20;
-  --color-stone-950: #080e12;
+  --color-white: #fffdf5;
+  --color-orange-50: #fff8e0;
+  --color-orange-100: #ffecb3;
+  --color-orange-200: #ffdd66;
+  --color-orange-300: #ffcc33;
+  --color-orange-400: #f5a623;
+  --color-orange-500: #e88d0a;
+  --color-orange-600: #cc7400;
+  --color-orange-700: #a85d00;
+  --color-orange-800: #884a00;
+  --color-orange-900: #663800;
+  --color-orange-950: #442400;
+  --color-stone-50: #f5efe2;
+  --color-stone-100: #e8dcc8;
+  --color-stone-200: #d4c4a0;
+  --color-stone-300: #b8a278;
+  --color-stone-400: #9a8458;
+  --color-stone-500: #7c6840;
+  --color-stone-600: #5e4e30;
+  --color-stone-700: #443822;
+  --color-stone-800: #2e2618;
+  --color-stone-900: #1c1810;
+  --color-stone-950: #0e0c08;
 }
 
 /* Fall — rich amber, burnt sienna, warm copper — harvest warmth */

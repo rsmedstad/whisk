@@ -470,18 +470,22 @@ export function HeartArrow(props: IconProps) {
   );
 }
 
-/** Shamrock/clover for St. Patrick's Day branding */
+/** Shamrock/clover for St. Patrick's Day branding — clear 3-leaf clover */
 export function Shamrock(props: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
-      {/* Top leaf */}
-      <path d="M12 3 C9 3, 7 5, 7 7.5 C7 10, 9 11, 12 11 C15 11, 17 10, 17 7.5 C17 5, 15 3, 12 3Z" strokeWidth={1.3} />
-      {/* Left leaf */}
-      <path d="M5 8 C3 10, 3 13, 5.5 14.5 C8 16, 10 14.5, 11.5 12 C9 13, 6 13, 5.5 11 C5 9.5, 5.5 8.5, 5 8Z" strokeWidth={1.3} />
-      {/* Right leaf */}
-      <path d="M19 8 C21 10, 21 13, 18.5 14.5 C16 16, 14 14.5, 12.5 12 C15 13, 18 13, 18.5 11 C19 9.5, 18.5 8.5, 19 8Z" strokeWidth={1.3} />
+      {/* Top leaf — heart shape */}
+      <path d="M12 11 C12 11, 9 10, 9 7 C9 4.5, 12 3, 12 3 C12 3, 15 4.5, 15 7 C15 10, 12 11, 12 11Z" strokeWidth={1.4} fill="currentColor" opacity={0.15} />
+      {/* Bottom-left leaf — heart shape */}
+      <path d="M12 11 C12 11, 8 12, 6 10 C4.5 8.5, 5.5 5.5, 5.5 5.5 C5.5 5.5, 8.5 5, 10 7 C11.5 9, 12 11, 12 11Z" strokeWidth={1.4} fill="currentColor" opacity={0.15} />
+      {/* Bottom-right leaf — heart shape */}
+      <path d="M12 11 C12 11, 16 12, 18 10 C19.5 8.5, 18.5 5.5, 18.5 5.5 C18.5 5.5, 15.5 5, 14 7 C12.5 9, 12 11, 12 11Z" strokeWidth={1.4} fill="currentColor" opacity={0.15} />
+      {/* Leaf veins */}
+      <line x1="12" y1="11" x2="12" y2="4" strokeWidth={0.8} />
+      <line x1="12" y1="11" x2="7" y2="7" strokeWidth={0.8} />
+      <line x1="12" y1="11" x2="17" y2="7" strokeWidth={0.8} />
       {/* Stem */}
-      <path d="M12 11 C12 14, 11.5 17, 12 21" strokeWidth={1.8} />
+      <path d="M12 11 C12 14, 11 17, 12 22" strokeWidth={2} />
     </svg>
   );
 }
@@ -530,16 +534,31 @@ export function Firework(props: IconProps) {
   );
 }
 
-/** Turkey leg for Thanksgiving branding */
+/** Turkey for Thanksgiving branding — recognizable bird silhouette */
 export function TurkeyLeg(props: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
-      {/* Drumstick body */}
-      <path d="M15 3 C11 3, 7 6, 6 10 C5 14, 6 16, 8 17 L5 22" strokeWidth={2} />
-      {/* Meat round part */}
-      <path d="M15 3 C19 3, 21 6, 20 10 C19 14, 16 16, 12 17 C10 17.5, 8 17, 8 17" strokeWidth={1.5} />
-      {/* Bone end frills */}
-      <path d="M5 22 C4 21, 3.5 22.5, 4.5 23 M5 22 C6 21, 6.5 22.5, 5.5 23" strokeWidth={1.2} />
+      {/* Fan tail feathers */}
+      <path d="M6 4 C6 4, 4 8, 6 12" strokeWidth={1.3} />
+      <path d="M8 2.5 C8 2.5, 7 7, 8 12" strokeWidth={1.3} />
+      <path d="M10.5 2 C10.5 2, 10 7, 10 12" strokeWidth={1.3} />
+      <path d="M13 2.5 C13 2.5, 13 7, 12 12" strokeWidth={1.3} />
+      <path d="M15 4 C15 4, 16 8, 14 12" strokeWidth={1.3} />
+      {/* Body */}
+      <ellipse cx="10" cy="15" rx="6" ry="4.5" strokeWidth={1.4} />
+      {/* Head and neck */}
+      <path d="M16 13 C18 11, 19 9, 18.5 7.5" strokeWidth={1.4} />
+      <circle cx="18.5" cy="7" r="1.2" strokeWidth={1.3} />
+      {/* Wattle */}
+      <path d="M19.5 7.5 C20 8.5, 19.5 9.5, 19 9" strokeWidth={1.2} />
+      {/* Beak */}
+      <path d="M17.3 6.8 L16 6.5" strokeWidth={1.3} />
+      {/* Legs */}
+      <line x1="8" y1="19" x2="7" y2="22" strokeWidth={1.3} />
+      <line x1="12" y1="19" x2="13" y2="22" strokeWidth={1.3} />
+      {/* Feet */}
+      <path d="M5.5 22 L7 22 L8 22" strokeWidth={1.2} />
+      <path d="M12 22 L13 22 L14.5 22" strokeWidth={1.2} />
     </svg>
   );
 }

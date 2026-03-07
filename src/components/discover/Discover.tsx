@@ -446,7 +446,7 @@ export function Discover({
 
   // ── Feed item detail view ──
 
-  // Deduplicate photos — match RecipeDetail logic
+  // Deduplicate photos — aggressive dedup to catch same image from different CDN paths
   const detailPhotos = useMemo(() => {
     if (!importedRecipe) return [];
     const allPhotos: { url: string; isPrimary: boolean }[] = [];
@@ -460,13 +460,22 @@ export function Discover({
         allPhotos.push(p);
       }
     }
-    // Deduplicate by URL
-    const seen = new Set<string>();
+    // Deduplicate by normalized URL and by filename (last path segment)
+    // Recipe sites often serve the same image via different CDN paths/sizes
+    const seenUrls = new Set<string>();
+    const seenFilenames = new Set<string>();
     const deduped = allPhotos.filter((p) => {
-      // Normalize: strip trailing slashes, query params for comparison
-      const key = p.url.split("?")[0]?.replace(/\/$/, "") ?? p.url;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      // Normalize: strip trailing slashes, query params, protocol
+      const stripped = p.url.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? p.url;
+      if (seenUrls.has(stripped)) return false;
+      seenUrls.add(stripped);
+      // Also dedup by filename — catches same image from different CDN subdomains
+      const filename = stripped.split("/").pop()?.toLowerCase() ?? "";
+      // Only dedup by filename if it looks like a real image filename (not generic like "image.jpg")
+      if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
+        if (seenFilenames.has(filename)) return false;
+        seenFilenames.add(filename);
+      }
       return true;
     });
     return deduped;

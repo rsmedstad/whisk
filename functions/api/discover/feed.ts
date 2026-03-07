@@ -624,7 +624,7 @@ function findRecipesInJson(
           : undefined;
     // Try to extract time from the JSON object
     const totalTime = parseIsoDuration(rec.totalTime)
-      ?? ((parseIsoDuration(rec.prepTime) ?? 0) + (parseIsoDuration(rec.cookTime) ?? 0)) || undefined;
+      ?? (((parseIsoDuration(rec.prepTime) ?? 0) + (parseIsoDuration(rec.cookTime) ?? 0)) || undefined);
 
     results.push({ title: name, url: recipeUrl, imageUrl, description, totalTime });
     return; // Don't recurse into children of a matched recipe
