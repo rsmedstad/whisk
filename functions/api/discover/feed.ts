@@ -401,6 +401,10 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
   const allItems: FeedItem[] = [];
   const seen = new Set<string>();
 
+  /** Only keep URLs that are actual recipe pages (/recipe/ID/slug) */
+  const isRecipeUrl = (url: string): boolean =>
+    /\/recipe\/\d+\/[a-z0-9-]+/i.test(url);
+
   for (const pageUrl of urls) {
     try {
       const html = await fetchPage(pageUrl, env);
@@ -409,6 +413,7 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
       // Try JSON-LD extraction first (most reliable)
       const jsonLdItems = extractJsonLdRecipes(html, "allrecipes.com");
       for (const item of jsonLdItems) {
+        if (!isRecipeUrl(item.url)) continue;
         const key = normalizeUrl(item.url);
         if (!seen.has(key)) {
           seen.add(key);
@@ -416,7 +421,7 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
         }
       }
 
-      // HTML link extraction — broader pattern that also catches newer URL formats
+      // HTML link extraction — only matches /recipe/ID/slug pattern
       const linkItems = extractRecipeLinks(
         html,
         /https?:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+\/?/gi,
@@ -443,19 +448,57 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
 
 async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
   const urls = [
-    "https://www.seriouseats.com/",
     "https://www.seriouseats.com/recipes",
+    "https://www.seriouseats.com/",
   ];
 
   const allItems: FeedItem[] = [];
   const seen = new Set<string>();
+
+  /** Check if a Serious Eats URL is likely an actual recipe page */
+  const isRecipePage = (url: string): boolean => {
+    const path = new URL(url).pathname.replace(/\/$/, "");
+    const slug = path.split("/").pop() ?? "";
+
+    // Must have a slug with substance
+    if (slug.length < 8) return false;
+
+    // Positive signals: slug contains "recipe" (very common for SE recipes)
+    if (/-recipe$/.test(slug) || slug.includes("-recipe-")) return true;
+
+    // Negative signals: non-recipe content patterns
+    const nonRecipePatterns = [
+      /^how-to-/,          // how-to guides
+      /^what-is-/,         // explainers
+      /^what-are-/,        // explainers
+      /^why-/,             // explainers
+      /^best-/,            // equipment/product roundups
+      /^the-best-/,        // equipment/product roundups
+      /-guide$/,           // guides
+      /-guide-/,           // guides
+      /-review$/,          // product reviews
+      /-reviews$/,         // product reviews
+      /-vs-/,              // comparisons
+      /-tips$/,            // tip articles
+      /-techniques$/,      // technique articles
+      /-essential-/,       // essential guides
+      /^about-/,           // about pages
+    ];
+    if (nonRecipePatterns.some((p) => p.test(slug))) return false;
+
+    // Reject known section pages
+    if (/^\/(recipes|about|contact|newsletter|culture|equipment|ingredients|the-food-lab)\/?$/i.test(path)) return false;
+
+    // Accept remaining slugs (many SE recipes don't end in -recipe)
+    return true;
+  };
 
   for (const pageUrl of urls) {
     try {
       const html = await fetchPage(pageUrl, env);
       if (!html) continue;
 
-      // Try JSON-LD extraction first
+      // Try JSON-LD extraction first (most reliable — only returns @type: Recipe)
       const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
       for (const item of jsonLdItems) {
         const key = normalizeUrl(item.url);
@@ -465,25 +508,20 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
         }
       }
 
-      // HTML link extraction with slug-based patterns
-      const linkItems = extractRecipeLinks(
-        html,
-        /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi,
-        "seriouseats.com"
-      );
-      // Filter out non-recipe pages
-      const filtered = linkItems.filter((item) => {
-        const path = new URL(item.url).pathname;
-        if (path.split("/").filter(Boolean).length < 1) return false;
-        if (/^\/(recipes|about|contact|newsletter|culture|equipment|ingredients)\/?$/i.test(path)) return false;
-        if (path.includes("-recipes-")) return false;
-        return true;
-      });
-      for (const item of filtered) {
-        const key = normalizeUrl(item.url);
-        if (!seen.has(key)) {
-          seen.add(key);
-          allItems.push(item);
+      // HTML link extraction — only if JSON-LD didn't yield enough
+      if (allItems.length < 10) {
+        const linkItems = extractRecipeLinks(
+          html,
+          /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi,
+          "seriouseats.com"
+        );
+        const filtered = linkItems.filter((item) => isRecipePage(item.url));
+        for (const item of filtered) {
+          const key = normalizeUrl(item.url);
+          if (!seen.has(key)) {
+            seen.add(key);
+            allItems.push(item);
+          }
         }
       }
 
@@ -618,28 +656,24 @@ function extractRecipeLinks(
     const ctxEnd = Math.min(html.length, idx + url.length + 2000);
     const ctx = html.slice(ctxStart, ctxEnd);
 
-    // Find title from multiple sources
+    // Find title from multiple sources (ordered by reliability)
     // 1. Link text: <a href="...url...">Title</a>
     const linkTextMatch = ctx.match(
       new RegExp(`href="${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"]*"[^>]*>\\s*(?:<[^>]+>)*\\s*([^<]{3,100})`, "i")
     );
-    // 2. Alt text on nearby img
-    const altText = ctx.match(
-      /<img[^>]+alt="([^"]{5,100})"[^>]*>/i
-    )?.[1]?.trim();
-    // 3. Heading text with title/card class
+    // 2. Heading text with title/card class (AllRecipes uses mntl-card__title)
     const headingText = ctx.match(
       /<(?:span|h[1-4]|div|a)[^>]*class="[^"]*(?:title|heading|name|card__title|card-title|mntl-card__title)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,100})/i
+    )?.[1]?.trim();
+    // 3. data-title or aria-label attribute (more reliable than img alt)
+    const dataTitle = ctx.match(
+      /(?:data-title|aria-label)="([^"]{3,100})"/i
     )?.[1]?.trim();
     // 4. Any nearby heading
     const genericHeading = ctx.match(
       /<h[2-4][^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,100})/i
     )?.[1]?.trim();
-    // 5. data-title or aria-label attribute
-    const dataTitle = ctx.match(
-      /(?:data-title|aria-label)="([^"]{3,100})"/i
-    )?.[1]?.trim();
-    // 6. Fallback: generate title from URL slug
+    // 5. Fallback: generate title from URL slug (better than img alt text)
     const slugMatch = url.match(/\/([a-z0-9][a-z0-9-]+[a-z0-9])(?:\/?$)/);
     const slug = slugMatch?.[1]
       ?.replace(/-recipe.*$/, "")
@@ -648,7 +682,7 @@ function extractRecipeLinks(
       ?.replace(/-/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
-    const title = linkTextMatch?.[1]?.trim() ?? headingText ?? altText ?? genericHeading ?? dataTitle ?? slugTitle;
+    const title = linkTextMatch?.[1]?.trim() ?? headingText ?? dataTitle ?? genericHeading ?? slugTitle;
     if (!title || title.length < 3) continue;
 
     // Find image from context
