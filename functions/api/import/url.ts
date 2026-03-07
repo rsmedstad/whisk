@@ -727,12 +727,20 @@ function extractBlogRecipe(html: string): RecipeData | null {
 function extractAllImageUrls(data: RecipeData, html: string): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
+  const seenFilenames = new Set<string>();
 
   const addUrl = (url: string | undefined) => {
     if (!url || seen.has(url)) return;
     // Skip tiny icons, emojis, tracking pixels
     if (url.includes("emoji") || url.includes("icon") || url.includes("avatar")) return;
     if (url.includes("1x1") || url.includes("pixel")) return;
+    // Dedup by filename — same image often served from different CDN paths/sizes
+    const stripped = url.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? url;
+    const filename = stripped.split("/").pop()?.toLowerCase() ?? "";
+    if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
+      if (seenFilenames.has(filename)) return;
+      seenFilenames.add(filename);
+    }
     seen.add(url);
     urls.push(url);
   };
