@@ -6,6 +6,7 @@ import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
 import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, WhiskLogo } from "../ui/Icon";
+import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { DealsScanner } from "../plan/DealsScanner";
 
 type SortMode = "department" | "alphabetical" | "unchecked-first";
@@ -229,10 +230,10 @@ export function ShoppingList({
       </datalist>
 
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)] wk-header-decor relative">
         <div className="flex items-center justify-between py-3">
           <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
-            <WhiskLogo className="w-5 h-5 text-orange-500" />
+            <SeasonalBrandIcon />
             <span className="text-lg font-bold text-orange-500">W</span>
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">List</h1>

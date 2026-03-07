@@ -12,6 +12,7 @@ import { Button } from "../ui/Button";
 import { InstallPrompt } from "../InstallPrompt";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown } from "../ui/Icon";
+import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked";
 
@@ -175,10 +176,10 @@ export function RecipeList({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)]">
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)] wk-header-decor relative">
         <div className="flex items-center justify-between py-3">
           <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
-            <WhiskLogo className="w-5 h-5 text-orange-500" />
+            <SeasonalBrandIcon />
             <span className="text-lg font-bold text-orange-500">W</span>
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Recipes</h1>

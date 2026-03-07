@@ -31,303 +31,354 @@ input[type="search"]::-webkit-search-decoration {
    automatically pick up the seasonal accent color.
    Applied via data-accent attribute on <html>. */
 
-/* Valentine's Day — rose/pink — immersive pink-tinted UI */
+/* Valentine's Day — deep rose, passionate pinks — romantic immersion */
 [data-accent="valentine"] {
-  --color-white: #fff5f7;
-  --color-orange-50: #fff0f3;
-  --color-orange-100: #ffe4e9;
-  --color-orange-200: #fecdd5;
-  --color-orange-300: #fda4b2;
-  --color-orange-400: #fb7185;
-  --color-orange-500: #f43f5e;
-  --color-orange-600: #e11d48;
-  --color-orange-700: #be123c;
-  --color-orange-800: #9f1239;
-  --color-orange-900: #881337;
-  --color-orange-950: #4c0519;
-  --color-stone-50: #fcecf0;
-  --color-stone-100: #f8dde4;
-  --color-stone-200: #efc5d0;
-  --color-stone-300: #d4a0af;
-  --color-stone-400: #b87a8d;
-  --color-stone-500: #96596c;
-  --color-stone-600: #744352;
-  --color-stone-700: #53303b;
-  --color-stone-800: #3d1926;
-  --color-stone-900: #2a0e19;
-  --color-stone-950: #1a060f;
+  --color-white: #fff0f3;
+  --color-orange-50: #ffe5eb;
+  --color-orange-100: #ffc2d1;
+  --color-orange-200: #ff8fab;
+  --color-orange-300: #ff6090;
+  --color-orange-400: #f23b72;
+  --color-orange-500: #e0115f;
+  --color-orange-600: #c00050;
+  --color-orange-700: #9e0042;
+  --color-orange-800: #7d0035;
+  --color-orange-900: #5c0028;
+  --color-orange-950: #3a0018;
+  --color-stone-50: #fce0e8;
+  --color-stone-100: #f5c8d5;
+  --color-stone-200: #e8a5b8;
+  --color-stone-300: #cc7a95;
+  --color-stone-400: #aa5a76;
+  --color-stone-500: #88405c;
+  --color-stone-600: #662e44;
+  --color-stone-700: #4a1e30;
+  --color-stone-800: #33101f;
+  --color-stone-900: #220812;
+  --color-stone-950: #14040a;
+}
+[data-accent="valentine"] {
+  --wk-holiday-secondary: #ff69b4;
+  --wk-holiday-tertiary: #8b0045;
+  --wk-holiday-glow: rgba(224, 17, 95, 0.2);
 }
 
-/* St. Patrick's Day — emerald — immersive green-tinted UI */
+/* St. Patrick's Day — bold emerald & gold — full Irish immersion */
 [data-accent="stpatrick"] {
-  --color-white: #f2fdf8;
-  --color-orange-50: #e8fbf0;
-  --color-orange-100: #d1fae5;
-  --color-orange-200: #a7f3d0;
-  --color-orange-300: #6ee7b7;
-  --color-orange-400: #34d399;
-  --color-orange-500: #10b981;
-  --color-orange-600: #059669;
-  --color-orange-700: #047857;
-  --color-orange-800: #065f46;
-  --color-orange-900: #064e3b;
-  --color-orange-950: #022c22;
-  --color-stone-50: #e5f5ed;
-  --color-stone-100: #d0ebde;
-  --color-stone-200: #a8d5bf;
-  --color-stone-300: #7db89c;
-  --color-stone-400: #5a9a7d;
-  --color-stone-500: #437a62;
-  --color-stone-600: #335c4b;
-  --color-stone-700: #254336;
-  --color-stone-800: #162e22;
-  --color-stone-900: #0c1e14;
-  --color-stone-950: #05120b;
+  --color-white: #eafce8;
+  --color-orange-50: #d5fad0;
+  --color-orange-100: #a8f09a;
+  --color-orange-200: #66e055;
+  --color-orange-300: #33cc33;
+  --color-orange-400: #1aaa1a;
+  --color-orange-500: #008800;
+  --color-orange-600: #006d00;
+  --color-orange-700: #005500;
+  --color-orange-800: #004400;
+  --color-orange-900: #003300;
+  --color-orange-950: #001a00;
+  --color-stone-50: #e0f5d8;
+  --color-stone-100: #c8e8bc;
+  --color-stone-200: #95cc82;
+  --color-stone-300: #5daa48;
+  --color-stone-400: #3d8830;
+  --color-stone-500: #2a6622;
+  --color-stone-600: #1e4c18;
+  --color-stone-700: #143812;
+  --color-stone-800: #0c280c;
+  --color-stone-900: #061a06;
+  --color-stone-950: #030e03;
+}
+[data-accent="stpatrick"] {
+  --wk-holiday-secondary: #d4a828;
+  --wk-holiday-tertiary: #004400;
+  --wk-holiday-glow: rgba(0, 136, 0, 0.25);
 }
 
-/* Easter — violet/lavender — immersive pastel-tinted UI */
+/* Easter — soft pastels: lavender, mint, pink, yellow — springtime whimsy */
 [data-accent="easter"] {
-  --color-white: #f8f5ff;
-  --color-orange-50: #f0ebff;
-  --color-orange-100: #e5defe;
-  --color-orange-200: #d5ccfe;
-  --color-orange-300: #c4b5fd;
-  --color-orange-400: #a78bfa;
-  --color-orange-500: #8b5cf6;
-  --color-orange-600: #7c3aed;
-  --color-orange-700: #6d28d9;
-  --color-orange-800: #5b21b6;
-  --color-orange-900: #4c1d95;
-  --color-orange-950: #2e1065;
-  --color-stone-50: #eee8fa;
-  --color-stone-100: #e0d6f4;
-  --color-stone-200: #c9bbe4;
-  --color-stone-300: #a895cc;
-  --color-stone-400: #8872b0;
-  --color-stone-500: #6b5590;
-  --color-stone-600: #503f6e;
-  --color-stone-700: #3a2d52;
-  --color-stone-800: #271c3a;
-  --color-stone-900: #181025;
+  --color-white: #faf8ff;
+  --color-orange-50: #f0e8ff;
+  --color-orange-100: #e2d4ff;
+  --color-orange-200: #d0b8ff;
+  --color-orange-300: #bb99ff;
+  --color-orange-400: #9f66ff;
+  --color-orange-500: #8844ee;
+  --color-orange-600: #7733cc;
+  --color-orange-700: #6622aa;
+  --color-orange-800: #551a88;
+  --color-orange-900: #441166;
+  --color-orange-950: #280a40;
+  --color-stone-50: #f0eef8;
+  --color-stone-100: #e5ddf2;
+  --color-stone-200: #ccbfe2;
+  --color-stone-300: #ad99cc;
+  --color-stone-400: #8e77b0;
+  --color-stone-500: #6e5590;
+  --color-stone-600: #523f6e;
+  --color-stone-700: #3c2d52;
+  --color-stone-800: #291c3a;
+  --color-stone-900: #1a1028;
   --color-stone-950: #0e0818;
 }
+[data-accent="easter"] {
+  --wk-holiday-secondary: #ffb6d9;
+  --wk-holiday-tertiary: #88ddaa;
+  --wk-holiday-glow: rgba(136, 68, 238, 0.15);
+}
 
-/* 4th of July — blue/red patriotic — immersive navy-tinted UI */
+/* 4th of July — bold red, white & blue — patriotic celebration */
 [data-accent="july4th"] {
-  --color-white: #f0f5ff;
-  --color-orange-50: #e8f0ff;
-  --color-orange-100: #d5e3fe;
-  --color-orange-200: #b8d1fe;
-  --color-orange-300: #93c5fd;
-  --color-orange-400: #60a5fa;
-  --color-orange-500: #3b82f6;
-  --color-orange-600: #2563eb;
-  --color-orange-700: #1d4ed8;
-  --color-orange-800: #1e40af;
-  --color-orange-900: #1e3a8a;
-  --color-orange-950: #172554;
-  --color-stone-50: #e0e8f5;
-  --color-stone-100: #ced9ec;
-  --color-stone-200: #a8b8d6;
-  --color-stone-300: #8096bb;
-  --color-stone-400: #5e77a0;
-  --color-stone-500: #475c80;
-  --color-stone-600: #354562;
-  --color-stone-700: #263248;
-  --color-stone-800: #182132;
-  --color-stone-900: #0e1420;
-  --color-stone-950: #060a12;
+  --color-white: #f0f4ff;
+  --color-orange-50: #dde8ff;
+  --color-orange-100: #bbccff;
+  --color-orange-200: #7799ff;
+  --color-orange-300: #3366ee;
+  --color-orange-400: #1144cc;
+  --color-orange-500: #002299;
+  --color-orange-600: #001b80;
+  --color-orange-700: #001466;
+  --color-orange-800: #000e4d;
+  --color-orange-900: #000a38;
+  --color-orange-950: #000522;
+  --color-stone-50: #e8e0f0;
+  --color-stone-100: #d5cce5;
+  --color-stone-200: #b0a0cc;
+  --color-stone-300: #8878aa;
+  --color-stone-400: #665588;
+  --color-stone-500: #4d406a;
+  --color-stone-600: #382e50;
+  --color-stone-700: #28203a;
+  --color-stone-800: #1a1428;
+  --color-stone-900: #0e0a18;
+  --color-stone-950: #06040e;
+}
+[data-accent="july4th"] {
+  --wk-holiday-secondary: #cc0000;
+  --wk-holiday-tertiary: #ffffff;
+  --wk-holiday-glow: rgba(0, 34, 153, 0.2);
 }
 
-/* Halloween — orange & black — immersive spooky UI */
+/* Halloween — vibrant orange, purple-black, spooky green — max immersion */
 [data-accent="halloween"] {
-  --color-white: #fdf6ec;
-  --color-orange-50: #fef0db;
-  --color-orange-100: #fde4b8;
-  --color-orange-200: #fcd078;
-  --color-orange-300: #fbba3c;
-  --color-orange-400: #f9a00a;
-  --color-orange-500: #e88506;
-  --color-orange-600: #c66a04;
-  --color-orange-700: #a45207;
-  --color-orange-800: #87400d;
-  --color-orange-900: #6e320f;
-  --color-orange-950: #3d1903;
-  --color-stone-50: #f5e8d2;
-  --color-stone-100: #e8d5b5;
-  --color-stone-200: #d1b88e;
-  --color-stone-300: #b3956a;
-  --color-stone-400: #93744c;
-  --color-stone-500: #735838;
-  --color-stone-600: #56412a;
-  --color-stone-700: #3e2e1d;
-  --color-stone-800: #2a1d10;
-  --color-stone-900: #1a1008;
-  --color-stone-950: #0e0804;
+  --color-white: #1a1025;
+  --color-orange-50: #fff0d4;
+  --color-orange-100: #ffe0a8;
+  --color-orange-200: #ffcc66;
+  --color-orange-300: #ff9900;
+  --color-orange-400: #ff6b00;
+  --color-orange-500: #ff5500;
+  --color-orange-600: #e04400;
+  --color-orange-700: #c03800;
+  --color-orange-800: #993000;
+  --color-orange-900: #6b2200;
+  --color-orange-950: #401500;
+  --color-stone-50: #2d1f3d;
+  --color-stone-100: #261a35;
+  --color-stone-200: #20152e;
+  --color-stone-300: #8b6aad;
+  --color-stone-400: #7a5c9e;
+  --color-stone-500: #6b4f8a;
+  --color-stone-600: #4a3666;
+  --color-stone-700: #352550;
+  --color-stone-800: #1e1330;
+  --color-stone-900: #140c22;
+  --color-stone-950: #0a0612;
+}
+/* Halloween dark mode: even darker purple-black base */
+html.dark[data-accent="halloween"] {
+  --color-white: #0d0818;
+  --color-stone-50: #1e1330;
+  --color-stone-100: #180e28;
+  --color-stone-200: #140c22;
+}
+/* Halloween secondary accent colors */
+[data-accent="halloween"] {
+  --wk-holiday-secondary: #7b2dbd;
+  --wk-holiday-tertiary: #2d8b4e;
+  --wk-holiday-glow: rgba(255, 85, 0, 0.3);
 }
 
-/* Thanksgiving — warm amber/brown — immersive harvest UI */
+/* Thanksgiving — rich burnt orange, deep burgundy & warm brown — harvest feast */
 [data-accent="thanksgiving"] {
-  --color-white: #fdf8ee;
-  --color-orange-50: #fdf2dc;
-  --color-orange-100: #fce8be;
-  --color-orange-200: #f8d48a;
-  --color-orange-300: #f2bc52;
-  --color-orange-400: #e8a020;
-  --color-orange-500: #ca8a04;
-  --color-orange-600: #a16207;
-  --color-orange-700: #854d0e;
-  --color-orange-800: #713f12;
-  --color-orange-900: #422006;
-  --color-orange-950: #271306;
-  --color-stone-50: #f2e8d0;
-  --color-stone-100: #e5d5b2;
-  --color-stone-200: #ceba8e;
-  --color-stone-300: #b09868;
-  --color-stone-400: #90784c;
-  --color-stone-500: #705c38;
-  --color-stone-600: #54442a;
-  --color-stone-700: #3c301e;
-  --color-stone-800: #281f12;
-  --color-stone-900: #18120a;
-  --color-stone-950: #0e0a05;
+  --color-white: #faf3e6;
+  --color-orange-50: #fde8c8;
+  --color-orange-100: #fad090;
+  --color-orange-200: #f0b050;
+  --color-orange-300: #e09020;
+  --color-orange-400: #cc7700;
+  --color-orange-500: #b36200;
+  --color-orange-600: #994f00;
+  --color-orange-700: #804000;
+  --color-orange-800: #663300;
+  --color-orange-900: #4d2600;
+  --color-orange-950: #331a00;
+  --color-stone-50: #f0e4cc;
+  --color-stone-100: #e0ccaa;
+  --color-stone-200: #c4a878;
+  --color-stone-300: #a08050;
+  --color-stone-400: #806038;
+  --color-stone-500: #604828;
+  --color-stone-600: #48351e;
+  --color-stone-700: #352616;
+  --color-stone-800: #241a0e;
+  --color-stone-900: #161008;
+  --color-stone-950: #0c0804;
+}
+[data-accent="thanksgiving"] {
+  --wk-holiday-secondary: #8b2252;
+  --wk-holiday-tertiary: #cc7700;
+  --wk-holiday-glow: rgba(179, 98, 0, 0.2);
 }
 
-/* Christmas — red & green — immersive festive UI */
+/* Christmas — rich red accents + forest green neutrals — max festive */
 [data-accent="christmas"] {
-  --color-white: #fdf3f3;
-  --color-orange-50: #fce8e8;
-  --color-orange-100: #fad5d5;
-  --color-orange-200: #f5b0b0;
-  --color-orange-300: #f08888;
-  --color-orange-400: #e85555;
-  --color-orange-500: #dc2626;
-  --color-orange-600: #b91c1c;
-  --color-orange-700: #991b1b;
-  --color-orange-800: #7f1d1d;
-  --color-orange-900: #661a1a;
-  --color-orange-950: #3b0a0a;
-  --color-stone-50: #f0e5e5;
-  --color-stone-100: #e2cece;
-  --color-stone-200: #c9a8a8;
-  --color-stone-300: #a88080;
-  --color-stone-400: #8a5e5e;
-  --color-stone-500: #6e4545;
-  --color-stone-600: #533333;
-  --color-stone-700: #3d2222;
-  --color-stone-800: #2e1414;
-  --color-stone-900: #200c0c;
-  --color-stone-950: #130606;
+  --color-white: #f2f7f2;
+  --color-orange-50: #fde8e8;
+  --color-orange-100: #fcc8c8;
+  --color-orange-200: #f99;
+  --color-orange-300: #f06060;
+  --color-orange-400: #e63030;
+  --color-orange-500: #cc0000;
+  --color-orange-600: #aa0000;
+  --color-orange-700: #8b0000;
+  --color-orange-800: #6b0000;
+  --color-orange-900: #500;
+  --color-orange-950: #300;
+  --color-stone-50: #e8f5e8;
+  --color-stone-100: #d4ead4;
+  --color-stone-200: #a8d5a8;
+  --color-stone-300: #6db86d;
+  --color-stone-400: #4a9a4a;
+  --color-stone-500: #2d7a2d;
+  --color-stone-600: #1e5c1e;
+  --color-stone-700: #154315;
+  --color-stone-800: #0e2e0e;
+  --color-stone-900: #081e08;
+  --color-stone-950: #041204;
+}
+/* Christmas dark mode: deep evergreen base */
+html.dark[data-accent="christmas"] {
+  --color-white: #061206;
+  --color-stone-50: #0e2e0e;
+  --color-stone-100: #0a220a;
+  --color-stone-200: #081a08;
+}
+/* Christmas secondary accent: gold */
+[data-accent="christmas"] {
+  --wk-holiday-secondary: #d4a828;
+  --wk-holiday-tertiary: #1a6b1a;
+  --wk-holiday-glow: rgba(204, 0, 0, 0.2);
 }
 
 /* ── Season defaults (when no holiday is near) ──────────── */
 
-/* Spring — cherry blossom pink */
+/* Spring — cherry blossom pink with fresh green undertones */
 [data-accent="spring"] {
-  --color-white: #fef9fb;
-  --color-orange-50: #fdf2f8;
-  --color-orange-100: #fce7f3;
-  --color-orange-200: #fbcfe8;
-  --color-orange-300: #f9a8d4;
-  --color-orange-400: #f472b6;
-  --color-orange-500: #ec4899;
-  --color-orange-600: #db2777;
-  --color-orange-700: #be185d;
-  --color-orange-800: #9d174d;
-  --color-orange-900: #831843;
-  --color-orange-950: #500724;
-  --color-stone-50: #f8eef3;
-  --color-stone-100: #f2e2ea;
-  --color-stone-200: #e6ccd8;
-  --color-stone-300: #d0aebb;
-  --color-stone-400: #b48e9d;
-  --color-stone-500: #8d6e7c;
-  --color-stone-600: #6b535e;
-  --color-stone-700: #4d3a44;
-  --color-stone-800: #33252e;
-  --color-stone-900: #1c1619;
-  --color-stone-950: #100b0d;
+  --color-white: #fdf8fa;
+  --color-orange-50: #fceef5;
+  --color-orange-100: #f9d4e8;
+  --color-orange-200: #f5aad0;
+  --color-orange-300: #f080b8;
+  --color-orange-400: #e8559d;
+  --color-orange-500: #d93884;
+  --color-orange-600: #bb2266;
+  --color-orange-700: #991a55;
+  --color-orange-800: #771444;
+  --color-orange-900: #550e33;
+  --color-orange-950: #380820;
+  --color-stone-50: #f5edf0;
+  --color-stone-100: #eddde4;
+  --color-stone-200: #ddc2ce;
+  --color-stone-300: #c4a0b0;
+  --color-stone-400: #a58090;
+  --color-stone-500: #886070;
+  --color-stone-600: #664854;
+  --color-stone-700: #48323c;
+  --color-stone-800: #302028;
+  --color-stone-900: #1e1218;
+  --color-stone-950: #100a0d;
 }
 
-/* Summer — sky blue */
+/* Summer — bright sky blue with warm golden sand undertones */
 [data-accent="summer"] {
-  --color-white: #f5faff;
-  --color-orange-50: #f0f9ff;
-  --color-orange-100: #e0f2fe;
-  --color-orange-200: #bae6fd;
-  --color-orange-300: #7dd3fc;
-  --color-orange-400: #38bdf8;
-  --color-orange-500: #0ea5e9;
-  --color-orange-600: #0284c7;
-  --color-orange-700: #0369a1;
-  --color-orange-800: #075985;
-  --color-orange-900: #0c4a6e;
-  --color-orange-950: #082f49;
-  --color-stone-50: #eaf4fa;
-  --color-stone-100: #daeaf4;
-  --color-stone-200: #c0d8e8;
-  --color-stone-300: #a0bed0;
-  --color-stone-400: #7ea2b5;
-  --color-stone-500: #5f8495;
-  --color-stone-600: #476470;
-  --color-stone-700: #33484f;
-  --color-stone-800: #223035;
-  --color-stone-900: #151a1c;
-  --color-stone-950: #0a0e10;
+  --color-white: #f3f9ff;
+  --color-orange-50: #e5f3ff;
+  --color-orange-100: #c8e5ff;
+  --color-orange-200: #88ccff;
+  --color-orange-300: #44aaff;
+  --color-orange-400: #1188ee;
+  --color-orange-500: #0070d0;
+  --color-orange-600: #005aaa;
+  --color-orange-700: #004888;
+  --color-orange-800: #003866;
+  --color-orange-900: #002a4d;
+  --color-orange-950: #001a33;
+  --color-stone-50: #e8f0f5;
+  --color-stone-100: #d5e2ec;
+  --color-stone-200: #b0c8d8;
+  --color-stone-300: #88aac0;
+  --color-stone-400: #6690a8;
+  --color-stone-500: #4d7488;
+  --color-stone-600: #385868;
+  --color-stone-700: #28404c;
+  --color-stone-800: #1c2c34;
+  --color-stone-900: #101a20;
+  --color-stone-950: #080e12;
 }
 
-/* Fall — warm amber (the app's natural orange, slightly warmer) */
+/* Fall — rich amber, burnt sienna, warm copper — harvest warmth */
 [data-accent="fall"] {
-  --color-white: #fefaf2;
-  --color-orange-50: #fdf5e4;
-  --color-orange-100: #fcecc8;
-  --color-orange-200: #f9d98e;
-  --color-orange-300: #f5c152;
-  --color-orange-400: #efa622;
-  --color-orange-500: #d98c08;
-  --color-orange-600: #b87006;
-  --color-orange-700: #955808;
-  --color-orange-800: #7a450d;
-  --color-orange-900: #613510;
-  --color-orange-950: #381c05;
-  --color-stone-50: #f5eedf;
-  --color-stone-100: #e8ddc8;
-  --color-stone-200: #d4c4a5;
-  --color-stone-300: #bba580;
-  --color-stone-400: #9c8560;
-  --color-stone-500: #7d6948;
-  --color-stone-600: #5e4f36;
-  --color-stone-700: #443928;
-  --color-stone-800: #2e261a;
-  --color-stone-900: #1c1a12;
-  --color-stone-950: #100e0a;
+  --color-white: #fdf6ee;
+  --color-orange-50: #fce8cc;
+  --color-orange-100: #f8d098;
+  --color-orange-200: #f0b060;
+  --color-orange-300: #e09030;
+  --color-orange-400: #cc7510;
+  --color-orange-500: #b36000;
+  --color-orange-600: #944e00;
+  --color-orange-700: #7a3f00;
+  --color-orange-800: #603200;
+  --color-orange-900: #482500;
+  --color-orange-950: #2e1800;
+  --color-stone-50: #f2e8d5;
+  --color-stone-100: #e5d5b5;
+  --color-stone-200: #ccb88a;
+  --color-stone-300: #aa9565;
+  --color-stone-400: #887548;
+  --color-stone-500: #685a38;
+  --color-stone-600: #50442a;
+  --color-stone-700: #3a3020;
+  --color-stone-800: #282016;
+  --color-stone-900: #1a140e;
+  --color-stone-950: #0e0a06;
 }
 
-/* Winter — cool slate blue */
+/* Winter — icy blue, silver frost, deep indigo — cold elegance */
 [data-accent="winter"] {
-  --color-white: #f5f6fc;
-  --color-orange-50: #eef0fa;
-  --color-orange-100: #e0e3f5;
-  --color-orange-200: #c8cde8;
-  --color-orange-300: #94a3b8;
-  --color-orange-400: #64748b;
-  --color-orange-500: #6366f1;
-  --color-orange-600: #4f46e5;
-  --color-orange-700: #4338ca;
-  --color-orange-800: #3730a3;
-  --color-orange-900: #312e81;
-  --color-orange-950: #1e1b4b;
-  --color-stone-50: #eceaf5;
-  --color-stone-100: #dedbed;
-  --color-stone-200: #c5c0de;
-  --color-stone-300: #a5a0c5;
-  --color-stone-400: #8682aa;
-  --color-stone-500: #6a6690;
-  --color-stone-600: #504d70;
-  --color-stone-700: #3a3852;
-  --color-stone-800: #272538;
-  --color-stone-900: #181620;
-  --color-stone-950: #0c0a14;
+  --color-white: #f0f4fa;
+  --color-orange-50: #e0eaf8;
+  --color-orange-100: #c0d4f0;
+  --color-orange-200: #88aadd;
+  --color-orange-300: #5580cc;
+  --color-orange-400: #3060bb;
+  --color-orange-500: #1a44aa;
+  --color-orange-600: #143890;
+  --color-orange-700: #102c75;
+  --color-orange-800: #0c225c;
+  --color-orange-900: #081844;
+  --color-orange-950: #040e2c;
+  --color-stone-50: #e4e8f2;
+  --color-stone-100: #d0d5e5;
+  --color-stone-200: #b0b8cc;
+  --color-stone-300: #8890aa;
+  --color-stone-400: #6a7290;
+  --color-stone-500: #505878;
+  --color-stone-600: #3c4260;
+  --color-stone-700: #2c3048;
+  --color-stone-800: #1e2234;
+  --color-stone-900: #121624;
+  --color-stone-950: #080a14;
 }
 
 /* ── Design Style Tokens ──────────────────────────────────
@@ -528,6 +579,106 @@ body {
 }
 .animate-dice {
   animation: dice-roll 0.6s ease-out;
+}
+
+/* ── Holiday Decorative Effects ──────────────────────────── */
+
+/* Halloween — cobweb corner decoration on header */
+[data-accent="halloween"] .wk-header-decor::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(ellipse at 100% 0%, transparent 30%, rgba(139, 106, 173, 0.12) 50%, transparent 70%);
+  pointer-events: none;
+}
+[data-accent="halloween"] .wk-header-decor::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(ellipse at 0% 0%, transparent 30%, rgba(45, 139, 78, 0.08) 50%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Halloween — card glow effect */
+[data-accent="halloween"] .wk-card {
+  box-shadow: 0 0 12px rgba(255, 85, 0, 0.15), var(--wk-shadow-card);
+}
+[data-accent="halloween"] .wk-card:hover {
+  box-shadow: 0 0 20px rgba(255, 85, 0, 0.25), var(--wk-shadow-card-hover);
+}
+
+/* Christmas — subtle shimmer on cards */
+[data-accent="christmas"] .wk-card {
+  box-shadow: 0 0 8px rgba(204, 0, 0, 0.1), 0 0 4px rgba(26, 107, 26, 0.08), var(--wk-shadow-card);
+}
+
+/* Christmas — gold star accent on headers */
+[data-accent="christmas"] .wk-header-decor::after {
+  content: "\2726";
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 14px;
+  color: #d4a828;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Valentine — soft glow on cards */
+[data-accent="valentine"] .wk-card {
+  box-shadow: 0 0 10px rgba(224, 17, 95, 0.1), var(--wk-shadow-card);
+}
+
+/* 4th of July — subtle red & blue alternating card borders */
+[data-accent="july4th"] .wk-card:nth-child(odd) {
+  border-color: rgba(204, 0, 0, 0.2);
+}
+[data-accent="july4th"] .wk-card:nth-child(even) {
+  border-color: rgba(0, 34, 153, 0.2);
+}
+
+/* St Patrick's — gold shimmer accent */
+[data-accent="stpatrick"] .wk-header-decor::after {
+  content: "\2618";
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 14px;
+  color: #d4a828;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Easter — pastel card top border */
+[data-accent="easter"] .wk-card {
+  border-top: 2px solid rgba(136, 68, 238, 0.2);
+}
+
+/* ── Holiday accent animations ──────────────────────────── */
+
+/* Gentle glow pulse for Halloween */
+@keyframes spooky-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 85, 0, 0.15); }
+  50% { box-shadow: 0 0 16px rgba(255, 85, 0, 0.3); }
+}
+[data-accent="halloween"] .wk-brand-icon {
+  animation: spooky-glow 3s ease-in-out infinite;
+  border-radius: 50%;
+}
+
+/* Gentle sparkle for Christmas */
+@keyframes festive-sparkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; filter: brightness(1.2); }
+}
+[data-accent="christmas"] .wk-brand-icon {
+  animation: festive-sparkle 2s ease-in-out infinite;
 }
 
 /* Print styles */

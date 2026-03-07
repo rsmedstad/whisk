@@ -638,6 +638,12 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </Card>
               </section>
             )}
+
+            <section className="pt-2">
+              <Button variant="secondary" fullWidth onClick={onLogout}>
+                Sign Out
+              </Button>
+            </section>
           </>
         )}
 
@@ -1002,6 +1008,38 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </Card>
             </section>
+
+            <section>
+              <button
+                onClick={() => setShowDanger(!showDanger)}
+                className="text-xs text-stone-400 dark:text-stone-500 w-full text-center py-2"
+              >
+                {showDanger ? "Hide" : "Show"} reset options
+              </button>
+              {showDanger && (
+                <Card>
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                      Reset Data
+                    </p>
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      This will clear all local data including cached recipes, settings, and sign you out. Server data is not affected.
+                    </p>
+                    <Button
+                      variant="danger"
+                      fullWidth
+                      onClick={() => {
+                        if (window.confirm("Reset all local data? This cannot be undone.")) {
+                          handleReset();
+                        }
+                      }}
+                    >
+                      Reset Local Data & Sign Out
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </section>
           </>
         )}
 
@@ -1072,43 +1110,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
           </>
         )}
 
-        {/* Sign out — always visible */}
-        <Button variant="secondary" fullWidth onClick={onLogout}>
-          Sign Out
-        </Button>
-
-        {/* Reset — always visible */}
-        <section>
-          <button
-            onClick={() => setShowDanger(!showDanger)}
-            className="text-xs text-stone-400 dark:text-stone-500 w-full text-center py-2"
-          >
-            {showDanger ? "Hide" : "Show"} reset options
-          </button>
-          {showDanger && (
-            <Card>
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-red-600 dark:text-red-400">
-                  Reset Data
-                </p>
-                <p className="text-xs text-stone-500 dark:text-stone-400">
-                  This will clear all local data including cached recipes, settings, and sign you out. Server data is not affected.
-                </p>
-                <Button
-                  variant="danger"
-                  fullWidth
-                  onClick={() => {
-                    if (window.confirm("Reset all local data? This cannot be undone.")) {
-                      handleReset();
-                    }
-                  }}
-                >
-                  Reset Local Data & Sign Out
-                </Button>
-              </div>
-            </Card>
-          )}
-        </section>
       </div>
 
       {/* Share / Invite Modal */}
