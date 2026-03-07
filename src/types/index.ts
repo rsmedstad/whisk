@@ -308,6 +308,7 @@ export interface DiscoverFeedItem {
   category?: DiscoverCategory;
   addedAt?: string;
   tags?: string[];
+  totalTime?: number; // estimated total minutes (from AI tagging)
 }
 
 /** Legacy format: grouped by source (used by scraper, converted for UI) */

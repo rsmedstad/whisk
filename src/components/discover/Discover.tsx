@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { classNames, formatTotalTime, normalizeSearch } from "../../lib/utils";
+import { classNames, formatTime, formatTotalTime, normalizeSearch } from "../../lib/utils";
+import { TIME_RANGES } from "../../lib/tags";
 import { api } from "../../lib/api";
 import { getLocal, setLocal } from "../../lib/cache";
 import { Card } from "../ui/Card";
@@ -234,6 +235,7 @@ export function Discover({
   const [newOnly, setNewOnly] = useState(false);
   const [selectedType, setSelectedType] = useState<DiscoverCategory | null>(null);
   const [selectedCuisine, setSelectedCuisine] = useState<CuisineOption | null>(null);
+  const [maxTime, setMaxTime] = useState<number | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number } | null>(null);
 
@@ -513,9 +515,18 @@ export function Discover({
       items = items.filter((i) => i.category === selectedType);
     }
 
-    // Cuisine filter (text match)
+    // Cuisine filter (tags or text match)
     if (selectedCuisine) {
       items = items.filter((i) => matchesCuisine(i, selectedCuisine));
+    }
+
+    // Time filter
+    if (maxTime != null) {
+      if (maxTime === Infinity) {
+        items = items.filter((i) => i.totalTime && i.totalTime >= 60);
+      } else {
+        items = items.filter((i) => i.totalTime && i.totalTime <= maxTime);
+      }
     }
 
     // Sort
@@ -530,13 +541,13 @@ export function Discover({
     }
 
     return items;
-  }, [allItems, search, newOnly, selectedType, selectedCuisine, sort]);
+  }, [allItems, search, newOnly, selectedType, selectedCuisine, maxTime, sort]);
 
   // Count new items for the badge
   const newCount = useMemo(() => allItems.filter(isNewItem).length, [allItems]);
 
   // Check if any filters are active (to switch from carousel to grid)
-  const hasActiveFilters = search || newOnly || selectedType !== null || selectedCuisine !== null;
+  const hasActiveFilters = search || newOnly || selectedType !== null || selectedCuisine !== null || maxTime !== null;
 
   // Group filtered items by category for carousel view
   const groupedItems = useMemo(() => {
@@ -1173,6 +1184,25 @@ export function Discover({
                   <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "cuisine" && "rotate-180")} />
                 </button>
               )}
+
+              {/* Time filter */}
+              <button
+                onClick={(e) => openDropdownAt("time", e)}
+                className={classNames(
+                  "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                  maxTime != null
+                    ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                    : openDropdown === "time"
+                      ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                )}
+              >
+                <Clock className="w-3 h-3" />
+                {maxTime != null
+                  ? TIME_RANGES.find((r) => r.maxMinutes === maxTime)?.label ?? "Time"
+                  : "Time"}
+                <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "time" && "rotate-180")} />
+              </button>
             </div>
 
             {/* Dropdown panel — portaled to body */}
@@ -1235,13 +1265,31 @@ export function Discover({
                       {selectedCuisine === cuisine && <Check className="w-4 h-4 text-orange-500" />}
                     </button>
                   ))}
+                  {openDropdown === "time" && TIME_RANGES.map((range) => {
+                    const isActive = maxTime === range.maxMinutes;
+                    return (
+                      <button
+                        key={range.maxMinutes}
+                        onClick={() => { setMaxTime(isActive ? null : range.maxMinutes); setOpenDropdown(null); }}
+                        className={classNames(
+                          "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                          isActive
+                            ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                            : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                        )}
+                      >
+                        {range.label}
+                        {isActive && <Check className="w-4 h-4 text-orange-500" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </>,
               document.body
             )}
 
             {/* Active filter chips */}
-            {(selectedType || selectedCuisine) && (
+            {(selectedType || selectedCuisine || maxTime != null) && (
               <div className="flex items-center gap-1.5 pb-2">
                 <div className="flex flex-wrap gap-1.5 flex-1">
                   {selectedType && (
@@ -1262,9 +1310,18 @@ export function Discover({
                       <XMark className="w-3 h-3" />
                     </button>
                   )}
+                  {maxTime != null && (
+                    <button
+                      onClick={() => setMaxTime(null)}
+                      className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                    >
+                      {TIME_RANGES.find((r) => r.maxMinutes === maxTime)?.label ?? "Time"}
+                      <XMark className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
                 <button
-                  onClick={() => { setSelectedType(null); setSelectedCuisine(null); }}
+                  onClick={() => { setSelectedType(null); setSelectedCuisine(null); setMaxTime(null); }}
                   className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 shrink-0 transition-colors"
                 >
                   Clear all
@@ -1385,7 +1442,7 @@ export function Discover({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => { setSearch(""); setNewOnly(false); setSelectedType(null); setSelectedCuisine(null); }}
+                    onClick={() => { setSearch(""); setNewOnly(false); setSelectedType(null); setSelectedCuisine(null); setMaxTime(null); }}
                   >
                     Clear filters
                   </Button>
@@ -1453,11 +1510,16 @@ function FeedCard({
         <h4 className="text-xs font-medium line-clamp-2 dark:text-stone-100 leading-snug">
           {item.title}
         </h4>
-        {item.source && (
-          <p className="text-[10px] text-stone-400 dark:text-stone-500 mt-0.5">
-            {SOURCE_LABELS[item.source ?? "nyt"]}
-          </p>
-        )}
+        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-stone-400 dark:text-stone-500">
+          {item.source && (
+            <span>{SOURCE_LABELS[item.source ?? "nyt"]}</span>
+          )}
+          {item.totalTime && item.totalTime > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Clock className="w-3 h-3" /> {formatTime(item.totalTime)}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );
