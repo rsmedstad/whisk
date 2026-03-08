@@ -47,10 +47,13 @@ export function useTheme() {
   });
 
   // Resolve dark/light mode
+  // Seasonal themes use their own palettes — don't force system dark/light
   const resolved =
-    preference === "system" || preference === "seasonal"
+    preference === "system"
       ? getSystemTheme()
-      : preference;
+      : preference === "seasonal"
+        ? "light"
+        : preference;
 
   useEffect(() => {
     applyTheme(resolved);
@@ -80,9 +83,9 @@ export function useTheme() {
     }
   }, [preference, accentOverride]);
 
-  // Listen for system theme changes (for system + seasonal modes)
+  // Listen for system theme changes (for system mode only)
   useEffect(() => {
-    if (preference !== "system" && preference !== "seasonal") return;
+    if (preference !== "system") return;
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => applyTheme(getSystemTheme());

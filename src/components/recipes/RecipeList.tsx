@@ -9,9 +9,9 @@ import { PRESET_TAGS, TIME_RANGES } from "../../lib/tags";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
-import { InstallPrompt } from "../InstallPrompt";
+
 import { FirstRunGuide } from "./FirstRunGuide";
-import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown } from "../ui/Icon";
+import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked";
@@ -80,6 +80,8 @@ export function RecipeList({
   );
 
   const CATEGORY_ORDER = ["breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish"];
+  const [searchOpen, setSearchOpen] = useState(() => !!(restored?.search));
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number } | null>(null);
 
@@ -105,7 +107,6 @@ export function RecipeList({
       ["meal", "Type"],
       ["cuisine", "Cuisine"],
       ["diet", "Diet"],
-      ["method", "Method"],
       ["season", "Season"],
       ["custom", "Other"],
     ];
@@ -186,6 +187,22 @@ export function RecipeList({
           </button>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => {
+                setSearchOpen(!searchOpen);
+                if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
+                else setSearch("");
+              }}
+              className={classNames(
+                "p-2 transition-colors",
+                searchOpen || search
+                  ? "text-orange-500"
+                  : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+              )}
+              title="Search recipes"
+            >
+              <MagnifyingGlass className="w-5 h-5" />
+            </button>
+            <button
               onClick={() => navigate("/recipes/new")}
               className="p-2 text-orange-500 hover:text-orange-600"
               title="Add recipe"
@@ -195,28 +212,31 @@ export function RecipeList({
           </div>
         </div>
 
-        {/* Search */}
-        <div className="pb-2">
-          <div className="relative">
-            <input
-              type="search"
-              enterKeyHint="search"
-              placeholder="Search recipes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-              className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 pr-8 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-              >
-                <XMark className="w-4 h-4" />
-              </button>
-            )}
+        {/* Search — collapsible */}
+        {searchOpen && (
+          <div className="pb-2">
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                type="search"
+                enterKeyHint="search"
+                placeholder="Search recipes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 pr-8 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                >
+                  <XMark className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Filter bar */}
         <div className="flex items-center gap-2 pb-2 overflow-x-auto no-scrollbar">
@@ -252,7 +272,7 @@ export function RecipeList({
             </button>
           </div>
           <span className="text-stone-300 dark:text-stone-600 text-sm select-none">|</span>
-          {filterGroups.map((group) => {
+          {filterGroups.filter((g) => g.key === "meal" || g.key === "cuisine").map((group) => {
             const activeCount = group.tags.filter((t) => selectedTags.includes(t)).length;
             return (
               <div key={group.key} className="relative shrink-0">
@@ -323,6 +343,42 @@ export function RecipeList({
               <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "time" && "rotate-180")} />
             </button>
           </div>
+          {filterGroups.filter((g) => g.key !== "meal" && g.key !== "cuisine").map((group) => {
+            const activeCount = group.tags.filter((t) => selectedTags.includes(t)).length;
+            return (
+              <div key={group.key} className="relative shrink-0">
+                <button
+                  onClick={(e) => {
+                    if (openDropdown === group.key) {
+                      setOpenDropdown(null);
+                    } else {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const minDropdownWidth = 140;
+                      const wouldOverflow = rect.left + minDropdownWidth > window.innerWidth;
+                      if (wouldOverflow) {
+                        const right = Math.max(8, window.innerWidth - rect.right);
+                        setDropdownPos({ top: rect.bottom + 4, left: 0, right });
+                      } else {
+                        setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+                      }
+                      setOpenDropdown(group.key);
+                    }
+                  }}
+                  className={classNames(
+                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    activeCount > 0
+                      ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      : openDropdown === group.key
+                        ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                  )}
+                >
+                  {group.label}{activeCount > 0 && ` (${activeCount})`}
+                  <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === group.key && "rotate-180")} />
+                </button>
+              </div>
+            );
+          })}
         </div>
         {/* Dropdown panel — portaled to body to escape backdrop-blur containing block */}
         {openDropdown && dropdownPos && createPortal((() => {
@@ -436,9 +492,6 @@ export function RecipeList({
           </div>
         )}
       </div>
-
-      {/* Install prompt */}
-      <InstallPrompt />
 
       {/* Recipe cards */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 pb-24">

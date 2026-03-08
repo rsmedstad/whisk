@@ -12,7 +12,7 @@ import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
 import { classNames } from "../lib/utils";
-import { ChevronLeft, Trash, ComputerDesktop, Moon, Sun, Globe, Share, Check, ChevronDown } from "./ui/Icon";
+import { ChevronLeft, Trash, Globe, Share, Check, ChevronDown } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -303,63 +303,40 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     <label className="text-sm font-medium dark:text-stone-200 block mb-2">
                       Theme
                     </label>
-                    {(() => {
-                      const THEME_ICONS: Record<string, typeof Sun> = {
-                        system: ComputerDesktop, light: Sun, dark: Moon,
-                      };
-                      const isSeasonal = theme === "seasonal";
-                      return (
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col gap-2">
-                            {(["system", "light", "dark"] as const).map((t) => {
-                              const ThemeIcon = THEME_ICONS[t];
-                              return (
-                                <button
-                                  key={t}
-                                  onClick={() => onSetTheme(t)}
-                                  className={`py-2.5 px-3 rounded-[var(--wk-radius-btn)] font-medium border flex items-center gap-2 text-sm capitalize ${theme === t ? activeClass : inactiveClass}`}
-                                >
-                                  {ThemeIcon && <ThemeIcon className="w-4 h-4" />}
-                                  {t}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <button
-                            onClick={() => onSetTheme("seasonal")}
-                            className={`rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-1.5 p-3 ${isSeasonal ? activeClass : inactiveClass}`}
-                          >
-                            <Globe className="w-6 h-6" />
-                            <span className="text-sm font-semibold">Seasonal</span>
-                            <span className="text-[10px] leading-tight text-center opacity-70">
-                              Colors shift with holidays &amp; seasons
-                            </span>
-                          </button>
-                        </div>
-                      );
-                    })()}
+                    <select
+                      value={theme === "seasonal" ? `seasonal:${accentOverride}` : theme}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "system" || val === "light" || val === "dark") {
+                          onSetTheme(val);
+                        } else if (val.startsWith("seasonal:")) {
+                          const accent = val.replace("seasonal:", "") as "auto" | SeasonalAccent;
+                          onSetTheme("seasonal");
+                          onSetAccent(accent);
+                        }
+                      }}
+                      className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-2.5 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    >
+                      <optgroup label="Standard">
+                        <option value="system">System (follows device)</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                      </optgroup>
+                      <optgroup label="Seasonal &amp; Holiday Colors">
+                        <option value="seasonal:auto">Auto (changes with calendar)</option>
+                        {ACCENT_OPTIONS.filter((o) => o.value !== "auto").map((opt) => (
+                          <option key={opt.value} value={`seasonal:${opt.value}`}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
                     {theme === "seasonal" && (
-                      <div className="mt-3 space-y-1.5">
-                        <label className="text-xs font-medium text-stone-500 dark:text-stone-400 block">
-                          Color palette
-                        </label>
-                        <select
-                          value={accentOverride}
-                          onChange={(e) => onSetAccent(e.target.value as "auto" | SeasonalAccent)}
-                          className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                        >
-                          {ACCENT_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-stone-500 dark:text-stone-400">
-                          {accentOverride === "auto"
-                            ? "Changes automatically with the calendar"
-                            : "Locked — won't change with the date"}
-                        </p>
-                      </div>
+                      <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+                        {accentOverride === "auto"
+                          ? "Colors shift automatically with the calendar"
+                          : `Locked to ${ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? accentOverride} colors`}
+                      </p>
                     )}
                   </div>
 
