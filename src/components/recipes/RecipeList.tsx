@@ -587,6 +587,13 @@ const CARD_HIDDEN_TAGS = new Set([
   "quick", "under 30 min", "under 30 minutes", "30 min", "meal prep",
 ]);
 
+// Additional tags to hide for drink recipes — food-oriented labels that don't apply
+const DRINK_HIDDEN_TAGS = new Set([
+  "weeknight", "quick", "under 30 min", "under 30 minutes", "30 min",
+  "meal prep", "one-pot", "sheet pan", "healthy", "low-carb", "keto",
+  "grilling", "baking", "slow cook", "instant pot", "air fryer", "stir-fry",
+]);
+
 const ALCOHOLIC_KEYWORDS = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
 
 function RecipeCard({
@@ -601,7 +608,10 @@ function RecipeCard({
   const isDrinks = recipe.tags.includes("drinks");
   const totalTime = isDrinks ? null : formatTotalTime(recipe.prepTime, recipe.cookTime);
   // Show cuisine, diet, method, season tags — skip meal type (already in section header)
-  const displayTags = recipe.tags.filter((t) => !CARD_HIDDEN_TAGS.has(t));
+  // For drinks, also hide food-oriented tags (weeknight, cooking methods, etc.)
+  const displayTags = recipe.tags.filter((t) =>
+    !CARD_HIDDEN_TAGS.has(t) && (!isDrinks || !DRINK_HIDDEN_TAGS.has(t))
+  );
   const isAlcoholic = isDrinks && (ALCOHOLIC_KEYWORDS.test(recipe.title) || (recipe.spirits && recipe.spirits.length > 0));
 
   return (

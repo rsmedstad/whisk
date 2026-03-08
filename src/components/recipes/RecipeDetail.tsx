@@ -510,32 +510,46 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               {decodeEntities(recipe.description)}
             </p>
           )}
-          <div className="flex flex-wrap gap-3 mt-2 text-sm text-stone-500 dark:text-stone-400">
-            {(recipe.prepTime || recipe.cookTime) && (
-              <span className="flex items-center gap-1">
-                <Clock className="w-4 h-4" />
-                {formatTime((recipe.prepTime ?? 0) + (recipe.cookTime ?? 0))}
-              </span>
-            )}
-            {recipe.servings && (
-              <span className="flex items-center gap-1">
-                <Users className="w-4 h-4" /> {recipe.servings} servings
-              </span>
-            )}
-            {recipe.yield && <span>{recipe.yield}</span>}
-            {recipe.difficulty && (
-              <span className="capitalize">{recipe.difficulty}</span>
-            )}
-            {recipe.tags.includes("drinks") && (
-              <span className="capitalize">
-                {/\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i.test(recipe.title)
-                  ? "Alcoholic"
-                  : "Non-alcoholic"}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-2 items-center">
-            {recipe.tags.map((tag) => (
+          {(() => {
+            const isDrinks = recipe.tags.includes("drinks");
+            const alcoholicRe = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
+            const isAlcoholic = isDrinks && (
+              alcoholicRe.test(recipe.title) ||
+              recipe.ingredients.some((i) => alcoholicRe.test(i.name))
+            );
+            // Tags to hide for drinks — food-oriented labels
+            const drinkHiddenTags = new Set([
+              "weeknight", "quick", "under 30 min", "under 30 minutes", "30 min",
+              "meal prep", "one-pot", "sheet pan", "healthy", "low-carb", "keto",
+              "grilling", "baking", "slow cook", "instant pot", "air fryer", "stir-fry",
+            ]);
+            const displayTags = isDrinks
+              ? recipe.tags.filter((t) => !drinkHiddenTags.has(t))
+              : recipe.tags;
+            return (
+              <>
+                <div className="flex flex-wrap gap-3 mt-2 text-sm text-stone-500 dark:text-stone-400">
+                  {!isDrinks && (recipe.prepTime || recipe.cookTime) && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {formatTime((recipe.prepTime ?? 0) + (recipe.cookTime ?? 0))}
+                    </span>
+                  )}
+                  {recipe.servings && (
+                    <span className="flex items-center gap-1">
+                      <Users className="w-4 h-4" /> {recipe.servings} servings
+                    </span>
+                  )}
+                  {recipe.yield && <span>{recipe.yield}</span>}
+                  {recipe.difficulty && (
+                    <span className="capitalize">{recipe.difficulty}</span>
+                  )}
+                  {isDrinks && (
+                    <span>{isAlcoholic ? "Alcoholic" : "Non-alcoholic"}</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2 items-center">
+                  {displayTags.map((tag) => (
               <TagChip
                 key={tag}
                 label={tag}
@@ -595,6 +609,9 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               </div>
             </div>
           )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Divider between tags and ingredients/steps */}
