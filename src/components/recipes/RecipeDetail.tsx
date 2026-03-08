@@ -260,10 +260,31 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
   const photos = useMemo(() => {
     if (recipe?.photos?.length) {
-      // Filter out entries with missing URLs, then deduplicate
+      // Normalize CDN image URLs for dedup — strips fingerprints, dimensions, filters
+      const normalizeImageKey = (url: string): string => {
+        let u = url.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? url;
+        // Strip Dotdash /thmb/FINGERPRINT/DIMENSIONs/filters:.../ path segments
+        u = u.replace(/\/thmb\/[^/]+\/[^/]*\d+x\d+[^/]*\/(?:filters:[^/]*\/)?/i, "/thmb/");
+        // Strip generic CDN size/crop segments like /750x422/, /4x3/, /1500x0/
+        u = u.replace(/\/\d+x\d+\//g, "/");
+        return u.toLowerCase();
+      };
+      // Filter out entries with missing URLs, then deduplicate by normalized key + filename
+      const seenKeys = new Set<string>();
+      const seenFilenames = new Set<string>();
       let deduped = recipe.photos
         .filter((p) => p.url)
-        .filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
+        .filter((p) => {
+          const key = normalizeImageKey(p.url);
+          if (seenKeys.has(key)) return false;
+          seenKeys.add(key);
+          const filename = key.split("/").pop() ?? "";
+          if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
+            if (seenFilenames.has(filename)) return false;
+            seenFilenames.add(filename);
+          }
+          return true;
+        });
       // If we have local R2 photos, filter out external URLs (likely duplicates from import)
       const hasLocal = deduped.some((p) => p.url.startsWith("/"));
       if (hasLocal) {
@@ -504,6 +525,13 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             {recipe.yield && <span>{recipe.yield}</span>}
             {recipe.difficulty && (
               <span className="capitalize">{recipe.difficulty}</span>
+            )}
+            {recipe.tags.includes("drinks") && (
+              <span className="capitalize">
+                {/\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i.test(recipe.title)
+                  ? "Alcoholic"
+                  : "Non-alcoholic"}
+              </span>
             )}
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2 items-center">

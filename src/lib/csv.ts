@@ -86,7 +86,7 @@ const TAG_MAPPINGS: Record<string, string[]> = {
   vegetarian: ["vegetarian"],
   vegan: ["vegan"],
   "gluten-free": ["gluten-free"],
-  quick: ["quick", "under 30 min"],
+  quick: ["quick"],
   soup: ["dinner"],
   salad: ["lunch", "healthy"],
   pasta: ["italian", "dinner"],

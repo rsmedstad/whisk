@@ -51,7 +51,6 @@ export function RecipeList({
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
-  const [drinkFilter, setDrinkFilter] = useState<"all" | "alcoholic" | "non-alcoholic">("all");
 
   // Save filter state to sessionStorage whenever it changes
   useEffect(() => {
@@ -118,18 +117,6 @@ export function RecipeList({
     return groups;
   }, [recipes, availableTags]);
 
-  // Detect alcoholic drinks by title keywords (same approach as Discover tab)
-  const ALCOHOLIC_KEYWORDS = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
-  const isNonAlcoholicRecipe = (r: RecipeIndexEntry) =>
-    !ALCOHOLIC_KEYWORDS.test(r.title) && (!r.spirits || r.spirits.length === 0);
-
-  // Show drink filter pills if there are any drinks
-  const showNonAlcoholicPill = useMemo(() => {
-    const allDrinks = recipes.filter((r) => r.tags.includes("drinks"));
-    if (allDrinks.length === 0) return false;
-    const alcCount = allDrinks.filter((r) => !isNonAlcoholicRecipe(r)).length;
-    return alcCount > 0 && alcCount < allDrinks.length;
-  }, [recipes]);
 
   // Group recipes by meal category for the "category" sort view
   const groupedRecipes = useMemo(() => {
@@ -151,15 +138,6 @@ export function RecipeList({
         }
       }
     }
-    // Apply drink type filter to drinks group
-    if (drinkFilter !== "all") {
-      const drinks = groups.get("drinks");
-      if (drinks) {
-        groups.set("drinks", drinks.filter((r) =>
-          drinkFilter === "non-alcoholic" ? isNonAlcoholicRecipe(r) : !isNonAlcoholicRecipe(r)
-        ));
-      }
-    }
     // Sort alphabetically within each group
     for (const list of groups.values()) {
       list.sort((a, b) => a.title.localeCompare(b.title));
@@ -178,7 +156,7 @@ export function RecipeList({
     const drinks = groups.get("drinks");
     if (drinks && drinks.length > 0) ordered.push({ label: "Drinks", recipes: drinks });
     return ordered;
-  }, [filtered, sort, drinkFilter]);
+  }, [filtered, sort]);
 
   const goToRecipe = (id: string) => {
     if (scrollRef.current) {
@@ -543,32 +521,6 @@ export function RecipeList({
                   <span className="text-xs font-normal text-stone-400 dark:text-stone-500 ml-1.5">
                     {group.recipes.length}
                   </span>
-                  {group.label === "Drinks" && showNonAlcoholicPill && (
-                    <>
-                      <button
-                        onClick={() => setDrinkFilter(drinkFilter === "alcoholic" ? "all" : "alcoholic")}
-                        className={classNames(
-                          "ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
-                          drinkFilter === "alcoholic"
-                            ? "border-orange-400 bg-orange-50 text-orange-600 dark:border-orange-600 dark:bg-orange-950 dark:text-orange-400"
-                            : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
-                        )}
-                      >
-                        Alcoholic
-                      </button>
-                      <button
-                        onClick={() => setDrinkFilter(drinkFilter === "non-alcoholic" ? "all" : "non-alcoholic")}
-                        className={classNames(
-                          "ml-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
-                          drinkFilter === "non-alcoholic"
-                            ? "border-orange-400 bg-orange-50 text-orange-600 dark:border-orange-600 dark:bg-orange-950 dark:text-orange-400"
-                            : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
-                        )}
-                      >
-                        Non-alcoholic
-                      </button>
-                    </>
-                  )}
                 </h2>
                 {recipeLayout === "horizontal" && !search && selectedTags.length === 0 && !favoritesOnly ? (
                   <CarouselRow>
@@ -626,6 +578,17 @@ function CarouselRow({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Tags to exclude from card preview — meal types are redundant with the category section
+// header, and time/speed tags are redundant with the cook time shown on each card
+const CARD_HIDDEN_TAGS = new Set([
+  // Meal types (shown as section headers)
+  "breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish", "drinks",
+  // Time/speed (shown as cook time on card)
+  "quick", "under 30 min", "under 30 minutes", "30 min", "meal prep",
+]);
+
+const ALCOHOLIC_KEYWORDS = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
+
 function RecipeCard({
   recipe,
   onClick,
@@ -637,6 +600,9 @@ function RecipeCard({
 }) {
   const isDrinks = recipe.tags.includes("drinks");
   const totalTime = isDrinks ? null : formatTotalTime(recipe.prepTime, recipe.cookTime);
+  // Show cuisine, diet, method, season tags — skip meal type (already in section header)
+  const displayTags = recipe.tags.filter((t) => !CARD_HIDDEN_TAGS.has(t));
+  const isAlcoholic = isDrinks && (ALCOHOLIC_KEYWORDS.test(recipe.title) || (recipe.spirits && recipe.spirits.length > 0));
 
   return (
     <button
@@ -656,6 +622,19 @@ function RecipeCard({
           <div className="flex h-full w-full items-center justify-center text-stone-300 dark:text-stone-600">
             <WhiskLogo className="w-10 h-10" />
           </div>
+        )}
+        {isDrinks && (
+          <span
+            className={classNames(
+              "absolute top-1.5 left-1.5 flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold backdrop-blur-sm",
+              isAlcoholic
+                ? "bg-amber-500/80 text-white"
+                : "bg-green-500/80 text-white"
+            )}
+            title={isAlcoholic ? "Alcoholic" : "Non-alcoholic"}
+          >
+            {isAlcoholic ? "A" : "NA"}
+          </span>
         )}
         <button
           onClick={(e) => {
@@ -679,7 +658,7 @@ function RecipeCard({
             {recipe.title}
           </h3>
           <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
-            {recipe.tags.length > 0 ? recipe.tags.slice(0, 3).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ") : "\u00A0"}
+            {displayTags.length > 0 ? displayTags.slice(0, 3).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ") : "\u00A0"}
           </p>
         </div>
 
