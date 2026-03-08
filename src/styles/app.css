@@ -455,82 +455,123 @@ html.dark[data-style="soft"] .wk-card {
   background: linear-gradient(135deg, rgb(28 25 23 / 0.95), rgb(35 28 20 / 0.8));
 }
 
-/* Brutalist — hard edges, thick borders, offset shadows, monospace headings */
-[data-style="brutalist"] {
-  --wk-radius-card: 0px;
-  --wk-radius-btn: 0px;
-  --wk-radius-input: 0px;
-  --wk-radius-tag: 0px;
-  --wk-shadow-card: 4px 4px 0 0 rgb(0 0 0);
-  --wk-shadow-card-hover: 6px 6px 0 0 rgb(0 0 0);
-  --wk-border-card: 3px;
-  --wk-border-input: 2px;
-  --wk-heading-weight: 900;
-  --wk-heading-tracking: -0.03em;
-  --wk-heading-transform: uppercase;
-  --wk-card-backdrop: none;
-}
-[data-style="brutalist"] h1,
-[data-style="brutalist"] h2,
-[data-style="brutalist"] h3 {
-  font-family: "Courier New", Courier, monospace;
-}
-.dark[data-style="brutalist"],
-.dark [data-style="brutalist"],
-[data-style="brutalist"].dark,
-[data-style="brutalist"] .dark {
-  --wk-shadow-card: 4px 4px 0 0 rgb(255 255 255 / 0.3);
-  --wk-shadow-card-hover: 6px 6px 0 0 rgb(255 255 255 / 0.3);
-}
-html.dark[data-style="brutalist"] {
-  --wk-shadow-card: 4px 4px 0 0 rgb(255 255 255 / 0.3);
-  --wk-shadow-card-hover: 6px 6px 0 0 rgb(255 255 255 / 0.3);
-}
 
-/* Glass — Apple Liquid Glass: deeply translucent, specular edges, refractive blur */
+/* Glass — Apple Liquid Glass: deeply translucent, accent-tinted, refractive blur */
 [data-style="glass"] {
   --wk-radius-card: 1.25rem;
   --wk-radius-btn: 0.875rem;
   --wk-radius-input: 0.875rem;
   --wk-radius-tag: 9999px;
-  --wk-shadow-card: 0 2px 16px rgb(0 0 0 / 0.04), 0 0 1px rgb(255 255 255 / 0.6) inset;
-  --wk-shadow-card-hover: 0 4px 24px rgb(0 0 0 / 0.08), 0 0 1px rgb(255 255 255 / 0.8) inset;
+  --wk-shadow-card: none;
+  --wk-shadow-card-hover: none;
   --wk-border-card: 1px;
   --wk-border-input: 1px;
   --wk-heading-weight: 500;
   --wk-heading-tracking: 0.01em;
   --wk-heading-transform: none;
   --wk-card-backdrop: blur(40px) saturate(1.8);
+  /* Glass accent tint — orange by default, overridden by seasonal palettes */
+  --glass-tint: 249 115 22;  /* orange-500 */
+  --glass-tint-strength: 0.06;
 }
 
-/* Glass Liquid Glass card: ultra-translucent, specular highlight borders, deep blur */
+/* Glass card: translucent with accent tint, specular top rim, deep blur */
 [data-style="glass"] .wk-card {
   background: linear-gradient(
-    135deg,
-    rgb(255 255 255 / 0.35) 0%,
-    rgb(255 255 255 / 0.18) 50%,
-    rgb(255 255 255 / 0.25) 100%
+    168deg,
+    rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.04)) 0%,
+    rgb(255 255 255 / 0.22) 30%,
+    rgb(255 255 255 / 0.14) 70%,
+    rgb(var(--glass-tint) / var(--glass-tint-strength)) 100%
   );
   -webkit-backdrop-filter: var(--wk-card-backdrop);
   backdrop-filter: var(--wk-card-backdrop);
-  border-color: rgb(255 255 255 / 0.5);
-  border-top-color: rgb(255 255 255 / 0.7);
-  box-shadow: var(--wk-shadow-card),
-    0 0.5px 0 0 rgb(255 255 255 / 0.5) inset,
-    0 -0.5px 0 0 rgb(255 255 255 / 0.15) inset;
+  /* Specular rim: bright top, fading sides, subtle bottom */
+  border-color: rgb(255 255 255 / 0.3);
+  border-top-color: rgb(255 255 255 / 0.8);
+  border-bottom-color: rgb(255 255 255 / 0.1);
+  box-shadow:
+    /* Outer glow */
+    0 2px 20px rgb(0 0 0 / 0.05),
+    0 8px 32px rgb(var(--glass-tint) / 0.04),
+    /* Specular top highlight — bright line at top edge */
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    /* Subtle bottom edge */
+    inset 0 -0.5px 0 rgb(255 255 255 / 0.1);
 }
 html.dark[data-style="glass"] .wk-card {
   background: linear-gradient(
-    135deg,
-    rgb(255 255 255 / 0.08) 0%,
-    rgb(255 255 255 / 0.03) 50%,
-    rgb(255 255 255 / 0.06) 100%
+    168deg,
+    rgb(var(--glass-tint) / calc(var(--glass-tint-strength) - 0.02)) 0%,
+    rgb(255 255 255 / 0.06) 30%,
+    rgb(255 255 255 / 0.03) 70%,
+    rgb(var(--glass-tint) / calc(var(--glass-tint-strength) - 0.03)) 100%
   );
-  border-color: rgb(255 255 255 / 0.12);
+  border-color: rgb(255 255 255 / 0.08);
   border-top-color: rgb(255 255 255 / 0.2);
-  box-shadow: 0 2px 16px rgb(0 0 0 / 0.2),
-    0 0.5px 0 0 rgb(255 255 255 / 0.12) inset,
-    0 -0.5px 0 0 rgb(255 255 255 / 0.05) inset;
+  border-bottom-color: rgb(255 255 255 / 0.03);
+  box-shadow:
+    0 2px 20px rgb(0 0 0 / 0.25),
+    0 8px 32px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.15),
+    inset 0 -0.5px 0 rgb(255 255 255 / 0.04);
+}
+
+/* Glass buttons: translucent with blur instead of solid fills */
+[data-style="glass"] button.bg-orange-500 {
+  background: linear-gradient(
+    168deg,
+    rgb(249 115 22 / 0.7),
+    rgb(234 88 12 / 0.55)
+  ) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow:
+    0 2px 12px rgb(249 115 22 / 0.25),
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    inset 0 -0.5px 0 rgb(0 0 0 / 0.1);
+}
+[data-style="glass"] button.bg-stone-100,
+[data-style="glass"] .dark button.dark\:bg-stone-800 {
+  background: rgb(255 255 255 / 0.2) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgb(255 255 255 / 0.3);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+
+/* Glass inputs: translucent */
+[data-style="glass"] input,
+[data-style="glass"] textarea,
+[data-style="glass"] select {
+  background: rgb(255 255 255 / 0.15) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgb(255 255 255 / 0.3) !important;
+}
+html.dark[data-style="glass"] input,
+html.dark[data-style="glass"] textarea,
+html.dark[data-style="glass"] select {
+  background: rgb(255 255 255 / 0.06) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+
+/* Glass bottom nav: floating translucent bar */
+[data-style="glass"] nav.fixed.bottom-0 > div {
+  background: rgb(255 255 255 / 0.45) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  backdrop-filter: blur(40px) saturate(1.8);
+  border-top-color: rgb(255 255 255 / 0.6) !important;
+  box-shadow:
+    0 -2px 20px rgb(0 0 0 / 0.04),
+    inset 0 0.5px 0 rgb(255 255 255 / 0.5);
+}
+html.dark[data-style="glass"] nav.fixed.bottom-0 > div {
+  background: rgb(0 0 0 / 0.35) !important;
+  border-top-color: rgb(255 255 255 / 0.1) !important;
+  box-shadow:
+    0 -2px 20px rgb(0 0 0 / 0.2),
+    inset 0 0.5px 0 rgb(255 255 255 / 0.08);
 }
 
 /* ── Heading Style Application ─────────────────────────── */
