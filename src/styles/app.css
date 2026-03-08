@@ -574,6 +574,15 @@ html.dark[data-style="glass"] .bg-orange-100,
 html.dark[data-style="glass"] .bg-orange-50 {
   background: rgb(255 255 255 / 0.1) !important;
 }
+/* Notification badges stay solid and readable in Glass mode */
+[data-style="glass"] .wk-badge.bg-orange-500 {
+  background: rgb(71 85 105) !important; /* slate-600 — solid, not translucent */
+  color: rgb(255 255 255) !important;
+}
+html.dark[data-style="glass"] .wk-badge.bg-orange-500 {
+  background: rgb(148 163 184) !important; /* slate-400 */
+  color: rgb(15 23 42) !important; /* slate-900 */
+}
 /* Orange text → medium slate (visible but neutral, not black) */
 [data-style="glass"] .text-orange-500 {
   color: rgb(100 116 139) !important; /* slate-500 */
