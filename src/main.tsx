@@ -19,8 +19,18 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .register("/sw.js", { updateViaCache: "none" })
       .then((reg) => {
-        // Check for updates every 30 minutes
-        setInterval(() => reg.update(), 30 * 60 * 1000);
+        // Check for updates every 5 minutes
+        setInterval(() => reg.update(), 5 * 60 * 1000);
+
+        // Check for updates when user returns to the app
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") reg.update();
+        });
+
+        // If a SW is already waiting (e.g. installed while tab was in background), activate it
+        if (reg.waiting) {
+          reg.waiting.postMessage("skipWaiting");
+        }
 
         // When a new SW is waiting, tell it to activate immediately
         reg.addEventListener("updatefound", () => {
@@ -40,8 +50,12 @@ if ("serviceWorker" in navigator) {
       });
 
     // When the new SW takes over, reload to get fresh assets
+    let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
+      if (!reloading) {
+        reloading = true;
+        window.location.reload();
+      }
     });
   });
 }

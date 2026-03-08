@@ -94,34 +94,49 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Static assets (JS/CSS): stale-while-revalidate ──
+  // ── Static assets (JS/CSS): network-first with fast fallback ──
   // Vite uses content-hashed filenames, so new deploys = new URLs.
-  // Serve from cache instantly, fetch fresh copy in background.
+  // Try network first (with 3s timeout), fall back to cache for offline.
   if (url.pathname.match(/\.(js|css|woff2?)$/) || url.pathname === "/manifest.json") {
     event.respondWith(
-      caches.open(CACHE_NAME).then((cache) =>
-        cache.match(request).then((cached) => {
-          const fetchPromise = fetch(request).then((response) => {
+      caches.open(CACHE_NAME).then((cache) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+        return fetch(request, { signal: controller.signal })
+          .then((response) => {
+            clearTimeout(timeoutId);
             if (response.ok) cache.put(request, response.clone());
             return response;
+          })
+          .catch(() => {
+            clearTimeout(timeoutId);
+            return cache.match(request).then(
+              (cached) => cached || fetch(request)
+            );
           });
-          return cached || fetchPromise;
-        })
-      )
+      })
     );
     return;
   }
 
-  // ── Navigation: network-first, instant fallback to cached shell ──
+  // ── Navigation: network-first with timeout, cached shell as offline fallback ──
   if (request.mode === "navigate") {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
     event.respondWith(
-      fetch(request)
+      fetch(request, { signal: controller.signal })
         .then((response) => {
+          clearTimeout(timeoutId);
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put("/", clone));
           return response;
         })
-        .catch(() => caches.match("/").then((r) => r || new Response("Offline", { status: 503 })))
+        .catch(() => {
+          clearTimeout(timeoutId);
+          return caches.match("/").then((r) => r || new Response("Offline", { status: 503 }));
+        })
     );
     return;
   }
