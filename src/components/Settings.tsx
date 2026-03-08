@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
-import type { SeasonalAccent } from "../lib/seasonal";
+import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
 import { ACCENT_OPTIONS } from "../hooks/useTheme";
@@ -351,21 +351,36 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   {/* Seasonal accent picker */}
                   {theme === "seasonal" && (
                     <div>
-                      <button
-                        onClick={() => setShowAccentPicker(!showAccentPicker)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--wk-radius-input)] border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-sm transition-colors hover:border-stone-400 dark:hover:border-stone-500"
-                      >
-                        <span className="text-lg leading-none">{ACCENT_EMOJI[accentOverride] ?? "🔄"}</span>
-                        <span className="flex-1 text-left font-medium dark:text-stone-200">
-                          {ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? "Auto"}
-                        </span>
-                        <div className="flex gap-1 mr-1">
-                          {(ACCENT_COLORS[accentOverride] ?? []).map((c, i) => (
-                            <span key={i} className="w-3 h-3 rounded-full border border-stone-200 dark:border-stone-600" style={{ background: c }} />
-                          ))}
-                        </div>
-                        <ChevronDown className={classNames("w-4 h-4 text-stone-400 transition-transform", showAccentPicker && "rotate-180")} />
-                      </button>
+                      {(() => {
+                        const resolvedAccent = accentOverride === "auto" ? getSeasonalAccent() : accentOverride;
+                        const resolvedLabel = ACCENT_OPTIONS.find((o) => o.value === resolvedAccent)?.label ?? resolvedAccent;
+                        const displayEmoji = accentOverride === "auto" ? ACCENT_EMOJI[resolvedAccent] ?? "🔄" : ACCENT_EMOJI[accentOverride] ?? "🔄";
+                        const displayColors = ACCENT_COLORS[resolvedAccent] ?? [];
+                        return (
+                          <button
+                            onClick={() => setShowAccentPicker(!showAccentPicker)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--wk-radius-input)] border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-sm transition-colors hover:border-stone-400 dark:hover:border-stone-500"
+                          >
+                            <span className="text-lg leading-none">{displayEmoji}</span>
+                            <div className="flex-1 text-left">
+                              <span className="font-medium dark:text-stone-200">
+                                {accentOverride === "auto" ? "Auto" : ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? accentOverride}
+                              </span>
+                              {accentOverride === "auto" && (
+                                <span className="ml-1.5 text-xs text-stone-400 dark:text-stone-500">
+                                  Currently {resolvedLabel}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex gap-1 mr-1">
+                              {displayColors.map((c, i) => (
+                                <span key={i} className="w-3 h-3 rounded-full border border-stone-200 dark:border-stone-600" style={{ background: c }} />
+                              ))}
+                            </div>
+                            <ChevronDown className={classNames("w-4 h-4 text-stone-400 transition-transform", showAccentPicker && "rotate-180")} />
+                          </button>
+                        );
+                      })()}
 
                       {showAccentPicker && (
                         <div className="mt-1.5 rounded-[var(--wk-radius-input)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 overflow-hidden divide-y divide-stone-100 dark:divide-stone-700/50 max-h-72 overflow-y-auto">
@@ -398,7 +413,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
 
                       <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
                         {accentOverride === "auto"
-                          ? "Colors shift automatically with the calendar"
+                          ? `Colors shift automatically with the calendar — currently showing ${ACCENT_OPTIONS.find((o) => o.value === getSeasonalAccent())?.label ?? "seasonal"}`
                           : `Locked to ${ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? accentOverride} colors`}
                       </p>
                     </div>
