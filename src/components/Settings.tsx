@@ -12,7 +12,10 @@ import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
 import { classNames } from "../lib/utils";
-import { ChevronLeft, Trash, Globe, Share, Check, ChevronDown, Sun, Moon, ComputerDesktop, CalendarDays } from "./ui/Icon";
+import {
+  ChevronLeft, Trash, Globe, Share, Check, ChevronDown, Sun, Moon, ComputerDesktop, CalendarDays,
+  Pumpkin, ChristmasTree, Snowflake, HeartArrow, Shamrock, EasterEgg, Firework, TurkeyLeg,
+} from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -40,15 +43,28 @@ const ACCENT_EMOJI: Record<string, string> = {
   spring: "🌸",
   summer: "☀\uFE0F",
   fall: "🍂",
-  winter: "❄\uFE0F",
-  valentine: "❤\uFE0F",
-  stpatrick: "☘\uFE0F",
-  easter: "🐣",
-  july4th: "🎆",
-  halloween: "🎃",
-  thanksgiving: "🦃",
-  christmas: "🎄",
 };
+
+/** SVG icon components for accents that have dedicated icons */
+const ACCENT_ICON: Record<string, typeof Pumpkin> = {
+  winter: Snowflake,
+  valentine: HeartArrow,
+  stpatrick: Shamrock,
+  easter: EasterEgg,
+  july4th: Firework,
+  halloween: Pumpkin,
+  thanksgiving: TurkeyLeg,
+  christmas: ChristmasTree,
+};
+
+/** Render an accent icon — SVG component if available, emoji fallback */
+function AccentIcon({ accent, className = "w-5 h-5" }: { accent: string; className?: string }) {
+  const SvgIcon = ACCENT_ICON[accent];
+  if (SvgIcon) return <SvgIcon className={className} />;
+  const emoji = ACCENT_EMOJI[accent];
+  if (emoji) return <span className="text-lg leading-none">{emoji}</span>;
+  return null;
+}
 
 const ACCENT_COLORS: Record<string, string[]> = {
   auto: ["#22c55e", "#16a34a", "#15803d"],
@@ -354,14 +370,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       {(() => {
                         const resolvedAccent = accentOverride === "auto" ? getSeasonalAccent() : accentOverride;
                         const resolvedLabel = ACCENT_OPTIONS.find((o) => o.value === resolvedAccent)?.label ?? resolvedAccent;
-                        const displayEmoji = accentOverride === "auto" ? ACCENT_EMOJI[resolvedAccent] ?? "🔄" : ACCENT_EMOJI[accentOverride] ?? "🔄";
+                        const displayAccent = accentOverride === "auto" ? resolvedAccent : accentOverride;
                         const displayColors = ACCENT_COLORS[resolvedAccent] ?? [];
                         return (
                           <button
                             onClick={() => setShowAccentPicker(!showAccentPicker)}
                             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--wk-radius-input)] border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-sm transition-colors hover:border-stone-400 dark:hover:border-stone-500"
                           >
-                            <span className="text-lg leading-none">{displayEmoji}</span>
+                            <AccentIcon accent={displayAccent} />
                             <div className="flex-1 text-left">
                               <span className="font-medium dark:text-stone-200">
                                 {accentOverride === "auto" ? "Auto" : ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? accentOverride}
@@ -399,7 +415,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                                     : "text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700/50"
                                 )}
                               >
-                                <span className="text-lg leading-none">{ACCENT_EMOJI[opt.value] ?? ""}</span>
+                                <AccentIcon accent={opt.value} />
                                 <span className="flex-1">{opt.label}</span>
                                 <div className="flex gap-1">
                                   {(ACCENT_COLORS[opt.value] ?? []).map((c, i) => (
