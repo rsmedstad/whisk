@@ -174,7 +174,7 @@ export function CookMode({ onStartTimer }: CookModeProps) {
                         e.stopPropagation();
                         onStartTimer(`Step ${i + 1}`, timerMin, recipe.id, i);
                       }}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      className="wk-pill mt-2 inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                     >
                       <Stopwatch className="w-3.5 h-3.5" /> {timerMin}:00 Timer
                     </button>

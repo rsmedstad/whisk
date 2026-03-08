@@ -1294,7 +1294,7 @@ export function Discover({
               <button
                 onClick={(e) => openDropdownAt("type", e)}
                 className={classNames(
-                  "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                  "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
                   selectedType
                     ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                     : openDropdown === "type"
@@ -1311,7 +1311,7 @@ export function Discover({
                 <button
                   onClick={(e) => openDropdownAt("cuisine", e)}
                   className={classNames(
-                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                    "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
                     selectedCuisine
                       ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                       : openDropdown === "cuisine"
@@ -1328,7 +1328,7 @@ export function Discover({
               <button
                 onClick={(e) => openDropdownAt("time", e)}
                 className={classNames(
-                  "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                  "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
                   maxTime != null
                     ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                     : openDropdown === "time"
@@ -1348,7 +1348,7 @@ export function Discover({
                 <button
                   onClick={(e) => openDropdownAt("diet", e)}
                   className={classNames(
-                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                    "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
                     selectedDiet
                       ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                       : openDropdown === "diet"
@@ -1366,7 +1366,7 @@ export function Discover({
                 <button
                   onClick={(e) => openDropdownAt("season", e)}
                   className={classNames(
-                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                    "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
                     selectedSeason
                       ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                       : openDropdown === "season"
@@ -1386,7 +1386,7 @@ export function Discover({
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
                 <div
-                  className="fixed z-50 min-w-35 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1"
+                  className="wk-dropdown fixed z-50 min-w-35 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1"
                   style={{
                     top: dropdownPos.top,
                     ...(dropdownPos.right != null

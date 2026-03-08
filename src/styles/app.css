@@ -470,8 +470,8 @@ html.dark[data-style="soft"] .wk-card {
   --wk-heading-tracking: 0.01em;
   --wk-heading-transform: none;
   --wk-card-backdrop: blur(40px) saturate(1.8);
-  /* Glass accent tint — orange by default, overridden by seasonal palettes */
-  --glass-tint: 249 115 22;  /* orange-500 */
+  /* Glass tint — cool blue/silver for a neutral reflective look */
+  --glass-tint: 148 163 184;  /* slate-400 — silver/blue */
   --glass-tint-strength: 0.06;
 }
 
@@ -572,6 +572,136 @@ html.dark[data-style="glass"] nav.fixed.bottom-0 > div {
   box-shadow:
     0 -2px 20px rgb(0 0 0 / 0.2),
     inset 0 0.5px 0 rgb(255 255 255 / 0.08);
+}
+
+/* ── Per-Style Extended UI ─────────────────────────────── */
+
+/* --- Editorial: sharp pill chips, strong header border, crisp dropdowns --- */
+[data-style="editorial"] .wk-pill {
+  border-radius: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+[data-style="editorial"] .wk-header-decor {
+  border-bottom-width: 2px;
+  border-bottom-color: rgb(28 25 23);
+}
+html.dark[data-style="editorial"] .wk-header-decor {
+  border-bottom-color: rgb(231 229 228);
+}
+[data-style="editorial"] nav.fixed.bottom-0 > div {
+  border-top-width: 2px;
+  border-top-color: rgb(28 25 23);
+}
+html.dark[data-style="editorial"] nav.fixed.bottom-0 > div {
+  border-top-color: rgb(231 229 228);
+}
+[data-style="editorial"] .wk-dropdown {
+  border-radius: 0;
+  border: 2px solid rgb(28 25 23);
+  box-shadow: none;
+}
+html.dark[data-style="editorial"] .wk-dropdown {
+  border-color: rgb(231 229 228);
+}
+
+/* --- Soft: extra-rounded pills, borderless header with shadow, puffy dropdowns --- */
+[data-style="soft"] .wk-pill {
+  border-radius: 9999px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+  border-color: transparent;
+  background: rgb(245 245 244);
+}
+[data-style="soft"] .wk-pill[class*="border-orange"] {
+  background: rgb(255 247 237);
+  border-color: rgb(249 115 22);
+}
+html.dark[data-style="soft"] .wk-pill {
+  background: rgb(41 37 36);
+  border-color: transparent;
+}
+html.dark[data-style="soft"] .wk-pill[class*="border-orange"] {
+  background: rgb(67 20 7 / 0.5);
+  border-color: rgb(194 65 12);
+}
+[data-style="soft"] .wk-header-decor {
+  border-bottom: none !important;
+  box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.06);
+}
+html.dark[data-style="soft"] .wk-header-decor {
+  box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.2);
+}
+[data-style="soft"] nav.fixed.bottom-0 > div {
+  border-top: none !important;
+  box-shadow: 0 -4px 12px -2px rgb(0 0 0 / 0.06);
+}
+html.dark[data-style="soft"] nav.fixed.bottom-0 > div {
+  box-shadow: 0 -4px 12px -2px rgb(0 0 0 / 0.2);
+}
+[data-style="soft"] .wk-dropdown {
+  border-radius: 1rem;
+  border: none;
+  box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.1), 0 2px 8px -2px rgb(0 0 0 / 0.06);
+}
+html.dark[data-style="soft"] .wk-dropdown {
+  background: rgb(41 37 36);
+  box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.3);
+}
+
+/* --- Glass: translucent pills, glassy header, glassy dropdowns --- */
+[data-style="glass"] .wk-pill {
+  background: rgb(255 255 255 / 0.2) !important;
+  border-color: rgb(255 255 255 / 0.35) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.4);
+}
+[data-style="glass"] .wk-pill[class*="border-orange"] {
+  background: rgb(249 115 22 / 0.15) !important;
+  border-color: rgb(249 115 22 / 0.4) !important;
+  box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.3), 0 0 8px rgb(249 115 22 / 0.08);
+}
+html.dark[data-style="glass"] .wk-pill {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+html.dark[data-style="glass"] .wk-pill[class*="border-orange"] {
+  background: rgb(249 115 22 / 0.12) !important;
+  border-color: rgb(249 115 22 / 0.3) !important;
+}
+[data-style="glass"] .wk-header-decor {
+  background: rgb(255 255 255 / 0.5) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  backdrop-filter: blur(40px) saturate(1.8);
+  border-bottom-color: rgb(255 255 255 / 0.4) !important;
+  box-shadow: inset 0 -0.5px 0 rgb(255 255 255 / 0.3);
+}
+html.dark[data-style="glass"] .wk-header-decor {
+  background: rgb(0 0 0 / 0.4) !important;
+  border-bottom-color: rgb(255 255 255 / 0.08) !important;
+  box-shadow: inset 0 -0.5px 0 rgb(255 255 255 / 0.06);
+}
+[data-style="glass"] .wk-dropdown {
+  background: rgb(255 255 255 / 0.6) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  backdrop-filter: blur(40px) saturate(1.8);
+  border-color: rgb(255 255 255 / 0.5) !important;
+  border-top-color: rgb(255 255 255 / 0.7) !important;
+  border-radius: 1rem;
+  box-shadow:
+    0 8px 32px rgb(0 0 0 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 -0.5px 0 rgb(255 255 255 / 0.1);
+}
+html.dark[data-style="glass"] .wk-dropdown {
+  background: rgb(0 0 0 / 0.5) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  border-top-color: rgb(255 255 255 / 0.18) !important;
+  box-shadow:
+    0 8px 32px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -0.5px 0 rgb(255 255 255 / 0.03);
 }
 
 /* ── Heading Style Application ─────────────────────────── */

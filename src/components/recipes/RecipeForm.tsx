@@ -816,7 +816,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
                   await fetchAutoTags(title, description, ingredients);
                   setIsAutoTagging(false);
                 }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900 disabled:opacity-50 transition-colors"
+                className="wk-pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900 disabled:opacity-50 transition-colors"
               >
                 {isAutoTagging ? (
                   <span className="inline-block w-3 h-3 border border-orange-300 border-t-orange-600 rounded-full animate-spin" />
