@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.3.4] - 2026-03-08
+
+### Discover & Recipes UX
+
+- Title-based deduplication for Discover feed (Jaccard word similarity >= 0.75, within and cross-source)
+- Non-alcoholic pill filter on Drinks category rows (Recipes and Discover tabs)
+  - Only appears when there's a mix of alcoholic and non-alcoholic drinks
+- Muted + icon on Recipes tab (stone gray default, orange on hover/press with frame)
+- Unified search, filter bar, and theme settings across tabs
+- Plan tab: generate shopping list from planned meals
+
+### Seasonal Themes
+
+- Dramatically enhanced holiday/seasonal color palettes with holiday brand icons
+- Fixed seasonal theme resolution issues
+
+---
+
+## [0.3.3] - 2026-03-07
+
+### Discover Tab Overhaul
+
+- Category-based feed: recipes grouped by dinner, breakfast, dessert, appetizer, drinks, etc.
+- Filter bar with Type and Cuisine dropdowns, search input, sort (recent/A-Z), and "New" badges
+- Time filter and cook time display on discover cards
+- Tabbed Ingredients/Steps view in recipe detail with Cook Mode features
+- Scroll-snap hero gallery for recipe photos
+- AI-based tagging for discover items at ingestion time with time estimates
+- Shared recipe components between Discover, Suggest, and Recipe Detail
+- Archive system with 2-day auto-refresh cycle
+
+### Feed Quality
+
+- Browser Rendering fallback for AllRecipes and Serious Eats scraping
+- Image proxy for cross-origin recipe thumbnails
+- Filter out person/author photos, promotional titles, non-recipe content
+- Fix ingredient formatting (decimal fractions, letter spacing)
+- Backfill totalTime on discover cards from imported recipe data
+- Deduplicate by normalized URL
+
+### Fixes
+
+- Fix conditional hooks crash in Discover detail view
+- Fix AllRecipes/Serious Eats: read HTML body on non-200 responses
+- Fix feed image not updating when imported image differs
+- Fix Discover category classification and Share icon
+
+---
+
+## [0.3.2] - 2026-03-06
+
+### Deployment & CI/CD
+
+- GitHub Actions auto-deploy workflow: pushes to `main` auto-deploy to Cloudflare Pages
+- Migrated to wrangler v4 assets config for Cloudflare deployment compatibility
+- Fixed sort dropdown rendering off-screen on small viewports
+- Fixed inconsistent category header alignment
+
+---
+
 ## [0.3.1] - 2026-03-05
 
 ### Recipe List

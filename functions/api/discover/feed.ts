@@ -407,23 +407,27 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     scrapeSeriousEats(env),
   ]);
 
-  // Merge new items into archive (dedup by URL)
+  // Merge new items into archive (dedup by URL + title similarity)
   const now = new Date().toISOString();
   const existingUrls = new Set(archive?.items.map((i) => normalizeUrl(i.url)) ?? []);
+  const existingTitles = (archive?.items ?? []).map((i) => i.title);
   const newItems: ArchiveItem[] = [];
 
   const addItems = (items: FeedItem[], source: DiscoverSource) => {
     for (const item of items) {
       const key = normalizeUrl(item.url);
-      if (!existingUrls.has(key)) {
-        existingUrls.add(key);
-        newItems.push({
-          ...item,
-          source,
-          category: classifyRecipe(item.title, item.description),
-          addedAt: now,
-        });
-      }
+      if (existingUrls.has(key)) continue;
+      // Also skip if title is very similar to an existing item
+      const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
+      if (isDupTitle) continue;
+      existingUrls.add(key);
+      existingTitles.push(item.title);
+      newItems.push({
+        ...item,
+        source,
+        category: classifyRecipe(item.title, item.description),
+        addedAt: now,
+      });
     }
   };
 
@@ -512,6 +516,55 @@ function migrateLegacyFeed(feed: Feed): CategoryFeed {
   addItems(feed.sources.allrecipes, "allrecipes");
   addItems(feed.sources.seriouseats, "seriouseats");
   return { lastRefreshed: now, categories };
+}
+
+// ── Title-based deduplication ────────────────────────────
+
+/** Normalize a title for similarity comparison */
+function normalizeCompareTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[''"""\-–—:,!?.()[\]{}]/g, " ")
+    .replace(/\b(the|a|an|and|or|of|for|with|from|to|in|on|is|are|my|our|your|this|that|best|easy|simple|classic|perfect|ultimate|homemade|recipe)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Jaccard word similarity between two titles (0–1) */
+function titleSimilarity(a: string, b: string): number {
+  const wordsA = new Set(normalizeCompareTitle(a).split(" ").filter(Boolean));
+  const wordsB = new Set(normalizeCompareTitle(b).split(" ").filter(Boolean));
+  if (wordsA.size === 0 && wordsB.size === 0) return 1;
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  let inter = 0;
+  for (const w of wordsA) if (wordsB.has(w)) inter++;
+  const union = wordsA.size + wordsB.size - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+/** Remove items with near-duplicate titles (Jaccard >= 0.75). Prefers items with images. */
+function deduplicateByTitle(items: FeedItem[]): FeedItem[] {
+  const result: FeedItem[] = [];
+  const norms: string[] = [];
+  for (const item of items) {
+    const norm = normalizeCompareTitle(item.title);
+    let isDup = false;
+    for (let i = 0; i < result.length; i++) {
+      if (norm === norms[i] || titleSimilarity(item.title, result[i]!.title) >= 0.75) {
+        if (!result[i]!.imageUrl && item.imageUrl) {
+          result[i] = item;
+          norms[i] = norm;
+        }
+        isDup = true;
+        break;
+      }
+    }
+    if (!isDup) {
+      result.push(item);
+      norms.push(norm);
+    }
+  }
+  return result;
 }
 
 // ── NYT Cooking ─────────────────────────────────────────
@@ -613,16 +666,15 @@ async function scrapeNYTCooking(env: Env): Promise<FeedItem[]> {
       if (metaItem) items.push(metaItem);
     }
 
-    // Deduplicate by URL
+    // Deduplicate by URL, then by title similarity
     const seen = new Set<string>();
-    return items
-      .filter((item) => {
-        const key = normalizeUrl(item.url);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .slice(0, 40);
+    const urlDeduped = items.filter((item) => {
+      const key = normalizeUrl(item.url);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return deduplicateByTitle(urlDeduped).slice(0, 40);
   } catch {
     return [];
   }
@@ -844,8 +896,8 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
     }
   }
 
-  // Post-process: fix promotional titles and non-food images
-  return allItems.slice(0, 30).map((item) => {
+  // Post-process: fix promotional titles and non-food images, then dedup by title
+  return deduplicateByTitle(allItems).slice(0, 30).map((item) => {
     // Replace promotional text titles with slug-derived recipe name
     const slug = titleFromSlug(item.url);
     const title = isPromoText(item.title) ? (slug ?? item.title) : item.title;
@@ -994,8 +1046,8 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
     }
   }
 
-  // Only keep /thmb/ images (recipe thumbnails, not profiles/ads)
-  return allItems.slice(0, 30).map((item) => ({
+  // Dedup by title, then only keep /thmb/ images (recipe thumbnails, not profiles/ads)
+  return deduplicateByTitle(allItems).slice(0, 30).map((item) => ({
     ...item,
     imageUrl: item.imageUrl && item.imageUrl.includes("/thmb/") ? item.imageUrl : undefined,
   }));

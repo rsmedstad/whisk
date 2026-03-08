@@ -51,6 +51,7 @@ export function RecipeList({
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
+  const [nonAlcoholicOnly, setNonAlcoholicOnly] = useState(false);
 
   // Save filter state to sessionStorage whenever it changes
   useEffect(() => {
@@ -117,6 +118,17 @@ export function RecipeList({
     return groups;
   }, [recipes, availableTags]);
 
+  // Whether a drink recipe is non-alcoholic (no spirits listed)
+  const isNonAlcoholicRecipe = (r: RecipeIndexEntry) => !r.spirits || r.spirits.length === 0;
+
+  // Show non-alcoholic pill only if there's a mix of both types
+  const showNonAlcoholicPill = useMemo(() => {
+    const allDrinks = recipes.filter((r) => r.tags.includes("drinks"));
+    if (allDrinks.length === 0) return false;
+    const nonAlcCount = allDrinks.filter(isNonAlcoholicRecipe).length;
+    return nonAlcCount > 0 && nonAlcCount < allDrinks.length;
+  }, [recipes]);
+
   // Group recipes by meal category for the "category" sort view
   const groupedRecipes = useMemo(() => {
     if (sort !== "category") return null;
@@ -137,6 +149,11 @@ export function RecipeList({
         }
       }
     }
+    // Apply non-alcoholic filter to drinks group
+    if (nonAlcoholicOnly) {
+      const drinks = groups.get("drinks");
+      if (drinks) groups.set("drinks", drinks.filter(isNonAlcoholicRecipe));
+    }
     // Sort alphabetically within each group
     for (const list of groups.values()) {
       list.sort((a, b) => a.title.localeCompare(b.title));
@@ -148,14 +165,14 @@ export function RecipeList({
     const cap = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
     for (const cat of CATEGORY_ORDER) {
       const list = groups.get(cat);
-      if (list) ordered.push({ label: cap(cat), recipes: list });
+      if (list && list.length > 0) ordered.push({ label: cap(cat), recipes: list });
     }
     const other = groups.get("other");
     if (other) ordered.push({ label: "Other", recipes: other });
     const drinks = groups.get("drinks");
-    if (drinks) ordered.push({ label: "Drinks", recipes: drinks });
+    if (drinks && drinks.length > 0) ordered.push({ label: "Drinks", recipes: drinks });
     return ordered;
-  }, [filtered, sort]);
+  }, [filtered, sort, nonAlcoholicOnly]);
 
   const goToRecipe = (id: string) => {
     if (scrollRef.current) {
@@ -204,7 +221,7 @@ export function RecipeList({
             </button>
             <button
               onClick={() => navigate("/recipes/new")}
-              className="p-2 text-orange-500 hover:text-orange-600"
+              className="p-1.5 rounded-lg text-stone-400 hover:text-orange-500 active:bg-orange-100 active:text-orange-600 active:ring-1 active:ring-orange-300 dark:text-stone-500 dark:hover:text-orange-400 dark:active:bg-orange-950 dark:active:text-orange-400 dark:active:ring-orange-700 transition-all"
               title="Add recipe"
             >
               <Plus className="w-6 h-6" strokeWidth={2.5} />
@@ -520,6 +537,19 @@ export function RecipeList({
                   <span className="text-xs font-normal text-stone-400 dark:text-stone-500 ml-1.5">
                     {group.recipes.length}
                   </span>
+                  {group.label === "Drinks" && showNonAlcoholicPill && (
+                    <button
+                      onClick={() => setNonAlcoholicOnly(!nonAlcoholicOnly)}
+                      className={classNames(
+                        "ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
+                        nonAlcoholicOnly
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                      )}
+                    >
+                      Non-alcoholic
+                    </button>
+                  )}
                 </h2>
                 {recipeLayout === "horizontal" && !search && selectedTags.length === 0 && !favoritesOnly ? (
                   <CarouselRow>
