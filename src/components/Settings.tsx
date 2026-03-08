@@ -86,7 +86,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   };
 
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showDanger, setShowDanger] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [exportExcludeTags, setExportExcludeTags] = useState<string[]>([]);
@@ -721,9 +720,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
         {/* ===== DATA TAB ===== */}
         {activeTab === "data" && (
           <>
+            {/* Import & Export */}
             <section>
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
-                Data
+                Import & Export
               </h2>
               <Card>
                 <div className="space-y-3">
@@ -934,14 +934,45 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       </div>
                     )}
                   </div>
+                </div>
+              </Card>
+            </section>
 
-                  <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
-                    <Button variant="secondary" fullWidth onClick={() => navigate("/settings/import")}>
-                      Import from URL / Text
+            {/* Recipe Book Maintenance */}
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Maintenance
+              </h2>
+              <Card>
+                <div className="space-y-3">
+                  <div>
+                    <Button
+                      variant="secondary"
+                      fullWidth
+                      disabled={isFixingText}
+                      onClick={async () => {
+                        setIsFixingText(true);
+                        setFixTextResult(null);
+                        try {
+                          const data = await api.post<{ updated: number }>("/recipes/fix-text");
+                          setFixTextResult(`Fixed ${data.updated} recipe${data.updated === 1 ? "" : "s"}`);
+                        } catch {
+                          setFixTextResult("Failed to fix text");
+                        } finally {
+                          setIsFixingText(false);
+                        }
+                      }}
+                    >
+                      {isFixingText ? "Fixing..." : "Fix Text Artifacts"}
                     </Button>
                     <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
-                      Import individual recipes from websites or pasted text
+                      Fixes &quot;teaspoon s&quot; and similar parsing artifacts
                     </p>
+                    {fixTextResult && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center font-medium">
+                        {fixTextResult}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Button
@@ -972,36 +1003,18 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       </p>
                     )}
                   </div>
+                </div>
+              </Card>
+            </section>
+
+            {/* Troubleshooting */}
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Troubleshooting
+              </h2>
+              <Card>
+                <div className="space-y-3">
                   <div>
-                    <Button
-                      variant="secondary"
-                      fullWidth
-                      disabled={isFixingText}
-                      onClick={async () => {
-                        setIsFixingText(true);
-                        setFixTextResult(null);
-                        try {
-                          const data = await api.post<{ updated: number }>("/recipes/fix-text");
-                          setFixTextResult(`Fixed ${data.updated} recipe${data.updated === 1 ? "" : "s"}`);
-                        } catch {
-                          setFixTextResult("Failed to fix text");
-                        } finally {
-                          setIsFixingText(false);
-                        }
-                      }}
-                    >
-                      {isFixingText ? "Fixing..." : "Fix Text Artifacts"}
-                    </Button>
-                    <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
-                      Fixes &quot;teaspoon s&quot; and similar parsing artifacts
-                    </p>
-                    {fixTextResult && (
-                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center font-medium">
-                        {fixTextResult}
-                      </p>
-                    )}
-                  </div>
-                  <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
                     <Button
                       variant="secondary"
                       fullWidth
@@ -1025,26 +1038,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       Fixes stale styles or broken updates. Your data is not affected.
                     </p>
                   </div>
-                </div>
-              </Card>
-            </section>
-
-            <section>
-              <button
-                onClick={() => setShowDanger(!showDanger)}
-                className="text-xs text-stone-400 dark:text-stone-500 w-full text-center py-2"
-              >
-                {showDanger ? "Hide" : "Show"} reset options
-              </button>
-              {showDanger && (
-                <Card>
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium text-red-600 dark:text-red-400">
-                      Reset Data
-                    </p>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
-                      This will clear all local data including cached recipes, settings, and sign you out. Server data is not affected.
-                    </p>
+                  <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
                     <Button
                       variant="danger"
                       fullWidth
@@ -1056,9 +1050,12 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     >
                       Reset Local Data & Sign Out
                     </Button>
+                    <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
+                      Clears cached recipes, settings, and signs you out. Server data is not affected.
+                    </p>
                   </div>
-                </Card>
-              )}
+                </div>
+              </Card>
             </section>
           </>
         )}
