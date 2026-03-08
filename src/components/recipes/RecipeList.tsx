@@ -625,12 +625,7 @@ function RecipeCard({
         )}
         {isDrinks && (
           <span
-            className={classNames(
-              "absolute top-1.5 left-1.5 flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold backdrop-blur-sm",
-              isAlcoholic
-                ? "bg-amber-500/80 text-white"
-                : "bg-green-500/80 text-white"
-            )}
+            className="absolute top-1.5 left-1.5 flex items-center justify-center w-6 h-6 rounded-full bg-black/30 backdrop-blur-sm text-[10px] font-bold text-white/80"
             title={isAlcoholic ? "Alcoholic" : "Non-alcoholic"}
           >
             {isAlcoholic ? "A" : "NA"}
