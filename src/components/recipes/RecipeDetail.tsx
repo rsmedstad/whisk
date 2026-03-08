@@ -76,6 +76,11 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
   const isDrink = recipe?.tags.includes("drinks") ?? false;
 
+  // Scroll to top when opening a recipe
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
+
   // Background refresh — updates from network silently
   useEffect(() => {
     if (!id) return;

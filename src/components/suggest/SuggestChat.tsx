@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } fro
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Send } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Send, MessageCircle, XMark } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -25,12 +25,30 @@ const PICK_CATEGORIES = [
   { value: "snack", label: "Snack", tags: ["snack"] },
 ];
 
-function filterByCategory(recipes: RecipeIndexEntry[], categoryValue: string): RecipeIndexEntry[] {
+function filterByCategory(recipes: RecipeIndexEntry[], categoryValue: string, seasonValue?: string): RecipeIndexEntry[] {
+  let filtered = recipes;
+
+  // Filter by meal type category
   const cat = PICK_CATEGORIES.find((c) => c.value === categoryValue);
-  if (!cat || cat.tags.length === 0) return recipes;
-  return recipes.filter((r) =>
-    r.tags.some((t) => cat.tags.includes(t.toLowerCase()))
-  );
+  if (cat && cat.tags.length > 0) {
+    filtered = filtered.filter((r) =>
+      r.tags.some((t) => cat.tags.includes(t.toLowerCase()))
+    );
+  }
+
+  // Filter by season/holiday if selected
+  if (seasonValue && seasonValue !== "") {
+    const seasonTags = seasonValue === "current"
+      ? ["spring", "summer", "fall", "winter"]
+      : [seasonValue];
+    const seasonFiltered = filtered.filter((r) =>
+      r.tags.some((t) => seasonTags.some((st) => t.toLowerCase().includes(st)))
+    );
+    // Only apply season filter if it yields results; otherwise keep the full pool
+    if (seasonFiltered.length > 0) filtered = seasonFiltered;
+  }
+
+  return filtered;
 }
 
 interface SuggestChatProps {
@@ -96,10 +114,12 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
       return saved.cat ?? "dinner";
     } catch { return "dinner"; }
   });
-  const [seasonFilter, setSeasonFilter] = useState<string>("current");
+  const [seasonFilter, setSeasonFilter] = useState<string>("");
   const [pickedRecipe, setPickedRecipe] = useState<RecipeIndexEntry | null>(null);
   const [diceAnimating, setDiceAnimating] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const autoSentRef = useRef(false);
   const autoPickedRef = useRef(false);
 
@@ -115,6 +135,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
   // Build season/holiday dropdown options
   const seasonOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [
+      { value: "", label: "Season" },
       { value: "current", label: `${seasonal.season.charAt(0).toUpperCase() + seasonal.season.slice(1)}` },
     ];
     for (const h of seasonal.upcomingHolidays.slice(0, 3)) {
@@ -202,7 +223,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
   }, []);
 
   const handleRandomPick = useCallback((animate = true) => {
-    const pool = filterByCategory(recipes, pickCategory);
+    const pool = filterByCategory(recipes, pickCategory, seasonFilter);
     if (pool.length === 0) return;
     const idx = Math.floor(Math.random() * pool.length);
     const pick = pool[idx] ?? null;
@@ -215,7 +236,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
         ts: Date.now(),
       }));
     }
-  }, [recipes, pickCategory, animateDice]);
+  }, [recipes, pickCategory, seasonFilter, animateDice]);
 
   // Auto-pick on load: restore cached pick or roll a new one
   useEffect(() => {
@@ -249,16 +270,63 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Suggest</h1>
           </button>
-          {messages.length > 0 && (
-            <button
-              onClick={handleNewChat}
-              className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              New chat
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                New chat
+              </button>
+            )}
+            {messages.length === 0 && (
+              <button
+                onClick={() => {
+                  if (chatOpen) {
+                    setChatOpen(false);
+                    setInput("");
+                  } else {
+                    setChatOpen(true);
+                    setTimeout(() => chatInputRef.current?.focus(), 50);
+                  }
+                }}
+                className={classNames(
+                  "p-2 rounded-lg transition-all",
+                  chatOpen
+                    ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
+                    : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+                )}
+                title="Chat with AI"
+              >
+                {chatOpen ? <XMark className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
+              </button>
+            )}
+          </div>
         </div>
+        {/* Collapsible chat input — like search bar pattern */}
+        {chatOpen && messages.length === 0 && (
+          <div className="pb-2">
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                ref={chatInputRef}
+                type="text"
+                enterKeyHint="send"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about recipes, seasonal ideas, or what to cook..."
+                className="flex-1 rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className="rounded-[var(--wk-radius-btn)] bg-orange-500 px-3 py-2 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
       <div
@@ -323,8 +391,28 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                   <div className="flex items-center gap-1.5">
                     <select
                       value={seasonFilter}
-                      onChange={(e) => setSeasonFilter(e.target.value)}
-                      className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      onChange={(e) => {
+                        const newSeason = e.target.value;
+                        setSeasonFilter(newSeason);
+                        setPickedRecipe(null);
+                        setTimeout(() => {
+                          const pool = filterByCategory(recipes, pickCategory, newSeason);
+                          if (pool.length === 0) return;
+                          const idx = Math.floor(Math.random() * pool.length);
+                          const pick = pool[idx] ?? null;
+                          setPickedRecipe(pick);
+                          animateDice();
+                          if (pick) {
+                            localStorage.setItem("whisk_daily_pick", JSON.stringify({
+                              id: pick.id, cat: pickCategory, ts: Date.now(),
+                            }));
+                          }
+                        }, 0);
+                      }}
+                      className={classNames(
+                        "rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500",
+                        seasonFilter ? "text-stone-600 dark:text-stone-300" : "text-stone-400 dark:text-stone-500"
+                      )}
                     >
                       {seasonOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -336,7 +424,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                         setPickCategory(e.target.value);
                         setPickedRecipe(null);
                         setTimeout(() => {
-                          const pool = filterByCategory(recipes, e.target.value);
+                          const pool = filterByCategory(recipes, e.target.value, seasonFilter);
                           if (pool.length === 0) return;
                           const idx = Math.floor(Math.random() * pool.length);
                           const pick = pool[idx] ?? null;
@@ -414,29 +502,46 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
               </Card>
             )}
 
-            {/* What are you in the mood for? */}
+            {/* Ask anything */}
             <Card>
-              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-3">
-                What are you in the mood for?
+              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-1">
+                Ask anything
               </p>
-              <div className="flex flex-wrap gap-2">
+              <p className="text-xs text-stone-400 dark:text-stone-500 mb-3">
+                {recipeCount > 0
+                  ? `Get ideas from your ${recipeCount} recipes, discover new ones, or explore what\u2019s in season for ${seasonal.season}`
+                  : `Discover new recipe ideas, explore seasonal cooking for ${seasonal.season}, or get inspiration`}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
                 {recipeCount > 0 && (
                   <button
                     onClick={() => sendMessage("What should I cook tonight from my recipes?")}
-                    className="rounded-lg border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 text-sm text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
+                    className="rounded-full border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1 text-xs text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
                   >
                     What should I cook tonight?
                   </button>
                 )}
-                {seasonal.contextualPrompts.slice(0, recipeCount > 0 ? 3 : 4).map((prompt) => (
+                <button
+                  onClick={() => sendMessage(`What ${seasonal.season} recipes should I try?`)}
+                  className="rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                >
+                  {seasonal.season.charAt(0).toUpperCase() + seasonal.season.slice(1)} ideas
+                </button>
+                {seasonal.contextualPrompts.slice(0, recipeCount > 0 ? 2 : 3).map((prompt) => (
                   <button
                     key={prompt}
                     onClick={() => sendMessage(prompt)}
-                    className="rounded-lg border border-stone-300 dark:border-stone-600 px-3 py-1.5 text-sm text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                    className="rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     {prompt}
                   </button>
                 ))}
+                <button
+                  onClick={() => sendMessage("Suggest a new recipe I don't have yet")}
+                  className="rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                >
+                  Something new
+                </button>
               </div>
               {/* Visible text input for custom prompts */}
               <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
@@ -445,13 +550,13 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                   enterKeyHint="send"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={recipeCount > 0 ? "Ask about your recipes..." : "Ask for recipe ideas..."}
-                  className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  placeholder={recipeCount > 0 ? "Ask about your recipes or discover new ideas..." : "What kind of recipe are you looking for?"}
+                  className="flex-1 rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-white px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
-                  className="rounded-lg bg-orange-500 px-3 py-2 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors"
+                  className="rounded-[var(--wk-radius-btn)] bg-orange-500 px-3 py-2 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -523,7 +628,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
               enterKeyHint="send"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={recipeCount > 0 ? "Ask about your recipes..." : "Ask for recipe ideas..."}
+              placeholder={recipeCount > 0 ? "Ask about your recipes or discover new ideas..." : "What kind of recipe are you looking for?"}
               className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
             />
             <Button type="submit" size="sm" disabled={!input.trim() || isLoading}>

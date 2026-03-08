@@ -127,36 +127,36 @@ input[type="search"]::-webkit-search-decoration {
   --wk-holiday-glow: rgba(136, 68, 238, 0.15);
 }
 
-/* 4th of July — bold red, white & blue — patriotic celebration */
+/* 4th of July — red, white & blue — patriotic celebration */
 [data-accent="july4th"] {
-  --color-white: #f0f4ff;
-  --color-orange-50: #dde8ff;
-  --color-orange-100: #bbccff;
-  --color-orange-200: #7799ff;
-  --color-orange-300: #3366ee;
-  --color-orange-400: #1144cc;
-  --color-orange-500: #002299;
-  --color-orange-600: #001b80;
-  --color-orange-700: #001466;
-  --color-orange-800: #000e4d;
-  --color-orange-900: #000a38;
-  --color-orange-950: #000522;
-  --color-stone-50: #e8e0f0;
-  --color-stone-100: #d5cce5;
-  --color-stone-200: #b0a0cc;
-  --color-stone-300: #8878aa;
-  --color-stone-400: #665588;
-  --color-stone-500: #4d406a;
-  --color-stone-600: #382e50;
-  --color-stone-700: #28203a;
-  --color-stone-800: #1a1428;
-  --color-stone-900: #0e0a18;
-  --color-stone-950: #06040e;
+  --color-white: #fafafa;
+  --color-orange-50: #fef2f2;
+  --color-orange-100: #fee2e2;
+  --color-orange-200: #fca5a5;
+  --color-orange-300: #f87171;
+  --color-orange-400: #ef4444;
+  --color-orange-500: #dc2626;
+  --color-orange-600: #b91c1c;
+  --color-orange-700: #991b1b;
+  --color-orange-800: #7f1d1d;
+  --color-orange-900: #631111;
+  --color-orange-950: #450a0a;
+  --color-stone-50: #f0f4f8;
+  --color-stone-100: #dce4ee;
+  --color-stone-200: #b8c8dd;
+  --color-stone-300: #8ea5c0;
+  --color-stone-400: #6882a0;
+  --color-stone-500: #4e6580;
+  --color-stone-600: #384c64;
+  --color-stone-700: #28374a;
+  --color-stone-800: #1a2536;
+  --color-stone-900: #101824;
+  --color-stone-950: #080c14;
 }
 [data-accent="july4th"] {
-  --wk-holiday-secondary: #cc0000;
+  --wk-holiday-secondary: #1e40af;
   --wk-holiday-tertiary: #ffffff;
-  --wk-holiday-glow: rgba(0, 34, 153, 0.2);
+  --wk-holiday-glow: rgba(220, 38, 38, 0.2);
 }
 
 /* Halloween — vibrant orange, purple-black, spooky green — max immersion */
@@ -185,12 +185,15 @@ input[type="search"]::-webkit-search-decoration {
   --color-stone-900: #1a1028;
   --color-stone-950: #0e0818;
 }
-/* Halloween dark mode: even darker purple-black base, keep text light */
+/* Halloween dark mode: darker purple-black base, boosted text contrast */
 html.dark[data-accent="halloween"] {
   --color-white: #0d0818;
-  --color-stone-50: #e8ddf0;
-  --color-stone-100: #d5c5e2;
-  --color-stone-200: #c0a8d4;
+  --color-stone-50: #f0e8f5;
+  --color-stone-100: #e0d0ea;
+  --color-stone-200: #d0b8dd;
+  --color-stone-300: #c0a0cc;
+  --color-stone-400: #b088bb;
+  --color-stone-500: #a070aa;
 }
 /* Halloween secondary accent colors */
 [data-accent="halloween"] {
@@ -422,48 +425,66 @@ html.dark[data-accent="christmas"] {
   border-left: none;
   border-right: none;
 }
+/* Editorial body text: serif-accented headings for magazine feel */
+[data-style="editorial"] h1,
+[data-style="editorial"] h2,
+[data-style="editorial"] h3 {
+  font-family: Georgia, "Times New Roman", serif;
+}
 
 /* Soft — rounded, cozy, shadow-defined edges */
 [data-style="soft"] {
-  --wk-radius-card: 1.25rem;
+  --wk-radius-card: 1.5rem;
   --wk-radius-btn: 9999px;
-  --wk-radius-input: 0.75rem;
+  --wk-radius-input: 1rem;
   --wk-radius-tag: 9999px;
   --wk-shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
   --wk-shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
   --wk-border-card: 0px;
   --wk-border-input: 1px;
-  --wk-heading-weight: 700;
-  --wk-heading-tracking: 0em;
+  --wk-heading-weight: 600;
+  --wk-heading-tracking: 0.01em;
   --wk-heading-transform: none;
   --wk-card-backdrop: none;
 }
+/* Soft: warm pastel card tint for cozy feel */
+[data-style="soft"] .wk-card {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.95), rgb(255 247 237 / 0.8));
+}
+html.dark[data-style="soft"] .wk-card {
+  background: linear-gradient(135deg, rgb(28 25 23 / 0.95), rgb(35 28 20 / 0.8));
+}
 
-/* Brutalist — hard edges, thick borders, offset shadows */
+/* Brutalist — hard edges, thick borders, offset shadows, monospace headings */
 [data-style="brutalist"] {
   --wk-radius-card: 0px;
   --wk-radius-btn: 0px;
   --wk-radius-input: 0px;
   --wk-radius-tag: 0px;
-  --wk-shadow-card: 3px 3px 0 0 rgb(0 0 0);
-  --wk-shadow-card-hover: 5px 5px 0 0 rgb(0 0 0);
-  --wk-border-card: 2px;
+  --wk-shadow-card: 4px 4px 0 0 rgb(0 0 0);
+  --wk-shadow-card-hover: 6px 6px 0 0 rgb(0 0 0);
+  --wk-border-card: 3px;
   --wk-border-input: 2px;
   --wk-heading-weight: 900;
   --wk-heading-tracking: -0.03em;
   --wk-heading-transform: uppercase;
   --wk-card-backdrop: none;
 }
+[data-style="brutalist"] h1,
+[data-style="brutalist"] h2,
+[data-style="brutalist"] h3 {
+  font-family: "Courier New", Courier, monospace;
+}
 .dark[data-style="brutalist"],
 .dark [data-style="brutalist"],
 [data-style="brutalist"].dark,
 [data-style="brutalist"] .dark {
-  --wk-shadow-card: 3px 3px 0 0 rgb(255 255 255 / 0.3);
-  --wk-shadow-card-hover: 5px 5px 0 0 rgb(255 255 255 / 0.3);
+  --wk-shadow-card: 4px 4px 0 0 rgb(255 255 255 / 0.3);
+  --wk-shadow-card-hover: 6px 6px 0 0 rgb(255 255 255 / 0.3);
 }
 html.dark[data-style="brutalist"] {
-  --wk-shadow-card: 3px 3px 0 0 rgb(255 255 255 / 0.3);
-  --wk-shadow-card-hover: 5px 5px 0 0 rgb(255 255 255 / 0.3);
+  --wk-shadow-card: 4px 4px 0 0 rgb(255 255 255 / 0.3);
+  --wk-shadow-card-hover: 6px 6px 0 0 rgb(255 255 255 / 0.3);
 }
 
 /* Glass — translucent layers, frosted blur, glow */
@@ -635,12 +656,18 @@ body {
   box-shadow: 0 0 10px rgba(224, 17, 95, 0.1), var(--wk-shadow-card);
 }
 
-/* 4th of July — subtle red & blue alternating card borders */
+/* 4th of July — red & blue card borders, white card backgrounds */
+[data-accent="july4th"] .wk-card {
+  background: #ffffff;
+}
+html.dark[data-accent="july4th"] .wk-card {
+  background: #0f1724;
+}
 [data-accent="july4th"] .wk-card:nth-child(odd) {
-  border-color: rgba(204, 0, 0, 0.2);
+  border-color: rgba(220, 38, 38, 0.3);
 }
 [data-accent="july4th"] .wk-card:nth-child(even) {
-  border-color: rgba(0, 34, 153, 0.2);
+  border-color: rgba(30, 64, 175, 0.3);
 }
 
 /* St Patrick's — gold shimmer accent */
