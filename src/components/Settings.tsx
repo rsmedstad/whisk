@@ -15,6 +15,7 @@ import { classNames } from "../lib/utils";
 import {
   ChevronLeft, Trash, Globe, Share, Check, ChevronDown, Sun, Moon, ComputerDesktop, CalendarDays,
   Pumpkin, ChristmasTree, Snowflake, HeartArrow, Shamrock, EasterEgg, Firework, TurkeyLeg,
+  RefreshCw, Flower, Leaf,
 } from "./ui/Icon";
 
 interface SettingsProps {
@@ -38,15 +39,12 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "about", label: "About" },
 ];
 
-const ACCENT_EMOJI: Record<string, string> = {
-  auto: "🔄",
-  spring: "🌸",
-  summer: "☀\uFE0F",
-  fall: "🍂",
-};
-
-/** SVG icon components for accents that have dedicated icons */
+/** SVG icon components for every accent */
 const ACCENT_ICON: Record<string, typeof Pumpkin> = {
+  auto: RefreshCw,
+  spring: Flower,
+  summer: Sun,
+  fall: Leaf,
   winter: Snowflake,
   valentine: HeartArrow,
   stpatrick: Shamrock,
@@ -57,12 +55,9 @@ const ACCENT_ICON: Record<string, typeof Pumpkin> = {
   christmas: ChristmasTree,
 };
 
-/** Render an accent icon — SVG component if available, emoji fallback */
 function AccentIcon({ accent, className = "w-5 h-5" }: { accent: string; className?: string }) {
   const SvgIcon = ACCENT_ICON[accent];
   if (SvgIcon) return <SvgIcon className={className} />;
-  const emoji = ACCENT_EMOJI[accent];
-  if (emoji) return <span className="text-lg leading-none">{emoji}</span>;
   return null;
 }
 
