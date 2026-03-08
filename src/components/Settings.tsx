@@ -383,31 +383,35 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       })()}
 
                       {showAccentPicker && (
-                        <div className="mt-1.5 rounded-[var(--wk-radius-input)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 overflow-hidden divide-y divide-stone-100 dark:divide-stone-700/50 max-h-72 overflow-y-auto">
-                          {ACCENT_OPTIONS.map((opt) => (
-                            <button
-                              key={opt.value}
-                              onClick={() => {
-                                onSetAccent(opt.value);
-                                setShowAccentPicker(false);
-                              }}
-                              className={classNames(
-                                "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors",
-                                accentOverride === opt.value
-                                  ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
-                                  : "text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700/50"
-                              )}
-                            >
-                              <span className="text-lg leading-none">{ACCENT_EMOJI[opt.value] ?? ""}</span>
-                              <span className="flex-1">{opt.label}</span>
-                              <div className="flex gap-1">
-                                {(ACCENT_COLORS[opt.value] ?? []).map((c, i) => (
-                                  <span key={i} className="w-2.5 h-2.5 rounded-full border border-stone-200/50 dark:border-stone-600/50" style={{ background: c }} />
-                                ))}
-                              </div>
-                              {accentOverride === opt.value && <Check className="w-4 h-4 text-orange-500 shrink-0" />}
-                            </button>
-                          ))}
+                        <div className="mt-1.5 relative rounded-[var(--wk-radius-input)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 overflow-hidden">
+                          <div className="max-h-72 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-700/50">
+                            {ACCENT_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                onClick={() => {
+                                  onSetAccent(opt.value);
+                                  setShowAccentPicker(false);
+                                }}
+                                className={classNames(
+                                  "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors",
+                                  accentOverride === opt.value
+                                    ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                                    : "text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700/50"
+                                )}
+                              >
+                                <span className="text-lg leading-none">{ACCENT_EMOJI[opt.value] ?? ""}</span>
+                                <span className="flex-1">{opt.label}</span>
+                                <div className="flex gap-1">
+                                  {(ACCENT_COLORS[opt.value] ?? []).map((c, i) => (
+                                    <span key={i} className="w-2.5 h-2.5 rounded-full border border-stone-200/50 dark:border-stone-600/50" style={{ background: c }} />
+                                  ))}
+                                </div>
+                                {accentOverride === opt.value && <Check className="w-4 h-4 text-orange-500 shrink-0" />}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Scroll fade hint */}
+                          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-stone-800 to-transparent" />
                         </div>
                       )}
 
@@ -512,20 +516,26 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   {style === "brutalist" && <Check className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-orange-500" />}
                 </button>
 
-                {/* Glass */}
+                {/* Glass — Liquid Glass */}
                 <button
                   onClick={() => onSetStyle("glass")}
                   className={classNames(
-                    "relative col-span-2 p-3 transition-all rounded-xl border text-left",
+                    "relative col-span-2 p-3 transition-all rounded-2xl border text-left overflow-hidden",
                     style === "glass"
-                      ? "bg-orange-50/30 dark:bg-orange-950/20 border-orange-500/50 ring-1 ring-orange-500/20 backdrop-blur-sm"
-                      : "bg-white/50 dark:bg-stone-800/50 border-stone-200/50 dark:border-stone-600/50 backdrop-blur-sm hover:bg-white/70 dark:hover:bg-stone-800/70"
+                      ? "border-orange-500/40 ring-1 ring-orange-500/20"
+                      : "border-white/40 dark:border-stone-500/30 hover:border-white/60 dark:hover:border-stone-400/40"
                   )}
+                  style={{
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.12), rgba(255,255,255,0.22))",
+                    backdropFilter: "blur(20px) saturate(1.5)",
+                    WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+                    boxShadow: "0 2px 16px rgba(0,0,0,0.04), inset 0 0.5px 0 rgba(255,255,255,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.15)",
+                  }}
                 >
-                  <div className="text-sm font-light dark:text-stone-200 mb-2">Glass</div>
+                  <div className="text-sm font-medium dark:text-stone-200 mb-2">Liquid Glass</div>
                   <div className="flex gap-2">
-                    <div className="flex-1 h-5 rounded-lg bg-white/60 dark:bg-stone-700/50 backdrop-blur border border-white/40 dark:border-stone-500/30 shadow-[0_4px_12px_rgba(0,0,0,0.04)]" />
-                    <div className="flex-1 h-5 rounded-lg bg-white/60 dark:bg-stone-700/50 backdrop-blur border border-white/40 dark:border-stone-500/30 shadow-[0_4px_12px_rgba(0,0,0,0.04)]" />
+                    <div className="flex-1 h-5 rounded-xl border border-white/50 dark:border-white/15 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.5),0_1px_4px_rgba(0,0,0,0.04)]" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))" }} />
+                    <div className="flex-1 h-5 rounded-xl border border-white/50 dark:border-white/15 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.5),0_1px_4px_rgba(0,0,0,0.04)]" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))" }} />
                   </div>
                   {style === "glass" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
                 </button>
