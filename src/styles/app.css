@@ -574,12 +574,12 @@ html.dark[data-style="glass"] .bg-orange-100,
 html.dark[data-style="glass"] .bg-orange-50 {
   background: rgb(255 255 255 / 0.1) !important;
 }
-/* Orange text → slate (but keep strong contrast for active states) */
+/* Orange text → medium slate (visible but neutral, not black) */
 [data-style="glass"] .text-orange-500 {
-  color: rgb(51 65 85) !important;
+  color: rgb(100 116 139) !important; /* slate-500 */
 }
 html.dark[data-style="glass"] .text-orange-500 {
-  color: rgb(226 232 240) !important;
+  color: rgb(148 163 184) !important; /* slate-400 */
 }
 [data-style="glass"] .text-orange-600,
 [data-style="glass"] .text-orange-700 {
@@ -604,14 +604,6 @@ html.dark[data-style="glass"] .border-orange-700 {
 }
 html.dark[data-style="glass"] .ring-orange-500 {
   --tw-ring-color: rgb(148 163 184 / 0.2) !important;
-}
-
-/* Glass: protect brand icon from orange neutralization */
-[data-style="glass"] .wk-brand-icon .text-orange-500 {
-  color: rgb(249 115 22) !important; /* keep original orange for logo */
-}
-html.dark[data-style="glass"] .wk-brand-icon .text-orange-500 {
-  color: rgb(249 115 22) !important;
 }
 
 /* Glass: bottom nav active icon needs stronger visual weight */
