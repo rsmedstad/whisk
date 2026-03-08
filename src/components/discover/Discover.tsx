@@ -1561,33 +1561,38 @@ export function Discover({
         {hasFeedContent && groupedItems && (
           /* Category carousel view (default, no filters active) */
           <div className="py-4 space-y-6">
-            {/* Feed header */}
-            <div className="px-4 flex items-center justify-between">
-              <h2 className="text-base font-bold dark:text-stone-100">
-                Discover Recipes
-              </h2>
-              {feed?.lastRefreshed && (
-                <span className="text-xs text-stone-400 dark:text-stone-500">
-                  Updated {timeAgo(feed.lastRefreshed)}
-                </span>
-              )}
-            </div>
-
-            {groupedItems.map(({ category, items }) => {
+            {groupedItems.map(({ category, items }, groupIdx) => {
               const catNewCount = items.filter(isNewItem).length;
               return (
                 <div key={category}>
-                  <h3 className="px-4 text-sm font-semibold text-stone-600 dark:text-stone-300 mb-2">
-                    {TYPE_LABELS[category]}
-                    <span className="ml-1.5 text-xs font-normal text-stone-400 dark:text-stone-500">
-                      {items.length} recipes
-                    </span>
-                    {catNewCount > 0 && (
-                      <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
-                        {catNewCount} new
+                  <div className="px-4 flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
+                      {TYPE_LABELS[category]}
+                      <span className="ml-1.5 text-xs font-normal text-stone-400 dark:text-stone-500">
+                        {items.length} recipes
                       </span>
+                      {catNewCount > 0 && (
+                        <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
+                          {catNewCount} new
+                        </span>
+                      )}
+                    </h3>
+                    {groupIdx === 0 && feed?.lastRefreshed && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-stone-400 dark:text-stone-500">
+                          {timeAgo(feed.lastRefreshed)}
+                        </span>
+                        <button
+                          onClick={() => refreshFeed(true)}
+                          disabled={feedLoading}
+                          className="p-1 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
+                          title="Refresh"
+                        >
+                          <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
+                        </button>
+                      </div>
                     )}
-                  </h3>
+                  </div>
                   <div className="flex gap-3 overflow-x-auto no-scrollbar px-4">
                     {items.map((item, i) => (
                       <FeedCard
@@ -1608,13 +1613,23 @@ export function Discover({
           /* Grid view (filters active or non-category sort) */
           <div className="py-4 px-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold dark:text-stone-100">
+              <h2 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
                 {filteredItems.length} recipe{filteredItems.length !== 1 ? "s" : ""}
               </h2>
               {feed?.lastRefreshed && (
-                <span className="text-xs text-stone-400 dark:text-stone-500">
-                  Updated {timeAgo(feed.lastRefreshed)}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-stone-400 dark:text-stone-500">
+                    {timeAgo(feed.lastRefreshed)}
+                  </span>
+                  <button
+                    onClick={() => refreshFeed(true)}
+                    disabled={feedLoading}
+                    className="p-1 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
+                    title="Refresh"
+                  >
+                    <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
+                  </button>
+                </div>
               )}
             </div>
             {filteredItems.length === 0 ? (

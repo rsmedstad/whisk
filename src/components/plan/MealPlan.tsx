@@ -5,6 +5,11 @@ import { getWeekDates, formatDateShort, toDateString, classNames } from "../../l
 import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
+const PANTRY_STAPLES = new Set([
+  "salt", "pepper", "black pepper", "olive oil", "vegetable oil", "canola oil",
+  "cooking spray", "water", "ice", "nonstick spray", "oil",
+]);
+
 const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
   { slot: "lunch", label: "Lunch" },
@@ -148,7 +153,7 @@ export function MealPlan({
     return [...new Set(weekMeals.filter((m) => m.recipeId).map((m) => m.recipeId!))];
   }, [weekMeals]);
 
-  const handleGenerateShoppingList = async () => {
+  const handleGenerateShoppingList = async (essentialsOnly: boolean) => {
     if (!onGenerateShoppingList || linkedRecipeIds.length === 0) return;
 
     setShoppingListStatus("loading");
@@ -171,7 +176,11 @@ export function MealPlan({
         const fullRecipe = (await res.json()) as { ingredients: Ingredient[] };
         if (!fullRecipe.ingredients?.length) continue;
 
-        const result = await onGenerateShoppingList(fullRecipe.ingredients, recipeId);
+        const ings = essentialsOnly
+          ? fullRecipe.ingredients.filter((i) => !PANTRY_STAPLES.has(i.name.toLowerCase().trim()))
+          : fullRecipe.ingredients;
+
+        const result = await onGenerateShoppingList(ings, recipeId);
         totalAdded += result.added;
         totalSkipped += result.skippedDuplicates;
       }
@@ -527,13 +536,23 @@ export function MealPlan({
             </p>
             <div className="flex gap-2">
               <button
-                onClick={handleGenerateShoppingList}
+                onClick={() => handleGenerateShoppingList(true)}
                 disabled={shoppingListStatus === "loading"}
-                className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium text-orange-600 dark:text-orange-400 border border-orange-500 px-3 py-2 rounded-[var(--wk-radius-btn)] hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium text-white bg-orange-500 px-3 py-2 rounded-[var(--wk-radius-btn)] hover:bg-orange-600 transition-colors disabled:opacity-50"
               >
-                Add All Ingredients
+                Add Essentials
+              </button>
+              <button
+                onClick={() => handleGenerateShoppingList(false)}
+                disabled={shoppingListStatus === "loading"}
+                className="shrink-0 flex items-center justify-center gap-1.5 text-sm font-medium text-orange-600 dark:text-orange-400 border border-orange-500 px-3 py-2 rounded-[var(--wk-radius-btn)] hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
+              >
+                Add All
               </button>
             </div>
+            <p className="mt-1.5 text-[11px] text-stone-400 dark:text-stone-500">
+              Essentials skips salt, pepper, oil &amp; common pantry staples
+            </p>
             {shoppingListStatus && shoppingListStatus !== "loading" && (
               <p className="mt-2 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
             )}
