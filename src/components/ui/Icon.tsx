@@ -376,20 +376,21 @@ export function Leaf(props: IconProps) {
   );
 }
 
-/** Simple flower for spring branding */
+/** Cherry-blossom style 5-petal flower for spring */
 export function Flower(props: IconProps) {
+  // 5 rounded petals arranged evenly around center, each a teardrop radiating outward
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
-      {/* Petals */}
-      <ellipse cx="12" cy="7" rx="2.5" ry="3.5" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
-      <ellipse cx="7.5" cy="10.5" rx="2.5" ry="3.5" transform="rotate(-60 7.5 10.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
-      <ellipse cx="16.5" cy="10.5" rx="2.5" ry="3.5" transform="rotate(60 16.5 10.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
-      <ellipse cx="9" cy="14.5" rx="2.5" ry="3.5" transform="rotate(-30 9 14.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
-      <ellipse cx="15" cy="14.5" rx="2.5" ry="3.5" transform="rotate(30 15 14.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
+      {/* Petals — 5 heart-shaped petals at 72° intervals */}
+      <path d="M12 10 C10.5 8, 9 5.5, 9.5 3.5 C10 2, 12 2, 12 4 C12 2, 14 2, 14.5 3.5 C15 5.5, 13.5 8, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
+      <path d="M12 10 C14.2 9, 17 8.5, 18.5 9.5 C19.8 10.3, 19.3 12.2, 17.5 11.5 C19.3 12.2, 18.8 14, 17.5 14 C15.5 14, 13.5 12, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
+      <path d="M12 10 C13 12.5, 13.5 15.5, 12.5 17.2 C11.8 18.5, 10 18.3, 10.3 16.5 C10 18.3, 8.2 17.8, 8 16.5 C7.5 14.5, 9.5 12, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
+      <path d="M12 10 C9.5 12, 7.5 14.5, 6 14 C4.7 13.5, 5 11.6, 6.5 12 C5 11.6, 5.2 9.8, 6.5 9.5 C8.5 9, 10.5 9.5, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
       {/* Center */}
-      <circle cx="12" cy="11" r="2" strokeWidth={1.3} fill="currentColor" opacity={0.3} />
-      {/* Stem */}
-      <path d="M12 13 C12 16, 11 19, 12 22" strokeWidth={1.8} />
+      <circle cx="12" cy="10" r="1.8" strokeWidth={1.3} fill="currentColor" opacity={0.25} />
+      {/* Stem with small leaf */}
+      <path d="M12 12 C12 15, 11.5 18, 12 21" strokeWidth={1.8} />
+      <path d="M12 16 C14 14.5, 16 14.5, 17 15" strokeWidth={1.2} />
     </svg>
   );
 }
@@ -404,24 +405,26 @@ export function Send(props: IconProps) {
 
 /* ── Holiday-themed brand icons ──────────────────────────── */
 
-/** Pumpkin icon for Halloween branding */
+/** Pumpkin icon for Halloween branding — classic round jack-o-lantern */
 export function Pumpkin(props: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
       {/* Stem */}
-      <path d="M12 2 C12 2, 10 3, 11 5 C11.5 5, 12.5 5, 13 5 C14 3, 12 2, 12 2Z" strokeWidth={1.2} fill="currentColor" opacity={0.6} />
-      {/* Left lobe */}
-      <path d="M6 13 C6 7, 9 5, 12 5 C8 5.5, 4 8, 4 13 C4 18, 8 21, 12 21 C9 21, 6 18, 6 13Z" strokeWidth={1.2} />
-      {/* Right lobe */}
-      <path d="M18 13 C18 7, 15 5, 12 5 C16 5.5, 20 8, 20 13 C20 18, 16 21, 12 21 C15 21, 18 18, 18 13Z" strokeWidth={1.2} />
-      {/* Center */}
-      <ellipse cx="12" cy="13" rx="5" ry="8" strokeWidth={1.2} />
-      {/* Left eye */}
-      <path d="M9 11 L10 9.5 L11 11" strokeWidth={1.5} />
-      {/* Right eye */}
-      <path d="M13 11 L14 9.5 L15 11" strokeWidth={1.5} />
-      {/* Mouth */}
-      <path d="M8.5 14.5 C9.5 16, 14.5 16, 15.5 14.5" strokeWidth={1.3} />
+      <path d="M11 6 C10.5 4, 11 2.5, 12.5 2 C13 3, 13 4.5, 13 6" strokeWidth={1.5} />
+      {/* Pumpkin body — wide oval */}
+      <ellipse cx="12" cy="14" rx="9" ry="7.5" strokeWidth={1.5} />
+      {/* Left crease */}
+      <path d="M8 7.5 C6.5 10, 6.5 17, 8 20" strokeWidth={1} opacity={0.5} />
+      {/* Right crease */}
+      <path d="M16 7.5 C17.5 10, 17.5 17, 16 20" strokeWidth={1} opacity={0.5} />
+      {/* Center crease */}
+      <path d="M12 6.5 C12 9, 12 19, 12 21.5" strokeWidth={1} opacity={0.4} />
+      {/* Left eye — triangle */}
+      <path d="M8 12 L9.5 10 L11 12 Z" strokeWidth={1.2} fill="currentColor" opacity={0.7} />
+      {/* Right eye — triangle */}
+      <path d="M13 12 L14.5 10 L16 12 Z" strokeWidth={1.2} fill="currentColor" opacity={0.7} />
+      {/* Mouth — jagged grin */}
+      <path d="M8 15.5 L9.5 14.5 L11 15.5 L12 14.5 L13 15.5 L14.5 14.5 L16 15.5" strokeWidth={1.3} />
     </svg>
   );
 }
@@ -488,22 +491,22 @@ export function HeartArrow(props: IconProps) {
   );
 }
 
-/** Shamrock/clover for St. Patrick's Day branding — clear 3-leaf clover */
+/** Shamrock/clover for St. Patrick's Day — clear 3-leaf clover with heart-shaped leaves */
 export function Shamrock(props: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
-      {/* Top leaf — heart shape */}
-      <path d="M12 11 C12 11, 9 10, 9 7 C9 4.5, 12 3, 12 3 C12 3, 15 4.5, 15 7 C15 10, 12 11, 12 11Z" strokeWidth={1.4} fill="currentColor" opacity={0.15} />
-      {/* Bottom-left leaf — heart shape */}
-      <path d="M12 11 C12 11, 8 12, 6 10 C4.5 8.5, 5.5 5.5, 5.5 5.5 C5.5 5.5, 8.5 5, 10 7 C11.5 9, 12 11, 12 11Z" strokeWidth={1.4} fill="currentColor" opacity={0.15} />
-      {/* Bottom-right leaf — heart shape */}
-      <path d="M12 11 C12 11, 16 12, 18 10 C19.5 8.5, 18.5 5.5, 18.5 5.5 C18.5 5.5, 15.5 5, 14 7 C12.5 9, 12 11, 12 11Z" strokeWidth={1.4} fill="currentColor" opacity={0.15} />
+      {/* Top leaf — heart pointing up */}
+      <path d="M12 11 C12 9, 10 6, 9.5 4.5 C9 3, 10.5 2, 12 3.5 C13.5 2, 15 3, 14.5 4.5 C14 6, 12 9, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.12} />
+      {/* Bottom-left leaf — heart pointing lower-left */}
+      <path d="M12 11 C10.5 10.5, 7.5 10.5, 6 11 C4.5 11.5, 4 10, 5.5 9 C4 8, 5 6.5, 6.5 7 C8 7.5, 10.5 9.5, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.12} />
+      {/* Bottom-right leaf — heart pointing lower-right */}
+      <path d="M12 11 C13.5 10.5, 16.5 10.5, 18 11 C19.5 11.5, 20 10, 18.5 9 C20 8, 19 6.5, 17.5 7 C16 7.5, 13.5 9.5, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.12} />
       {/* Leaf veins */}
-      <line x1="12" y1="11" x2="12" y2="4" strokeWidth={0.8} />
-      <line x1="12" y1="11" x2="7" y2="7" strokeWidth={0.8} />
-      <line x1="12" y1="11" x2="17" y2="7" strokeWidth={0.8} />
-      {/* Stem */}
-      <path d="M12 11 C12 14, 11 17, 12 22" strokeWidth={2} />
+      <line x1="12" y1="11" x2="12" y2="4.5" strokeWidth={0.7} opacity={0.4} />
+      <line x1="12" y1="11" x2="6.5" y2="8.5" strokeWidth={0.7} opacity={0.4} />
+      <line x1="12" y1="11" x2="17.5" y2="8.5" strokeWidth={0.7} opacity={0.4} />
+      {/* Stem — slightly curved */}
+      <path d="M12 11 C12.5 14, 11.5 17, 12 21" strokeWidth={2} />
     </svg>
   );
 }

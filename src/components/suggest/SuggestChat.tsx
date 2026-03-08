@@ -2,12 +2,26 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } fro
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Send, MessageCircle, XMark } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send, MessageCircle, XMark } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext, SEASONAL_CATEGORIES } from "../../lib/seasonal";
 import type { RecipeIndexEntry } from "../../types";
+
+const SEASON_ICON: Record<string, typeof Leaf> = {
+  spring: Flower,
+  summer: Sun,
+  fall: Leaf,
+  winter: Snowflake,
+};
+
+const SEASON_ICON_COLOR: Record<string, string> = {
+  spring: "text-pink-500 dark:text-pink-400",
+  summer: "text-amber-500 dark:text-amber-400",
+  fall: "text-orange-600 dark:text-orange-400",
+  winter: "text-sky-500 dark:text-sky-400",
+};
 
 interface Message {
   role: "user" | "assistant";
@@ -351,7 +365,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
             {/* What's in Season */}
             <Card>
               <div className="flex items-center gap-2 mb-3">
-                <Leaf className="w-4.5 h-4.5 text-green-600 dark:text-green-400" />
+                {(() => { const SeasonIcon = SEASON_ICON[seasonal.season] ?? Leaf; return <SeasonIcon className={`w-4.5 h-4.5 ${SEASON_ICON_COLOR[seasonal.season] ?? "text-green-600 dark:text-green-400"}`} />; })()}
                 <h2 className="text-base font-semibold dark:text-stone-100">
                   What&apos;s in Season
                 </h2>
