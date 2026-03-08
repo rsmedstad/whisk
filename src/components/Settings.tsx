@@ -455,10 +455,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 >
                   <div className="text-sm font-semibold dark:text-stone-200 mb-2">Modern</div>
                   <div className="space-y-1.5">
-                    <div className="h-5 rounded-lg bg-stone-100 dark:bg-stone-700 border border-stone-200/50 dark:border-stone-600/50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" />
-                    <div className="flex gap-1">
+                    {/* Header: thin bottom border */}
+                    <div className="h-2 -mx-3 border-b border-stone-200 dark:border-stone-700 bg-white/80 dark:bg-stone-900/80" />
+                    {/* Card: rounded corners, thin border, subtle shadow */}
+                    <div className="h-4 rounded-lg bg-stone-100 dark:bg-stone-700 border border-stone-200/50 dark:border-stone-600/50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" />
+                    {/* Pill + text line */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3 w-8 rounded-full border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800" />
                       <div className="h-1.5 flex-1 rounded bg-stone-200 dark:bg-stone-600" />
-                      <div className="h-1.5 w-5 rounded bg-stone-200 dark:bg-stone-600" />
                     </div>
                   </div>
                   {style === "modern" && <Check className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-orange-500" />}
@@ -476,10 +480,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 >
                   <div className="text-sm font-extrabold tracking-tight uppercase dark:text-stone-200 mb-2">Editorial</div>
                   <div className="space-y-1.5">
-                    <div className="h-5 border-t-2 border-t-stone-400 dark:border-t-stone-500 bg-stone-50 dark:bg-stone-800" />
-                    <div className="flex gap-1">
+                    {/* Header: thick bottom border */}
+                    <div className="h-2 -mx-3 border-b-2 border-stone-800 dark:border-stone-300 bg-white/80 dark:bg-stone-900/80" />
+                    {/* Card: top border only, no rounded corners */}
+                    <div className="h-4 border-t-2 border-t-stone-400 dark:border-t-stone-500 bg-stone-50 dark:bg-stone-800" />
+                    {/* Sharp pill + text line */}
+                    <div className="flex items-center gap-1">
+                      <div className="h-3 w-8 rounded-[2px] border-2 border-stone-800 dark:border-stone-300 bg-white dark:bg-stone-800 text-[5px] font-bold uppercase leading-none flex items-center justify-center text-stone-800 dark:text-stone-300">TAG</div>
                       <div className="h-1.5 flex-1 bg-stone-300 dark:bg-stone-600" />
-                      <div className="h-1.5 w-5 bg-stone-300 dark:bg-stone-600" />
                     </div>
                   </div>
                   {style === "editorial" && <Check className="absolute top-2 right-1.5 w-3.5 h-3.5 text-orange-500" />}
@@ -497,10 +505,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 >
                   <div className="text-sm font-semibold dark:text-stone-200 mb-2">Soft</div>
                   <div className="space-y-1.5">
-                    <div className="h-5 rounded-xl bg-stone-100 dark:bg-stone-700 shadow-[0_2px_8px_rgba(0,0,0,0.06)]" />
-                    <div className="flex gap-1.5">
+                    {/* Header: no border, soft shadow underneath */}
+                    <div className="h-2 -mx-3 bg-white/80 dark:bg-stone-900/80 shadow-[0_2px_8px_rgba(0,0,0,0.05)]" />
+                    {/* Card: extra rounded, no border, shadow only */}
+                    <div className="h-4 rounded-xl bg-stone-100 dark:bg-stone-700 shadow-[0_2px_8px_rgba(0,0,0,0.06)]" />
+                    {/* Borderless shadow pill + text line */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3 w-8 rounded-full bg-stone-100 dark:bg-stone-700 shadow-[0_1px_3px_rgba(0,0,0,0.06)]" />
                       <div className="h-1.5 flex-1 rounded-full bg-stone-200 dark:bg-stone-600" />
-                      <div className="h-1.5 w-5 rounded-full bg-stone-200 dark:bg-stone-600" />
                     </div>
                   </div>
                   {style === "soft" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
@@ -524,12 +536,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 >
                   <div className="text-sm font-medium dark:text-stone-200 mb-2">Liquid Glass</div>
                   <div className="space-y-1.5">
-                    {/* Mini glass card preview with specular rim and cool tint */}
-                    <div className="h-5 rounded-xl border border-t-white/70 border-x-white/30 border-b-white/10 dark:border-t-white/20 dark:border-x-white/8 dark:border-b-white/3" style={{ background: "linear-gradient(168deg, rgba(148,163,184,0.12), rgba(255,255,255,0.32), rgba(255,255,255,0.14))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 4px rgba(0,0,0,0.04)" }} />
-                    {/* Mini translucent pill + button preview */}
-                    <div className="flex gap-1.5">
-                      <div className="h-2 w-10 rounded-full" style={{ background: "rgba(249,115,22,0.45)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.3)" }} />
-                      <div className="h-1.5 flex-1 rounded-full mt-0.5" style={{ background: "rgba(255,255,255,0.25)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.3)" }} />
+                    {/* Header: translucent bar with specular edge */}
+                    <div className="-mx-3 h-2 border-b border-white/40 dark:border-white/8" style={{ background: "rgba(255,255,255,0.3)", boxShadow: "inset 0 -0.5px 0 rgba(255,255,255,0.3)" }} />
+                    {/* Card: translucent with specular top rim */}
+                    <div className="h-4 rounded-xl border border-t-white/70 border-x-white/30 border-b-white/10 dark:border-t-white/20 dark:border-x-white/8 dark:border-b-white/3" style={{ background: "linear-gradient(168deg, rgba(148,163,184,0.12), rgba(255,255,255,0.32), rgba(255,255,255,0.14))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 4px rgba(0,0,0,0.04)" }} />
+                    {/* Translucent pill + text line */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3 w-8 rounded-full border border-white/35 dark:border-white/12" style={{ background: "rgba(255,255,255,0.2)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.4)" }} />
+                      <div className="h-1.5 flex-1 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }} />
                     </div>
                   </div>
                   {style === "glass" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}

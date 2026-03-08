@@ -329,7 +329,7 @@ export function RecipeList({
                 }
               }}
               className={classNames(
-                "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                 maxTime != null
                   ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                   : openDropdown === "time"
@@ -477,7 +477,7 @@ export function RecipeList({
                 <button
                   key={tag}
                   onClick={() => toggleTag(tag)}
-                  className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 capitalize"
+                  className="wk-pill inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 capitalize"
                 >
                   {tag}
                   <XMark className="w-3 h-3" />
@@ -486,7 +486,7 @@ export function RecipeList({
             </div>
             <button
               onClick={() => setSelectedTags([])}
-              className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 shrink-0 transition-colors"
+              className="wk-pill inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 shrink-0 transition-colors"
             >
               Clear all
             </button>

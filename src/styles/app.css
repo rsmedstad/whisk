@@ -518,26 +518,92 @@ html.dark[data-style="glass"] .wk-card {
 }
 
 /* Glass buttons: translucent with blur instead of solid fills */
-[data-style="glass"] button.bg-orange-500 {
+[data-style="glass"] button.bg-orange-500,
+[data-style="glass"] a.bg-orange-500 {
   background: linear-gradient(
     168deg,
-    rgb(249 115 22 / 0.7),
-    rgb(234 88 12 / 0.55)
+    rgb(255 255 255 / 0.45),
+    rgb(148 163 184 / 0.25)
   ) !important;
+  color: rgb(28 25 23) !important;
   -webkit-backdrop-filter: blur(20px) saturate(1.5);
   backdrop-filter: blur(20px) saturate(1.5);
   box-shadow:
-    0 2px 12px rgb(249 115 22 / 0.25),
-    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 2px 12px rgb(0 0 0 / 0.06),
+    0 4px 16px rgb(148 163 184 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    inset 0 -0.5px 0 rgb(0 0 0 / 0.06);
+}
+html.dark[data-style="glass"] button.bg-orange-500,
+html.dark[data-style="glass"] a.bg-orange-500 {
+  background: linear-gradient(
+    168deg,
+    rgb(255 255 255 / 0.2),
+    rgb(148 163 184 / 0.12)
+  ) !important;
+  color: rgb(255 255 255) !important;
+  box-shadow:
+    0 2px 12px rgb(0 0 0 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
     inset 0 -0.5px 0 rgb(0 0 0 / 0.1);
 }
 [data-style="glass"] button.bg-stone-100,
 [data-style="glass"] .dark button.dark\:bg-stone-800 {
-  background: rgb(255 255 255 / 0.2) !important;
+  background: rgb(255 255 255 / 0.15) !important;
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   backdrop-filter: blur(16px) saturate(1.4);
   border: 1px solid rgb(255 255 255 / 0.3);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+
+/* Glass: comprehensively neutralize orange accents to silver/glass aesthetic */
+/* Orange backgrounds → translucent glass */
+[data-style="glass"] .bg-orange-500 {
+  background: linear-gradient(168deg, rgb(255 255 255 / 0.4), rgb(148 163 184 / 0.2)) !important;
+  color: rgb(28 25 23) !important;
+}
+html.dark[data-style="glass"] .bg-orange-500 {
+  background: linear-gradient(168deg, rgb(255 255 255 / 0.18), rgb(148 163 184 / 0.1)) !important;
+  color: rgb(255 255 255) !important;
+}
+[data-style="glass"] .bg-orange-100,
+[data-style="glass"] .bg-orange-50 {
+  background: rgb(255 255 255 / 0.25) !important;
+}
+html.dark[data-style="glass"] .bg-orange-100,
+html.dark[data-style="glass"] .bg-orange-50 {
+  background: rgb(255 255 255 / 0.1) !important;
+}
+/* Orange text → slate */
+[data-style="glass"] .text-orange-500 {
+  color: rgb(51 65 85) !important;
+}
+html.dark[data-style="glass"] .text-orange-500 {
+  color: rgb(226 232 240) !important;
+}
+[data-style="glass"] .text-orange-600,
+[data-style="glass"] .text-orange-700 {
+  color: rgb(71 85 105) !important;
+}
+html.dark[data-style="glass"] .text-orange-300,
+html.dark[data-style="glass"] .text-orange-400 {
+  color: rgb(203 213 225) !important;
+}
+/* Orange borders → white/silver glass borders */
+[data-style="glass"] .border-orange-500,
+[data-style="glass"] .border-orange-300 {
+  border-color: rgb(255 255 255 / 0.5) !important;
+}
+html.dark[data-style="glass"] .border-orange-500,
+html.dark[data-style="glass"] .border-orange-700 {
+  border-color: rgb(255 255 255 / 0.2) !important;
+}
+/* Orange ring → silver ring */
+[data-style="glass"] .ring-orange-500 {
+  --tw-ring-color: rgb(148 163 184 / 0.4) !important;
+}
+html.dark[data-style="glass"] .ring-orange-500 {
+  --tw-ring-color: rgb(148 163 184 / 0.2) !important;
 }
 
 /* Glass inputs: translucent */
@@ -651,24 +717,28 @@ html.dark[data-style="soft"] .wk-dropdown {
 
 /* --- Glass: translucent pills, glassy header, glassy dropdowns --- */
 [data-style="glass"] .wk-pill {
-  background: rgb(255 255 255 / 0.2) !important;
-  border-color: rgb(255 255 255 / 0.35) !important;
+  background: rgb(255 255 255 / 0.18) !important;
+  border-color: rgb(255 255 255 / 0.3) !important;
+  color: inherit;
   -webkit-backdrop-filter: blur(12px) saturate(1.4);
   backdrop-filter: blur(12px) saturate(1.4);
   box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.4);
 }
-[data-style="glass"] .wk-pill[class*="border-orange"] {
-  background: rgb(249 115 22 / 0.15) !important;
-  border-color: rgb(249 115 22 / 0.4) !important;
-  box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.3), 0 0 8px rgb(249 115 22 / 0.08);
+/* Active/selected pills: brighter glass, not orange */
+[data-style="glass"] .wk-pill[class*="border-orange"],
+[data-style="glass"] .wk-pill[class*="bg-orange"] {
+  background: rgb(255 255 255 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.55) !important;
+  box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.5), 0 0 8px rgb(148 163 184 / 0.1);
 }
 html.dark[data-style="glass"] .wk-pill {
-  background: rgb(255 255 255 / 0.08) !important;
+  background: rgb(255 255 255 / 0.07) !important;
   border-color: rgb(255 255 255 / 0.12) !important;
 }
-html.dark[data-style="glass"] .wk-pill[class*="border-orange"] {
-  background: rgb(249 115 22 / 0.12) !important;
-  border-color: rgb(249 115 22 / 0.3) !important;
+html.dark[data-style="glass"] .wk-pill[class*="border-orange"],
+html.dark[data-style="glass"] .wk-pill[class*="bg-orange"] {
+  background: rgb(255 255 255 / 0.16) !important;
+  border-color: rgb(255 255 255 / 0.25) !important;
 }
 [data-style="glass"] .wk-header-decor {
   background: rgb(255 255 255 / 0.5) !important;
