@@ -510,22 +510,27 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 <button
                   onClick={() => onSetStyle("glass")}
                   className={classNames(
-                    "relative col-span-2 p-3 transition-all rounded-2xl border text-left overflow-hidden",
+                    "relative p-3 transition-all rounded-2xl border text-left overflow-hidden",
                     style === "glass"
                       ? "border-orange-500/40 ring-1 ring-orange-500/20"
                       : "border-white/40 dark:border-stone-500/30 hover:border-white/60 dark:hover:border-stone-400/40"
                   )}
                   style={{
-                    background: "linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.12), rgba(255,255,255,0.22))",
+                    background: "linear-gradient(168deg, rgba(249,115,22,0.08), rgba(255,255,255,0.25), rgba(255,255,255,0.10), rgba(249,115,22,0.05))",
                     backdropFilter: "blur(20px) saturate(1.5)",
                     WebkitBackdropFilter: "blur(20px) saturate(1.5)",
-                    boxShadow: "0 2px 16px rgba(0,0,0,0.04), inset 0 0.5px 0 rgba(255,255,255,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.15)",
+                    boxShadow: "0 2px 16px rgba(0,0,0,0.04), 0 8px 24px rgba(249,115,22,0.04), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.1)",
                   }}
                 >
                   <div className="text-sm font-medium dark:text-stone-200 mb-2">Liquid Glass</div>
-                  <div className="flex gap-2">
-                    <div className="flex-1 h-5 rounded-xl border border-white/50 dark:border-white/15 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.5),0_1px_4px_rgba(0,0,0,0.04)]" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))" }} />
-                    <div className="flex-1 h-5 rounded-xl border border-white/50 dark:border-white/15 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.5),0_1px_4px_rgba(0,0,0,0.04)]" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))" }} />
+                  <div className="space-y-1.5">
+                    {/* Mini glass card preview with visible specular rim and tint */}
+                    <div className="h-5 rounded-xl border border-t-white/70 border-x-white/30 border-b-white/10 dark:border-t-white/20 dark:border-x-white/8 dark:border-b-white/3" style={{ background: "linear-gradient(168deg, rgba(249,115,22,0.1), rgba(255,255,255,0.3), rgba(255,255,255,0.12))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 4px rgba(0,0,0,0.04)" }} />
+                    {/* Mini translucent button preview */}
+                    <div className="flex gap-1.5">
+                      <div className="h-2 w-10 rounded-full" style={{ background: "rgba(249,115,22,0.45)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.3)" }} />
+                      <div className="h-1.5 flex-1 rounded-full bg-white/20 dark:bg-white/8 mt-0.5" />
+                    </div>
                   </div>
                   {style === "glass" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
                 </button>
