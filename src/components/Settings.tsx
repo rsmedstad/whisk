@@ -506,27 +506,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   {style === "soft" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
                 </button>
 
-                {/* Brutalist */}
-                <button
-                  onClick={() => onSetStyle("brutalist")}
-                  className={classNames(
-                    "relative p-3 border-2 transition-all text-left",
-                    style === "brutalist"
-                      ? "border-orange-500 bg-orange-50/50 dark:bg-orange-950/30 shadow-[3px_3px_0_0_rgb(234,88,12)]"
-                      : "border-stone-800 dark:border-stone-300 bg-white dark:bg-stone-900 shadow-[3px_3px_0_0_#000] dark:shadow-[3px_3px_0_0_rgba(255,255,255,0.3)] hover:shadow-[4px_4px_0_0_#000] dark:hover:shadow-[4px_4px_0_0_rgba(255,255,255,0.4)]"
-                  )}
-                >
-                  <div className="text-sm font-black tracking-tight uppercase dark:text-stone-200 mb-2">Brutalist</div>
-                  <div className="space-y-1.5">
-                    <div className="h-5 border-2 border-stone-800 dark:border-stone-400 bg-stone-50 dark:bg-stone-800 shadow-[2px_2px_0_0_#000] dark:shadow-[2px_2px_0_0_rgba(255,255,255,0.2)]" />
-                    <div className="flex gap-1">
-                      <div className="h-2 flex-1 bg-stone-800 dark:bg-stone-400" />
-                      <div className="h-2 w-5 bg-stone-800 dark:bg-stone-400" />
-                    </div>
-                  </div>
-                  {style === "brutalist" && <Check className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-orange-500" />}
-                </button>
-
                 {/* Glass — Liquid Glass */}
                 <button
                   onClick={() => onSetStyle("glass")}

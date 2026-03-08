@@ -199,7 +199,7 @@ export interface CookingTimer {
 
 // ── Settings ────────────────────────────────────────────
 
-export type AppStyle = "modern" | "editorial" | "soft" | "brutalist" | "glass";
+export type AppStyle = "modern" | "editorial" | "soft" | "glass";
 
 export interface AppSettings {
   theme: "system" | "light" | "dark" | "seasonal";

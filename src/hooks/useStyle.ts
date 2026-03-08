@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { AppStyle } from "../types";
 
-const VALID_STYLES: AppStyle[] = ["modern", "editorial", "soft", "brutalist", "glass"];
+const VALID_STYLES: AppStyle[] = ["modern", "editorial", "soft", "glass"];
 
 function applyStyle(style: AppStyle) {
   if (style === "modern") {
