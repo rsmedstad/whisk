@@ -574,7 +574,7 @@ html.dark[data-style="glass"] .bg-orange-100,
 html.dark[data-style="glass"] .bg-orange-50 {
   background: rgb(255 255 255 / 0.1) !important;
 }
-/* Orange text → slate */
+/* Orange text → slate (but keep strong contrast for active states) */
 [data-style="glass"] .text-orange-500 {
   color: rgb(51 65 85) !important;
 }
@@ -583,11 +583,11 @@ html.dark[data-style="glass"] .text-orange-500 {
 }
 [data-style="glass"] .text-orange-600,
 [data-style="glass"] .text-orange-700 {
-  color: rgb(71 85 105) !important;
+  color: rgb(30 41 59) !important; /* slate-800 — strong for active tabs */
 }
 html.dark[data-style="glass"] .text-orange-300,
 html.dark[data-style="glass"] .text-orange-400 {
-  color: rgb(203 213 225) !important;
+  color: rgb(241 245 249) !important; /* slate-100 — bright for dark active */
 }
 /* Orange borders → white/silver glass borders */
 [data-style="glass"] .border-orange-500,
@@ -604,6 +604,33 @@ html.dark[data-style="glass"] .border-orange-700 {
 }
 html.dark[data-style="glass"] .ring-orange-500 {
   --tw-ring-color: rgb(148 163 184 / 0.2) !important;
+}
+
+/* Glass: protect brand icon from orange neutralization */
+[data-style="glass"] .wk-brand-icon .text-orange-500 {
+  color: rgb(249 115 22) !important; /* keep original orange for logo */
+}
+html.dark[data-style="glass"] .wk-brand-icon .text-orange-500 {
+  color: rgb(249 115 22) !important;
+}
+
+/* Glass: bottom nav active icon needs stronger visual weight */
+[data-style="glass"] nav.fixed.bottom-0 .text-orange-500 {
+  color: rgb(15 23 42) !important; /* slate-900 — bold active */
+  font-weight: 600;
+}
+html.dark[data-style="glass"] nav.fixed.bottom-0 .text-orange-500 {
+  color: rgb(248 250 252) !important; /* slate-50 — bright active */
+}
+
+/* Glass: recipe detail tab underline needs to be visible, not translucent */
+[data-style="glass"] .bg-orange-500[class*="absolute"][class*="bottom-0"],
+[data-style="glass"] span.bg-orange-500 {
+  background: rgb(51 65 85) !important; /* slate-700 solid bar */
+}
+html.dark[data-style="glass"] .bg-orange-500[class*="absolute"][class*="bottom-0"],
+html.dark[data-style="glass"] span.bg-orange-500 {
+  background: rgb(226 232 240) !important; /* slate-200 solid bar */
 }
 
 /* Glass inputs: translucent */
@@ -753,25 +780,27 @@ html.dark[data-style="glass"] .wk-header-decor {
   box-shadow: inset 0 -0.5px 0 rgb(255 255 255 / 0.06);
 }
 [data-style="glass"] .wk-dropdown {
-  background: rgb(255 255 255 / 0.6) !important;
+  background: rgb(255 255 255 / 0.85) !important;
   -webkit-backdrop-filter: blur(40px) saturate(1.8);
   backdrop-filter: blur(40px) saturate(1.8);
-  border-color: rgb(255 255 255 / 0.5) !important;
-  border-top-color: rgb(255 255 255 / 0.7) !important;
+  border-color: rgb(255 255 255 / 0.6) !important;
+  border-top-color: rgb(255 255 255 / 0.8) !important;
   border-radius: 1rem;
   box-shadow:
-    0 8px 32px rgb(0 0 0 / 0.08),
-    inset 0 1px 0 rgb(255 255 255 / 0.5),
-    inset 0 -0.5px 0 rgb(255 255 255 / 0.1);
+    0 8px 32px rgb(0 0 0 / 0.12),
+    0 2px 8px rgb(0 0 0 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    inset 0 -0.5px 0 rgb(255 255 255 / 0.15);
 }
 html.dark[data-style="glass"] .wk-dropdown {
-  background: rgb(0 0 0 / 0.5) !important;
-  border-color: rgb(255 255 255 / 0.1) !important;
-  border-top-color: rgb(255 255 255 / 0.18) !important;
+  background: rgb(0 0 0 / 0.75) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  border-top-color: rgb(255 255 255 / 0.2) !important;
   box-shadow:
-    0 8px 32px rgb(0 0 0 / 0.3),
-    inset 0 1px 0 rgb(255 255 255 / 0.1),
-    inset 0 -0.5px 0 rgb(255 255 255 / 0.03);
+    0 8px 32px rgb(0 0 0 / 0.4),
+    0 2px 8px rgb(0 0 0 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 -0.5px 0 rgb(255 255 255 / 0.04);
 }
 
 /* ── Heading Style Application ─────────────────────────── */

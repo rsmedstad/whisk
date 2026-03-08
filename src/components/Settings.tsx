@@ -535,15 +535,15 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   }}
                 >
                   <div className="text-sm font-medium dark:text-stone-200 mb-2">Liquid Glass</div>
-                  <div className="space-y-1.5">
-                    {/* Header: translucent bar with specular edge */}
-                    <div className="-mx-3 h-2 border-b border-white/40 dark:border-white/8" style={{ background: "rgba(255,255,255,0.3)", boxShadow: "inset 0 -0.5px 0 rgba(255,255,255,0.3)" }} />
-                    {/* Card: translucent with specular top rim */}
-                    <div className="h-4 rounded-xl border border-t-white/70 border-x-white/30 border-b-white/10 dark:border-t-white/20 dark:border-x-white/8 dark:border-b-white/3" style={{ background: "linear-gradient(168deg, rgba(148,163,184,0.12), rgba(255,255,255,0.32), rgba(255,255,255,0.14))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 4px rgba(0,0,0,0.04)" }} />
-                    {/* Translucent pill + text line */}
+                  <div className="space-y-2">
+                    {/* Header: frosted bar with visible bottom edge */}
+                    <div className="-mx-3 h-2.5 border-b" style={{ background: "rgba(255,255,255,0.45)", borderColor: "rgba(148,163,184,0.3)", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }} />
+                    {/* Card: frosted glass with visible borders */}
+                    <div className="h-5 rounded-xl" style={{ background: "linear-gradient(168deg, rgba(255,255,255,0.5), rgba(148,163,184,0.15))", border: "1px solid rgba(148,163,184,0.3)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.06)" }} />
+                    {/* Pill + text line with visible contrast */}
                     <div className="flex items-center gap-1.5">
-                      <div className="h-3 w-8 rounded-full border border-white/35 dark:border-white/12" style={{ background: "rgba(255,255,255,0.2)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.4)" }} />
-                      <div className="h-1.5 flex-1 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }} />
+                      <div className="h-3.5 w-10 rounded-full" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(148,163,184,0.35)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.6)" }} />
+                      <div className="h-1.5 flex-1 rounded-full" style={{ background: "rgba(148,163,184,0.25)" }} />
                     </div>
                   </div>
                   {style === "glass" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
