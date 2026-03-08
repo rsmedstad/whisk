@@ -51,7 +51,7 @@ export function RecipeList({
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
-  const [nonAlcoholicOnly, setNonAlcoholicOnly] = useState(false);
+  const [drinkFilter, setDrinkFilter] = useState<"all" | "alcoholic" | "non-alcoholic">("all");
 
   // Save filter state to sessionStorage whenever it changes
   useEffect(() => {
@@ -118,15 +118,17 @@ export function RecipeList({
     return groups;
   }, [recipes, availableTags]);
 
-  // Whether a drink recipe is non-alcoholic (no spirits listed)
-  const isNonAlcoholicRecipe = (r: RecipeIndexEntry) => !r.spirits || r.spirits.length === 0;
+  // Detect alcoholic drinks by title keywords (same approach as Discover tab)
+  const ALCOHOLIC_KEYWORDS = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
+  const isNonAlcoholicRecipe = (r: RecipeIndexEntry) =>
+    !ALCOHOLIC_KEYWORDS.test(r.title) && (!r.spirits || r.spirits.length === 0);
 
-  // Show non-alcoholic pill only if there's a mix of both types
+  // Show drink filter pills if there are any drinks
   const showNonAlcoholicPill = useMemo(() => {
     const allDrinks = recipes.filter((r) => r.tags.includes("drinks"));
     if (allDrinks.length === 0) return false;
-    const nonAlcCount = allDrinks.filter(isNonAlcoholicRecipe).length;
-    return nonAlcCount > 0 && nonAlcCount < allDrinks.length;
+    const alcCount = allDrinks.filter((r) => !isNonAlcoholicRecipe(r)).length;
+    return alcCount > 0 && alcCount < allDrinks.length;
   }, [recipes]);
 
   // Group recipes by meal category for the "category" sort view
@@ -149,10 +151,14 @@ export function RecipeList({
         }
       }
     }
-    // Apply non-alcoholic filter to drinks group
-    if (nonAlcoholicOnly) {
+    // Apply drink type filter to drinks group
+    if (drinkFilter !== "all") {
       const drinks = groups.get("drinks");
-      if (drinks) groups.set("drinks", drinks.filter(isNonAlcoholicRecipe));
+      if (drinks) {
+        groups.set("drinks", drinks.filter((r) =>
+          drinkFilter === "non-alcoholic" ? isNonAlcoholicRecipe(r) : !isNonAlcoholicRecipe(r)
+        ));
+      }
     }
     // Sort alphabetically within each group
     for (const list of groups.values()) {
@@ -172,7 +178,7 @@ export function RecipeList({
     const drinks = groups.get("drinks");
     if (drinks && drinks.length > 0) ordered.push({ label: "Drinks", recipes: drinks });
     return ordered;
-  }, [filtered, sort, nonAlcoholicOnly]);
+  }, [filtered, sort, drinkFilter]);
 
   const goToRecipe = (id: string) => {
     if (scrollRef.current) {
@@ -538,17 +544,30 @@ export function RecipeList({
                     {group.recipes.length}
                   </span>
                   {group.label === "Drinks" && showNonAlcoholicPill && (
-                    <button
-                      onClick={() => setNonAlcoholicOnly(!nonAlcoholicOnly)}
-                      className={classNames(
-                        "ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
-                        nonAlcoholicOnly
-                          ? "bg-orange-500 text-white border-orange-500"
-                          : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
-                      )}
-                    >
-                      Non-alcoholic
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setDrinkFilter(drinkFilter === "alcoholic" ? "all" : "alcoholic")}
+                        className={classNames(
+                          "ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
+                          drinkFilter === "alcoholic"
+                            ? "border-orange-400 bg-orange-50 text-orange-600 dark:border-orange-600 dark:bg-orange-950 dark:text-orange-400"
+                            : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                        )}
+                      >
+                        Alcoholic
+                      </button>
+                      <button
+                        onClick={() => setDrinkFilter(drinkFilter === "non-alcoholic" ? "all" : "non-alcoholic")}
+                        className={classNames(
+                          "ml-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
+                          drinkFilter === "non-alcoholic"
+                            ? "border-orange-400 bg-orange-50 text-orange-600 dark:border-orange-600 dark:bg-orange-950 dark:text-orange-400"
+                            : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                        )}
+                      >
+                        Non-alcoholic
+                      </button>
+                    </>
                   )}
                 </h2>
                 {recipeLayout === "horizontal" && !search && selectedTags.length === 0 && !favoritesOnly ? (

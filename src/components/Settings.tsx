@@ -91,6 +91,9 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [exportExcludeTags, setExportExcludeTags] = useState<string[]>([]);
   const [exportIncludeNotes, setExportIncludeNotes] = useState(false);
+  const [feedRefreshDays, setFeedRefreshDays] = useState(() =>
+    localStorage.getItem("whisk_feed_refresh_days") ?? "2"
+  );
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [isRetagging, setIsRetagging] = useState(false);
   const [retagResult, setRetagResult] = useState<string | null>(null);
@@ -458,6 +461,46 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                         }`}
                       />
                     </button>
+                  </div>
+                </div>
+              </Card>
+            </section>
+
+            {/* Discover Feed */}
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Discover Feed
+              </h2>
+              <Card>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                      Auto-refresh interval
+                    </label>
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                      How often the Discover feed checks for new trending recipes. Uses Cloudflare Browser Rendering credits.
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {([
+                        { value: "1", label: "1 day" },
+                        { value: "2", label: "2 days" },
+                        { value: "3", label: "3 days" },
+                        { value: "7", label: "Weekly" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            localStorage.setItem("whisk_feed_refresh_days", opt.value);
+                            setFeedRefreshDays(opt.value);
+                          }}
+                          className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
+                            feedRefreshDays === opt.value ? activeClass : inactiveClass
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </Card>

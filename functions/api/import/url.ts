@@ -729,14 +729,27 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
   const seen = new Set<string>();
   const seenFilenames = new Set<string>();
 
+  // Normalize CDN URLs to canonical keys for dedup — strips fingerprints, dimensions, filters
+  const normalizeImageKey = (u: string): string => {
+    let n = u.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? u;
+    // Strip Dotdash /thmb/FINGERPRINT/DIMENSIONs/filters:.../ path segments
+    n = n.replace(/\/thmb\/[^/]+\/[^/]*\d+x\d+[^/]*\/(?:filters:[^/]*\/)?/i, "/thmb/");
+    // Strip generic CDN size/crop segments like /750x422/, /4x3/, /1500x0/
+    n = n.replace(/\/\d+x\d+\//g, "/");
+    return n.toLowerCase();
+  };
+
   const addUrl = (url: string | undefined) => {
     if (!url || seen.has(url)) return;
     // Skip tiny icons, emojis, tracking pixels
     if (url.includes("emoji") || url.includes("icon") || url.includes("avatar")) return;
     if (url.includes("1x1") || url.includes("pixel")) return;
-    // Dedup by filename — same image often served from different CDN paths/sizes
-    const stripped = url.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? url;
-    const filename = stripped.split("/").pop()?.toLowerCase() ?? "";
+    // Dedup by normalized CDN key
+    const key = normalizeImageKey(url);
+    if (seenFilenames.has(key)) return;
+    seenFilenames.add(key);
+    // Also dedup by filename alone for cross-domain matches
+    const filename = key.split("/").pop() ?? "";
     if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
       if (seenFilenames.has(filename)) return;
       seenFilenames.add(filename);

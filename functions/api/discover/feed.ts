@@ -17,6 +17,9 @@ const BROWSER_HEADERS: Record<string, string> = {
   "Accept-Language": "en-US,en;q=0.9",
 };
 
+// Track BR errors during a refresh cycle so we can report them to the client
+let brWarnings: string[] = [];
+
 /** Fetch HTML via Cloudflare Browser Rendering (headless browser) */
 async function fetchWithBrowserRendering(
   url: string,
@@ -40,7 +43,16 @@ async function fetchWithBrowserRendering(
         }),
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (res.status === 429) {
+        brWarnings.push("Browser Rendering rate limit reached. Your Cloudflare plan may need more credits.");
+      } else if (res.status === 403) {
+        brWarnings.push("Browser Rendering access denied. Check your CF_BR_TOKEN.");
+      } else {
+        brWarnings.push(`Browser Rendering error (${res.status}) for ${new URL(url).hostname}`);
+      }
+      return null;
+    }
     const body = await res.text();
     const html = body.startsWith("{")
       ? ((JSON.parse(body) as { result?: string }).result ?? "")
@@ -386,6 +398,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 // Pass ?force=true to bypass 2-day rate limit (still respects 1-hour minimum)
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  brWarnings = []; // Reset warnings for this refresh cycle
   const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
   const { searchParams } = new URL(request.url);
   const force = searchParams.get("force") === "true";
@@ -479,7 +492,46 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     env.WHISK_KV.put(KV_KEY, JSON.stringify(legacyFeed)),
   ]);
 
-  return Response.json(archiveToCategoryFeed(updatedArchive));
+  const feed = archiveToCategoryFeed(updatedArchive);
+  // Include any warnings from BR failures so the client can inform the user
+  const warnings = [...new Set(brWarnings)];
+  return Response.json(warnings.length > 0 ? { ...feed, warnings } : feed);
+};
+
+// ── PATCH: update a feed item (e.g. fix image after import) ──
+
+export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
+  const { url, imageUrl, totalTime } = (await request.json()) as {
+    url: string;
+    imageUrl?: string;
+    totalTime?: number;
+  };
+  if (!url) {
+    return new Response(JSON.stringify({ error: "url required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+  if (!archive) {
+    return new Response(JSON.stringify({ error: "no feed" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  let updated = false;
+  for (const item of archive.items) {
+    if (normalizeUrl(item.url) === normalizeUrl(url)) {
+      if (imageUrl) item.imageUrl = imageUrl;
+      if (totalTime) item.totalTime = totalTime;
+      updated = true;
+      break;
+    }
+  }
+  if (updated) {
+    await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(archive));
+  }
+  return Response.json({ ok: true, updated });
 };
 
 /** Convert archive to category-grouped feed for the UI, sanitizing images.
@@ -1315,6 +1367,12 @@ function isPersonImage(url: string): boolean {
 
   // URL path patterns for profile/person images
   if (/(?:author|avatar|profile|headshot|byline|contributor|bio|staff|portrait|people|person|user)[\/-]/i.test(lc)) return true;
+
+  // Geographic/non-food images (state pages, location headers, travel)
+  if (/(?:\/state\/|\/states\/|\/city\/|\/cities\/|\/location\/|\/destination\/|\/travel\/|\/getty-?images)/i.test(lc)) return true;
+
+  // Stock photo / editorial image patterns (often author or lifestyle, not food)
+  if (/(?:editorial|lifestyle|headshot|portrait|stock-?photo)/i.test(lc)) return true;
 
   // Gravatar and similar avatar services
   if (lc.includes("gravatar.com") || lc.includes("secure.gravatar")) return true;

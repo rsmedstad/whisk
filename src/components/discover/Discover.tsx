@@ -68,6 +68,15 @@ const TYPE_LABELS: Record<DiscoverCategory, string> = {
   baking: "Baking",
 };
 
+/** Keywords that indicate an alcoholic drink */
+const ALCOHOLIC_KEYWORDS = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|flip|punch(?!.*fruit)|eggnog|grog|absinthe|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
+
+/** Detect whether a discover feed drink item is likely alcoholic based on title/description */
+function isAlcoholicDrink(item: { title: string; description?: string }): boolean {
+  const text = `${item.title} ${item.description ?? ""}`;
+  return ALCOHOLIC_KEYWORDS.test(text);
+}
+
 /** Cuisine keywords for text-matching against discover item titles/descriptions */
 const CUISINE_OPTIONS = [
   "italian", "mexican", "chinese", "thai", "indian",
@@ -277,6 +286,7 @@ export function Discover({
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<DiscoverSort>("category");
   const [newOnly, setNewOnly] = useState(false);
+  const [discoverDrinkFilter, setDiscoverDrinkFilter] = useState<"all" | "alcoholic" | "non-alcoholic">("all");
   const [selectedType, setSelectedType] = useState<DiscoverCategory | null>(null);
   const [selectedCuisine, setSelectedCuisine] = useState<CuisineOption | null>(null);
   const [selectedDiet, setSelectedDiet] = useState<DietOption | null>(null);
@@ -291,6 +301,7 @@ export function Discover({
   );
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [feedWarnings, setFeedWarnings] = useState<string[]>([]);
 
   // ── Feed detail state ──
   const [selectedFeedItem, setSelectedFeedItem] = useState<
@@ -323,10 +334,14 @@ export function Discover({
   const refreshFeed = useCallback(async (force = false) => {
     setFeedLoading(true);
     setFeedError(null);
+    setFeedWarnings([]);
     try {
       const url = force ? "/discover/feed?force=true" : "/discover/feed";
-      const data = await api.post<DiscoverFeed>(url, {});
+      const data = await api.post<DiscoverFeed & { warnings?: string[] }>(url, {});
       if (data) {
+        if (data.warnings?.length) {
+          setFeedWarnings(data.warnings);
+        }
         setFeed(data);
         setLocal(FEED_CACHE_KEY, data);
       }
@@ -338,14 +353,16 @@ export function Discover({
   }, []);
 
   useEffect(() => {
-    const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+    // Read user-configured refresh interval (default 2 days)
+    const refreshDays = parseInt(localStorage.getItem("whisk_feed_refresh_days") ?? "2", 10) || 2;
+    const staleMs = refreshDays * 24 * 60 * 60 * 1000;
 
     async function init() {
       // If we have cached data, show it immediately
       if (feed?.lastRefreshed) {
-        // Auto-refresh in background if feed is stale (>2 days old)
+        // Auto-refresh in background if feed is stale
         const age = Date.now() - new Date(feed.lastRefreshed).getTime();
-        if (age > TWO_DAYS_MS) {
+        if (age > staleMs) {
           refreshFeed(); // Background refresh — cached data shows meanwhile
         }
         return;
@@ -359,7 +376,7 @@ export function Discover({
           setLocal(FEED_CACHE_KEY, data);
           // Check staleness of server-side data too
           const age = Date.now() - new Date(data.lastRefreshed).getTime();
-          if (age > TWO_DAYS_MS) {
+          if (age > staleMs) {
             refreshFeed();
           }
         }
@@ -403,6 +420,7 @@ export function Discover({
           const needsImageUpdate = importedImage && importedImage !== item.imageUrl;
           const needsTimeUpdate = importedTotalTime && !item.totalTime;
           if (needsImageUpdate || needsTimeUpdate) {
+            // Update local feed cache
             setFeed((prev) => {
               if (!prev) return prev;
               const updated = { ...prev, categories: { ...prev.categories } };
@@ -424,6 +442,12 @@ export function Discover({
               setLocal(FEED_CACHE_KEY, updated);
               return updated;
             });
+            // Persist the fix to the server so other devices/sessions get it too
+            api.patch("/discover/feed", {
+              url: item.url,
+              ...(needsImageUpdate ? { imageUrl: importedImage } : {}),
+              ...(needsTimeUpdate ? { totalTime: importedTotalTime } : {}),
+            }).catch(() => {/* best-effort */});
           }
         } else {
           setImportError("Could not parse recipe from this page.");
@@ -511,18 +535,29 @@ export function Discover({
         allPhotos.push(p);
       }
     }
-    // Deduplicate by normalized URL and by filename (last path segment)
-    // Recipe sites often serve the same image via different CDN paths/sizes
-    const seenUrls = new Set<string>();
+    // Normalize a CDN image URL to a canonical key for dedup comparison.
+    // CDNs like Dotdash Meredith (AllRecipes, Serious Eats) serve the same image
+    // at different sizes/crops with different fingerprints in the URL path:
+    //   /thmb/ABC123/1500x0/filters:no_upscale()/lamb-biryani.jpg
+    //   /thmb/DEF456/750x422/filters:fill()/lamb-biryani.jpg
+    // We strip the fingerprint, dimensions, and filter params to compare.
+    const normalizeImageKey = (url: string): string => {
+      let u = url.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? url;
+      // Strip Dotdash /thmb/FINGERPRINT/DIMENSIONs/filters:.../ path segments
+      u = u.replace(/\/thmb\/[^/]+\/[^/]*\d+x\d+[^/]*\/(?:filters:[^/]*\/)?/i, "/thmb/");
+      // Strip generic CDN size/crop segments like /750x422/, /4x3/, /1500x0/
+      u = u.replace(/\/\d+x\d+\//g, "/");
+      return u.toLowerCase();
+    };
+
+    const seenKeys = new Set<string>();
     const seenFilenames = new Set<string>();
     const deduped = allPhotos.filter((p) => {
-      // Normalize: strip trailing slashes, query params, protocol
-      const stripped = p.url.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? p.url;
-      if (seenUrls.has(stripped)) return false;
-      seenUrls.add(stripped);
+      const key = normalizeImageKey(p.url);
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
       // Also dedup by filename — catches same image from different CDN subdomains
-      const filename = stripped.split("/").pop()?.toLowerCase() ?? "";
-      // Only dedup by filename if it looks like a real image filename (not generic like "image.jpg")
+      const filename = key.split("/").pop() ?? "";
       if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
         if (seenFilenames.has(filename)) return false;
         seenFilenames.add(filename);
@@ -1543,6 +1578,18 @@ export function Discover({
           </div>
         )}
 
+        {feedWarnings.length > 0 && (
+          <div className="px-4 pt-2">
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 px-3 py-2">
+              {feedWarnings.map((w, i) => (
+                <p key={i} className="text-xs text-amber-700 dark:text-amber-400">
+                  {w}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!hasFeedContent && !feedLoading && !feedError && (
           <div className="px-4 py-8">
             <Card>
@@ -1566,8 +1613,19 @@ export function Discover({
         {hasFeedContent && groupedItems && (
           /* Category carousel view (default, no filters active) */
           <div className="py-4 space-y-6">
-            {groupedItems.map(({ category, items }, groupIdx) => {
+            {groupedItems.map(({ category, items: rawItems }, groupIdx) => {
+              // Apply drink filter for the Drinks category
+              const items = category === "drinks" && discoverDrinkFilter !== "all"
+                ? rawItems.filter((item) =>
+                    discoverDrinkFilter === "alcoholic" ? isAlcoholicDrink(item) : !isAlcoholicDrink(item)
+                  )
+                : rawItems;
               const catNewCount = items.filter(isNewItem).length;
+              // Show drink pills if there's a mix of alcoholic and non-alcoholic
+              const showDrinkPills = category === "drinks" && rawItems.length > 0 && (() => {
+                const alcCount = rawItems.filter(isAlcoholicDrink).length;
+                return alcCount > 0 && alcCount < rawItems.length;
+              })();
               return (
                 <div key={category}>
                   <div className="px-4 flex items-center justify-between mb-2">
@@ -1580,6 +1638,32 @@ export function Discover({
                         <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
                           {catNewCount} new
                         </span>
+                      )}
+                      {showDrinkPills && (
+                        <>
+                          <button
+                            onClick={() => setDiscoverDrinkFilter(discoverDrinkFilter === "alcoholic" ? "all" : "alcoholic")}
+                            className={classNames(
+                              "ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
+                              discoverDrinkFilter === "alcoholic"
+                                ? "border-orange-400 bg-orange-50 text-orange-600 dark:border-orange-600 dark:bg-orange-950 dark:text-orange-400"
+                                : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                            )}
+                          >
+                            Alcoholic
+                          </button>
+                          <button
+                            onClick={() => setDiscoverDrinkFilter(discoverDrinkFilter === "non-alcoholic" ? "all" : "non-alcoholic")}
+                            className={classNames(
+                              "ml-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors border",
+                              discoverDrinkFilter === "non-alcoholic"
+                                ? "border-orange-400 bg-orange-50 text-orange-600 dark:border-orange-600 dark:bg-orange-950 dark:text-orange-400"
+                                : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                            )}
+                          >
+                            Non-alcoholic
+                          </button>
+                        </>
                       )}
                     </h3>
                     {groupIdx === 0 && feed?.lastRefreshed && (
