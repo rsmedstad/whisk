@@ -1273,7 +1273,7 @@ export function Discover({
               >
                 <Sparkles className="w-5 h-5" />
                 {newCount > 0 && !newOnly && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 flex items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white px-1">
+                  <span className="wk-badge absolute -top-0.5 -right-0.5 min-w-4 h-4 flex items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white px-1">
                     {newCount}
                   </span>
                 )}
