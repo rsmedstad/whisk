@@ -4,6 +4,10 @@ import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 
 type Theme = AppSettings["theme"];
 
+// Accents whose CSS palettes use dark backgrounds (e.g. --color-white is a dark value)
+// These need the `.dark` class so dark: Tailwind variants activate for text contrast
+const DARK_ACCENTS: ReadonlySet<SeasonalAccent> = new Set(["halloween"]);
+
 function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
@@ -47,10 +51,14 @@ export function useTheme() {
   });
 
   // Resolve dark/light mode
+  // Seasonal themes use their own palettes — dark class only for dark-palette accents
+  const activeAccent = accentOverride !== "auto" ? accentOverride : getSeasonalAccent();
   const resolved =
-    preference === "system" || preference === "seasonal"
+    preference === "system"
       ? getSystemTheme()
-      : preference;
+      : preference === "seasonal"
+        ? (DARK_ACCENTS.has(activeAccent) ? "dark" : "light")
+        : preference;
 
   useEffect(() => {
     applyTheme(resolved);
@@ -80,9 +88,9 @@ export function useTheme() {
     }
   }, [preference, accentOverride]);
 
-  // Listen for system theme changes (for system + seasonal modes)
+  // Listen for system theme changes (for system mode only)
   useEffect(() => {
-    if (preference !== "system" && preference !== "seasonal") return;
+    if (preference !== "system") return;
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => applyTheme(getSystemTheme());

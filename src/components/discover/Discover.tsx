@@ -25,6 +25,7 @@ import {
   XMark,
   ChevronDown,
   Sun,
+  MagnifyingGlass,
 } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { useWakeLock } from "../../hooks/useWakeLock";
@@ -110,6 +111,47 @@ function matchesCuisine(item: DiscoverFeedItem, cuisine: CuisineOption): boolean
   const text = `${item.title} ${item.description ?? ""}`.toLowerCase();
   return CUISINE_KEYWORDS[cuisine].some((kw) => text.includes(kw));
 }
+
+/** Diet options for tag-based filtering */
+const DIET_OPTIONS = [
+  "vegetarian", "vegan", "gluten-free", "dairy-free", "keto", "low-carb", "healthy",
+] as const;
+type DietOption = typeof DIET_OPTIONS[number];
+
+const DIET_LABELS: Record<DietOption, string> = {
+  vegetarian: "Vegetarian",
+  vegan: "Vegan",
+  "gluten-free": "Gluten-Free",
+  "dairy-free": "Dairy-Free",
+  keto: "Keto",
+  "low-carb": "Low-Carb",
+  healthy: "Healthy",
+};
+
+/** Season options for tag-based filtering */
+const SEASON_OPTIONS = [
+  "summer", "fall", "winter", "spring",
+  "christmas", "thanksgiving", "halloween", "easter",
+  "july 4th", "valentines", "st patricks", "cinco de mayo", "new years", "birthday",
+] as const;
+type SeasonOption = typeof SEASON_OPTIONS[number];
+
+const SEASON_LABELS: Record<SeasonOption, string> = {
+  summer: "Summer",
+  fall: "Fall",
+  winter: "Winter",
+  spring: "Spring",
+  christmas: "Christmas",
+  thanksgiving: "Thanksgiving",
+  halloween: "Halloween",
+  easter: "Easter",
+  "july 4th": "July 4th",
+  valentines: "Valentine's",
+  "st patricks": "St. Patrick's",
+  "cinco de mayo": "Cinco de Mayo",
+  "new years": "New Year's",
+  birthday: "Birthday",
+};
 
 /** Display order for categories */
 const CATEGORY_ORDER: DiscoverCategory[] = [
@@ -230,11 +272,15 @@ export function Discover({
   const navigate = useNavigate();
 
   // ── Filter/sort state ──
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<DiscoverSort>("category");
   const [newOnly, setNewOnly] = useState(false);
   const [selectedType, setSelectedType] = useState<DiscoverCategory | null>(null);
   const [selectedCuisine, setSelectedCuisine] = useState<CuisineOption | null>(null);
+  const [selectedDiet, setSelectedDiet] = useState<DietOption | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<SeasonOption | null>(null);
   const [maxTime, setMaxTime] = useState<number | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number } | null>(null);
@@ -534,6 +580,16 @@ export function Discover({
       items = items.filter((i) => matchesCuisine(i, selectedCuisine));
     }
 
+    // Diet filter (tag match)
+    if (selectedDiet) {
+      items = items.filter((i) => i.tags?.includes(selectedDiet));
+    }
+
+    // Season filter (tag match)
+    if (selectedSeason) {
+      items = items.filter((i) => i.tags?.includes(selectedSeason));
+    }
+
     // Time filter
     if (maxTime != null) {
       if (maxTime === Infinity) {
@@ -555,13 +611,13 @@ export function Discover({
     }
 
     return items;
-  }, [allItems, search, newOnly, selectedType, selectedCuisine, maxTime, sort]);
+  }, [allItems, search, newOnly, selectedType, selectedCuisine, selectedDiet, selectedSeason, maxTime, sort]);
 
   // Count new items for the badge
   const newCount = useMemo(() => allItems.filter(isNewItem).length, [allItems]);
 
   // Check if any filters are active (to switch from carousel to grid)
-  const hasActiveFilters = search || newOnly || selectedType !== null || selectedCuisine !== null || maxTime !== null;
+  const hasActiveFilters = search || newOnly || selectedType !== null || selectedCuisine !== null || selectedDiet !== null || selectedSeason !== null || maxTime !== null;
 
   // Group filtered items by category for carousel view
   const groupedItems = useMemo(() => {
@@ -581,6 +637,14 @@ export function Discover({
   );
   const availableCuisines = useMemo(() =>
     CUISINE_OPTIONS.filter((cuisine) => allItems.some((i) => matchesCuisine(i, cuisine))),
+    [allItems]
+  );
+  const availableDiets = useMemo(() =>
+    DIET_OPTIONS.filter((diet) => allItems.some((i) => i.tags?.includes(diet))),
+    [allItems]
+  );
+  const availableSeasons = useMemo(() =>
+    SEASON_OPTIONS.filter((season) => allItems.some((i) => i.tags?.includes(season))),
     [allItems]
   );
 
@@ -1092,46 +1156,67 @@ export function Discover({
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Discover</h1>
           </button>
-          <button
-            onClick={() => refreshFeed(true)}
-            disabled={feedLoading}
-            className="p-2 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
-            title="Refresh trending recipes"
-          >
-            <RefreshCw
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setSearchOpen(!searchOpen);
+                if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
+                else setSearch("");
+              }}
               className={classNames(
-                "w-4.5 h-4.5",
-                feedLoading && "animate-spin"
+                "p-2 transition-colors",
+                searchOpen || search
+                  ? "text-orange-500"
+                  : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
               )}
-            />
-          </button>
+              title="Search discover recipes"
+            >
+              <MagnifyingGlass className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => refreshFeed(true)}
+              disabled={feedLoading}
+              className="p-2 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
+              title="Refresh trending recipes"
+            >
+              <RefreshCw
+                className={classNames(
+                  "w-4.5 h-4.5",
+                  feedLoading && "animate-spin"
+                )}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Search + filter bar — only show when we have content */}
         {hasFeedContent && (
           <>
-            {/* Search */}
-            <div className="pb-2">
-              <div className="relative">
-                <input
-                  type="search"
-                  enterKeyHint="search"
-                  placeholder="Search discover recipes..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
-                  className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 pr-8 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-                  >
-                    <XMark className="w-4 h-4" />
-                  </button>
-                )}
+            {/* Search — collapsible */}
+            {searchOpen && (
+              <div className="pb-2">
+                <div className="relative">
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    enterKeyHint="search"
+                    placeholder="Search discover recipes..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLElement).blur(); }}
+                    className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 pr-8 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                    >
+                      <XMark className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Filter bar */}
             <div className="flex items-center gap-2 pb-2 overflow-x-auto no-scrollbar">
@@ -1217,6 +1302,43 @@ export function Discover({
                   : "Time"}
                 <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "time" && "rotate-180")} />
               </button>
+
+              {/* Diet filter */}
+              {availableDiets.length > 0 && (
+                <button
+                  onClick={(e) => openDropdownAt("diet", e)}
+                  className={classNames(
+                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                    selectedDiet
+                      ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      : openDropdown === "diet"
+                        ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                  )}
+                >
+                  {selectedDiet ? DIET_LABELS[selectedDiet] : "Diet"}
+                  <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "diet" && "rotate-180")} />
+                </button>
+              )}
+
+              {/* Season filter */}
+              {availableSeasons.length > 0 && (
+                <button
+                  onClick={(e) => openDropdownAt("season", e)}
+                  className={classNames(
+                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors shrink-0",
+                    selectedSeason
+                      ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      : openDropdown === "season"
+                        ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                  )}
+                >
+                  <Sun className="w-3 h-3" />
+                  {selectedSeason ? SEASON_LABELS[selectedSeason] : "Season"}
+                  <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "season" && "rotate-180")} />
+                </button>
+              )}
             </div>
 
             {/* Dropdown panel — portaled to body */}
@@ -1279,6 +1401,36 @@ export function Discover({
                       {selectedCuisine === cuisine && <Check className="w-4 h-4 text-orange-500" />}
                     </button>
                   ))}
+                  {openDropdown === "diet" && availableDiets.map((diet) => (
+                    <button
+                      key={diet}
+                      onClick={() => { setSelectedDiet(selectedDiet === diet ? null : diet); setOpenDropdown(null); }}
+                      className={classNames(
+                        "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                        selectedDiet === diet
+                          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                          : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      )}
+                    >
+                      {DIET_LABELS[diet]}
+                      {selectedDiet === diet && <Check className="w-4 h-4 text-orange-500" />}
+                    </button>
+                  ))}
+                  {openDropdown === "season" && availableSeasons.map((season) => (
+                    <button
+                      key={season}
+                      onClick={() => { setSelectedSeason(selectedSeason === season ? null : season); setOpenDropdown(null); }}
+                      className={classNames(
+                        "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                        selectedSeason === season
+                          ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                          : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      )}
+                    >
+                      {SEASON_LABELS[season]}
+                      {selectedSeason === season && <Check className="w-4 h-4 text-orange-500" />}
+                    </button>
+                  ))}
                   {openDropdown === "time" && TIME_RANGES.map((range) => {
                     const isActive = maxTime === range.maxMinutes;
                     return (
@@ -1303,7 +1455,7 @@ export function Discover({
             )}
 
             {/* Active filter chips */}
-            {(selectedType || selectedCuisine || maxTime != null) && (
+            {(selectedType || selectedCuisine || selectedDiet || selectedSeason || maxTime != null) && (
               <div className="flex items-center gap-1.5 pb-2">
                 <div className="flex flex-wrap gap-1.5 flex-1">
                   {selectedType && (
@@ -1333,9 +1485,27 @@ export function Discover({
                       <XMark className="w-3 h-3" />
                     </button>
                   )}
+                  {selectedDiet && (
+                    <button
+                      onClick={() => setSelectedDiet(null)}
+                      className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                    >
+                      {DIET_LABELS[selectedDiet]}
+                      <XMark className="w-3 h-3" />
+                    </button>
+                  )}
+                  {selectedSeason && (
+                    <button
+                      onClick={() => setSelectedSeason(null)}
+                      className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                    >
+                      {SEASON_LABELS[selectedSeason]}
+                      <XMark className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
                 <button
-                  onClick={() => { setSelectedType(null); setSelectedCuisine(null); setMaxTime(null); }}
+                  onClick={() => { setSelectedType(null); setSelectedCuisine(null); setSelectedDiet(null); setSelectedSeason(null); setMaxTime(null); }}
                   className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 shrink-0 transition-colors"
                 >
                   Clear all
@@ -1391,33 +1561,38 @@ export function Discover({
         {hasFeedContent && groupedItems && (
           /* Category carousel view (default, no filters active) */
           <div className="py-4 space-y-6">
-            {/* Feed header */}
-            <div className="px-4 flex items-center justify-between">
-              <h2 className="text-base font-bold dark:text-stone-100">
-                Discover Recipes
-              </h2>
-              {feed?.lastRefreshed && (
-                <span className="text-xs text-stone-400 dark:text-stone-500">
-                  Updated {timeAgo(feed.lastRefreshed)}
-                </span>
-              )}
-            </div>
-
-            {groupedItems.map(({ category, items }) => {
+            {groupedItems.map(({ category, items }, groupIdx) => {
               const catNewCount = items.filter(isNewItem).length;
               return (
                 <div key={category}>
-                  <h3 className="px-4 text-sm font-semibold text-stone-600 dark:text-stone-300 mb-2">
-                    {TYPE_LABELS[category]}
-                    <span className="ml-1.5 text-xs font-normal text-stone-400 dark:text-stone-500">
-                      {items.length} recipes
-                    </span>
-                    {catNewCount > 0 && (
-                      <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
-                        {catNewCount} new
+                  <div className="px-4 flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
+                      {TYPE_LABELS[category]}
+                      <span className="ml-1.5 text-xs font-normal text-stone-400 dark:text-stone-500">
+                        {items.length} recipes
                       </span>
+                      {catNewCount > 0 && (
+                        <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
+                          {catNewCount} new
+                        </span>
+                      )}
+                    </h3>
+                    {groupIdx === 0 && feed?.lastRefreshed && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-stone-400 dark:text-stone-500">
+                          {timeAgo(feed.lastRefreshed)}
+                        </span>
+                        <button
+                          onClick={() => refreshFeed(true)}
+                          disabled={feedLoading}
+                          className="p-1 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
+                          title="Refresh"
+                        >
+                          <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
+                        </button>
+                      </div>
                     )}
-                  </h3>
+                  </div>
                   <div className="flex gap-3 overflow-x-auto no-scrollbar px-4">
                     {items.map((item, i) => (
                       <FeedCard
@@ -1438,13 +1613,23 @@ export function Discover({
           /* Grid view (filters active or non-category sort) */
           <div className="py-4 px-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold dark:text-stone-100">
+              <h2 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
                 {filteredItems.length} recipe{filteredItems.length !== 1 ? "s" : ""}
               </h2>
               {feed?.lastRefreshed && (
-                <span className="text-xs text-stone-400 dark:text-stone-500">
-                  Updated {timeAgo(feed.lastRefreshed)}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-stone-400 dark:text-stone-500">
+                    {timeAgo(feed.lastRefreshed)}
+                  </span>
+                  <button
+                    onClick={() => refreshFeed(true)}
+                    disabled={feedLoading}
+                    className="p-1 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
+                    title="Refresh"
+                  >
+                    <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
+                  </button>
+                </div>
               )}
             </div>
             {filteredItems.length === 0 ? (
@@ -1456,7 +1641,7 @@ export function Discover({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => { setSearch(""); setNewOnly(false); setSelectedType(null); setSelectedCuisine(null); setMaxTime(null); }}
+                    onClick={() => { setSearch(""); setNewOnly(false); setSelectedType(null); setSelectedCuisine(null); setSelectedDiet(null); setSelectedSeason(null); setMaxTime(null); }}
                   >
                     Clear filters
                   </Button>

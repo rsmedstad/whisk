@@ -3,6 +3,7 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { ChevronLeft } from "../ui/Icon";
+import { InstallPrompt } from "../InstallPrompt";
 import { getSeasonalAccent } from "../../lib/seasonal";
 import type { AppSettings, OnboardingPrefs } from "../../types";
 
@@ -94,6 +95,8 @@ export function Login({
               Set Up a New Book
             </Button>
           </div>
+
+          <InstallPrompt />
         </div>
       </div>
     );
