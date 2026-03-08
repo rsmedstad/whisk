@@ -12,7 +12,7 @@ import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
 import { classNames } from "../lib/utils";
-import { ChevronLeft, Trash, Globe, Share, Check, ChevronDown } from "./ui/Icon";
+import { ChevronLeft, Trash, Globe, Share, Check, ChevronDown, Sun, Moon, ComputerDesktop, CalendarDays } from "./ui/Icon";
 
 interface SettingsProps {
   theme: AppSettings["theme"];
@@ -34,6 +34,36 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "data", label: "Data" },
   { id: "about", label: "About" },
 ];
+
+const ACCENT_EMOJI: Record<string, string> = {
+  auto: "🔄",
+  spring: "🌸",
+  summer: "☀\uFE0F",
+  fall: "🍂",
+  winter: "❄\uFE0F",
+  valentine: "❤\uFE0F",
+  stpatrick: "☘\uFE0F",
+  easter: "🐣",
+  july4th: "🎆",
+  halloween: "🎃",
+  thanksgiving: "🦃",
+  christmas: "🎄",
+};
+
+const ACCENT_COLORS: Record<string, string[]> = {
+  auto: ["#22c55e", "#16a34a", "#15803d"],
+  spring: ["#f080b8", "#d93884", "#991a55"],
+  summer: ["#ffcc33", "#e88d0a", "#cc7400"],
+  fall: ["#e09030", "#b36000", "#7a3f00"],
+  winter: ["#5580cc", "#1a44aa", "#102c75"],
+  valentine: ["#ff6090", "#e0115f", "#9e0042"],
+  stpatrick: ["#33cc33", "#008800", "#d4a828"],
+  easter: ["#bb99ff", "#8844ee", "#ffb6d9"],
+  july4th: ["#cc0000", "#1e40af", "#ffffff"],
+  halloween: ["#ff9900", "#ff5500", "#7b2dbd"],
+  thanksgiving: ["#e09020", "#b36200", "#8b2252"],
+  christmas: ["#cc0000", "#1a6b1a", "#d4a828"],
+};
 
 export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities }: SettingsProps) {
   const aiConfig = useAIConfig();
@@ -65,9 +95,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     } catch { return []; }
   });
 
-  const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
-    return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
-  });
+  const [showAccentPicker, setShowAccentPicker] = useState(false);
 
   const [mealSlots, setMealSlots] = useState<string[]>(() => {
     try {
@@ -79,11 +107,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     } catch {}
     return ["dinner"];
   });
-
-  const handleRecipeLayoutChange = (layout: "horizontal" | "vertical") => {
-    setRecipeLayout(layout);
-    localStorage.setItem("whisk_recipe_layout", layout);
-  };
 
   const [showShareModal, setShowShareModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -294,109 +317,204 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
         {/* ===== GENERAL TAB ===== */}
         {activeTab === "general" && (
           <>
-            {/* Appearance */}
+            {/* Theme */}
             <section>
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
-                Appearance
+                Theme
               </h2>
               <Card>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                      Theme
-                    </label>
-                    <select
-                      value={theme === "seasonal" ? `seasonal:${accentOverride}` : theme}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "system" || val === "light" || val === "dark") {
-                          onSetTheme(val);
-                        } else if (val.startsWith("seasonal:")) {
-                          const accent = val.replace("seasonal:", "") as "auto" | SeasonalAccent;
-                          onSetTheme("seasonal");
-                          onSetAccent(accent);
-                        }
-                      }}
-                      className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-2.5 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                    >
-                      <optgroup label="Standard">
-                        <option value="system">System (follows device)</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                      </optgroup>
-                      <optgroup label="Seasonal &amp; Holiday Colors">
-                        <option value="seasonal:auto">Auto (changes with calendar)</option>
-                        {ACCENT_OPTIONS.filter((o) => o.value !== "auto").map((opt) => (
-                          <option key={opt.value} value={`seasonal:${opt.value}`}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-                    {theme === "seasonal" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {([
+                      { id: "system" as const, label: "System", IconComp: ComputerDesktop },
+                      { id: "light" as const, label: "Light", IconComp: Sun },
+                      { id: "dark" as const, label: "Dark", IconComp: Moon },
+                      { id: "seasonal" as const, label: "Seasonal", IconComp: CalendarDays },
+                    ] as const).map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          onSetTheme(t.id);
+                          if (t.id === "seasonal" && !showAccentPicker) setShowAccentPicker(true);
+                        }}
+                        className={classNames(
+                          "flex flex-col items-center gap-1 py-2.5 px-1 rounded-[var(--wk-radius-btn)] text-xs font-medium border transition-all",
+                          theme === t.id ? activeClass : inactiveClass
+                        )}
+                      >
+                        <t.IconComp className="w-5 h-5" />
+                        <span>{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Seasonal accent picker */}
+                  {theme === "seasonal" && (
+                    <div>
+                      <button
+                        onClick={() => setShowAccentPicker(!showAccentPicker)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--wk-radius-input)] border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-sm transition-colors hover:border-stone-400 dark:hover:border-stone-500"
+                      >
+                        <span className="text-lg leading-none">{ACCENT_EMOJI[accentOverride] ?? "🔄"}</span>
+                        <span className="flex-1 text-left font-medium dark:text-stone-200">
+                          {ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? "Auto"}
+                        </span>
+                        <div className="flex gap-1 mr-1">
+                          {(ACCENT_COLORS[accentOverride] ?? []).map((c, i) => (
+                            <span key={i} className="w-3 h-3 rounded-full border border-stone-200 dark:border-stone-600" style={{ background: c }} />
+                          ))}
+                        </div>
+                        <ChevronDown className={classNames("w-4 h-4 text-stone-400 transition-transform", showAccentPicker && "rotate-180")} />
+                      </button>
+
+                      {showAccentPicker && (
+                        <div className="mt-1.5 rounded-[var(--wk-radius-input)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 overflow-hidden divide-y divide-stone-100 dark:divide-stone-700/50 max-h-72 overflow-y-auto">
+                          {ACCENT_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => {
+                                onSetAccent(opt.value);
+                                setShowAccentPicker(false);
+                              }}
+                              className={classNames(
+                                "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors",
+                                accentOverride === opt.value
+                                  ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                                  : "text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700/50"
+                              )}
+                            >
+                              <span className="text-lg leading-none">{ACCENT_EMOJI[opt.value] ?? ""}</span>
+                              <span className="flex-1">{opt.label}</span>
+                              <div className="flex gap-1">
+                                {(ACCENT_COLORS[opt.value] ?? []).map((c, i) => (
+                                  <span key={i} className="w-2.5 h-2.5 rounded-full border border-stone-200/50 dark:border-stone-600/50" style={{ background: c }} />
+                                ))}
+                              </div>
+                              {accentOverride === opt.value && <Check className="w-4 h-4 text-orange-500 shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
                         {accentOverride === "auto"
                           ? "Colors shift automatically with the calendar"
                           : `Locked to ${ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? accentOverride} colors`}
                       </p>
-                    )}
-                  </div>
-
-                  {/* Design Style */}
-                  <div>
-                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                      Design Style
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([
-                        { id: "modern" as const, label: "Modern", desc: "Clean & minimal" },
-                        { id: "editorial" as const, label: "Editorial", desc: "Magazine-style dividers" },
-                        { id: "soft" as const, label: "Soft", desc: "Rounded & cozy" },
-                        { id: "brutalist" as const, label: "Brutalist", desc: "Thick borders & hard shadows" },
-                        { id: "glass" as const, label: "Glass", desc: "Frosted & layered" },
-                      ]).map((s) => (
-                        <button
-                          key={s.id}
-                          onClick={() => onSetStyle(s.id)}
-                          className={`py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-0.5 ${
-                            style === s.id ? activeClass : inactiveClass
-                          }`}
-                        >
-                          <span className="text-sm">{s.label}</span>
-                          <span className="text-[10px] opacity-60">{s.desc}</span>
-                        </button>
-                      ))}
                     </div>
-                  </div>
-
-                  {/* Recipe Layout */}
-                  <div>
-                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                      Recipe Layout
-                    </label>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-                      How categories display on the Recipes tab
-                    </p>
-                    <div className="flex gap-2">
-                      {([
-                        { id: "horizontal" as const, label: "Carousel", desc: "Scroll sideways per category" },
-                        { id: "vertical" as const, label: "Grid", desc: "All recipes in a vertical list" },
-                      ]).map((l) => (
-                        <button
-                          key={l.id}
-                          onClick={() => handleRecipeLayoutChange(l.id)}
-                          className={`flex-1 py-2 px-2 rounded-[var(--wk-radius-btn)] font-medium border flex flex-col items-center justify-center gap-0.5 ${
-                            recipeLayout === l.id ? activeClass : inactiveClass
-                          }`}
-                        >
-                          <span className="text-sm">{l.label}</span>
-                          <span className="text-[10px] opacity-60">{l.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  )}
                 </div>
               </Card>
+            </section>
+
+            {/* Design Style */}
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Design Style
+              </h2>
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Modern */}
+                <button
+                  onClick={() => onSetStyle("modern")}
+                  className={classNames(
+                    "relative p-3 border transition-all rounded-xl shadow-sm text-left",
+                    style === "modern"
+                      ? "border-orange-500 bg-orange-50/50 dark:bg-orange-950/30 ring-1 ring-orange-500/30"
+                      : "border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-stone-300 dark:hover:border-stone-600"
+                  )}
+                >
+                  <div className="text-sm font-semibold dark:text-stone-200 mb-2">Modern</div>
+                  <div className="space-y-1.5">
+                    <div className="h-5 rounded-lg bg-stone-100 dark:bg-stone-700 border border-stone-200/50 dark:border-stone-600/50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" />
+                    <div className="flex gap-1">
+                      <div className="h-1.5 flex-1 rounded bg-stone-200 dark:bg-stone-600" />
+                      <div className="h-1.5 w-5 rounded bg-stone-200 dark:bg-stone-600" />
+                    </div>
+                  </div>
+                  {style === "modern" && <Check className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-orange-500" />}
+                </button>
+
+                {/* Editorial */}
+                <button
+                  onClick={() => onSetStyle("editorial")}
+                  className={classNames(
+                    "relative p-3 transition-all text-left",
+                    style === "editorial"
+                      ? "border-t-2 border-t-orange-500 border-b border-l border-r border-orange-500/30 bg-orange-50/50 dark:bg-orange-950/30"
+                      : "border-t-2 border-t-stone-800 dark:border-t-stone-300 border-b border-l border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-stone-300"
+                  )}
+                >
+                  <div className="text-sm font-extrabold tracking-tight uppercase dark:text-stone-200 mb-2">Editorial</div>
+                  <div className="space-y-1.5">
+                    <div className="h-5 border-t-2 border-t-stone-400 dark:border-t-stone-500 bg-stone-50 dark:bg-stone-800" />
+                    <div className="flex gap-1">
+                      <div className="h-1.5 flex-1 bg-stone-300 dark:bg-stone-600" />
+                      <div className="h-1.5 w-5 bg-stone-300 dark:bg-stone-600" />
+                    </div>
+                  </div>
+                  {style === "editorial" && <Check className="absolute top-2 right-1.5 w-3.5 h-3.5 text-orange-500" />}
+                </button>
+
+                {/* Soft */}
+                <button
+                  onClick={() => onSetStyle("soft")}
+                  className={classNames(
+                    "relative p-3 transition-all rounded-2xl border text-left",
+                    style === "soft"
+                      ? "border-orange-500 bg-orange-50/50 dark:bg-orange-950/30 shadow-lg ring-1 ring-orange-500/20"
+                      : "border-transparent bg-white dark:bg-stone-900 shadow-md hover:shadow-lg"
+                  )}
+                >
+                  <div className="text-sm font-semibold dark:text-stone-200 mb-2">Soft</div>
+                  <div className="space-y-1.5">
+                    <div className="h-5 rounded-xl bg-stone-100 dark:bg-stone-700 shadow-[0_2px_8px_rgba(0,0,0,0.06)]" />
+                    <div className="flex gap-1.5">
+                      <div className="h-1.5 flex-1 rounded-full bg-stone-200 dark:bg-stone-600" />
+                      <div className="h-1.5 w-5 rounded-full bg-stone-200 dark:bg-stone-600" />
+                    </div>
+                  </div>
+                  {style === "soft" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
+                </button>
+
+                {/* Brutalist */}
+                <button
+                  onClick={() => onSetStyle("brutalist")}
+                  className={classNames(
+                    "relative p-3 border-2 transition-all text-left",
+                    style === "brutalist"
+                      ? "border-orange-500 bg-orange-50/50 dark:bg-orange-950/30 shadow-[3px_3px_0_0_rgb(234,88,12)]"
+                      : "border-stone-800 dark:border-stone-300 bg-white dark:bg-stone-900 shadow-[3px_3px_0_0_#000] dark:shadow-[3px_3px_0_0_rgba(255,255,255,0.3)] hover:shadow-[4px_4px_0_0_#000] dark:hover:shadow-[4px_4px_0_0_rgba(255,255,255,0.4)]"
+                  )}
+                >
+                  <div className="text-sm font-black tracking-tight uppercase dark:text-stone-200 mb-2">Brutalist</div>
+                  <div className="space-y-1.5">
+                    <div className="h-5 border-2 border-stone-800 dark:border-stone-400 bg-stone-50 dark:bg-stone-800 shadow-[2px_2px_0_0_#000] dark:shadow-[2px_2px_0_0_rgba(255,255,255,0.2)]" />
+                    <div className="flex gap-1">
+                      <div className="h-2 flex-1 bg-stone-800 dark:bg-stone-400" />
+                      <div className="h-2 w-5 bg-stone-800 dark:bg-stone-400" />
+                    </div>
+                  </div>
+                  {style === "brutalist" && <Check className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-orange-500" />}
+                </button>
+
+                {/* Glass */}
+                <button
+                  onClick={() => onSetStyle("glass")}
+                  className={classNames(
+                    "relative col-span-2 p-3 transition-all rounded-xl border text-left",
+                    style === "glass"
+                      ? "bg-orange-50/30 dark:bg-orange-950/20 border-orange-500/50 ring-1 ring-orange-500/20 backdrop-blur-sm"
+                      : "bg-white/50 dark:bg-stone-800/50 border-stone-200/50 dark:border-stone-600/50 backdrop-blur-sm hover:bg-white/70 dark:hover:bg-stone-800/70"
+                  )}
+                >
+                  <div className="text-sm font-light dark:text-stone-200 mb-2">Glass</div>
+                  <div className="flex gap-2">
+                    <div className="flex-1 h-5 rounded-lg bg-white/60 dark:bg-stone-700/50 backdrop-blur border border-white/40 dark:border-stone-500/30 shadow-[0_4px_12px_rgba(0,0,0,0.04)]" />
+                    <div className="flex-1 h-5 rounded-lg bg-white/60 dark:bg-stone-700/50 backdrop-blur border border-white/40 dark:border-stone-500/30 shadow-[0_4px_12px_rgba(0,0,0,0.04)]" />
+                  </div>
+                  {style === "glass" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
+                </button>
+              </div>
             </section>
 
             {/* Units & Measurements */}
