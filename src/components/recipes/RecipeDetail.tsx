@@ -259,6 +259,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   }, [recipe, isGroupingSteps, updateRecipe]);
 
   const photos = useMemo(() => {
+    const isDrinks = recipe?.tags.includes("drinks");
     if (recipe?.photos?.length) {
       // Normalize CDN image URLs for dedup — strips fingerprints, dimensions, filters
       const normalizeImageKey = (url: string): string => {
@@ -290,14 +291,20 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
       if (hasLocal) {
         deduped = deduped.filter((p) => p.url.startsWith("/"));
       }
-      return deduped;
+      // For drink recipes, only show the primary photo (step photos aren't useful)
+      if (isDrinks && deduped.length > 1) {
+        const primary = deduped.find((p) => p.isPrimary);
+        if (primary) deduped = [primary];
+      }
+      // If all photos had missing URLs, fall back to thumbnailUrl
+      if (deduped.length > 0) return deduped;
     }
-    // Fall back to thumbnailUrl if no photos array
+    // Fall back to thumbnailUrl if no photos array or all entries had missing URLs
     if (recipe?.thumbnailUrl) {
       return [{ url: recipe.thumbnailUrl, isPrimary: true }];
     }
     return [];
-  }, [recipe?.photos, recipe?.thumbnailUrl]);
+  }, [recipe?.photos, recipe?.thumbnailUrl, recipe?.tags]);
 
   if (isLoading || !recipe) {
     return <LoadingSpinner className="py-20" size="lg" />;
