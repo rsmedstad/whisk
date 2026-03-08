@@ -260,8 +260,10 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
   const photos = useMemo(() => {
     if (recipe?.photos?.length) {
-      // Deduplicate by URL
-      let deduped = recipe.photos.filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
+      // Filter out entries with missing URLs, then deduplicate
+      let deduped = recipe.photos
+        .filter((p) => p.url)
+        .filter((p, i, arr) => arr.findIndex((q) => q.url === p.url) === i);
       // If we have local R2 photos, filter out external URLs (likely duplicates from import)
       const hasLocal = deduped.some((p) => p.url.startsWith("/"));
       if (hasLocal) {
