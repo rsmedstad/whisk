@@ -1164,9 +1164,9 @@ export function Discover({
                 else setSearch("");
               }}
               className={classNames(
-                "p-2 transition-colors",
+                "p-2 rounded-lg transition-all",
                 searchOpen || search
-                  ? "text-orange-500"
+                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
                   : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
               )}
               title="Search discover recipes"
