@@ -376,6 +376,24 @@ export function Leaf(props: IconProps) {
   );
 }
 
+/** Simple flower for spring branding */
+export function Flower(props: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
+      {/* Petals */}
+      <ellipse cx="12" cy="7" rx="2.5" ry="3.5" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
+      <ellipse cx="7.5" cy="10.5" rx="2.5" ry="3.5" transform="rotate(-60 7.5 10.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
+      <ellipse cx="16.5" cy="10.5" rx="2.5" ry="3.5" transform="rotate(60 16.5 10.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
+      <ellipse cx="9" cy="14.5" rx="2.5" ry="3.5" transform="rotate(-30 9 14.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
+      <ellipse cx="15" cy="14.5" rx="2.5" ry="3.5" transform="rotate(30 15 14.5)" strokeWidth={1.3} fill="currentColor" opacity={0.12} />
+      {/* Center */}
+      <circle cx="12" cy="11" r="2" strokeWidth={1.3} fill="currentColor" opacity={0.3} />
+      {/* Stem */}
+      <path d="M12 13 C12 16, 11 19, 12 22" strokeWidth={1.8} />
+    </svg>
+  );
+}
+
 export function Send(props: IconProps) {
   return (
     <Icon {...props}>
