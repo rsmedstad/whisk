@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Ingredient, Step } from "../../types";
 import { classNames, decodeEntities, parseTimerFromText, parseFraction } from "../../lib/utils";
-import { categorizeIngredient, CATEGORY_LABELS, CATEGORY_ORDER } from "../../lib/categories";
+import { categorizeIngredient, CATEGORY_LABELS, CATEGORY_ORDER, categorizeIngredientForDrink, DRINK_CATEGORY_LABELS, DRINK_CATEGORY_ORDER } from "../../lib/categories";
 import { estimateGrams } from "../../lib/units";
 import { Check, Stopwatch } from "../ui/Icon";
 
@@ -67,12 +67,13 @@ export function IngredientRow({ ingredient, hideGroup, showGrams, onCheck }: {
 
 // ── Grouped Ingredients ──
 
-export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onCheckedChange }: {
+export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onCheckedChange, isDrink }: {
   ingredients: Ingredient[];
   sort: "recipe" | "category";
   resetKey: number;
   showGrams: boolean;
   onCheckedChange?: (hasChecked: boolean) => void;
+  isDrink?: boolean;
 }) {
   const hasExplicitGroups = ingredients.some((i) => i.group);
   const handleCheck = () => onCheckedChange?.(true);
@@ -117,8 +118,10 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
 
   // Category sort
   const grouped = new Map<string, Ingredient[]>();
+  const categoryOrder = isDrink ? DRINK_CATEGORY_ORDER : CATEGORY_ORDER;
+  const categoryLabels = isDrink ? DRINK_CATEGORY_LABELS : CATEGORY_LABELS;
   for (const ing of ingredients) {
-    const cat = categorizeIngredient(ing.name);
+    const cat = isDrink ? categorizeIngredientForDrink(ing.name) : categorizeIngredient(ing.name);
     const list = grouped.get(cat);
     if (list) list.push(ing);
     else grouped.set(cat, [ing]);
@@ -136,12 +139,12 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
 
   return (
     <div className="space-y-4">
-      {CATEGORY_ORDER.filter((cat) => grouped.has(cat)).map((cat) => {
+      {categoryOrder.filter((cat) => grouped.has(cat)).map((cat) => {
         const ings = grouped.get(cat)!;
         return (
           <div key={cat}>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1.5">
-              {CATEGORY_LABELS[cat]}
+              {categoryLabels[cat as keyof typeof categoryLabels]}
             </h3>
             <ul className="space-y-2">
               {ings.map((ing, i) => (

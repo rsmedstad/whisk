@@ -214,3 +214,112 @@ export const CATEGORY_ORDER: ShoppingCategory[] = [
   "beverages",
   "other",
 ];
+
+// ── Drink-specific categories ──────────────────────────
+
+export type DrinkCategory =
+  | "spirits"
+  | "wine"
+  | "beer"
+  | "mixers"
+  | "bitters_modifiers"
+  | "garnish"
+  | "other";
+
+const DRINK_CATEGORY_KEYWORDS: Record<DrinkCategory, string[]> = {
+  spirits: [
+    "bourbon", "brandy", "cognac", "gin", "mezcal", "pisco", "rum",
+    "rye", "scotch", "tequila", "vodka", "whiskey", "whisky",
+    "absinthe", "aquavit", "cachaca", "grappa", "moonshine",
+    "amaretto", "baileys", "campari", "chambord", "chartreuse",
+    "cointreau", "creme de", "curacao", "drambuie", "elderflower liqueur",
+    "frangelico", "galliano", "grand marnier", "kahlua", "limoncello",
+    "maraschino liqueur", "midori", "patron", "sambuca", "schnapps",
+    "st-germain", "st germain", "triple sec", "liqueur", "amaro",
+    "aperol", "fernet",
+  ],
+  wine: [
+    "wine", "champagne", "prosecco", "cava", "sparkling wine",
+    "red wine", "white wine", "rose", "rosé", "port", "sherry",
+    "vermouth", "marsala", "madeira", "sake", "soju", "mead",
+  ],
+  beer: [
+    "beer", "ale", "lager", "stout", "porter", "ipa", "pilsner",
+    "wheat beer", "hefeweizen", "hard cider", "hard seltzer",
+    "hard lemonade", "malt liquor", "shandy", "radler",
+  ],
+  mixers: [
+    "soda", "soda water", "club soda", "tonic", "tonic water",
+    "ginger ale", "ginger beer", "cola", "sprite", "lemon-lime",
+    "cranberry juice", "orange juice", "pineapple juice", "grapefruit juice",
+    "lime juice", "lemon juice", "juice", "tomato juice", "apple cider",
+    "coconut water", "coconut cream", "coconut milk", "cream of coconut",
+    "grenadine", "simple syrup", "syrup", "agave", "honey",
+    "cream", "heavy cream", "half and half", "milk", "egg white",
+    "espresso", "coffee", "tea", "hot water", "water", "ice",
+    "sparkling water", "mineral water", "seltzer", "kombucha",
+  ],
+  bitters_modifiers: [
+    "bitters", "angostura", "peychaud", "orange bitters",
+    "aromatic bitters", "chocolate bitters", "celery bitters",
+    "mole bitters", "worcestershire", "hot sauce", "tabasco",
+    "salt", "pepper", "sugar", "sugar cube", "demerara",
+    "powdered sugar", "cinnamon", "nutmeg", "cayenne",
+    "celery salt", "tajin", "everything bagel",
+  ],
+  garnish: [
+    "garnish", "cherry", "maraschino cherry", "olive", "onion",
+    "cocktail onion", "lime wheel", "lemon wheel", "orange peel",
+    "lemon peel", "lime peel", "lemon twist", "orange twist",
+    "lime wedge", "lemon wedge", "orange slice", "pineapple wedge",
+    "mint", "mint sprig", "basil", "rosemary", "thyme",
+    "cucumber", "celery", "celery stalk", "jalapeño", "jalapeno",
+    "whipped cream", "cocoa powder", "cinnamon stick",
+    "star anise", "umbrella", "edible flower", "candied ginger",
+  ],
+  other: [],
+};
+
+export function categorizeIngredientForDrink(name: string): DrinkCategory {
+  const normalized = normalizeForMatch(name);
+  const variants = getStemVariants(normalized);
+
+  for (const [category, keywords] of Object.entries(DRINK_CATEGORY_KEYWORDS)) {
+    if (category === "other") continue;
+    for (const keyword of keywords) {
+      for (const variant of variants) {
+        if (variant.includes(keyword) || keyword.includes(variant)) {
+          return category as DrinkCategory;
+        }
+      }
+      const keywordVariants = getStemVariants(keyword);
+      for (const kv of keywordVariants) {
+        if (normalized.includes(kv)) {
+          return category as DrinkCategory;
+        }
+      }
+    }
+  }
+
+  return "other";
+}
+
+export const DRINK_CATEGORY_LABELS: Record<DrinkCategory, string> = {
+  spirits: "Spirits & Liqueurs",
+  wine: "Wine",
+  beer: "Beer & Cider",
+  mixers: "Mixers & Juices",
+  bitters_modifiers: "Bitters & Modifiers",
+  garnish: "Garnish",
+  other: "Other",
+};
+
+export const DRINK_CATEGORY_ORDER: DrinkCategory[] = [
+  "spirits",
+  "wine",
+  "beer",
+  "mixers",
+  "bitters_modifiers",
+  "garnish",
+  "other",
+];

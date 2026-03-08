@@ -17,6 +17,7 @@ import { TagChip } from "../ui/TagChip";
 import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun } from "../ui/Icon";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { GroupedIngredients, StepsList } from "./RecipeComponents";
+import { categorizeIngredientForDrink } from "../../lib/categories";
 
 interface RecipeDetailProps {
   onStartTimer: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
@@ -30,6 +31,10 @@ const PANTRY_STAPLES = new Set([
   "salt", "pepper", "black pepper", "olive oil", "vegetable oil", "canola oil",
   "cooking spray", "water", "ice", "nonstick spray", "oil",
 ]);
+
+// For drinks, "essentials" means the main spirits/liquors/wine/beer —
+// skip garnishes, bitters, modifiers, ice, water, and other extras
+const DRINK_NON_ESSENTIALS = new Set<string>(["garnish", "bitters_modifiers"]);
 
 export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShoppingList, onAddMeal }: RecipeDetailProps) {
   const { id } = useParams<{ id: string }>();
@@ -68,6 +73,8 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [planSlot, setPlanSlot] = useState<MealSlot>("dinner");
   const galleryRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const isDrink = recipe?.tags.includes("drinks") ?? false;
 
   // Background refresh — updates from network silently
   useEffect(() => {
@@ -117,7 +124,9 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const handleAddToList = useCallback(async (essentialsOnly: boolean) => {
     if (!recipe) return;
     const ings = essentialsOnly
-      ? recipe.ingredients.filter((i) => !PANTRY_STAPLES.has(i.name.toLowerCase().trim()))
+      ? isDrink
+        ? recipe.ingredients.filter((i) => !DRINK_NON_ESSENTIALS.has(categorizeIngredientForDrink(i.name)))
+        : recipe.ingredients.filter((i) => !PANTRY_STAPLES.has(i.name.toLowerCase().trim()))
       : recipe.ingredients;
     const result = await onAddToShoppingList(ings, recipe.id);
     if (result.added > 0) {
@@ -730,7 +739,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             </div>
 
             {ingredients.length > 0 ? (
-              <GroupedIngredients ingredients={ingredients} sort={ingredientSort} resetKey={ingredientResetKey} showGrams={showGrams} onCheckedChange={setHasCheckedIngredients} />
+              <GroupedIngredients ingredients={ingredients} sort={ingredientSort} resetKey={ingredientResetKey} showGrams={showGrams} onCheckedChange={setHasCheckedIngredients} isDrink={isDrink} />
             ) : (
               <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">
                 No ingredients listed
@@ -954,7 +963,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                       >
                         -
                       </button>
-                      <span>Cooked {recipe.cookedCount} time{recipe.cookedCount !== 1 ? "s" : ""}</span>
+                      <span>{isDrink ? "Made" : "Cooked"} {recipe.cookedCount} time{recipe.cookedCount !== 1 ? "s" : ""}</span>
                       <button
                         onClick={() => {
                           const newCount = (recipe.cookedCount ?? 0) + 1;
@@ -969,7 +978,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                     </span>
                   ) : null}
                   {recipe.cookedCount && recipe.lastCookedAt ? " · " : ""}
-                  {recipe.lastCookedAt ? `Last ${new Date(recipe.lastCookedAt).toLocaleDateString()}` : ""}
+                  {recipe.lastCookedAt ? `Last made ${new Date(recipe.lastCookedAt).toLocaleDateString()}` : ""}
                 </div>
               )}
             </div>
@@ -996,7 +1005,9 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 </Button>
               </div>
               <p className="text-[11px] text-stone-400 dark:text-stone-500">
-                Essentials skips salt, pepper, oil & common pantry staples
+                {isDrink
+                  ? "Essentials skips garnishes, bitters & modifiers"
+                  : "Essentials skips salt, pepper, oil & common pantry staples"}
               </p>
             </div>
           </div>
