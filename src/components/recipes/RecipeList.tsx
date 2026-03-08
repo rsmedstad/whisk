@@ -217,7 +217,7 @@ export function RecipeList({
               )}
               title="Search recipes"
             >
-              <MagnifyingGlass className="w-5 h-5" />
+              {searchOpen ? <XMark className="w-5 h-5" /> : <MagnifyingGlass className="w-5 h-5" />}
             </button>
             <button
               onClick={() => navigate("/recipes/new")}

@@ -1171,12 +1171,17 @@ export function Discover({
               )}
               title="Search discover recipes"
             >
-              <MagnifyingGlass className="w-5 h-5" />
+              {searchOpen ? <XMark className="w-5 h-5" /> : <MagnifyingGlass className="w-5 h-5" />}
             </button>
             <button
               onClick={() => refreshFeed(true)}
               disabled={feedLoading}
-              className="p-2 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
+              className={classNames(
+                "p-2 rounded-lg transition-all",
+                feedLoading
+                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
+                  : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+              )}
               title="Refresh trending recipes"
             >
               <RefreshCw
@@ -1569,7 +1574,7 @@ export function Discover({
                     <h3 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
                       {TYPE_LABELS[category]}
                       <span className="ml-1.5 text-xs font-normal text-stone-400 dark:text-stone-500">
-                        {items.length} recipes
+                        {items.length}
                       </span>
                       {catNewCount > 0 && (
                         <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
