@@ -295,7 +295,7 @@ export function RecipeList({
                     }
                   }}
                   className={classNames(
-                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                     activeCount > 0
                       ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                       : openDropdown === group.key
@@ -366,7 +366,7 @@ export function RecipeList({
                     }
                   }}
                   className={classNames(
-                    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                     activeCount > 0
                       ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                       : openDropdown === group.key
@@ -398,7 +398,7 @@ export function RecipeList({
             <>
               <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
               <div
-                className="fixed z-50 min-w-35 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1"
+                className="wk-dropdown fixed z-50 min-w-35 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1"
                 style={{
                   top: dropdownPos.top,
                   ...(dropdownPos.right != null

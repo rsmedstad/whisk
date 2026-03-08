@@ -256,7 +256,7 @@ export function ShoppingList({
               {showSortMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-                  <div className="absolute right-0 top-10 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                  <div className="absolute right-0 top-10 z-50 w-48 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
                     {([
                       { value: "department", label: "By department" },
                       { value: "alphabetical", label: "A-Z" },
@@ -291,7 +291,7 @@ export function ShoppingList({
               {showOverflow && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowOverflow(false)} />
-                  <div className="absolute right-0 top-10 z-50 w-52 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                  <div className="absolute right-0 top-10 z-50 w-52 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
                     {checkedCount > 0 && (
                       <button
                         onClick={() => { onClearChecked(); setShowOverflow(false); }}

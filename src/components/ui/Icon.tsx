@@ -378,19 +378,18 @@ export function Leaf(props: IconProps) {
 
 /** Cherry-blossom style 5-petal flower for spring */
 export function Flower(props: IconProps) {
-  // 5 rounded petals arranged evenly around center, each a teardrop radiating outward
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
-      {/* Petals — 5 heart-shaped petals at 72° intervals */}
-      <path d="M12 10 C10.5 8, 9 5.5, 9.5 3.5 C10 2, 12 2, 12 4 C12 2, 14 2, 14.5 3.5 C15 5.5, 13.5 8, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
-      <path d="M12 10 C14.2 9, 17 8.5, 18.5 9.5 C19.8 10.3, 19.3 12.2, 17.5 11.5 C19.3 12.2, 18.8 14, 17.5 14 C15.5 14, 13.5 12, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
-      <path d="M12 10 C13 12.5, 13.5 15.5, 12.5 17.2 C11.8 18.5, 10 18.3, 10.3 16.5 C10 18.3, 8.2 17.8, 8 16.5 C7.5 14.5, 9.5 12, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
-      <path d="M12 10 C9.5 12, 7.5 14.5, 6 14 C4.7 13.5, 5 11.6, 6.5 12 C5 11.6, 5.2 9.8, 6.5 9.5 C8.5 9, 10.5 9.5, 12 10Z" strokeWidth={1.3} fill="currentColor" opacity={0.15} />
+      {/* 5 simple rounded petals radiating from center — clear outlines */}
+      <ellipse cx="12" cy="5.5" rx="3" ry="4" strokeWidth={1.5} fill="currentColor" opacity={0.35} />
+      <ellipse cx="17.5" cy="9.5" rx="3" ry="4" transform="rotate(72 17.5 9.5)" strokeWidth={1.5} fill="currentColor" opacity={0.35} />
+      <ellipse cx="15.5" cy="15.5" rx="3" ry="4" transform="rotate(144 15.5 15.5)" strokeWidth={1.5} fill="currentColor" opacity={0.35} />
+      <ellipse cx="8.5" cy="15.5" rx="3" ry="4" transform="rotate(-144 8.5 15.5)" strokeWidth={1.5} fill="currentColor" opacity={0.35} />
+      <ellipse cx="6.5" cy="9.5" rx="3" ry="4" transform="rotate(-72 6.5 9.5)" strokeWidth={1.5} fill="currentColor" opacity={0.35} />
       {/* Center */}
-      <circle cx="12" cy="10" r="1.8" strokeWidth={1.3} fill="currentColor" opacity={0.25} />
-      {/* Stem with small leaf */}
-      <path d="M12 12 C12 15, 11.5 18, 12 21" strokeWidth={1.8} />
-      <path d="M12 16 C14 14.5, 16 14.5, 17 15" strokeWidth={1.2} />
+      <circle cx="12" cy="10.5" r="2.2" strokeWidth={1.5} fill="currentColor" opacity={0.5} />
+      {/* Stem */}
+      <path d="M12 13 C12 16, 11.5 18, 12 21" strokeWidth={1.8} />
     </svg>
   );
 }
@@ -491,21 +490,21 @@ export function HeartArrow(props: IconProps) {
   );
 }
 
-/** Shamrock/clover for St. Patrick's Day — clear 3-leaf clover with heart-shaped leaves */
+/** Shamrock/clover for St. Patrick's Day — bold 3-leaf clover */
 export function Shamrock(props: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={props.className ?? "w-5 h-5"} {...props}>
       {/* Top leaf — heart pointing up */}
-      <path d="M12 11 C12 9, 10 6, 9.5 4.5 C9 3, 10.5 2, 12 3.5 C13.5 2, 15 3, 14.5 4.5 C14 6, 12 9, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.12} />
+      <path d="M12 11 C11 9, 9.5 6, 9.5 4.5 C9.5 2.5, 11 1.5, 12 3 C13 1.5, 14.5 2.5, 14.5 4.5 C14.5 6, 13 9, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.4} />
       {/* Bottom-left leaf — heart pointing lower-left */}
-      <path d="M12 11 C10.5 10.5, 7.5 10.5, 6 11 C4.5 11.5, 4 10, 5.5 9 C4 8, 5 6.5, 6.5 7 C8 7.5, 10.5 9.5, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.12} />
+      <path d="M12 11 C10 10, 7 9.5, 5.5 10 C3.5 10.5, 3 8.5, 4.5 7.5 C3 6.5, 4 5, 6 5.5 C7.5 6, 10 8, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.4} />
       {/* Bottom-right leaf — heart pointing lower-right */}
-      <path d="M12 11 C13.5 10.5, 16.5 10.5, 18 11 C19.5 11.5, 20 10, 18.5 9 C20 8, 19 6.5, 17.5 7 C16 7.5, 13.5 9.5, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.12} />
+      <path d="M12 11 C14 10, 17 9.5, 18.5 10 C20.5 10.5, 21 8.5, 19.5 7.5 C21 6.5, 20 5, 18 5.5 C16.5 6, 14 8, 12 11Z" strokeWidth={1.5} fill="currentColor" opacity={0.4} />
       {/* Leaf veins */}
-      <line x1="12" y1="11" x2="12" y2="4.5" strokeWidth={0.7} opacity={0.4} />
-      <line x1="12" y1="11" x2="6.5" y2="8.5" strokeWidth={0.7} opacity={0.4} />
-      <line x1="12" y1="11" x2="17.5" y2="8.5" strokeWidth={0.7} opacity={0.4} />
-      {/* Stem — slightly curved */}
+      <line x1="12" y1="11" x2="12" y2="4" strokeWidth={0.8} opacity={0.5} />
+      <line x1="12" y1="11" x2="6" y2="7.5" strokeWidth={0.8} opacity={0.5} />
+      <line x1="12" y1="11" x2="18" y2="7.5" strokeWidth={0.8} opacity={0.5} />
+      {/* Stem */}
       <path d="M12 11 C12.5 14, 11.5 17, 12 21" strokeWidth={2} />
     </svg>
   );

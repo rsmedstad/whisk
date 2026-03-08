@@ -377,7 +377,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   className="fixed inset-0 z-40"
                   onClick={() => setShowOverflow(false)}
                 />
-                <div className="absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800">
+                <div className="wk-dropdown absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800">
                   <button
                     onClick={() => {
                       navigate(`/recipes/${recipe.id}/edit`);
@@ -582,7 +582,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             <button
               onClick={() => setShowTagEditor(!showTagEditor)}
               className={classNames(
-                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                "wk-pill inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
                 showTagEditor
                   ? "border-orange-500 text-orange-600 dark:text-orange-400"
                   : "border-stone-300 text-stone-400 dark:border-stone-600 dark:text-stone-500"
@@ -692,7 +692,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                       key={mult}
                       onClick={() => setScaledServings(target)}
                       className={classNames(
-                        "px-3 py-1 rounded-full text-sm font-medium transition-colors",
+                        "wk-pill px-3 py-1 rounded-full text-sm font-medium transition-colors",
                         isActive
                           ? "bg-orange-500 text-white"
                           : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
@@ -721,7 +721,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                     localStorage.setItem("whisk_ingredient_sort", value);
                   }}
                   className={classNames(
-                    "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                    "wk-pill px-3 py-1 rounded-full text-xs font-medium border transition-colors",
                     ingredientSort === value
                       ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                       : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
@@ -736,7 +736,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                     setIngredientResetKey((k) => k + 1);
                     setHasCheckedIngredients(false);
                   }}
-                  className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-medium border border-stone-300 text-stone-500 hover:border-orange-500 hover:text-orange-600 dark:border-stone-600 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
+                  className="wk-pill ml-auto px-2.5 py-0.5 rounded-full text-xs font-medium border border-stone-300 text-stone-500 hover:border-orange-500 hover:text-orange-600 dark:border-stone-600 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
                 >
                   Clear checked
                 </button>
@@ -765,7 +765,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                       onClick={handleGroupSteps}
                       disabled={isGroupingSteps}
                       className={classNames(
-                        "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                        "wk-pill px-3 py-1 rounded-full text-xs font-medium border transition-colors",
                         recipe.steps.some((s) => s.group)
                           ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                           : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
@@ -788,7 +788,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                       }
                     }}
                     className={classNames(
-                      "ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                      "wk-pill ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors",
                       wakeLock.isActive
                         ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                         : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
@@ -1097,7 +1097,7 @@ function HeaderStarRating({ ratings, onRate }: { ratings?: Record<string, number
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1">
+          <div className="wk-dropdown absolute right-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1">
             {[5, 4, 3, 2, 1].map((star) => (
               <button
                 key={star}

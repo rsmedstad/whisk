@@ -20,7 +20,7 @@ export function TagChip({
       type="button"
       onClick={onToggle}
       className={classNames(
-        "inline-flex items-center gap-1 rounded-[var(--wk-radius-tag)] border font-medium whitespace-nowrap transition-colors",
+        "wk-pill inline-flex items-center gap-1 rounded-[var(--wk-radius-tag)] border font-medium whitespace-nowrap transition-colors",
         size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-sm",
         selected
           ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700"

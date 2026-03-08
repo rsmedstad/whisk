@@ -530,7 +530,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                 {recipeCount > 0 && (
                   <button
                     onClick={() => sendMessage("What should I cook tonight from my recipes?")}
-                    className="rounded-full border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1 text-xs text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
+                    className="wk-pill rounded-full border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1 text-xs text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
                   >
                     What should I cook tonight?
                   </button>
@@ -545,14 +545,14 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                   <button
                     key={prompt}
                     onClick={() => sendMessage(prompt)}
-                    className="rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                    className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     {prompt}
                   </button>
                 ))}
                 <button
                   onClick={() => sendMessage("Suggest a new recipe I don't have yet")}
-                  className="rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Something new
                 </button>

@@ -516,20 +516,20 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       : "border-white/40 dark:border-stone-500/30 hover:border-white/60 dark:hover:border-stone-400/40"
                   )}
                   style={{
-                    background: "linear-gradient(168deg, rgba(249,115,22,0.08), rgba(255,255,255,0.25), rgba(255,255,255,0.10), rgba(249,115,22,0.05))",
+                    background: "linear-gradient(168deg, rgba(148,163,184,0.1), rgba(255,255,255,0.28), rgba(255,255,255,0.12), rgba(148,163,184,0.06))",
                     backdropFilter: "blur(20px) saturate(1.5)",
                     WebkitBackdropFilter: "blur(20px) saturate(1.5)",
-                    boxShadow: "0 2px 16px rgba(0,0,0,0.04), 0 8px 24px rgba(249,115,22,0.04), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.1)",
+                    boxShadow: "0 2px 16px rgba(0,0,0,0.04), 0 8px 24px rgba(148,163,184,0.06), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.1)",
                   }}
                 >
                   <div className="text-sm font-medium dark:text-stone-200 mb-2">Liquid Glass</div>
                   <div className="space-y-1.5">
-                    {/* Mini glass card preview with visible specular rim and tint */}
-                    <div className="h-5 rounded-xl border border-t-white/70 border-x-white/30 border-b-white/10 dark:border-t-white/20 dark:border-x-white/8 dark:border-b-white/3" style={{ background: "linear-gradient(168deg, rgba(249,115,22,0.1), rgba(255,255,255,0.3), rgba(255,255,255,0.12))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 4px rgba(0,0,0,0.04)" }} />
-                    {/* Mini translucent button preview */}
+                    {/* Mini glass card preview with specular rim and cool tint */}
+                    <div className="h-5 rounded-xl border border-t-white/70 border-x-white/30 border-b-white/10 dark:border-t-white/20 dark:border-x-white/8 dark:border-b-white/3" style={{ background: "linear-gradient(168deg, rgba(148,163,184,0.12), rgba(255,255,255,0.32), rgba(255,255,255,0.14))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 4px rgba(0,0,0,0.04)" }} />
+                    {/* Mini translucent pill + button preview */}
                     <div className="flex gap-1.5">
                       <div className="h-2 w-10 rounded-full" style={{ background: "rgba(249,115,22,0.45)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.3)" }} />
-                      <div className="h-1.5 flex-1 rounded-full bg-white/20 dark:bg-white/8 mt-0.5" />
+                      <div className="h-1.5 flex-1 rounded-full mt-0.5" style={{ background: "rgba(255,255,255,0.25)", boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.3)" }} />
                     </div>
                   </div>
                   {style === "glass" && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-orange-500" />}
@@ -899,7 +899,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                                             : [...exportExcludeTags, tag.name]
                                         )}
                                         className={classNames(
-                                          "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors capitalize",
+                                          "wk-pill px-2.5 py-1 rounded-full text-xs font-medium border transition-colors capitalize",
                                           excluded
                                             ? "border-red-300 bg-red-50 text-red-600 dark:border-red-700 dark:bg-red-950 dark:text-red-400 line-through"
                                             : "border-stone-200 text-stone-600 dark:border-stone-600 dark:text-stone-300"
