@@ -185,15 +185,15 @@ input[type="search"]::-webkit-search-decoration {
   --color-stone-900: #1a1028;
   --color-stone-950: #0e0818;
 }
-/* Halloween dark mode: darker purple-black base, boosted text contrast */
+/* Halloween dark mode: darker purple-black base, bright orange text contrast */
 html.dark[data-accent="halloween"] {
   --color-white: #0d0818;
-  --color-stone-50: #f0e8f5;
-  --color-stone-100: #e0d0ea;
-  --color-stone-200: #d0b8dd;
-  --color-stone-300: #c0a0cc;
-  --color-stone-400: #b088bb;
-  --color-stone-500: #a070aa;
+  --color-stone-50: #f5e8d8;
+  --color-stone-100: #ead0b0;
+  --color-stone-200: #ddb888;
+  --color-stone-300: #ff9900;
+  --color-stone-400: #ff8800;
+  --color-stone-500: #ff7700;
 }
 /* Halloween secondary accent colors */
 [data-accent="halloween"] {
@@ -487,32 +487,50 @@ html.dark[data-style="brutalist"] {
   --wk-shadow-card-hover: 6px 6px 0 0 rgb(255 255 255 / 0.3);
 }
 
-/* Glass — translucent layers, frosted blur, glow */
+/* Glass — Apple Liquid Glass: deeply translucent, specular edges, refractive blur */
 [data-style="glass"] {
-  --wk-radius-card: 1rem;
-  --wk-radius-btn: 0.75rem;
-  --wk-radius-input: 0.75rem;
+  --wk-radius-card: 1.25rem;
+  --wk-radius-btn: 0.875rem;
+  --wk-radius-input: 0.875rem;
   --wk-radius-tag: 9999px;
-  --wk-shadow-card: 0 8px 32px rgb(0 0 0 / 0.06);
-  --wk-shadow-card-hover: 0 8px 32px rgb(0 0 0 / 0.12);
+  --wk-shadow-card: 0 2px 16px rgb(0 0 0 / 0.04), 0 0 1px rgb(255 255 255 / 0.6) inset;
+  --wk-shadow-card-hover: 0 4px 24px rgb(0 0 0 / 0.08), 0 0 1px rgb(255 255 255 / 0.8) inset;
   --wk-border-card: 1px;
   --wk-border-input: 1px;
-  --wk-heading-weight: 600;
-  --wk-heading-tracking: 0em;
+  --wk-heading-weight: 500;
+  --wk-heading-tracking: 0.01em;
   --wk-heading-transform: none;
-  --wk-card-backdrop: blur(16px);
+  --wk-card-backdrop: blur(40px) saturate(1.8);
 }
 
-/* Glass style-specific overrides for card and nav surfaces */
+/* Glass Liquid Glass card: ultra-translucent, specular highlight borders, deep blur */
 [data-style="glass"] .wk-card {
-  background: rgb(255 255 255 / 0.65);
+  background: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.35) 0%,
+    rgb(255 255 255 / 0.18) 50%,
+    rgb(255 255 255 / 0.25) 100%
+  );
   -webkit-backdrop-filter: var(--wk-card-backdrop);
   backdrop-filter: var(--wk-card-backdrop);
-  border-color: rgb(255 255 255 / 0.3);
+  border-color: rgb(255 255 255 / 0.5);
+  border-top-color: rgb(255 255 255 / 0.7);
+  box-shadow: var(--wk-shadow-card),
+    0 0.5px 0 0 rgb(255 255 255 / 0.5) inset,
+    0 -0.5px 0 0 rgb(255 255 255 / 0.15) inset;
 }
 html.dark[data-style="glass"] .wk-card {
-  background: rgb(12 10 9 / 0.55);
-  border-color: rgb(255 255 255 / 0.08);
+  background: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.08) 0%,
+    rgb(255 255 255 / 0.03) 50%,
+    rgb(255 255 255 / 0.06) 100%
+  );
+  border-color: rgb(255 255 255 / 0.12);
+  border-top-color: rgb(255 255 255 / 0.2);
+  box-shadow: 0 2px 16px rgb(0 0 0 / 0.2),
+    0 0.5px 0 0 rgb(255 255 255 / 0.12) inset,
+    0 -0.5px 0 0 rgb(255 255 255 / 0.05) inset;
 }
 
 /* ── Heading Style Application ─────────────────────────── */

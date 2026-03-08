@@ -261,7 +261,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
   }, [recipes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col min-h-screen pb-16">
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)] wk-header-decor relative">
         <div className="flex items-center justify-between py-3">
           <button onClick={() => navigate("/settings")} title="Settings" className="flex items-center gap-1.5">
@@ -314,7 +314,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                 enterKeyHint="send"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about recipes, seasonal ideas, or what to cook..."
+                placeholder="What should I cook?"
                 className="flex-1 rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
               />
               <button
@@ -550,7 +550,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
                   enterKeyHint="send"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={recipeCount > 0 ? "Ask about your recipes or discover new ideas..." : "What kind of recipe are you looking for?"}
+                  placeholder={recipeCount > 0 ? "Ask me anything..." : "What should I cook?"}
                   className="flex-1 rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-white px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
                 />
                 <button
@@ -620,7 +620,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
       {messages.length > 0 && (
         <div className={classNames(
           "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
-          isKeyboardOpen ? "bottom-0 pb-1" : "bottom-0 pb-3"
+          isKeyboardOpen ? "bottom-0 pb-1" : "bottom-[calc(3.5rem+var(--sab))] pb-3"
         )}>
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
@@ -628,7 +628,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [] }: SuggestChatPr
               enterKeyHint="send"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={recipeCount > 0 ? "Ask about your recipes or discover new ideas..." : "What kind of recipe are you looking for?"}
+              placeholder={recipeCount > 0 ? "Ask me anything..." : "What should I cook?"}
               className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
             />
             <Button type="submit" size="sm" disabled={!input.trim() || isLoading}>
