@@ -1,2 +1,14 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()
+  X-XSS-Protection: 0
+  Cross-Origin-Opener-Policy: same-origin
+
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate
+
+/api/*
+  X-Content-Type-Options: nosniff
+  Cache-Control: no-store

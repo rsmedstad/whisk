@@ -27,16 +27,26 @@ const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 1 week
 
 // GET /api/discover/ideas — Generate recipe ideas with optional Unsplash photos
 // Supports two filter dimensions: mealType (all/dinner/drinks/desserts) + vibe (seasonal/quick/trending/comfort/healthy)
+// Allowed values for query params — prevents arbitrary strings from flowing into AI prompts or KV keys
+const ALLOWED_MEAL_TYPES = new Set(["all", "dinner", "drinks", "desserts"]);
+const ALLOWED_VIBES = new Set(["seasonal", "quick", "trending", "comfort", "healthy"]);
+const ALLOWED_SEASONS = new Set(["spring", "summer", "fall", "winter"]);
+
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
-  const mealType = url.searchParams.get("mealType") ?? "all";
-  const vibe = url.searchParams.get("vibe") ?? "seasonal";
-  const season = url.searchParams.get("season") ?? "spring";
+  const rawMealType = url.searchParams.get("mealType") ?? "all";
+  const rawVibe = url.searchParams.get("vibe") ?? "seasonal";
+  const rawSeason = url.searchParams.get("season") ?? "spring";
   const refresh = url.searchParams.get("refresh") === "1";
 
-  // Legacy support: if "category" is passed, treat it as vibe
+  // Validate against allowed values to prevent prompt injection via query params
+  const mealType = ALLOWED_MEAL_TYPES.has(rawMealType) ? rawMealType : "all";
+  const vibe = ALLOWED_VIBES.has(rawVibe) ? rawVibe : "seasonal";
+  const season = ALLOWED_SEASONS.has(rawSeason) ? rawSeason : "spring";
+
+  // Legacy support: if "category" is passed, treat it as vibe (but validate)
   const legacyCategory = url.searchParams.get("category");
-  const effectiveVibe = legacyCategory ?? vibe;
+  const effectiveVibe = legacyCategory && ALLOWED_VIBES.has(legacyCategory) ? legacyCategory : vibe;
 
   const cacheKey = `discover_ideas:${mealType}:${effectiveVibe}:${season}`;
   if (!refresh) {
