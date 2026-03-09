@@ -1,0 +1,9 @@
+name = "whisk-deal-scanner"
+main = "worker.ts"
+compatibility_date = "2024-12-01"
+
+# Cron schedule: runs every Wednesday and Sunday at 8:00 AM UTC
+# Most grocery ads drop on Wed (weekly) and Sun (weekend specials)
+# Adjust to match your stores' ad cycles
+[triggers]
+crons = ["0 8 * * 3", "0 8 * * 0"]
