@@ -8,6 +8,8 @@ import {
 const KV_KEY = "discover_feed";
 const ARCHIVE_KEY = "discover_archive";
 const MIN_REFRESH_MS = 2 * 24 * 60 * 60 * 1000; // 2 days between refreshes
+const DEFAULT_ITEM_LIFETIME_DAYS = 7; // how long a discover item stays visible
+const ARCHIVE_RETENTION_DAYS = 30; // keep expired items in DB for this long before purging
 
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
@@ -130,6 +132,7 @@ interface ArchiveItem extends FeedItem {
   source: DiscoverSource;
   category: DiscoverCategory;
   addedAt: string;
+  expiresAt?: string; // ISO date when this item leaves the discover feed
   tags?: string[];
   totalTime?: number;
 }
@@ -383,7 +386,7 @@ function keywordTagItem(item: ArchiveItem): string[] {
 
 // ── GET: return category-grouped feed from archive ──────
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
   if (!archive || archive.items.length === 0) {
     // Try legacy format for backward compat
@@ -391,7 +394,38 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     if (legacy) return Response.json(migrateLegacyFeed(legacy));
     return Response.json({ lastRefreshed: null, categories: {} });
   }
-  return Response.json(archiveToCategoryFeed(archive));
+
+  // Client can pass ?lifetime=N to control how many days items stay visible
+  const { searchParams } = new URL(request.url);
+  const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || DEFAULT_ITEM_LIFETIME_DAYS;
+  const now = Date.now();
+
+  // Filter: only show items that haven't expired yet
+  // Items without expiresAt use addedAt + lifetime as fallback
+  const visibleItems = archive.items.filter((item) => {
+    const expiry = item.expiresAt
+      ? new Date(item.expiresAt).getTime()
+      : new Date(item.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000;
+    return expiry > now;
+  });
+
+  // Purge items past retention period from the archive in the background
+  const retentionCutoff = now - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const itemsBeforePurge = archive.items.length;
+  const retained = archive.items.filter((item) => {
+    const addedMs = new Date(item.addedAt).getTime();
+    return addedMs > retentionCutoff;
+  });
+  if (retained.length < itemsBeforePurge) {
+    // Fire-and-forget background purge
+    env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
+      lastRefreshed: archive.lastRefreshed,
+      items: retained,
+    }));
+  }
+
+  const filtered: Archive = { lastRefreshed: archive.lastRefreshed, items: visibleItems };
+  return Response.json(archiveToCategoryFeed(filtered));
 };
 
 // ── POST: refresh feed by scraping, merge into archive ──
@@ -402,6 +436,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
   const { searchParams } = new URL(request.url);
   const force = searchParams.get("force") === "true";
+  const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || DEFAULT_ITEM_LIFETIME_DAYS;
   const MIN_FORCE_MS = 60 * 60 * 1000; // 1 hour minimum even on force
 
   // Rate limit: 2 days auto, 1 hour on manual force
@@ -435,11 +470,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (isDupTitle) continue;
       existingUrls.add(key);
       existingTitles.push(item.title);
+      const expiresAt = new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString();
       newItems.push({
         ...item,
         source,
         category: classifyRecipe(item.title, item.description),
         addedAt: now,
+        expiresAt,
       });
     }
   };
@@ -466,9 +503,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await batchEstimateTimes(missingTime, env);
   }
 
+  // Backfill expiresAt on existing items that don't have it
   // Clean up any existing archive items that have person/profile images
   const cleanedExisting = (archive?.items ?? []).map((item) => ({
     ...item,
+    expiresAt: item.expiresAt ?? new Date(new Date(item.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString(),
     imageUrl: sanitizeImageUrl(item.imageUrl),
   }));
 
