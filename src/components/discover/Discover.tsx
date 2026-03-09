@@ -727,10 +727,22 @@ export function Discover({
     return CATEGORY_ORDER
       .map((cat) => ({
         category: cat,
-        items: filteredItems.filter((i) => i.category === cat),
+        items: filteredItems.filter((i) => i.category === cat).sort((a, b) => {
+          // New items first, then expiring, then the rest
+          const aNew = isNewItem(a, feed?.lastRefreshed) ? 0 : 1;
+          const bNew = isNewItem(b, feed?.lastRefreshed) ? 0 : 1;
+          if (aNew !== bNew) return aNew - bNew;
+          const aExpiring = isExpiringItem(a) ? 0 : 1;
+          const bExpiring = isExpiringItem(b) ? 0 : 1;
+          if (aExpiring !== bExpiring) return aExpiring - bExpiring;
+          // Within the same group, sort by expiry date ascending (soonest first)
+          const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity;
+          const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity;
+          return aExpiry - bExpiry;
+        }),
       }))
       .filter((g) => g.items.length > 0);
-  }, [filteredItems, hasActiveFilters, sort]);
+  }, [filteredItems, hasActiveFilters, sort, feed?.lastRefreshed]);
 
   // Available types and cuisines for filter dropdowns (must be before early return)
   const availableTypes = useMemo(() =>
