@@ -434,6 +434,7 @@ html.dark[data-accent="christmas"] {
 
 /* Soft — rounded, cozy, shadow-defined edges */
 [data-style="soft"] {
+  font-family: "Nunito", system-ui, sans-serif;
   --wk-radius-card: 1.5rem;
   --wk-radius-btn: 9999px;
   --wk-radius-input: 1rem;
