@@ -27,7 +27,9 @@ import {
   ChevronDown,
   Sun,
   MagnifyingGlass,
+  Tag,
 } from "../ui/Icon";
+import { useTags } from "../../hooks/useTags";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import type {
@@ -291,6 +293,7 @@ export function Discover({
   onSaveRecipe,
 }: DiscoverProps) {
   const navigate = useNavigate();
+  const tags = useTags();
 
   // ── Filter/sort state ──
   const [searchOpen, setSearchOpen] = useState(false);
@@ -342,6 +345,8 @@ export function Discover({
   const [isGroupingSteps, setIsGroupingSteps] = useState(false);
   const [groupedSteps, setGroupedSteps] = useState<Step[] | null>(null);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [showTagEditor, setShowTagEditor] = useState(false);
+  const [newTag, setNewTag] = useState("");
   const wakeLock = useWakeLock();
 
   // ── Feed loading ──
@@ -563,8 +568,34 @@ export function Discover({
     setSavedFeedRecipeId(null);
     setPhotoIndex(0);
     setGroupedSteps(null);
+    setShowTagEditor(false);
+    setNewTag("");
     if (wakeLock.isActive) wakeLock.release();
   };
+
+  // Toggle a tag on the imported recipe (local-only, pre-save)
+  const handleToggleDiscoverTag = useCallback((tag: string) => {
+    setImportedRecipe((prev) => {
+      if (!prev) return prev;
+      const current = prev.tags ?? [];
+      const newTags = current.includes(tag)
+        ? current.filter((t) => t !== tag)
+        : [...current, tag];
+      return { ...prev, tags: newTags };
+    });
+  }, []);
+
+  const handleAddNewDiscoverTag = useCallback(async () => {
+    const name = newTag.trim().toLowerCase();
+    if (!name || !importedRecipe) return;
+    if (!tags.allTagNames.includes(name)) {
+      await tags.addCustomTag(name);
+    }
+    if (!(importedRecipe.tags ?? []).includes(name)) {
+      handleToggleDiscoverTag(name);
+    }
+    setNewTag("");
+  }, [newTag, importedRecipe, tags, handleToggleDiscoverTag]);
 
   // ── Share handler for discover recipes ──
   const handleShareFeed = useCallback(async () => {
@@ -1001,16 +1032,70 @@ export function Discover({
                     </span>
                   )}
                 </div>
-                {importedRecipe.tags && importedRecipe.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {importedRecipe.tags.map((tag) => (
+                {((importedRecipe.tags && importedRecipe.tags.length > 0) || showTagEditor) && (
+                  <>
+                  <div className="flex flex-wrap gap-1.5 mt-2 items-center">
+                    {(importedRecipe.tags ?? []).map((tag) => (
                       <TagChip
                         key={tag}
                         label={tag.charAt(0).toUpperCase() + tag.slice(1)}
                         size="sm"
+                        selected={showTagEditor}
+                        onToggle={showTagEditor ? () => handleToggleDiscoverTag(tag) : undefined}
                       />
                     ))}
+                    <button
+                      onClick={() => setShowTagEditor(!showTagEditor)}
+                      className={classNames(
+                        "wk-pill inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                        showTagEditor
+                          ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                          : "border-stone-300 text-stone-400 dark:border-stone-600 dark:text-stone-500"
+                      )}
+                    >
+                      <Tag className="w-3 h-3" /> {showTagEditor ? "Done" : "Edit"}
+                    </button>
                   </div>
+                  {showTagEditor && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.allTagNames
+                          .filter((t) => !(importedRecipe.tags ?? []).includes(t))
+                          .slice(0, 15)
+                          .map((tag) => (
+                            <TagChip
+                              key={tag}
+                              label={tag}
+                              size="sm"
+                              onToggle={() => handleToggleDiscoverTag(tag)}
+                            />
+                          ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                          placeholder="New tag..."
+                          value={newTag}
+                          onChange={(e) => setNewTag(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddNewDiscoverTag();
+                            }
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleAddNewDiscoverTag}
+                          disabled={!newTag.trim()}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
 

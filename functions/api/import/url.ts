@@ -421,6 +421,16 @@ function generateTags(data: RecipeData, ingredients: { name: string }[]): string
   else if (month >= 8 && month <= 10) tags.add("fall");
   else tags.add("winter");
 
+  // Disambiguate: recipes with protein/main-dish keywords in the title
+  // shouldn't be tagged as "snack" (e.g. "fish and chips", "chicken wings")
+  if (tags.has("snack") && !tags.has("dinner")) {
+    const MAIN_DISH_TITLE = /\b(?:fish|chicken|beef|pork|lamb|steak|shrimp|salmon|turkey|duck|sausage|burger|meatball|pulled|roast|brisket|ribs|chop|fillet|wings?\s+and|and\s+chips|fish\s+(?:&|and)\s+chips)\b/i;
+    if (MAIN_DISH_TITLE.test(title)) {
+      tags.delete("snack");
+      tags.add("dinner");
+    }
+  }
+
   return [...tags];
 }
 
