@@ -337,8 +337,22 @@ export function ShoppingList({
       setIsListScanning(true);
       setListScanResult(null);
       try {
+        // Normalize orientation via canvas (createImageBitmap respects EXIF)
+        // and downscale to max 1600px so we don't send huge photos to the AI
+        const bitmap = await createImageBitmap(file);
+        const maxDim = 1600;
+        const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+        const w = Math.round(bitmap.width * scale);
+        const h = Math.round(bitmap.height * scale);
+        const canvas = new OffscreenCanvas(w, h);
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        bitmap.close();
+        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+        const normalizedFile = new File([blob], "scan.jpg", { type: "image/jpeg" });
+
         const formData = new FormData();
-        formData.append("photo", file);
+        formData.append("photo", normalizedFile);
         const token = localStorage.getItem("whisk_token");
         const res = await fetch("/api/shopping/scan", {
           method: "POST",
