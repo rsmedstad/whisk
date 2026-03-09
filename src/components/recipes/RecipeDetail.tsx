@@ -294,9 +294,15 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           if (seenKeys.has(key)) return false;
           seenKeys.add(key);
           const filename = key.split("/").pop() ?? "";
-          if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
+          if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/i.test(filename)) {
+            // Strip dimension suffixes for better matching (e.g. "image-750x422.jpg" → "image.jpg")
+            const baseFilename = filename.replace(/-?\d+x\d+/, "");
             if (seenFilenames.has(filename)) return false;
             seenFilenames.add(filename);
+            if (baseFilename !== filename) {
+              if (seenFilenames.has(baseFilename)) return false;
+              seenFilenames.add(baseFilename);
+            }
           }
           return true;
         });

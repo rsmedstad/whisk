@@ -750,9 +750,16 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
     seenFilenames.add(key);
     // Also dedup by filename alone for cross-domain matches
     const filename = key.split("/").pop() ?? "";
-    if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
+    if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/i.test(filename)) {
+      // Strip dimension suffixes from filename for better matching
+      // e.g. "lamb-biryani-750x422.jpg" → "lamb-biryani.jpg"
+      const baseFilename = filename.replace(/-?\d+x\d+/, "");
       if (seenFilenames.has(filename)) return;
       seenFilenames.add(filename);
+      if (baseFilename !== filename) {
+        if (seenFilenames.has(baseFilename)) return;
+        seenFilenames.add(baseFilename);
+      }
     }
     seen.add(url);
     urls.push(url);
@@ -866,17 +873,84 @@ function stripHtml(str: string): string {
     .trim();
 }
 
+/** Known ingredient/cooking words for re-joining split text artifacts */
+const KNOWN_WORDS = new Set([
+  // Sizes & descriptors
+  "large", "medium", "small", "extra", "thin", "thick", "whole", "half",
+  "light", "heavy", "packed", "level", "heaped", "heaping", "about",
+  // Cooking prep words
+  "chopped", "minced", "diced", "sliced", "peeled", "grated", "shredded",
+  "crushed", "frozen", "softened", "melted", "toasted", "divided", "optional",
+  "quartered", "halved", "trimmed", "rinsed", "drained", "deveined",
+  "julienned", "blanched", "sifted", "warmed", "chilled", "cubed", "pitted",
+  "seeded", "cored", "roasted", "steamed", "braised", "grilled", "broiled",
+  "smoked", "pickled", "fermented", "marinated", "soaked", "sauteed",
+  "caramelized", "charred", "poached", "fried", "baked", "dried", "ground",
+  "crumbled", "mashed", "pureed", "shaved", "spiralized", "torn", "snipped",
+  // Adverbs
+  "roughly", "finely", "coarsely", "thinly", "lightly", "freshly", "loosely",
+  "firmly", "well", "very", "just",
+  // Meat/protein descriptors
+  "boneless", "skinless", "skinned", "bone", "deboned",
+  // States
+  "unsalted", "salted", "fresh", "dried", "raw", "cooked", "uncooked",
+  // Colors
+  "black", "white", "red", "green", "yellow", "orange", "brown", "golden",
+  "purple", "dark", "bright",
+  // Common ingredients
+  "sugar", "butter", "cream", "flour", "water", "olive", "virgin", "vegetable",
+  "canola", "coconut", "sesame", "vanilla", "extract", "baking", "powder",
+  "soda", "salt", "pepper", "chicken", "turkey", "beef", "pork", "lamb",
+  "onion", "onions", "garlic", "ginger", "lemon", "lime", "juice", "zest",
+  "whipping", "sour", "plain", "greek", "yogurt", "milk", "egg", "eggs",
+  "yolk", "yolks", "purpose", "bread", "cake", "wheat", "oat", "corn",
+  "starch", "sauce", "paste", "tomato", "canned", "wine", "broth", "stock",
+  "honey", "maple", "syrup", "vinegar", "mustard", "mayo", "mayonnaise",
+  "ketchup", "soy", "fish", "oyster", "worcestershire", "sriracha",
+  // Spices & herbs
+  "cinnamon", "cumin", "paprika", "turmeric", "coriander", "cardamom",
+  "nutmeg", "cloves", "allspice", "anise", "fennel", "fenugreek",
+  "saffron", "oregano", "basil", "thyme", "rosemary", "parsley", "cilantro",
+  "dill", "mint", "sage", "tarragon", "chives", "chili", "cayenne",
+  "garam", "masala", "curry", "peppercorns", "bay",
+  // Produce
+  "potato", "potatoes", "carrot", "carrots", "celery", "spinach", "kale",
+  "lettuce", "cabbage", "broccoli", "cauliflower", "zucchini", "squash",
+  "eggplant", "mushroom", "mushrooms", "bell", "jalapeno", "serrano",
+  "habanero", "poblano", "avocado", "cucumber", "peas", "beans", "lentils",
+  "chickpeas", "rice", "noodles", "pasta",
+  // Dairy & nuts
+  "cheese", "parmesan", "mozzarella", "cheddar", "ricotta", "gouda",
+  "provolone", "gruyere", "brie", "feta", "paneer", "ghee",
+  "almond", "almonds", "walnut", "walnuts", "pecan", "pecans",
+  "cashew", "cashews", "pistachio", "pistachios", "peanut", "peanuts",
+  // Units/measures that might get split
+  "tablespoon", "tablespoons", "teaspoon", "teaspoons", "ounce", "ounces",
+  "pound", "pounds", "cup", "cups", "clove", "cloves", "pinch", "dash",
+  "slice", "slices", "piece", "pieces", "stick", "bunch", "head", "stalk",
+  "sprig", "can", "package",
+]);
+
 function cleanIngredientText(str: string): string {
   return str
     // Fix "teaspoon s" / "tablespoon s" / "cup s" artifacts from HTML stripping
     .replace(/\b(teaspoon|tablespoon|cup|ounce|pound|clove|pinch|dash|slice|piece|stick|bunch|can|package|head|stalk|sprig)\s+s\b/gi, "$1s")
     // Fix multi-letter spacing artifacts from HTML tag stripping
-    // e.g. "l arge" → "large", "m edium" → "medium", "un salted" → "unsalted"
+    // e.g. "l arge" → "large", "m edium" → "medium", "g reen" → "green"
+    // Apply repeatedly to handle chains like "g r een" → "gr een" → "green"
     .replace(/\b(\w{1,3})\s+(\w{2,})\b/g, (match, prefix, rest) => {
       const combined = (prefix as string).toLowerCase() + (rest as string).toLowerCase();
-      // Only merge if it forms a known ingredient/cooking word
-      const commonWords = /^(large|medium|small|fresh|dried|ground|chopped|minced|diced|sliced|peeled|grated|shredded|whole|thick|thin|packed|level|heaped|heaping|about|roughly|finely|coarsely|thinly|lightly|boneless|skinless|crushed|frozen|softened|melted|unsalted|salted|toasted|divided|optional|quartered|halved|trimmed|rinsed|drained|deveined|julienned|blanched|sifted|warmed|chilled|cubed|pitted|seeded|cored|light|brown|sugar|butter|cream|flour|water|olive|extra|virgin|vegetable|canola|coconut|sesame|vanilla|extract|baking|powder|soda|salt|pepper|black|white|red|green|yellow|orange|chicken|turkey|beef|pork|lamb|onion|garlic|ginger|lemon|lime|juice|zest|heavy|whipping|sour|plain|greek|yogurt|milk|egg|eggs|yolk|yolks|purpose|bread|cake|wheat|oat|corn|starch|sauce|paste|tomato|canned|fresh)$/i;
-      return commonWords.test(combined) ? (prefix as string) + (rest as string) : match;
+      return KNOWN_WORDS.has(combined) ? (prefix as string) + (rest as string) : match;
+    })
+    // Second pass for longer prefix splits like "card amom" or "core d"
+    .replace(/\b(\w{2,5})\s+(\w{1,3})\b/g, (match, prefix, suffix) => {
+      const combined = (prefix as string).toLowerCase() + (suffix as string).toLowerCase();
+      return KNOWN_WORDS.has(combined) ? (prefix as string) + (suffix as string) : match;
+    })
+    // Third pass for mid-word splits like "carda mom", "cilan tro"
+    .replace(/\b(\w{3,})\s+(\w{2,})\b/g, (match, prefix, suffix) => {
+      const combined = (prefix as string).toLowerCase() + (suffix as string).toLowerCase();
+      return KNOWN_WORDS.has(combined) ? (prefix as string) + (suffix as string) : match;
     })
     // Collapse multiple spaces
     .replace(/\s{2,}/g, " ")

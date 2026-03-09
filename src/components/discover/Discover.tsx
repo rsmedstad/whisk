@@ -558,9 +558,15 @@ export function Discover({
       seenKeys.add(key);
       // Also dedup by filename — catches same image from different CDN subdomains
       const filename = key.split("/").pop() ?? "";
-      if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/.test(filename)) {
+      if (filename.length > 8 && /\.(jpg|jpeg|png|webp|avif)$/i.test(filename)) {
+        // Strip dimension suffixes for better matching (e.g. "image-750x422.jpg" → "image.jpg")
+        const baseFilename = filename.replace(/-?\d+x\d+/, "");
         if (seenFilenames.has(filename)) return false;
         seenFilenames.add(filename);
+        if (baseFilename !== filename) {
+          if (seenFilenames.has(baseFilename)) return false;
+          seenFilenames.add(baseFilename);
+        }
       }
       return true;
     });
