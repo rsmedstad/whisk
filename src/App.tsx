@@ -8,6 +8,7 @@ import { useShoppingList } from "./hooks/useShoppingList";
 import { useMealPlan } from "./hooks/useMealPlan";
 import { useTimers } from "./hooks/useTimers";
 import { useTags } from "./hooks/useTags";
+import { useReceipts } from "./hooks/useReceipts";
 import { useCapabilities } from "./hooks/useCapabilities";
 import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
@@ -150,6 +151,7 @@ function AppShell({
   const timers = useTimers();
   const tags = useTags();
   const capabilities = useCapabilities();
+  const receiptData = useReceipts();
 
   const handleStartTimer = (
     label: string,
@@ -254,6 +256,14 @@ function AppShell({
                 recipeIndex={recipes.recipes}
                 visionEnabled={capabilities.vision}
                 chatEnabled={capabilities.chat}
+                currentWeekSpending={receiptData.currentWeekSpending}
+                spendingTrend={receiptData.spendingTrend}
+                onScanReceipt={receiptData.scanReceipt}
+                isScanning={receiptData.isScanning}
+                scanError={receiptData.scanError}
+                lastScannedReceipt={receiptData.lastScannedReceipt}
+                onClearScanError={receiptData.clearScanError}
+                onClearLastScanned={receiptData.clearLastScanned}
               />
             }
           />

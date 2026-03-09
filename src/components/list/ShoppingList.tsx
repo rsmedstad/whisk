@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry } from "../../types";
+import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Receipt, SpendingSummary } from "../../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categories";
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
@@ -25,6 +25,15 @@ interface ShoppingListProps {
   recipeIndex?: RecipeIndexEntry[];
   visionEnabled?: boolean;
   chatEnabled?: boolean;
+  // Receipt / spending props
+  currentWeekSpending?: SpendingSummary | null;
+  spendingTrend?: { amount: number; direction: "up" | "down" | "flat" } | null;
+  onScanReceipt?: (photo: File) => Promise<Receipt | null>;
+  isScanning?: boolean;
+  scanError?: string | null;
+  lastScannedReceipt?: Receipt | null;
+  onClearScanError?: () => void;
+  onClearLastScanned?: () => void;
 }
 
 export function ShoppingList({
@@ -41,6 +50,14 @@ export function ShoppingList({
   recipeIndex = [],
   visionEnabled = false,
   chatEnabled = false,
+  currentWeekSpending,
+  spendingTrend,
+  onScanReceipt,
+  isScanning = false,
+  scanError,
+  lastScannedReceipt,
+  onClearScanError,
+  onClearLastScanned,
 }: ShoppingListProps) {
   const navigate = useNavigate();
   const [newItem, setNewItem] = useState("");
@@ -51,6 +68,8 @@ export function ShoppingList({
   const [storeInput, setStoreInput] = useState("");
   const [isClassifying, setIsClassifying] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [scanMode, setScanMode] = useState<"list" | "receipt">("list");
+  const [showSpendingDetail, setShowSpendingDetail] = useState(false);
 
   // Get unique store names from items
   const storeNames = useMemo(() => {
@@ -430,6 +449,94 @@ export function ShoppingList({
       {/* Deals Scanner */}
       <DealsScanner visionEnabled={visionEnabled} chatEnabled={chatEnabled} />
 
+      {/* Spending summary */}
+      {currentWeekSpending && currentWeekSpending.total > 0 && (
+        <div className="px-4 py-2 border-b border-stone-200 dark:border-stone-800">
+          <button
+            onClick={() => setShowSpendingDetail(!showSpendingDetail)}
+            className="w-full flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold dark:text-stone-200">
+                This week: ${currentWeekSpending.total.toFixed(2)}
+              </span>
+              {spendingTrend && spendingTrend.direction !== "flat" && (
+                <span className={classNames(
+                  "text-xs font-medium",
+                  spendingTrend.direction === "down" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
+                )}>
+                  {spendingTrend.direction === "up" ? "\u2191" : "\u2193"} ${spendingTrend.amount.toFixed(2)}
+                </span>
+              )}
+            </div>
+            <span className="text-xs text-stone-400 dark:text-stone-500">
+              {showSpendingDetail ? "Hide" : "Details"}
+            </span>
+          </button>
+          {showSpendingDetail && (
+            <div className="mt-2 space-y-1.5">
+              {Object.entries(currentWeekSpending.byStore).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase text-stone-400 dark:text-stone-500 mb-1">By Store</p>
+                  {Object.entries(currentWeekSpending.byStore).map(([store, amount]) => (
+                    <div key={store} className="flex justify-between text-xs dark:text-stone-300">
+                      <span>{store}</span>
+                      <span>${amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                {currentWeekSpending.itemCount} receipt{currentWeekSpending.itemCount !== 1 ? "s" : ""} this week
+                {spendingTrend && spendingTrend.direction !== "flat" && (
+                  <> &middot; {spendingTrend.direction === "up" ? "up" : "down"} ${spendingTrend.amount.toFixed(2)} vs last week</>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Scan error banner */}
+      {scanError && (
+        <div className="px-4 py-2 bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
+          <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>
+          {onClearScanError && (
+            <button onClick={onClearScanError} className="text-red-400 hover:text-red-600">
+              <XMark className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Receipt scan result preview */}
+      {lastScannedReceipt && (
+        <div className="px-4 py-3 bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-green-700 dark:text-green-400">
+              Receipt Scanned{lastScannedReceipt.store ? ` — ${lastScannedReceipt.store}` : ""}
+            </p>
+            {onClearLastScanned && (
+              <button onClick={onClearLastScanned} className="text-green-400 hover:text-green-600">
+                <XMark className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-green-600 dark:text-green-500">
+            {lastScannedReceipt.items.length} item{lastScannedReceipt.items.length !== 1 ? "s" : ""}
+            {lastScannedReceipt.total ? ` · Total: $${lastScannedReceipt.total.toFixed(2)}` : ""}
+          </p>
+          <div className="mt-2 max-h-32 overflow-y-auto space-y-0.5">
+            {lastScannedReceipt.items.map((item, i) => (
+              <div key={i} className="flex justify-between text-xs dark:text-stone-300">
+                <span className="truncate flex-1">{item.name}</span>
+                <span className="ml-2 text-stone-500">${item.price.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* List */}
       <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
         {totalCount === 0 ? (
@@ -542,26 +649,86 @@ export function ShoppingList({
         )}
       </div>
 
-      {/* Camera FAB for photo scanning */}
+      {/* Camera FAB with scan mode toggle */}
       {visionEnabled && (
-        <button
-          onClick={() => {
-            // Placeholder — will trigger camera/file picker for shopping list or receipt scanning in Phase 2
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = "image/*";
-            input.capture = "environment";
-            input.onchange = () => {
-              // Will be handled in Phase 2 with receipt/list scan mode toggle
-            };
-            input.click();
-          }}
-          className="no-print fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-orange-500 text-white shadow-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
-          style={{ marginBottom: "var(--sab)" }}
-          title="Scan shopping list or receipt"
-        >
-          <Camera className="w-6 h-6" />
-        </button>
+        <div className="no-print fixed bottom-20 right-4 z-30 flex flex-col items-end gap-2" style={{ marginBottom: "var(--sab)" }}>
+          {/* Mode toggle pills */}
+          <div className="flex rounded-full bg-stone-800/90 dark:bg-stone-700/90 p-0.5 shadow-lg">
+            <button
+              onClick={() => setScanMode("list")}
+              className={classNames(
+                "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                scanMode === "list"
+                  ? "bg-orange-500 text-white"
+                  : "text-stone-300 hover:text-white"
+              )}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setScanMode("receipt")}
+              className={classNames(
+                "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                scanMode === "receipt"
+                  ? "bg-orange-500 text-white"
+                  : "text-stone-300 hover:text-white"
+              )}
+            >
+              Receipt
+            </button>
+          </div>
+          {/* FAB */}
+          <button
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.capture = "environment";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                if (scanMode === "receipt" && onScanReceipt) {
+                  await onScanReceipt(file);
+                } else {
+                  // Shopping list scan — use existing /api/shopping/scan
+                  const formData = new FormData();
+                  formData.append("photo", file);
+                  const token = localStorage.getItem("whisk_token");
+                  try {
+                    const res = await fetch("/api/shopping/scan", {
+                      method: "POST",
+                      headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      body: formData,
+                    });
+                    if (res.ok) {
+                      const data = (await res.json()) as { items?: { name: string }[] };
+                      if (data.items) {
+                        for (const item of data.items) {
+                          if (item.name) onAddItem(item.name);
+                        }
+                      }
+                    }
+                  } catch {
+                    // Silently fail — user can retry
+                  }
+                }
+              };
+              input.click();
+            }}
+            disabled={isScanning}
+            className={classNames(
+              "w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center transition-colors",
+              isScanning ? "bg-stone-400" : "bg-orange-500 hover:bg-orange-600"
+            )}
+            title={scanMode === "receipt" ? "Scan receipt" : "Scan shopping list"}
+          >
+            {isScanning ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Camera className="w-6 h-6" />
+            )}
+          </button>
+        </div>
       )}
     </div>
   );
