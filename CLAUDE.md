@@ -65,7 +65,7 @@ src/
     auth/Login.tsx     # Onboarding: join existing book or setup new
     ui/                # Reusable primitives (Button, Card, Input, TextArea, etc.)
     recipes/           # RecipeList, RecipeDetail, RecipeForm, CookMode
-    discover/          # Discover tab (TheMealDB browser + AI identify)
+    discover/          # Discover tab (recipe browser + AI identify)
     suggest/           # SuggestChat (AI-powered recipe discovery)
     list/              # ShoppingList
     plan/              # MealPlan

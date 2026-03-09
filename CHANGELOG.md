@@ -109,7 +109,7 @@
 ### Discover Tab Redesign
 
 - Replaced AI-only Identify tab with Discover: a free, public-API-powered recipe browser
-- TheMealDB integration: random picks, category browsing, search, and area/region filters
+- Recipe discovery: random picks, category browsing, search, and region filters
 - One-tap "Add to Book" saves any discovered recipe directly to your collection
 - AI features (photo identify, chat) remain available as secondary options when configured
 

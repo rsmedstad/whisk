@@ -87,6 +87,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
+    // ── NYT Cooking intercept (REST API — richer data than HTML scraping) ──
+    const nytRecipeId = extractNytRecipeId(url);
+    if (nytRecipeId) {
+      const nytResult = await tryNytCookingApi(nytRecipeId, downloadImage ?? false, env);
+      if (nytResult) {
+        return new Response(JSON.stringify(nytResult), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      // If NYT API failed, fall through to normal HTML-based extraction
+    }
+
     // ── Known-blocked domains → skip straight to Browser Rendering ──
     const BLOCKED_DOMAINS = [
       "foodnetwork.com",   // Akamai WAF
@@ -1671,6 +1683,174 @@ async function tryApifyRecipeScraper(
       cookTime: recipe.cookTime,
       totalTime: recipe.totalTime,
       recipeYield: recipe.yield,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── NYT Cooking REST API fallback ───────────────────────────
+
+/** Extract numeric recipe ID from an NYT Cooking URL, e.g. /recipes/1015819-chocolate-chip-cookies → 1015819 */
+function extractNytRecipeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes("nytimes.com")) return null;
+    const match = u.pathname.match(/\/recipes\/(\d+)/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface NytIngredient {
+  display_quantity?: string;
+  display_text?: string;
+}
+
+interface NytStep {
+  description?: string;
+}
+
+interface NytRecipeResponse {
+  id?: number;
+  name?: string;
+  byline?: string;
+  yield?: string;
+  cooking_time?: { display?: string; minutes?: string };
+  topnote?: { content?: string };
+  parts?: { part_label?: string; ingredients?: NytIngredient[] }[];
+  directions?: { direction_label?: string; steps?: NytStep[] }[];
+  nutritional_information?: Record<string, unknown>;
+  tags?: { name?: string; facet?: string }[];
+  image?: { crops?: { name?: string; url?: string; width?: number; height?: number }[] };
+  avg_rating?: number;
+  num_ratings?: number;
+  has_video?: boolean;
+  video?: { renditions?: { type?: string; url?: string }[] };
+}
+
+async function tryNytCookingApi(
+  recipeId: string,
+  downloadImage: boolean,
+  env: Env
+): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(
+      `https://cooking.nytimes.com/api/v5/recipes/${recipeId}`,
+      {
+        headers: { "x-cooking-api": "cooking-frontend" },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    if (!res.ok) return null;
+
+    const raw = (await res.json()) as NytRecipeResponse;
+    if (!raw.name) return null;
+
+    // Parse ingredients from NYT's grouped parts format
+    const rawIngredients: string[] = [];
+    for (const part of raw.parts ?? []) {
+      for (const ing of part.ingredients ?? []) {
+        const text = ing.display_text ?? "";
+        const qty = ing.display_quantity ?? "";
+        rawIngredients.push(qty ? `${qty} ${text}` : text);
+      }
+    }
+
+    // Parse steps from NYT's grouped directions format
+    const rawSteps: string[] = [];
+    for (const dir of raw.directions ?? []) {
+      for (const step of dir.steps ?? []) {
+        if (step.description) rawSteps.push(step.description);
+      }
+    }
+
+    // Extract description from topnote (strip HTML)
+    const description = raw.topnote?.content
+      ? stripHtml(raw.topnote.content)
+      : "";
+
+    // Extract image URLs from crops — prefer articleLarge, fall back to first
+    const allImageUrls: string[] = [];
+    const crops = raw.image?.crops ?? [];
+    const articleLarge = crops.find((c) => c.name === "articleLarge");
+    if (articleLarge?.url) allImageUrls.push(articleLarge.url);
+    for (const crop of crops) {
+      if (crop.url && !allImageUrls.includes(crop.url)) {
+        allImageUrls.push(crop.url);
+      }
+    }
+
+    let thumbnailUrl = allImageUrls[0];
+    let photos: { url: string; isPrimary: boolean }[] = [];
+
+    if (downloadImage && allImageUrls.length > 0) {
+      const toDownload = allImageUrls.slice(0, 5);
+      for (let i = 0; i < toDownload.length; i++) {
+        const imgUrl = toDownload[i]!;
+        try {
+          const imgRes = await fetch(imgUrl, {
+            signal: AbortSignal.timeout(10000),
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+            },
+          });
+          if (imgRes.ok && imgRes.body) {
+            const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+            const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+            const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(imgUrl));
+            const hashHex = [...new Uint8Array(hashBuf)]
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join("")
+              .slice(0, 12);
+            const key = `photos/import-${hashHex}.${ext}`;
+            await env.WHISK_R2.put(key, imgRes.body, { httpMetadata: { contentType } });
+            const isPrimary = i === 0;
+            photos.push({ url: `/${key}`, isPrimary });
+            if (isPrimary) thumbnailUrl = `/${key}`;
+          }
+        } catch {
+          // Skip failed image download
+        }
+      }
+    } else {
+      photos = allImageUrls.slice(0, 5).map((u, i) => ({ url: u, isPrimary: i === 0 }));
+    }
+
+    // Map NYT tags to our tag system
+    const nytTags = raw.tags ?? [];
+    const parsedIngredients = parseIngredients(rawIngredients);
+    const nytRecipeData: RecipeData = {
+      name: raw.name,
+      description,
+      recipeIngredient: rawIngredients,
+      recipeInstructions: rawSteps,
+      recipeYield: raw.yield,
+      recipeCategory: nytTags.filter((t) => t.facet === "meal_types").map((t) => t.name ?? ""),
+      recipeCuisine: nytTags.filter((t) => t.facet === "cuisines").map((t) => t.name ?? ""),
+      keywords: nytTags.map((t) => t.name ?? ""),
+    };
+    const tags = generateTags(nytRecipeData, parsedIngredients);
+
+    // Parse cooking time
+    const cookTimeMinutes = raw.cooking_time?.minutes
+      ? Math.round(parseFloat(raw.cooking_time.minutes))
+      : undefined;
+
+    return {
+      title: raw.name,
+      description,
+      ingredients: parsedIngredients,
+      steps: rawSteps.map((text) => ({ text })),
+      prepTime: undefined, // NYT API doesn't separate prep/cook
+      cookTime: cookTimeMinutes || undefined,
+      servings: parseServings(raw.yield),
+      thumbnailUrl,
+      photos,
+      tags,
+      lastCrawledAt: new Date().toISOString(),
     };
   } catch {
     return null;
