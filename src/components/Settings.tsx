@@ -503,15 +503,15 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       : "border-transparent bg-white dark:bg-stone-900 shadow-md hover:shadow-lg"
                   )}
                 >
-                  <div className="text-sm font-semibold dark:text-stone-200 mb-2">Soft</div>
+                  <div style={{ fontFamily: '"Nunito", system-ui, sans-serif' }} className="text-sm font-semibold dark:text-stone-200 mb-2">Soft</div>
                   <div className="space-y-1.5">
                     {/* Header: no border, soft shadow underneath */}
                     <div className="h-2 -mx-3 bg-white/80 dark:bg-stone-900/80 shadow-[0_2px_8px_rgba(0,0,0,0.05)]" />
                     {/* Card: extra rounded, no border, shadow only */}
                     <div className="h-4 rounded-xl bg-stone-100 dark:bg-stone-700 shadow-[0_2px_8px_rgba(0,0,0,0.06)]" />
-                    {/* Borderless shadow pill + text line */}
+                    {/* Rounded font label + pill */}
                     <div className="flex items-center gap-1.5">
-                      <div className="h-3 w-8 rounded-full bg-stone-100 dark:bg-stone-700 shadow-[0_1px_3px_rgba(0,0,0,0.06)]" />
+                      <div style={{ fontFamily: '"Nunito", system-ui, sans-serif' }} className="h-3 w-8 rounded-full bg-stone-100 dark:bg-stone-700 shadow-[0_1px_3px_rgba(0,0,0,0.06)] text-[5px] font-bold leading-none flex items-center justify-center text-stone-500 dark:text-stone-400">cozy</div>
                       <div className="h-1.5 flex-1 rounded-full bg-stone-200 dark:bg-stone-600" />
                     </div>
                   </div>
