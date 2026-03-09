@@ -124,6 +124,8 @@ export interface ShoppingItem {
   addedBy?: "manual" | "recipe" | "ai" | "scan";
   addedByUser?: string; // user name who added this item
   store?: string; // optional store tag for filtering (e.g. "Costco", "Trader Joe's")
+  price?: number; // from receipt scanning
+  dealMatch?: { storeId: string; storeName: string; salePrice: number };
 }
 
 export type ShoppingCategory =
@@ -152,9 +154,79 @@ export interface PlannedMeal {
   recipeId?: string;
   title: string;
   notes?: string;
+  completed?: boolean;
+  sourceRecipeServings?: number;
 }
 
 export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
+
+// ── Store & Deals ──────────────────────────────────────
+
+export interface Store {
+  id: string;
+  name: string;
+  adUrl?: string;
+  adFormat?: "pdf" | "html" | "image";
+  refreshDay?: number; // 0=Sun..6=Sat (when new ads drop)
+  location?: string;
+}
+
+export interface Deal {
+  id: string;
+  storeId: string;
+  storeName: string;
+  item: string;
+  price: number;
+  originalPrice?: number;
+  unit?: string;
+  category?: ShoppingCategory;
+  validFrom: string;
+  validTo: string;
+  notes?: string;
+  scannedAt: string;
+}
+
+export interface DealIndex {
+  deals: Deal[];
+  lastScanned: Record<string, string>; // storeId → ISO timestamp
+  updatedAt: string;
+}
+
+// ── Receipt & Spending ─────────────────────────────────
+
+export interface Receipt {
+  id: string;
+  store?: string;
+  date: string;
+  items: ReceiptItem[];
+  total?: number;
+  scannedAt: string;
+}
+
+export interface ReceiptItem {
+  name: string;
+  price: number;
+  quantity?: number;
+  unit?: string;
+  category?: ShoppingCategory;
+}
+
+export interface SpendingSummary {
+  weekOf: string;
+  total: number;
+  byStore: Record<string, number>;
+  byCategory: Record<string, number>;
+  itemCount: number;
+}
+
+// ── User Preferences (for Ask tab context) ─────────────
+
+export interface UserPreferences {
+  dietaryRestrictions?: string[];
+  favoriteCuisines?: string[];
+  budgetPreference?: "budget" | "moderate" | "no-preference";
+  dislikedIngredients?: string[];
+}
 
 // ── Auth ────────────────────────────────────────────────
 

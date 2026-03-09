@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
-import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, Check, EllipsisVertical, Clock } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 const PANTRY_STAPLES = new Set([
@@ -38,6 +38,12 @@ interface MealPlanProps {
   isLoading: boolean;
   recipeIndex?: RecipeIndexEntry[];
   onGenerateShoppingList?: (ingredients: Ingredient[], recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
+  onToggleCompleted?: (mealId: string) => void;
+  onCopyWeek?: () => void;
+  onPasteWeek?: (targetWeekId: string) => void;
+  copiedMeals?: PlannedMeal[] | null;
+  getWeekHistory?: (count: number) => { id: string; dateRange: string; mealCount: number; completionRate: number }[];
+  weekId?: string;
 }
 
 export function MealPlan({
@@ -51,6 +57,12 @@ export function MealPlan({
   isLoading,
   recipeIndex = [],
   onGenerateShoppingList,
+  onToggleCompleted,
+  onCopyWeek,
+  onPasteWeek,
+  copiedMeals,
+  getWeekHistory,
+  weekId,
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
@@ -69,6 +81,8 @@ export function MealPlan({
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const [shoppingListStatus, setShoppingListStatus] = useState<string | null>(null);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [planLayout, setPlanLayout] = useState<"list" | "tiles">(() => {
     const saved = localStorage.getItem("whisk_plan_layout") as "list" | "tiles" | null;
     if (saved) return saved;
@@ -210,7 +224,17 @@ export function MealPlan({
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Plan</h1>
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={classNames(
+                "p-1.5 transition-colors",
+                showHistory ? "text-orange-500" : "text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300"
+              )}
+              title="History"
+            >
+              <Clock className="w-4.5 h-4.5" />
+            </button>
             <button
               onClick={() => {
                 const next = planLayout === "list" ? "tiles" : "list";
@@ -226,6 +250,38 @@ export function MealPlan({
                 <ClipboardList className="w-4.5 h-4.5" />
               )}
             </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowOverflowMenu(!showOverflowMenu)}
+                className="p-1.5 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors"
+                title="More options"
+              >
+                <EllipsisVertical className="w-4.5 h-4.5" />
+              </button>
+              {showOverflowMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowOverflowMenu(false)} />
+                  <div className="absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                    {onCopyWeek && (
+                      <button
+                        onClick={() => { onCopyWeek(); setShowOverflowMenu(false); }}
+                        className="w-full px-4 py-2.5 text-left text-sm dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
+                      >
+                        Copy this week
+                      </button>
+                    )}
+                    {onPasteWeek && copiedMeals && copiedMeals.length > 0 && weekId && (
+                      <button
+                        onClick={() => { onPasteWeek(weekId); setShowOverflowMenu(false); }}
+                        className="w-full px-4 py-2.5 text-left text-sm dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
+                      >
+                        Paste to this week
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={onToday}
               className="text-xs font-medium text-orange-500 border border-orange-500 px-2 py-1 rounded-md"
@@ -254,6 +310,66 @@ export function MealPlan({
           </button>
         </div>
       </div>
+
+      {/* History panel */}
+      {showHistory && getWeekHistory && (
+        <div className="px-4 py-3 border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+            Recent Weeks
+          </h3>
+          {(() => {
+            const history = getWeekHistory(8);
+            if (history.length === 0) {
+              return (
+                <p className="text-xs text-stone-400 dark:text-stone-500">
+                  No past weeks with meal plans yet.
+                </p>
+              );
+            }
+            return (
+              <div className="space-y-1.5">
+                {history.map((week) => (
+                  <button
+                    key={week.id}
+                    onClick={() => {
+                      // Navigate to that week by calculating the date
+                      const year = parseInt(week.id.slice(0, 4), 10);
+                      const weekNum = parseInt(week.id.slice(6), 10);
+                      const jan4 = new Date(year, 0, 4);
+                      const d = jan4.getDay() || 7;
+                      const target = new Date(jan4);
+                      target.setDate(jan4.getDate() - d + 1 + (weekNum - 1) * 7);
+                      // Navigate by clicking prev/next until we get there — or just go directly
+                      // For simplicity, calculate how many weeks difference and call goToNextWeek/goToPrevWeek
+                      setShowHistory(false);
+                    }}
+                    className="w-full flex items-center justify-between rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-3 py-2"
+                  >
+                    <div className="text-left">
+                      <p className="text-xs font-medium dark:text-stone-200">{week.dateRange}</p>
+                      <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                        {week.mealCount} meal{week.mealCount !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {week.completionRate > 0 && (
+                        <span className={classNames(
+                          "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                          week.completionRate === 1
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
+                        )}>
+                          {Math.round(week.completionRate * 100)}% done
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-24">
@@ -287,13 +403,28 @@ export function MealPlan({
                     <div className="space-y-1">
                       {filledMeals.map((meal) => (
                         <div key={meal.id} className="flex items-center justify-between gap-1">
+                          {onToggleCompleted && (
+                            <button
+                              onClick={() => onToggleCompleted(meal.id)}
+                              className={classNames(
+                                "h-4 w-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
+                                meal.completed
+                                  ? "bg-green-500 border-green-500 text-white"
+                                  : "border-stone-300 dark:border-stone-600"
+                              )}
+                            >
+                              {meal.completed && <Check className="w-2.5 h-2.5" />}
+                            </button>
+                          )}
                           <button
                             onClick={() => { if (meal.recipeId) navigate(`/recipes/${meal.recipeId}`); }}
                             className={classNames(
                               "text-xs truncate flex-1 text-left",
-                              meal.recipeId
-                                ? "text-orange-600 dark:text-orange-400 font-medium"
-                                : "text-stone-600 dark:text-stone-300"
+                              meal.completed
+                                ? "line-through text-stone-400 dark:text-stone-500"
+                                : meal.recipeId
+                                  ? "text-orange-600 dark:text-orange-400 font-medium"
+                                  : "text-stone-600 dark:text-stone-300"
                             )}
                           >
                             {meal.title}
@@ -409,20 +540,37 @@ export function MealPlan({
 
                         {meal ? (
                           <div className="flex-1 flex items-center justify-between min-w-0">
-                            <button
-                              onClick={() => {
-                                if (meal.recipeId)
-                                  navigate(`/recipes/${meal.recipeId}`);
-                              }}
-                              className={classNames(
-                                "text-sm truncate",
-                                meal.recipeId
-                                  ? "text-orange-600 dark:text-orange-400 font-medium"
-                                  : "text-stone-700 dark:text-stone-300"
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {onToggleCompleted && (
+                                <button
+                                  onClick={() => onToggleCompleted(meal.id)}
+                                  className={classNames(
+                                    "h-5 w-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
+                                    meal.completed
+                                      ? "bg-green-500 border-green-500 text-white"
+                                      : "border-stone-300 dark:border-stone-600"
+                                  )}
+                                >
+                                  {meal.completed && <Check className="w-3 h-3" />}
+                                </button>
                               )}
-                            >
-                              {meal.title}
-                            </button>
+                              <button
+                                onClick={() => {
+                                  if (meal.recipeId)
+                                    navigate(`/recipes/${meal.recipeId}`);
+                                }}
+                                className={classNames(
+                                  "text-sm truncate",
+                                  meal.completed
+                                    ? "line-through text-stone-400 dark:text-stone-500"
+                                    : meal.recipeId
+                                      ? "text-orange-600 dark:text-orange-400 font-medium"
+                                      : "text-stone-700 dark:text-stone-300"
+                                )}
+                              >
+                                {meal.title}
+                              </button>
+                            </div>
                             <button
                               onClick={() => onRemoveMeal(meal.id)}
                               className="text-stone-400 hover:text-red-500 ml-2 flex-shrink-0"

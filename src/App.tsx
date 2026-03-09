@@ -39,7 +39,7 @@ const CookMode = lazyRetry(() => import("./components/recipes/CookMode"), "CookM
 const ShoppingList = lazyRetry(() => import("./components/list/ShoppingList"), "ShoppingList");
 const MealPlan = lazyRetry(() => import("./components/plan/MealPlan"), "MealPlan");
 const Discover = lazyRetry(() => import("./components/discover/Discover"), "Discover");
-const SuggestChat = lazyRetry(() => import("./components/suggest/SuggestChat"), "SuggestChat");
+const AskChat = lazyRetry(() => import("./components/suggest/SuggestChat"), "SuggestChat");
 const Settings = lazyRetry(() => import("./components/Settings"), "Settings");
 const ImportRecipes = lazyRetry(() => import("./components/import/ImportRecipes"), "ImportRecipes");
 
@@ -235,7 +235,8 @@ function AppShell({
           {/* Other tabs — lazy loaded */}
           <Route path="/discover" element={<Discover onSaveRecipe={recipes.createRecipe} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
-          <Route path="/suggest" element={<SuggestChat chatEnabled={capabilities.chat} recipes={recipes.recipes} />} />
+          <Route path="/ask" element={<AskChat chatEnabled={capabilities.chat} recipes={recipes.recipes} />} />
+          <Route path="/suggest" element={<Navigate to="/ask" replace />} />
           <Route
             path="/list"
             element={
@@ -270,6 +271,12 @@ function AppShell({
                 isLoading={mealPlan.isLoading}
                 recipeIndex={recipes.recipes}
                 onGenerateShoppingList={shoppingList.addFromRecipe}
+                onToggleCompleted={mealPlan.toggleCompleted}
+                onCopyWeek={mealPlan.copyWeek}
+                onPasteWeek={mealPlan.pasteWeek}
+                copiedMeals={mealPlan.copiedMeals}
+                getWeekHistory={mealPlan.getWeekHistory}
+                weekId={mealPlan.plan.id}
               />
             }
           />

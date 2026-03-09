@@ -119,6 +119,57 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     return ["dinner"];
   });
 
+  const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      if (raw) {
+        const prefs = JSON.parse(raw) as Record<string, unknown>;
+        return Array.isArray(prefs.dietaryRestrictions) ? prefs.dietaryRestrictions as string[] : [];
+      }
+    } catch {}
+    return [];
+  });
+  const [favoriteCuisines, setFavoriteCuisines] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      if (raw) {
+        const prefs = JSON.parse(raw) as Record<string, unknown>;
+        return Array.isArray(prefs.favoriteCuisines) ? prefs.favoriteCuisines as string[] : [];
+      }
+    } catch {}
+    return [];
+  });
+  const [budgetPreference, setBudgetPreference] = useState<"budget" | "moderate" | "no-preference">(() => {
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      if (raw) {
+        const prefs = JSON.parse(raw) as Record<string, unknown>;
+        if (prefs.budgetPreference === "budget" || prefs.budgetPreference === "moderate" || prefs.budgetPreference === "no-preference") {
+          return prefs.budgetPreference;
+        }
+      }
+    } catch {}
+    return "no-preference";
+  });
+  const [dislikedIngredients, setDislikedIngredients] = useState(() => {
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      if (raw) {
+        const prefs = JSON.parse(raw) as Record<string, unknown>;
+        return Array.isArray(prefs.dislikedIngredients) ? (prefs.dislikedIngredients as string[]).join(", ") : "";
+      }
+    } catch {}
+    return "";
+  });
+
+  const savePreferences = (updates: Record<string, unknown>) => {
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      const existing = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+      localStorage.setItem("whisk_preferences", JSON.stringify({ ...existing, ...updates }));
+    } catch {}
+  };
+
   const [showShareModal, setShowShareModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
@@ -755,6 +806,119 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
                     }}
                   />
+                </div>
+              </Card>
+            </section>
+
+            {/* Dietary Preferences */}
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Dietary Preferences
+              </h2>
+              <Card>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                      Dietary Restrictions
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Nut-Free", "Keto", "Paleo", "Halal", "Kosher"].map((diet) => {
+                        const active = dietaryRestrictions.includes(diet.toLowerCase());
+                        return (
+                          <button
+                            key={diet}
+                            onClick={() => {
+                              const key = diet.toLowerCase();
+                              const updated = active
+                                ? dietaryRestrictions.filter((d) => d !== key)
+                                : [...dietaryRestrictions, key];
+                              setDietaryRestrictions(updated);
+                              savePreferences({ dietaryRestrictions: updated });
+                            }}
+                            className={classNames(
+                              "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+                              active ? activeClass : inactiveClass
+                            )}
+                          >
+                            {diet}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                      Favorite Cuisines
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {["Italian", "Mexican", "Asian", "Indian", "Mediterranean", "American", "French", "Japanese", "Thai", "Middle Eastern"].map((cuisine) => {
+                        const active = favoriteCuisines.includes(cuisine.toLowerCase());
+                        return (
+                          <button
+                            key={cuisine}
+                            onClick={() => {
+                              const key = cuisine.toLowerCase();
+                              const updated = active
+                                ? favoriteCuisines.filter((c) => c !== key)
+                                : [...favoriteCuisines, key];
+                              setFavoriteCuisines(updated);
+                              savePreferences({ favoriteCuisines: updated });
+                            }}
+                            className={classNames(
+                              "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+                              active ? activeClass : inactiveClass
+                            )}
+                          >
+                            {cuisine}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                      Budget Preference
+                    </label>
+                    <div className="flex gap-2">
+                      {([
+                        { value: "budget", label: "Budget-Friendly" },
+                        { value: "moderate", label: "Moderate" },
+                        { value: "no-preference", label: "No Preference" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            setBudgetPreference(opt.value);
+                            savePreferences({ budgetPreference: opt.value });
+                          }}
+                          className={classNames(
+                            "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+                            budgetPreference === opt.value ? activeClass : inactiveClass
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Input
+                      label="Disliked Ingredients"
+                      value={dislikedIngredients}
+                      onChange={(e) => {
+                        setDislikedIngredients(e.target.value);
+                        const items = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                        savePreferences({ dislikedIngredients: items });
+                      }}
+                      placeholder="e.g. cilantro, olives, anchovies"
+                    />
+                    <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
+                      Comma-separated. Used by AI to avoid suggesting recipes with these.
+                    </p>
+                  </div>
                 </div>
               </Card>
             </section>

@@ -5,11 +5,11 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, WhiskLogo } from "../ui/Icon";
+import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, WhiskLogo, Camera } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { DealsScanner } from "../plan/DealsScanner";
 
-type SortMode = "department" | "alphabetical" | "unchecked-first";
+type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store";
 
 interface ShoppingListProps {
   list: ShoppingListType;
@@ -90,6 +90,25 @@ export function ShoppingList({
       if (a.checked !== b.checked) return a.checked ? 1 : -1;
       return a.name.localeCompare(b.name);
     });
+  }, [filteredItems, sortMode]);
+
+  // Store-grouped list
+  const storeGrouped = useMemo(() => {
+    if (sortMode !== "by-store") return null;
+    const groups = new Map<string, ShoppingItem[]>();
+    for (const item of filteredItems) {
+      const store = item.store ?? "Unassigned";
+      const arr = groups.get(store) ?? [];
+      arr.push(item);
+      groups.set(store, arr);
+    }
+    // Sort stores alphabetically, with "Unassigned" last
+    const sorted = [...groups.entries()].sort(([a], [b]) => {
+      if (a === "Unassigned") return 1;
+      if (b === "Unassigned") return -1;
+      return a.localeCompare(b);
+    });
+    return sorted;
   }, [filteredItems, sortMode]);
 
   const recipeNames = useMemo(() => {
@@ -173,6 +192,13 @@ export function ShoppingList({
             </span>
           )}
         </span>
+
+        {/* Deal badge */}
+        {item.dealMatch && (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 whitespace-nowrap">
+            ${item.dealMatch.salePrice.toFixed(2)} @ {item.dealMatch.storeName}
+          </span>
+        )}
 
         {/* Store tag */}
         {editingStoreId === item.id ? (
@@ -259,6 +285,7 @@ export function ShoppingList({
                   <div className="absolute right-0 top-10 z-50 w-48 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
                     {([
                       { value: "department", label: "By department" },
+                      { value: "by-store", label: "By store" },
                       { value: "alphabetical", label: "A-Z" },
                       { value: "unchecked-first", label: "Unchecked first" },
                     ] as const).map((opt) => (
@@ -411,6 +438,41 @@ export function ShoppingList({
             title={storeFilter ? `No items for ${storeFilter}` : "List is empty"}
             description={storeFilter ? "Clear the filter to see all items" : "Add items above or from a recipe"}
           />
+        ) : sortMode === "by-store" && storeGrouped ? (
+          /* Store-grouped list */
+          <div className="space-y-4">
+            {storeGrouped.map(([store, items]) => {
+              const sorted = [...items].sort((a, b) => {
+                if (a.checked !== b.checked) return a.checked ? 1 : -1;
+                return a.name.localeCompare(b.name);
+              });
+              const storeChecked = items.filter((i) => i.checked).length;
+              return (
+                <section key={store}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50 flex items-center gap-1.5">
+                      {store}
+                      <span className="font-normal text-stone-300 dark:text-stone-600">
+                        ({items.length})
+                      </span>
+                    </h3>
+                    {storeChecked > 0 && storeChecked < items.length && (
+                      <span className="text-[10px] text-stone-400 dark:text-stone-500">
+                        {storeChecked}/{items.length}
+                      </span>
+                    )}
+                  </div>
+                  <ul className="space-y-1">
+                    {sorted.map(renderItem)}
+                  </ul>
+                </section>
+              );
+            })}
+            <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
+              {totalCount} item{totalCount !== 1 ? "s" : ""}
+              {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
+            </div>
+          </div>
         ) : sortMode === "alphabetical" && sortedFlat ? (
           /* Alphabetical flat list */
           <div>
@@ -479,6 +541,28 @@ export function ShoppingList({
           </div>
         )}
       </div>
+
+      {/* Camera FAB for photo scanning */}
+      {visionEnabled && (
+        <button
+          onClick={() => {
+            // Placeholder — will trigger camera/file picker for shopping list or receipt scanning in Phase 2
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/*";
+            input.capture = "environment";
+            input.onchange = () => {
+              // Will be handled in Phase 2 with receipt/list scan mode toggle
+            };
+            input.click();
+          }}
+          className="no-print fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-orange-500 text-white shadow-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
+          style={{ marginBottom: "var(--sab)" }}
+          title="Scan shopping list or receipt"
+        >
+          <Camera className="w-6 h-6" />
+        </button>
+      )}
     </div>
   );
 }
