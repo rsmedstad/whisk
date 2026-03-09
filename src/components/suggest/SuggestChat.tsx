@@ -86,36 +86,39 @@ function CategoryIcon({ category, className }: { category: string; className?: s
   const cn = className ?? "w-3.5 h-3.5";
   switch (category) {
     case "Fruit":
-      // Apple icon
+      // Apple (Lucide)
       return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c0-1 1-2 2-2M9 6c-3 0-6 3-6 7 0 5 3 9 6 9 1 0 2-.5 3-.5s2 .5 3 .5c3 0 6-4 6-9 0-4-3-7-6-7-1.5 0-2.5.5-3 1-.5-.5-1.5-1-3-1Z" />
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 6.528V3a1 1 0 0 1 1-1h0" />
+          <path d="M18.237 21A15 15 0 0 0 22 11a6 6 0 0 0-10-4.472A6 6 0 0 0 2 11a15.1 15.1 0 0 0 3.763 10 3 3 0 0 0 3.648.648 5.5 5.5 0 0 1 5.178 0A3 3 0 0 0 18.237 21" />
         </svg>
       );
     case "Vegetables":
-      // Broccoli icon
+      // Carrot (Lucide)
       return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 24v-9M10 15c-2 0-4-1-5-3-1.5-2.5-1-5 1-6.5-.5-2 .5-4 2.5-5s4 0 5 1.5c1-1.5 3-2.5 5-1.5s3 3 2.5 5c2 1.5 2.5 4 1 6.5-1 2-3 3-5 3" />
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2.27 21.7s9.87-3.5 12.73-6.36a4.5 4.5 0 0 0-6.36-6.37C5.77 11.84 2.27 21.7 2.27 21.7zM8.64 14l-2.05-2.04M15.34 15l-2.46-2.46" />
+          <path d="M22 9s-1.33-2-3.5-2C16.86 7 15 9 15 9s1.33 2 3.5 2S22 9 22 9z" />
+          <path d="M15 2s-2 1.33-2 3.5S15 9 15 9s2-1.84 2-3.5C17 3.33 15 2 15 2z" />
         </svg>
       );
     case "Mains":
-      // Roast chicken / poultry leg icon
+      // Drumstick (Lucide)
       return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 3c3 0 6 3 6 7 0 3-2 5-4 6l-1 4c0 1-1 2-2 2h-4c-1 0-2-1-2-2l-1-4c-2-1-4-3-4-6 0-4 3-7 6-7 1.5 0 2.5.5 3 1 .5-.5 1.5-1 3-1Z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10 22v-2M14 22v-2" />
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15.4 15.63a7.875 6 135 1 1 6.23-6.23 4.5 3.43 135 0 0-6.23 6.23" />
+          <path d="m8.29 12.71-2.6 2.6a2.5 2.5 0 1 0-1.65 4.65A2.5 2.5 0 1 0 8.7 18.3l2.59-2.59" />
         </svg>
       );
     case "Sides":
-      // Potato icon
+      // Salad bowl (Lucide)
       return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5c-5 0-9 3-9 7s4 7 9 7 9-3 9-7-4-7-9-7Z" />
-          <circle cx="9" cy="10" r=".5" fill="currentColor" stroke="none" />
-          <circle cx="14" cy="9" r=".5" fill="currentColor" stroke="none" />
-          <circle cx="11" cy="14" r=".5" fill="currentColor" stroke="none" />
-          <circle cx="15" cy="13" r=".5" fill="currentColor" stroke="none" />
+        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 21h10" />
+          <path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z" />
+          <path d="M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.37 3.37 2.4 2.4 0 0 1-1.1 3.7 2.51 2.51 0 0 1 .03 1.1" />
+          <path d="m13 12 4-4" />
+          <path d="M10.9 7.25A3.99 3.99 0 0 0 4 10c0 .73.2 1.41.54 2" />
         </svg>
       );
     default:
