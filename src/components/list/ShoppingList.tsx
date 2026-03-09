@@ -91,6 +91,7 @@ export function ShoppingList({
   const [showListScan, setShowListScan] = useState(false);
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
+  const [listScanPreview, setListScanPreview] = useState<string | null>(null);
   // Sales tab
   const [dealCategoryFilter, setDealCategoryFilter] = useState<string | null>(null);
   const [dealStoreFilter, setDealStoreFilter] = useState<string | null>(null);
@@ -330,6 +331,9 @@ export function ShoppingList({
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
+      // Show preview thumbnail during processing
+      const previewUrl = URL.createObjectURL(file);
+      setListScanPreview(previewUrl);
       setIsListScanning(true);
       setListScanResult(null);
       try {
@@ -363,6 +367,13 @@ export function ShoppingList({
         setListScanResult({ count: 0, message: "Failed to scan. Check your connection and try again." });
       } finally {
         setIsListScanning(false);
+        // Clear preview after a brief delay so user sees result alongside it
+        setTimeout(() => {
+          setListScanPreview((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+          });
+        }, 3000);
       }
     };
     input.click();
@@ -795,6 +806,19 @@ export function ShoppingList({
                         )}
                       </button>
                     </div>
+                    {/* Photo preview during/after scan */}
+                    {listScanPreview && (
+                      <div className="mt-2 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+                        <img
+                          src={listScanPreview}
+                          alt="Scanned list"
+                          className={classNames(
+                            "w-full max-h-40 object-cover transition-opacity",
+                            !isListScanning && "opacity-60"
+                          )}
+                        />
+                      </div>
+                    )}
                     {isListScanning && (
                       <p className="text-xs text-orange-500 mt-2 animate-pulse">
                         Reading your list...
