@@ -287,6 +287,9 @@ function AppShell({
                 onClearLastScanned={receiptData.clearLastScanned}
                 dealMatches={dealsData.matchDeals(shoppingList.list.items)}
                 bestStore={dealsData.getBestStoreForList(shoppingList.list.items)}
+                deals={dealsData.deals}
+                stores={dealsData.stores}
+                receipts={receiptData.receipts}
               />
             }
           />
