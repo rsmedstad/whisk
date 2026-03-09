@@ -204,6 +204,7 @@ function AppShell({
                 recipes={recipes.recipes}
                 isLoading={recipes.isLoading}
                 onToggleFavorite={recipes.toggleFavorite}
+                onToggleWantToMake={recipes.toggleWantToMake}
                 availableTags={tags.allTagNames}
               />
             }
@@ -314,6 +315,7 @@ function AppShell({
                 getWeekHistory={mealPlan.getWeekHistory}
                 weekId={mealPlan.plan.id}
                 deals={dealsData.deals}
+                onToggleWantToMake={recipes.toggleWantToMake}
               />
             }
           />

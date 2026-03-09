@@ -314,6 +314,9 @@ export function Discover({
   const [savedFeedRecipeId, setSavedFeedRecipeId] = useState<string | null>(
     null
   );
+  // Track URLs that have been quick-saved to recipe book
+  const [savedUrls, setSavedUrls] = useState<Set<string>>(new Set());
+  const [savingUrls, setSavingUrls] = useState<Set<string>>(new Set());
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<"ingredients" | "steps">("ingredients");
@@ -493,6 +496,47 @@ export function Discover({
       setIsSavingFeed(false);
     }
   }, [importedRecipe, onSaveRecipe]);
+
+  // Quick-save a feed item directly from the card (imports + saves in one step)
+  const handleQuickSave = useCallback(async (item: DiscoverFeedItem) => {
+    if (!onSaveRecipe || savedUrls.has(item.url) || savingUrls.has(item.url)) return;
+    setSavingUrls((prev) => new Set(prev).add(item.url));
+    try {
+      const data = await api.post<ImportedRecipe>("/import/url", {
+        url: item.url,
+        downloadImage: true,
+      });
+      if (!data?.title) return;
+      const mergedTags = [...new Set([
+        ...(data.tags ?? []),
+        ...(item.tags ?? []),
+      ])];
+      await onSaveRecipe({
+        title: data.title,
+        description: data.description,
+        ingredients: data.ingredients,
+        steps: data.steps,
+        favorite: false,
+        photos: data.photos ?? [],
+        thumbnailUrl: data.thumbnailUrl,
+        videoUrl: data.videoUrl,
+        tags: mergedTags,
+        prepTime: data.prepTime,
+        cookTime: data.cookTime,
+        servings: data.servings,
+        source: data.source as Recipe["source"],
+      });
+      setSavedUrls((prev) => new Set(prev).add(item.url));
+    } catch {
+      // Import failed — button stays as +
+    } finally {
+      setSavingUrls((prev) => {
+        const next = new Set(prev);
+        next.delete(item.url);
+        return next;
+      });
+    }
+  }, [onSaveRecipe, savedUrls, savingUrls]);
 
   const handleFeedBack = () => {
     setSelectedFeedItem(null);
@@ -1695,6 +1739,9 @@ export function Discover({
                         category={category}
                         onClick={() => handleFeedItemClick(item)}
                         lastRefreshed={feed?.lastRefreshed}
+                        onQuickSave={() => handleQuickSave(item)}
+                        isSaved={savedUrls.has(item.url)}
+                        isSaving={savingUrls.has(item.url)}
                       />
                     ))}
                   </div>
@@ -1751,6 +1798,9 @@ export function Discover({
                     category={item.category}
                     onClick={() => handleFeedItemClick(item)}
                     lastRefreshed={feed?.lastRefreshed}
+                    onQuickSave={() => handleQuickSave(item)}
+                    isSaved={savedUrls.has(item.url)}
+                    isSaving={savingUrls.has(item.url)}
                   />
                 ))}
               </div>
@@ -1770,11 +1820,17 @@ function FeedCard({
   category,
   onClick,
   lastRefreshed,
+  onQuickSave,
+  isSaved,
+  isSaving,
 }: {
   item: DiscoverFeedItem;
   category: DiscoverCategory;
   onClick: () => void;
   lastRefreshed?: string;
+  onQuickSave?: () => void;
+  isSaved?: boolean;
+  isSaving?: boolean;
 }) {
   const itemIsNew = isNewItem(item, lastRefreshed);
   return (
@@ -1798,8 +1854,34 @@ function FeedCard({
           </div>
         )}
         {itemIsNew && (
-          <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-orange-500/90 backdrop-blur-sm">
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-orange-500/90 backdrop-blur-sm">
             <Sparkles className="w-3.5 h-3.5 text-white" />
+          </div>
+        )}
+        {onQuickSave && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isSaved && !isSaving) onQuickSave();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                if (!isSaved && !isSaving) onQuickSave();
+              }
+            }}
+            className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/30 backdrop-blur-sm cursor-pointer"
+            title={isSaved ? "Added to recipes" : "Add to recipes"}
+          >
+            {isSaving ? (
+              <LoadingSpinner size="sm" className="w-4 h-4" />
+            ) : isSaved ? (
+              <Check className="w-4 h-4 text-green-400" />
+            ) : (
+              <Plus className="w-4 h-4 text-white/80" />
+            )}
           </div>
         )}
       </div>

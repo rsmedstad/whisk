@@ -11,7 +11,7 @@ import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
 
 import { FirstRunGuide } from "./FirstRunGuide";
-import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass } from "../ui/Icon";
+import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass, ClipboardList } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked";
@@ -21,6 +21,7 @@ interface RecipeListProps {
   recipes: RecipeIndexEntry[];
   isLoading: boolean;
   onToggleFavorite: (id: string) => void;
+  onToggleWantToMake: (id: string) => void;
   availableTags: string[];
 }
 
@@ -28,6 +29,7 @@ export function RecipeList({
   recipes,
   isLoading,
   onToggleFavorite,
+  onToggleWantToMake,
   availableTags,
 }: RecipeListProps) {
   const navigate = useNavigate();
@@ -530,6 +532,7 @@ export function RecipeList({
                           recipe={recipe}
                           onClick={() => goToRecipe(recipe.id)}
                           onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                          onToggleWantToMake={() => onToggleWantToMake(recipe.id)}
                         />
                       </div>
                     ))}
@@ -544,6 +547,7 @@ export function RecipeList({
                         recipe={recipe}
                         onClick={() => goToRecipe(recipe.id)}
                         onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                        onToggleWantToMake={() => onToggleWantToMake(recipe.id)}
                       />
                     ))}
                   </div>
@@ -559,6 +563,7 @@ export function RecipeList({
                 recipe={recipe}
                 onClick={() => goToRecipe(recipe.id)}
                 onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                onToggleWantToMake={() => onToggleWantToMake(recipe.id)}
               />
             ))}
           </div>
@@ -627,10 +632,12 @@ function RecipeCard({
   recipe,
   onClick,
   onToggleFavorite,
+  onToggleWantToMake,
 }: {
   recipe: RecipeIndexEntry;
   onClick: () => void;
   onToggleFavorite: () => void;
+  onToggleWantToMake: () => void;
 }) {
   const isDrinks = recipe.tags.includes("drinks");
   const totalTime = isDrinks ? null : formatTotalTime(recipe.prepTime, recipe.cookTime);
@@ -640,6 +647,10 @@ function RecipeCard({
     !CARD_HIDDEN_TAGS.has(t) && (!isDrinks || !DRINK_HIDDEN_TAGS.has(t))
   );
   const isAlcoholic = isDrinks && (ALCOHOLIC_KEYWORDS.test(recipe.title) || (recipe.spirits && recipe.spirits.length > 0));
+  // For drinks, prepend Alcoholic/Non-Alcoholic as a display tag instead of badge
+  const finalTags = isDrinks
+    ? [isAlcoholic ? "Alcoholic" : "Non-Alcoholic", ...displayTags]
+    : displayTags;
 
   return (
     <button
@@ -655,14 +666,16 @@ function RecipeCard({
             <WhiskLogo className="w-10 h-10" />
           </div>
         )}
-        {isDrinks && (
-          <span
-            className="absolute top-1.5 left-1.5 flex items-center justify-center w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm text-[11px] font-medium text-white/80"
-            title={isAlcoholic ? "Alcoholic" : "Non-alcoholic"}
-          >
-            {isAlcoholic ? "A" : "NA"}
-          </span>
-        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleWantToMake();
+          }}
+          className="absolute top-1.5 left-1.5 p-1.5 rounded-full bg-black/30 backdrop-blur-sm"
+          title={recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
+        >
+          <ClipboardList className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-400" : "text-white/80")} />
+        </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -685,7 +698,7 @@ function RecipeCard({
             {recipe.title}
           </h3>
           <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
-            {displayTags.length > 0 ? displayTags.slice(0, 3).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ") : "\u00A0"}
+            {finalTags.length > 0 ? finalTags.slice(0, 3).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ") : "\u00A0"}
           </p>
         </div>
 
