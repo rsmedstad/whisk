@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
+import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient, Deal } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
+import { getSeasonalContext } from "../../lib/seasonal";
 import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, Check, EllipsisVertical, Clock } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
@@ -19,12 +20,39 @@ const SLOT_TAGS: Record<MealSlot, string[]> = {
 };
 
 /** Score a recipe for quick-add ranking. Higher = better suggestion. */
-function recipeScore(r: RecipeIndexEntry, slot: MealSlot): number {
+function recipeScore(
+  r: RecipeIndexEntry,
+  slot: MealSlot,
+  seasonalIngredients: string[],
+  seasonalTags: string[],
+  dealItems: string[],
+): number {
   let score = 0;
 
   // Slot match bonus — strongest signal
   const slotTags = SLOT_TAGS[slot] ?? [];
   if (r.tags.some((t) => slotTags.includes(t.toLowerCase()))) score += 50;
+
+  // Seasonal tag match — recipe tagged with current season or holiday
+  if (seasonalTags.length > 0 && r.tags.some((t) => seasonalTags.includes(t.toLowerCase()))) score += 25;
+
+  // Seasonal ingredient match — recipe title/description mentions in-season produce
+  if (seasonalIngredients.length > 0) {
+    const titleLower = r.title.toLowerCase();
+    const descLower = (r.description ?? "").toLowerCase();
+    const text = `${titleLower} ${descLower}`;
+    const matches = seasonalIngredients.filter((ing) => text.includes(ing));
+    score += Math.min(matches.length * 10, 30);
+  }
+
+  // Deal match — recipe uses ingredients currently on sale
+  if (dealItems.length > 0) {
+    const titleLower = r.title.toLowerCase();
+    const descLower = (r.description ?? "").toLowerCase();
+    const text = `${titleLower} ${descLower}`;
+    const matches = dealItems.filter((item) => text.includes(item));
+    score += Math.min(matches.length * 12, 25);
+  }
 
   // Rating (0-5 scale, weighted heavily)
   if (r.avgRating) score += r.avgRating * 8;
@@ -77,6 +105,7 @@ interface MealPlanProps {
   copiedMeals?: PlannedMeal[] | null;
   getWeekHistory?: (count: number) => { id: string; dateRange: string; mealCount: number; completionRate: number }[];
   weekId?: string;
+  deals?: Deal[];
 }
 
 export function MealPlan({
@@ -96,9 +125,22 @@ export function MealPlan({
   copiedMeals,
   getWeekHistory,
   weekId,
+  deals = [],
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
+
+  // Seasonal context for scoring
+  const seasonal = useMemo(() => getSeasonalContext(new Date()), []);
+  const seasonalIngredients = seasonal.seasonalIngredients;
+  const seasonalTags = seasonal.seasonalTags;
+
+  // Deal items normalized for matching against recipe titles
+  const dealItems = useMemo(
+    () => deals.map((d) => d.item.toLowerCase()),
+    [deals]
+  );
+
   const enabledSlots = useMemo(() => getEnabledSlots(), []);
   const mealSlots = useMemo(
     () => ALL_MEAL_SLOTS.filter((s) => enabledSlots.includes(s.slot)),
@@ -741,7 +783,7 @@ export function MealPlan({
           const plannedIds = new Set(weekMeals.map((m) => m.recipeId).filter(Boolean));
           const candidates = recipeIndex
             .filter((r) => !plannedIds.has(r.id))
-            .map((r) => ({ recipe: r, score: recipeScore(r, slot) }))
+            .map((r) => ({ recipe: r, score: recipeScore(r, slot, seasonalIngredients, seasonalTags, dealItems) }))
             .sort((a, b) => b.score - a.score)
             .slice(0, 8)
             .filter((c) => c.score > 0);
@@ -754,25 +796,42 @@ export function MealPlan({
                 Suggested for {slotLabel}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {candidates.map(({ recipe: r }) => (
-                  <button
-                    key={r.id}
-                    onClick={() => handleAddMeal(r.title, r.id)}
-                    className="flex items-center gap-1.5 rounded-full border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 px-2.5 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                  >
-                    {r.thumbnailUrl ? (
-                      <img src={r.thumbnailUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
-                    ) : r.favorite ? (
-                      <span className="text-orange-400">★</span>
-                    ) : (
-                      <span className="text-stone-300 dark:text-stone-600">○</span>
-                    )}
-                    <span className="truncate max-w-[120px]">{r.title}</span>
-                    {r.avgRating != null && r.avgRating > 0 && (
-                      <span className="text-[9px] text-amber-500">{r.avgRating.toFixed(1)}★</span>
-                    )}
-                  </button>
-                ))}
+                {candidates.map(({ recipe: r }) => {
+                  const titleLower = r.title.toLowerCase();
+                  const descLower = (r.description ?? "").toLowerCase();
+                  const text = `${titleLower} ${descLower}`;
+                  const isSeasonal = seasonalIngredients.some((ing) => text.includes(ing))
+                    || seasonalTags.some((tag) => r.tags.some((t) => t.toLowerCase() === tag));
+                  const hasDeal = dealItems.some((item) => text.includes(item));
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => handleAddMeal(r.title, r.id)}
+                      className={classNames(
+                        "flex items-center gap-1.5 rounded-full border bg-white dark:bg-stone-800 px-2.5 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors",
+                        hasDeal
+                          ? "border-green-300 dark:border-green-700"
+                          : isSeasonal
+                            ? "border-emerald-200 dark:border-emerald-800"
+                            : "border-stone-200 dark:border-stone-700"
+                      )}
+                    >
+                      {r.thumbnailUrl ? (
+                        <img src={r.thumbnailUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
+                      ) : r.favorite ? (
+                        <span className="text-orange-400">★</span>
+                      ) : (
+                        <span className="text-stone-300 dark:text-stone-600">○</span>
+                      )}
+                      <span className="truncate max-w-[120px]">{r.title}</span>
+                      {r.avgRating != null && r.avgRating > 0 && (
+                        <span className="text-[9px] text-amber-500">{r.avgRating.toFixed(1)}★</span>
+                      )}
+                      {isSeasonal && <span className="text-[9px] text-emerald-500" title="In season">🌿</span>}
+                      {hasDeal && <span className="text-[9px] text-green-600" title="On sale">💲</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );

@@ -151,16 +151,17 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     } catch {}
     return "no-preference";
   });
-  const [dislikedIngredients, setDislikedIngredients] = useState(() => {
+  const [dislikedIngredients, setDislikedIngredients] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem("whisk_preferences");
       if (raw) {
         const prefs = JSON.parse(raw) as Record<string, unknown>;
-        return Array.isArray(prefs.dislikedIngredients) ? (prefs.dislikedIngredients as string[]).join(", ") : "";
+        return Array.isArray(prefs.dislikedIngredients) ? prefs.dislikedIngredients as string[] : [];
       }
     } catch {}
-    return "";
+    return [];
   });
+  const [dislikedInput, setDislikedInput] = useState("");
 
   const savePreferences = (updates: Record<string, unknown>) => {
     try {
@@ -905,18 +906,63 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   </div>
 
                   <div>
-                    <Input
-                      label="Disliked Ingredients"
-                      value={dislikedIngredients}
-                      onChange={(e) => {
-                        setDislikedIngredients(e.target.value);
-                        const items = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
-                        savePreferences({ dislikedIngredients: items });
-                      }}
-                      placeholder="e.g. cilantro, olives, anchovies"
-                    />
+                    <label className="text-sm font-medium text-stone-700 dark:text-stone-300">
+                      Disliked Ingredients
+                    </label>
+                    {dislikedIngredients.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {dislikedIngredients.map((item) => (
+                          <span
+                            key={item}
+                            className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300"
+                          >
+                            {item}
+                            <button
+                              onClick={() => {
+                                const updated = dislikedIngredients.filter((i) => i !== item);
+                                setDislikedIngredients(updated);
+                                savePreferences({ dislikedIngredients: updated });
+                              }}
+                              className="ml-0.5 text-red-400 hover:text-red-600 dark:hover:text-red-200"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        value={dislikedInput}
+                        onChange={(e) => setDislikedInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            const val = dislikedInput.trim().replace(/,/g, "");
+                            if (val && !dislikedIngredients.includes(val.toLowerCase())) {
+                              const updated = [...dislikedIngredients, val.toLowerCase()];
+                              setDislikedIngredients(updated);
+                              savePreferences({ dislikedIngredients: updated });
+                            }
+                            setDislikedInput("");
+                          }
+                        }}
+                        onBlur={() => {
+                          const val = dislikedInput.trim().replace(/,/g, "");
+                          if (val && !dislikedIngredients.includes(val.toLowerCase())) {
+                            const updated = [...dislikedIngredients, val.toLowerCase()];
+                            setDislikedIngredients(updated);
+                            savePreferences({ dislikedIngredients: updated });
+                          }
+                          setDislikedInput("");
+                        }}
+                        placeholder={dislikedIngredients.length > 0 ? "Add more..." : "e.g. cilantro, olives, anchovies"}
+                        className="w-full rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-white px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                      />
+                    </div>
                     <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
-                      Comma-separated. Used by AI to avoid suggesting recipes with these.
+                      Press Enter or comma to add. Used by AI to filter suggestions.
                     </p>
                   </div>
                 </div>

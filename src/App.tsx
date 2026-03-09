@@ -310,6 +310,7 @@ function AppShell({
                 copiedMeals={mealPlan.copiedMeals}
                 getWeekHistory={mealPlan.getWeekHistory}
                 weekId={mealPlan.plan.id}
+                deals={dealsData.deals}
               />
             }
           />
