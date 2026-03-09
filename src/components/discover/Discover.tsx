@@ -179,7 +179,7 @@ const CATEGORY_ORDER: DiscoverCategory[] = [
 
 const FEED_CACHE_KEY = "discover_feed";
 
-type DiscoverSort = "category" | "recent" | "alpha";
+type DiscoverSort = "category" | "recent" | "expiring" | "alpha";
 
 /** An item is "new" if it was added in the most recent crawl (same timestamp as lastRefreshed) */
 function isNewItem(item: DiscoverFeedItem, lastRefreshed?: string): boolean {
@@ -710,6 +710,12 @@ export function Discover({
         const bTime = b.addedAt ? new Date(b.addedAt).getTime() : 0;
         return bTime - aTime;
       });
+    } else if (sort === "expiring") {
+      items = [...items].sort((a, b) => {
+        const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity;
+        const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity;
+        return aExpiry - bExpiry;
+      });
     }
 
     return items;
@@ -717,6 +723,8 @@ export function Discover({
 
   // Count new items for the badge
   const newCount = useMemo(() => allItems.filter((i) => isNewItem(i, feed?.lastRefreshed)).length, [allItems, feed?.lastRefreshed]);
+  // Count expiring items (for conditional sort option)
+  const expiringCount = useMemo(() => allItems.filter((i) => isExpiringItem(i)).length, [allItems]);
 
   // Check if any filters are active (to switch from carousel to grid)
   const hasActiveFilters = search || newOnly || selectedType !== null || selectedCuisine !== null || selectedDiet !== null || selectedSeason !== null || maxTime !== null;
@@ -1362,7 +1370,7 @@ export function Discover({
               <button
                 onClick={(e) => openDropdownAt("sort", e)}
                 className="shrink-0 p-1.5 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 transition-colors"
-                title={`Sort: ${({ category: "Category", recent: "Recent", alpha: "A-Z" } as Record<DiscoverSort, string>)[sort]}`}
+                title={`Sort: ${({ category: "Category", recent: "Recent", expiring: "Expiring", alpha: "A-Z" } as Record<DiscoverSort, string>)[sort]}`}
               >
                 <ArrowUpDown className="w-4.5 h-4.5" />
               </button>
@@ -1474,7 +1482,7 @@ export function Discover({
                   }}
                 >
                   {openDropdown === "sort" && (
-                    [["category", "Category"], ["recent", "Recent"], ["alpha", "A-Z"]] as [DiscoverSort, string][]
+                    ([["category", "Category"], ["recent", "Recent"], ...(expiringCount > 0 ? [["expiring", "Expiring"]] : []), ["alpha", "A-Z"]] as [DiscoverSort, string][])
                   ).map(([value, label]) => (
                     <button
                       key={value}

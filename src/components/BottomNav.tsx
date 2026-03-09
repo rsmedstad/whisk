@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { classNames } from "../lib/utils";
 import { useKeyboard } from "../hooks/useKeyboard";
 import { BookOpen, Globe, Sparkles, ShoppingCart, CalendarDays } from "./ui/Icon";
@@ -8,11 +8,11 @@ const tabs = [
   { to: "/", icon: BookOpen, label: "Recipes" },
   { to: "/plan", icon: CalendarDays, label: "Plan" },
   { to: "/list", icon: ShoppingCart, label: "List" },
-  { to: "/ask", icon: Sparkles, label: "Ask" },
 ] as const;
 
 export function BottomNav() {
   const { isKeyboardOpen } = useKeyboard();
+  const navigate = useNavigate();
 
   return (
     <nav className={classNames(
@@ -39,6 +39,16 @@ export function BottomNav() {
               <span>{tab.label}</span>
             </NavLink>
           ))}
+          {/* Ask — inline input that navigates to /ask */}
+          <button
+            onClick={() => navigate("/ask")}
+            className="flex flex-1 items-center gap-1.5 py-2 px-2 min-w-0"
+          >
+            <Sparkles className="w-5 h-5 shrink-0 text-orange-500" />
+            <span className="truncate text-xs text-stone-400 dark:text-stone-500 bg-stone-100 dark:bg-stone-800 rounded-full px-3 py-1 border border-stone-200 dark:border-stone-700 text-left min-w-0">
+              Ask anything…
+            </span>
+          </button>
         </div>
       </div>
     </nav>
