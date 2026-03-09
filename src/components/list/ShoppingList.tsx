@@ -90,6 +90,7 @@ export function ShoppingList({
   // List scan
   const [showListScan, setShowListScan] = useState(false);
   const [isListScanning, setIsListScanning] = useState(false);
+  const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
   // Sales tab
   const [dealCategoryFilter, setDealCategoryFilter] = useState<string | null>(null);
   const [dealStoreFilter, setDealStoreFilter] = useState<string | null>(null);
@@ -326,11 +327,11 @@ export function ShoppingList({
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.capture = "environment";
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
       setIsListScanning(true);
+      setListScanResult(null);
       try {
         const formData = new FormData();
         formData.append("photo", file);
@@ -340,16 +341,26 @@ export function ShoppingList({
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
         });
-        if (res.ok) {
-          const data = (await res.json()) as { items?: { name: string }[] };
-          if (data.items) {
-            for (const item of data.items) {
-              if (item.name) onAddItem(item.name);
-            }
+        const data = (await res.json()) as { items?: { name: string }[]; message?: string; error?: string };
+        if (!res.ok) {
+          setListScanResult({ count: 0, message: data.error ?? data.message ?? `Scan failed (${res.status})` });
+          return;
+        }
+        const items = data.items ?? [];
+        let added = 0;
+        for (const item of items) {
+          if (item.name) {
+            onAddItem(item.name);
+            added++;
           }
         }
+        if (added > 0) {
+          setListScanResult({ count: added });
+        } else {
+          setListScanResult({ count: 0, message: data.message ?? "No items found in the image. Try a clearer photo." });
+        }
       } catch {
-        // Silently fail
+        setListScanResult({ count: 0, message: "Failed to scan. Check your connection and try again." });
       } finally {
         setIsListScanning(false);
       }
@@ -784,6 +795,23 @@ export function ShoppingList({
                         )}
                       </button>
                     </div>
+                    {isListScanning && (
+                      <p className="text-xs text-orange-500 mt-2 animate-pulse">
+                        Reading your list...
+                      </p>
+                    )}
+                    {listScanResult && !isListScanning && (
+                      <div className={classNames(
+                        "mt-2 px-3 py-2 rounded-lg text-xs",
+                        listScanResult.count > 0
+                          ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                          : "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                      )}>
+                        {listScanResult.count > 0
+                          ? `Added ${listScanResult.count} item${listScanResult.count !== 1 ? "s" : ""} to your list`
+                          : listScanResult.message}
+                      </div>
+                    )}
                   </Card>
                 </div>
               )}
