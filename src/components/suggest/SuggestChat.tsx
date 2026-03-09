@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } fro
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send, Tag } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send, Tag, Sparkles } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -511,6 +511,48 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                     Ask about deals &rarr;
                   </button>
                 )}
+              </Card>
+            )}
+
+            {/* Cook What's on Sale — AI-powered recipe suggestions from deals */}
+            {deals.length > 0 && chatEnabled && localStorage.getItem("whisk_sale_suggestions") !== "false" && (
+              <Card>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4.5 h-4.5 text-orange-500" />
+                  <h2 className="text-base font-semibold dark:text-stone-100">
+                    Cook What&apos;s on Sale
+                  </h2>
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-3">
+                  Get recipe ideas based on what&apos;s on sale at your stores
+                  {recipeCount > 0 && ", matched to your collection"}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => sendMessage(
+                      recipeCount > 0
+                        ? "Look at what's on sale right now at my preferred stores. Find recipes from my collection that use those sale ingredients, and suggest 2-3 new recipe ideas that take advantage of the best deals. Consider my dietary preferences."
+                        : "Based on what's currently on sale at my preferred stores, suggest 3-4 budget-friendly recipe ideas that use the sale ingredients. Consider my dietary preferences and what's in season."
+                    )}
+                    className="wk-pill rounded-full border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 text-xs text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
+                  >
+                    Meal ideas from sales
+                  </button>
+                  {recipeCount > 0 && (
+                    <button
+                      onClick={() => sendMessage("Plan this week's dinners prioritizing ingredients that are on sale right now. Use my existing recipes where possible and suggest new ones for the best deals.")}
+                      className="wk-pill rounded-full border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 px-3 py-1.5 text-xs text-green-600 dark:text-green-400 font-medium hover:border-green-500 transition-colors"
+                    >
+                      Week plan from deals
+                    </button>
+                  )}
+                  <button
+                    onClick={() => sendMessage("What are the best deals right now? Which sale items are the best value, and what quick meals can I make with them?")}
+                    className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1.5 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  >
+                    Best value picks
+                  </button>
+                </div>
               </Card>
             )}
 
