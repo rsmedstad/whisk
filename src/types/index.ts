@@ -381,6 +381,7 @@ export interface DiscoverFeedItem {
   source?: DiscoverSource;
   category?: DiscoverCategory;
   addedAt?: string;
+  expiresAt?: string; // ISO date when this item leaves the discover feed
   tags?: string[];
   totalTime?: number; // estimated total minutes (from AI tagging)
 }

@@ -179,6 +179,9 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const [feedRefreshDays, setFeedRefreshDays] = useState(() =>
     localStorage.getItem("whisk_feed_refresh_days") ?? "2"
   );
+  const [feedItemLifetime, setFeedItemLifetime] = useState(() =>
+    localStorage.getItem("whisk_feed_item_lifetime") ?? "7"
+  );
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [isRetagging, setIsRetagging] = useState(false);
   const [retagResult, setRetagResult] = useState<string | null>(null);
@@ -698,6 +701,35 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                           }}
                           className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
                             feedRefreshDays === opt.value ? activeClass : inactiveClass
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                      Recipe visibility
+                    </label>
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                      How long discover recipes stay visible before expiring. Expired recipes are removed from the feed but saved recipes are permanent.
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {([
+                        { value: "3", label: "3 days" },
+                        { value: "5", label: "5 days" },
+                        { value: "7", label: "1 week" },
+                        { value: "14", label: "2 weeks" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            localStorage.setItem("whisk_feed_item_lifetime", opt.value);
+                            setFeedItemLifetime(opt.value);
+                          }}
+                          className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
+                            feedItemLifetime === opt.value ? activeClass : inactiveClass
                           }`}
                         >
                           {opt.label}

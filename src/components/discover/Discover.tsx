@@ -21,6 +21,7 @@ import {
   Check,
   PlayCircle,
   Sparkles,
+  Hourglass,
   ArrowUpDown,
   XMark,
   ChevronDown,
@@ -186,6 +187,19 @@ function isNewItem(item: DiscoverFeedItem, lastRefreshed?: string): boolean {
   return item.addedAt === lastRefreshed;
 }
 
+/** How many days until this item expires from the discover feed */
+function daysUntilExpiry(item: DiscoverFeedItem): number | null {
+  if (!item.expiresAt) return null;
+  const ms = new Date(item.expiresAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+}
+
+/** An item is "expiring" if it will leave the discover feed within 2 days */
+function isExpiringItem(item: DiscoverFeedItem): boolean {
+  const days = daysUntilExpiry(item);
+  return days !== null && days <= 2;
+}
+
 /** Proxy external recipe images through our backend to avoid hotlinking blocks */
 function proxyImageUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
@@ -337,7 +351,10 @@ export function Discover({
     setFeedError(null);
     setFeedWarnings([]);
     try {
-      const url = force ? "/discover/feed?force=true" : "/discover/feed";
+      const lifetime = localStorage.getItem("whisk_feed_item_lifetime") ?? "7";
+      const params = new URLSearchParams({ lifetime });
+      if (force) params.set("force", "true");
+      const url = `/discover/feed?${params}`;
       const data = await api.post<DiscoverFeed & { warnings?: string[] }>(url, {});
       if (data) {
         if (data.warnings?.length) {
@@ -371,7 +388,8 @@ export function Discover({
 
       // No cache — fetch from KV
       try {
-        const data = await api.get<DiscoverFeed>("/discover/feed");
+        const lifetime = localStorage.getItem("whisk_feed_item_lifetime") ?? "7";
+        const data = await api.get<DiscoverFeed>(`/discover/feed?lifetime=${lifetime}`);
         if (data?.lastRefreshed) {
           setFeed(data);
           setLocal(FEED_CACHE_KEY, data);
@@ -1670,6 +1688,7 @@ export function Discover({
                   )
                 : rawItems;
               const catNewCount = items.filter((i) => isNewItem(i, feed?.lastRefreshed)).length;
+              const catExpiringCount = items.filter((i) => !isNewItem(i, feed?.lastRefreshed) && isExpiringItem(i)).length;
               // Show drink pills if there's a mix of alcoholic and non-alcoholic
               const showDrinkPills = category === "drinks" && rawItems.length > 0 && (() => {
                 const alcCount = rawItems.filter(isAlcoholicDrink).length;
@@ -1686,6 +1705,11 @@ export function Discover({
                       {catNewCount > 0 && (
                         <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
                           {catNewCount} new
+                        </span>
+                      )}
+                      {catExpiringCount > 0 && (
+                        <span className="ml-1.5 text-[10px] font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-full">
+                          {catExpiringCount} leaving soon
                         </span>
                       )}
                       {showDrinkPills && (
@@ -1833,6 +1857,8 @@ function FeedCard({
   isSaving?: boolean;
 }) {
   const itemIsNew = isNewItem(item, lastRefreshed);
+  const itemIsExpiring = !itemIsNew && isExpiringItem(item);
+  const expiryDays = daysUntilExpiry(item);
   return (
     <button
       onClick={onClick}
@@ -1854,8 +1880,13 @@ function FeedCard({
           </div>
         )}
         {itemIsNew && (
-          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-orange-500/90 backdrop-blur-sm">
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-orange-500/90 backdrop-blur-sm" title="New recipe">
             <Sparkles className="w-3.5 h-3.5 text-white" />
+          </div>
+        )}
+        {itemIsExpiring && (
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-stone-500/70 backdrop-blur-sm" title={expiryDays === 0 ? "Expiring today — save to keep" : `Leaving in ${expiryDays}d — save to keep`}>
+            <Hourglass className="w-3.5 h-3.5 text-white" />
           </div>
         )}
         {onQuickSave && (
