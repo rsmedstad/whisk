@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } fro
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send, MessageCircle, XMark } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -186,7 +186,6 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   const [seasonFilter, setSeasonFilter] = useState<string>("");
   const [pickedRecipe, setPickedRecipe] = useState<RecipeIndexEntry | null>(null);
   const [diceAnimating, setDiceAnimating] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const autoSentRef = useRef(false);
@@ -364,32 +363,10 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 New chat
               </button>
             )}
-            {messages.length === 0 && (
-              <button
-                onClick={() => {
-                  if (chatOpen) {
-                    setChatOpen(false);
-                    setInput("");
-                  } else {
-                    setChatOpen(true);
-                    setTimeout(() => chatInputRef.current?.focus(), 50);
-                  }
-                }}
-                className={classNames(
-                  "p-2 rounded-lg transition-all",
-                  chatOpen
-                    ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
-                    : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
-                )}
-                title="Chat with AI"
-              >
-                {chatOpen ? <XMark className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
-              </button>
-            )}
           </div>
         </div>
-        {/* Collapsible chat input — like search bar pattern */}
-        {chatOpen && messages.length === 0 && (
+        {/* Input bar in header — always visible when no messages */}
+        {messages.length === 0 && (
           <div className="pb-2">
             <form onSubmit={handleSubmit} className="flex gap-2">
               <input
