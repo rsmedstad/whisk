@@ -86,27 +86,36 @@ function CategoryIcon({ category, className }: { category: string; className?: s
   const cn = className ?? "w-3.5 h-3.5";
   switch (category) {
     case "Fruit":
+      // Apple icon
       return (
         <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 2c1 2 0 4-1 5 3-1 6 1 7 4s-1 8-6 10c-5-2-7-7-6-10s4-5 7-4c-1-1-2-3-1-5Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c0-1 1-2 2-2M9 6c-3 0-6 3-6 7 0 5 3 9 6 9 1 0 2-.5 3-.5s2 .5 3 .5c3 0 6-4 6-9 0-4-3-7-6-7-1.5 0-2.5.5-3 1-.5-.5-1.5-1-3-1Z" />
         </svg>
       );
     case "Vegetables":
+      // Broccoli icon
       return (
         <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 2c-1 2-3 3-3 3s2 1 3 3c1-2 3-3 3-3s-2-1-3-3ZM7 8c-3 2-5 6-4 10 1 3 4 4 9 4s8-1 9-4c1-4-1-8-4-10" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 24v-9M10 15c-2 0-4-1-5-3-1.5-2.5-1-5 1-6.5-.5-2 .5-4 2.5-5s4 0 5 1.5c1-1.5 3-2.5 5-1.5s3 3 2.5 5c2 1.5 2.5 4 1 6.5-1 2-3 3-5 3" />
         </svg>
       );
     case "Mains":
+      // Roast chicken / poultry leg icon
       return (
         <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 14h18M5 14c0-4 3-8 7-8s7 4 7 8M4 14v2a1 1 0 001 1h14a1 1 0 001-1v-2M12 18v3" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 3c3 0 6 3 6 7 0 3-2 5-4 6l-1 4c0 1-1 2-2 2h-4c-1 0-2-1-2-2l-1-4c-2-1-4-3-4-6 0-4 3-7 6-7 1.5 0 2.5.5 3 1 .5-.5 1.5-1 3-1Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 22v-2M14 22v-2" />
         </svg>
       );
     case "Sides":
+      // Potato icon
       return (
         <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 0116 0M3 12h18M5 12c0 4 3 7 7 7s7-3 7-7" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5c-5 0-9 3-9 7s4 7 9 7 9-3 9-7-4-7-9-7Z" />
+          <circle cx="9" cy="10" r=".5" fill="currentColor" stroke="none" />
+          <circle cx="14" cy="9" r=".5" fill="currentColor" stroke="none" />
+          <circle cx="11" cy="14" r=".5" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="13" r=".5" fill="currentColor" stroke="none" />
         </svg>
       );
     default:

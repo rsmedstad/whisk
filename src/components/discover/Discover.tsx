@@ -178,14 +178,12 @@ const CATEGORY_ORDER: DiscoverCategory[] = [
 
 const FEED_CACHE_KEY = "discover_feed";
 
-/** Items added within the last 7 days are considered "new" */
-const NEW_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
-
 type DiscoverSort = "category" | "recent" | "alpha";
 
-function isNewItem(item: DiscoverFeedItem): boolean {
-  if (!item.addedAt) return false;
-  return Date.now() - new Date(item.addedAt).getTime() < NEW_THRESHOLD_MS;
+/** An item is "new" if it was added in the most recent crawl (same timestamp as lastRefreshed) */
+function isNewItem(item: DiscoverFeedItem, lastRefreshed?: string): boolean {
+  if (!item.addedAt || !lastRefreshed) return false;
+  return item.addedAt === lastRefreshed;
 }
 
 /** Proxy external recipe images through our backend to avoid hotlinking blocks */
@@ -608,7 +606,7 @@ export function Discover({
 
     // New only
     if (newOnly) {
-      items = items.filter(isNewItem);
+      items = items.filter((i) => isNewItem(i, feed?.lastRefreshed));
     }
 
     // Type filter (maps to category field)
@@ -655,7 +653,7 @@ export function Discover({
   }, [allItems, search, newOnly, selectedType, selectedCuisine, selectedDiet, selectedSeason, maxTime, sort]);
 
   // Count new items for the badge
-  const newCount = useMemo(() => allItems.filter(isNewItem).length, [allItems]);
+  const newCount = useMemo(() => allItems.filter((i) => isNewItem(i, feed?.lastRefreshed)).length, [allItems, feed?.lastRefreshed]);
 
   // Check if any filters are active (to switch from carousel to grid)
   const hasActiveFilters = search || newOnly || selectedType !== null || selectedCuisine !== null || selectedDiet !== null || selectedSeason !== null || maxTime !== null;
@@ -1626,7 +1624,7 @@ export function Discover({
                     discoverDrinkFilter === "alcoholic" ? isAlcoholicDrink(item) : !isAlcoholicDrink(item)
                   )
                 : rawItems;
-              const catNewCount = items.filter(isNewItem).length;
+              const catNewCount = items.filter((i) => isNewItem(i, feed?.lastRefreshed)).length;
               // Show drink pills if there's a mix of alcoholic and non-alcoholic
               const showDrinkPills = category === "drinks" && rawItems.length > 0 && (() => {
                 const alcCount = rawItems.filter(isAlcoholicDrink).length;
@@ -1695,6 +1693,7 @@ export function Discover({
                         item={item}
                         category={category}
                         onClick={() => handleFeedItemClick(item)}
+                        lastRefreshed={feed?.lastRefreshed}
                       />
                     ))}
                   </div>
@@ -1750,6 +1749,7 @@ export function Discover({
                     item={item}
                     category={item.category}
                     onClick={() => handleFeedItemClick(item)}
+                    lastRefreshed={feed?.lastRefreshed}
                   />
                 ))}
               </div>
@@ -1768,12 +1768,14 @@ function FeedCard({
   item,
   category,
   onClick,
+  lastRefreshed,
 }: {
   item: DiscoverFeedItem;
   category: DiscoverCategory;
   onClick: () => void;
+  lastRefreshed?: string;
 }) {
-  const itemIsNew = isNewItem(item);
+  const itemIsNew = isNewItem(item, lastRefreshed);
   return (
     <button
       onClick={onClick}
