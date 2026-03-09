@@ -13,7 +13,7 @@ import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
 import { classNames } from "../lib/utils";
 import {
-  ChevronLeft, Trash, Globe, Share, Check, ChevronDown, Sun, Moon, ComputerDesktop, CalendarDays,
+  ChevronLeft, Trash, Globe, Share, Check, ChevronDown, XMark, Sun, Moon, ComputerDesktop, CalendarDays,
   Pumpkin, ChristmasTree, Snowflake, HeartArrow, Shamrock, EasterEgg, Firework, TurkeyLeg,
   RefreshCw, Flower, Leaf,
 } from "./ui/Icon";
@@ -107,6 +107,9 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   });
   const [dealsEnabled, setDealsEnabled] = useState(
     () => localStorage.getItem("whisk_deals_enabled") === "true"
+  );
+  const [saleSuggestionsEnabled, setSaleSuggestionsEnabled] = useState(
+    () => localStorage.getItem("whisk_sale_suggestions") !== "false"
   );
   const [flippStores, setFlippStores] = useState<FlippStore[]>([]);
   const [isLoadingStores, setIsLoadingStores] = useState(false);
@@ -911,6 +914,37 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       </p>
                     )}
                   </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium dark:text-stone-200">
+                          Sale-Based Suggestions
+                        </label>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                          Suggest recipes using ingredients on sale at your stores
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const next = !saleSuggestionsEnabled;
+                          setSaleSuggestionsEnabled(next);
+                          localStorage.setItem("whisk_sale_suggestions", String(next));
+                        }}
+                        className={classNames(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                          saleSuggestionsEnabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                        )}
+                      >
+                        <span
+                          className={classNames(
+                            "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
+                            saleSuggestionsEnabled ? "translate-x-5" : "translate-x-0"
+                          )}
+                        />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </Card>
             </section>
@@ -1652,7 +1686,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   );
 }
 
-const STORE_OPTIONS_FALLBACK = ["Jewel-Osco", "Trader Joe's", "Walmart", "Whole Foods", "Costco", "Aldi", "Target", "Meijer", "Kroger", "Mariano's"];
+const STORE_OPTIONS_FALLBACK = ["Jewel-Osco", "Mariano's", "Trader Joe's", "Aldi", "Whole Foods", "Costco", "Walmart", "Target", "Meijer", "Kroger", "Pete's Fresh Market", "Fresh Thyme", "H Mart", "Caputo's"];
 
 function PreferredStoresDropdown({
   stores,
@@ -1665,7 +1699,8 @@ function PreferredStoresDropdown({
   flippStores?: FlippStore[];
   isLoadingStores?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const toggle = (store: string) => {
     const updated = stores.includes(store)
@@ -1682,61 +1717,89 @@ function PreferredStoresDropdown({
   // Also include any existing preferred stores not in the current options
   const allOptions = [...new Set([...storeOptions, ...stores])];
 
+  // Filter by search
+  const filtered = search.trim()
+    ? allOptions.filter((s) => s.toLowerCase().includes(search.toLowerCase()))
+    : allOptions;
+
+  // Show selected first, then limit unselected
+  const selected = filtered.filter((s) => stores.includes(s));
+  const unselected = filtered.filter((s) => !stores.includes(s));
+  const visibleUnselected = showAll || search.trim() ? unselected : unselected.slice(0, 6);
+
   return (
     <div>
-      <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+      <label className="text-sm font-medium dark:text-stone-200 block mb-1">
         Preferred Stores
       </label>
-      <div className="relative">
-        <button
-          onClick={() => setOpen(!open)}
-          className="w-full flex items-center justify-between rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-        >
-          <span className={classNames("truncate", stores.length === 0 ? "text-stone-400 dark:text-stone-500" : "")}>
-            {stores.length === 0 ? "Select stores..." : stores.join(", ")}
+      <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+        Tap to select your grocery stores
+        {isLoadingStores && (
+          <span className="ml-1 inline-flex items-center">
+            <span className="w-3 h-3 border-2 border-stone-300 border-t-orange-500 rounded-full animate-spin" />
           </span>
-          <div className="flex items-center gap-1 ml-1 shrink-0">
-            {isLoadingStores && (
-              <span className="w-3 h-3 border-2 border-stone-300 border-t-orange-500 rounded-full animate-spin" />
-            )}
-            <ChevronDown className={classNames("w-4 h-4 text-stone-400 transition-transform", open && "rotate-180")} />
-          </div>
-        </button>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute z-20 mt-1 w-full rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1 max-h-60 overflow-y-auto">
-              {flippStores.length > 0 && (
-                <p className="px-3 py-1 text-[10px] text-stone-400 dark:text-stone-500 uppercase tracking-wide">
-                  Stores in your area
-                </p>
-              )}
-              {allOptions.map((store) => {
-                const checked = stores.includes(store);
-                const isFlippStore = flippStores.some((f) => f.name === store);
-                return (
-                  <button
-                    key={store}
-                    onClick={() => toggle(store)}
-                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors"
-                  >
-                    <span className={classNames(
-                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                      checked
-                        ? "bg-orange-500 border-orange-500 text-white"
-                        : "border-stone-300 dark:border-stone-600"
-                    )}>
-                      {checked && <Check className="w-3 h-3" />}
-                    </span>
-                    <span className="dark:text-stone-200 flex-1">{store}</span>
-                    {isFlippStore && (
-                      <span className="text-[10px] text-green-600 dark:text-green-400">Deals</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </>
+        )}
+      </p>
+
+      {/* Search input */}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search stores..."
+        className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-1.5 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 mb-2"
+      />
+
+      {/* Selected stores as removable chips */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selected.map((store) => {
+            const isFlipp = flippStores.some((f) => f.name === store);
+            return (
+              <button
+                key={store}
+                onClick={() => toggle(store)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500 text-white transition-colors hover:bg-orange-600"
+              >
+                {store}
+                {isFlipp && <span className="text-orange-200 text-[9px]">Deals</span>}
+                <XMark className="w-3 h-3 ml-0.5" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Available stores as tappable chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {visibleUnselected.map((store) => {
+          const isFlipp = flippStores.some((f) => f.name === store);
+          return (
+            <button
+              key={store}
+              onClick={() => toggle(store)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400 transition-colors hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400"
+            >
+              {store}
+              {isFlipp && <span className="text-[9px] text-green-600 dark:text-green-400">Deals</span>}
+            </button>
+          );
+        })}
+        {!showAll && !search.trim() && unselected.length > 6 && (
+          <button
+            onClick={() => setShowAll(true)}
+            className="px-2.5 py-1 rounded-full text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
+          >
+            +{unselected.length - 6} more
+          </button>
+        )}
+        {search.trim() && filtered.length === 0 && (
+          <button
+            onClick={() => { toggle(search.trim()); setSearch(""); }}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-dashed border-orange-400 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors"
+          >
+            + Add "{search.trim()}"
+          </button>
         )}
       </div>
     </div>

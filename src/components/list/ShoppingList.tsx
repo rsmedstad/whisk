@@ -90,6 +90,8 @@ export function ShoppingList({
   // List scan
   const [showListScan, setShowListScan] = useState(false);
   const [isListScanning, setIsListScanning] = useState(false);
+  const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
+  const [listScanPreview, setListScanPreview] = useState<string | null>(null);
   // Sales tab
   const [dealCategoryFilter, setDealCategoryFilter] = useState<string | null>(null);
   const [dealStoreFilter, setDealStoreFilter] = useState<string | null>(null);
@@ -326,32 +328,66 @@ export function ShoppingList({
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.capture = "environment";
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
+      // Show preview thumbnail during processing
+      const previewUrl = URL.createObjectURL(file);
+      setListScanPreview(previewUrl);
       setIsListScanning(true);
+      setListScanResult(null);
       try {
+        // Normalize orientation via canvas (createImageBitmap respects EXIF)
+        // and downscale to max 1600px so we don't send huge photos to the AI
+        const bitmap = await createImageBitmap(file);
+        const maxDim = 1600;
+        const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+        const w = Math.round(bitmap.width * scale);
+        const h = Math.round(bitmap.height * scale);
+        const canvas = new OffscreenCanvas(w, h);
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        bitmap.close();
+        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+        const normalizedFile = new File([blob], "scan.jpg", { type: "image/jpeg" });
+
         const formData = new FormData();
-        formData.append("photo", file);
+        formData.append("photo", normalizedFile);
         const token = localStorage.getItem("whisk_token");
         const res = await fetch("/api/shopping/scan", {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
         });
-        if (res.ok) {
-          const data = (await res.json()) as { items?: { name: string }[] };
-          if (data.items) {
-            for (const item of data.items) {
-              if (item.name) onAddItem(item.name);
-            }
+        const data = (await res.json()) as { items?: { name: string }[]; message?: string; error?: string };
+        if (!res.ok) {
+          setListScanResult({ count: 0, message: data.error ?? data.message ?? `Scan failed (${res.status})` });
+          return;
+        }
+        const items = data.items ?? [];
+        let added = 0;
+        for (const item of items) {
+          if (item.name) {
+            onAddItem(item.name);
+            added++;
           }
         }
+        if (added > 0) {
+          setListScanResult({ count: added });
+        } else {
+          setListScanResult({ count: 0, message: data.message ?? "No items found in the image. Try a clearer photo." });
+        }
       } catch {
-        // Silently fail
+        setListScanResult({ count: 0, message: "Failed to scan. Check your connection and try again." });
       } finally {
         setIsListScanning(false);
+        // Clear preview after a brief delay so user sees result alongside it
+        setTimeout(() => {
+          setListScanPreview((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+          });
+        }, 3000);
       }
     };
     input.click();
@@ -711,6 +747,34 @@ export function ShoppingList({
       {/* ═══ LIST TAB ═══ */}
       {subTab === "list" && (
         <>
+          {/* Deals callout banner — surfaces sales info on main list tab */}
+          {listDealMatches.length > 0 && (
+            <div className="px-4 pt-3">
+              <button
+                onClick={() => setSubTab("sales")}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 transition-colors hover:bg-green-100 dark:hover:bg-green-900/30"
+              >
+                <Tag className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                <div className="flex-1 text-left">
+                  <p className="text-xs font-semibold text-green-800 dark:text-green-300">
+                    {listDealMatches.length} item{listDealMatches.length !== 1 ? "s" : ""} on sale
+                    {bestStore && bestStore.matchCount >= 2 && (
+                      <span className="font-normal text-green-700 dark:text-green-400">
+                        {" "}— best at {bestStore.storeName}
+                        {bestStore.estimatedSavings > 0 && ` (~$${bestStore.estimatedSavings.toFixed(2)} savings)`}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-green-600 dark:text-green-500 mt-0.5">
+                    {listDealMatches.slice(0, 3).map(m => m.item.name).join(", ")}
+                    {listDealMatches.length > 3 && ` +${listDealMatches.length - 3} more`}
+                  </p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-green-500 -rotate-90 shrink-0" />
+              </button>
+            </div>
+          )}
+
           {/* Scan list camera — collapsible at top */}
           {visionEnabled && (
             <div className="px-4 pt-3">
@@ -756,6 +820,36 @@ export function ShoppingList({
                         )}
                       </button>
                     </div>
+                    {/* Photo preview during/after scan */}
+                    {listScanPreview && (
+                      <div className="mt-2 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+                        <img
+                          src={listScanPreview}
+                          alt="Scanned list"
+                          className={classNames(
+                            "w-full max-h-40 object-cover transition-opacity",
+                            !isListScanning && "opacity-60"
+                          )}
+                        />
+                      </div>
+                    )}
+                    {isListScanning && (
+                      <p className="text-xs text-orange-500 mt-2 animate-pulse">
+                        Reading your list...
+                      </p>
+                    )}
+                    {listScanResult && !isListScanning && (
+                      <div className={classNames(
+                        "mt-2 px-3 py-2 rounded-lg text-xs",
+                        listScanResult.count > 0
+                          ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                          : "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                      )}>
+                        {listScanResult.count > 0
+                          ? `Added ${listScanResult.count} item${listScanResult.count !== 1 ? "s" : ""} to your list`
+                          : listScanResult.message}
+                      </div>
+                    )}
                   </Card>
                 </div>
               )}
