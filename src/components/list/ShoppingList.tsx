@@ -10,7 +10,7 @@ import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 
-type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store";
+type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store" | "by-recipe";
 type SubTab = "list" | "sales" | "receipts";
 
 interface ShoppingListProps {
@@ -90,6 +90,8 @@ export function ShoppingList({
   const [dealCategoryFilter, setDealCategoryFilter] = useState<string | null>(null);
   const [dealStoreFilter, setDealStoreFilter] = useState<string | null>(null);
   // Sales scanner
+  const [showSalesScanner, setShowSalesScanner] = useState(false);
+  const [showReceiptScanner, setShowReceiptScanner] = useState(false);
   const flyerInputRef = useRef<HTMLInputElement>(null);
   const [flyerPreview, setFlyerPreview] = useState<string | null>(null);
   const [dealUrl, setDealUrl] = useState("");
@@ -108,11 +110,63 @@ export function ShoppingList({
     return Array.from(s).sort();
   }, [list.items]);
 
+  // Combine duplicate items by normalized name + unit
+  const combinedItems = useMemo(() => {
+    const groups = new Map<string, ShoppingItem[]>();
+    for (const item of list.items) {
+      const normName = abbreviateName(item.name).toLowerCase();
+      const normUnit = (item.unit ?? "").toLowerCase().trim();
+      const key = `${normName}||${normUnit}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(item);
+      groups.set(key, arr);
+    }
+
+    const result: ShoppingItem[] = [];
+    for (const [, items] of groups) {
+      if (items.length === 1) {
+        result.push(items[0]!);
+        continue;
+      }
+      // Try to combine amounts
+      const first = items[0]!;
+      const allNumeric = items.every((i) => {
+        if (!i.amount) return true;
+        return !isNaN(parseFloat(i.amount));
+      });
+      if (allNumeric) {
+        let totalAmount = 0;
+        let hasAmount = false;
+        for (const i of items) {
+          if (i.amount) {
+            totalAmount += parseFloat(i.amount);
+            hasAmount = true;
+          }
+        }
+        // Collect all source recipe IDs for the combined item
+        const sourceIds = items.map((i) => i.sourceRecipeId).filter(Boolean);
+        const allChecked = items.every((i) => i.checked);
+        result.push({
+          ...first,
+          amount: hasAmount ? (Number.isInteger(totalAmount) ? totalAmount.toString() : totalAmount.toFixed(2).replace(/\.?0+$/, "")) : first.amount,
+          checked: allChecked,
+          // Store sub-item IDs in a custom field for toggling
+          _mergedIds: items.map((i) => i.id),
+          _mergedSources: sourceIds.length > 1 ? sourceIds as string[] : undefined,
+        } as ShoppingItem & { _mergedIds?: string[]; _mergedSources?: string[] });
+      } else {
+        // Can't combine non-numeric amounts, keep separate
+        result.push(...items);
+      }
+    }
+    return result;
+  }, [list.items]);
+
   // Filter items by store
   const filteredItems = useMemo(() => {
-    if (!storeFilter) return list.items;
-    return list.items.filter((i) => i.store === storeFilter);
-  }, [list.items, storeFilter]);
+    if (!storeFilter) return combinedItems;
+    return combinedItems.filter((i) => i.store === storeFilter);
+  }, [combinedItems, storeFilter]);
 
   // Group by category
   const grouped = useMemo(() => {
@@ -156,6 +210,24 @@ export function ShoppingList({
     return sorted;
   }, [filteredItems, sortMode]);
 
+  // Recipe-grouped list
+  const recipeGrouped = useMemo(() => {
+    if (sortMode !== "by-recipe") return null;
+    const groups = new Map<string, ShoppingItem[]>();
+    for (const item of filteredItems) {
+      const key = item.sourceRecipeId ?? "__manual__";
+      const arr = groups.get(key) ?? [];
+      arr.push(item);
+      groups.set(key, arr);
+    }
+    const sorted = [...groups.entries()].sort(([a], [b]) => {
+      if (a === "__manual__") return 1;
+      if (b === "__manual__") return -1;
+      return a.localeCompare(b);
+    });
+    return sorted;
+  }, [filteredItems, sortMode]);
+
   const recipeNames = useMemo(() => {
     const map = new Map<string, string>();
     for (const r of recipeIndex) {
@@ -179,6 +251,17 @@ export function ShoppingList({
       names.add(d.storeName);
     }
     return Array.from(names).sort();
+  }, [deals]);
+
+  // Deals grouped by store for store cards
+  const dealsByStore = useMemo(() => {
+    const groups = new Map<string, Deal[]>();
+    for (const d of deals) {
+      const arr = groups.get(d.storeName) ?? [];
+      arr.push(d);
+      groups.set(d.storeName, arr);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [deals]);
 
   const filteredDeals = useMemo(() => {
@@ -332,10 +415,27 @@ export function ShoppingList({
     if (flyerInputRef.current) flyerInputRef.current.value = "";
   };
 
-  const renderItem = (item: ShoppingItem) => {
+  const renderItem = (item: ShoppingItem & { _mergedIds?: string[]; _mergedSources?: string[] }) => {
     const displayText = abbreviateName(item.name);
     const shortUnit = abbreviateUnit(item.unit);
     const fullLabel = [item.amount, shortUnit, displayText].filter(Boolean).join(" ");
+    const mergedIds = item._mergedIds;
+
+    const handleToggle = () => {
+      if (mergedIds) {
+        for (const id of mergedIds) onToggleItem(id);
+      } else {
+        onToggleItem(item.id);
+      }
+    };
+
+    const handleRemove = () => {
+      if (mergedIds) {
+        for (const id of mergedIds) onRemoveItem(id);
+      } else {
+        onRemoveItem(item.id);
+      }
+    };
 
     return (
       <li
@@ -344,7 +444,7 @@ export function ShoppingList({
       >
         {/* Checkbox */}
         <button
-          onClick={() => onToggleItem(item.id)}
+          onClick={handleToggle}
           className={classNames(
             "h-5 w-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
             item.checked
@@ -366,7 +466,11 @@ export function ShoppingList({
           title={[item.amount, item.unit, item.name].filter(Boolean).join(" ")}
         >
           {fullLabel}
-          {(item.sourceRecipeId || item.addedByUser) && (
+          {item._mergedSources && item._mergedSources.length > 1 ? (
+            <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">
+              ({item._mergedSources.map((id) => recipeNames.get(id) ?? "?").filter((v, i, a) => a.indexOf(v) === i).join(", ")})
+            </span>
+          ) : (item.sourceRecipeId || item.addedByUser) && (
             <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">
               {item.sourceRecipeId && recipeNames.get(item.sourceRecipeId)
                 ? `(${recipeNames.get(item.sourceRecipeId)})`
@@ -435,7 +539,7 @@ export function ShoppingList({
 
         {/* Delete */}
         <button
-          onClick={() => onRemoveItem(item.id)}
+          onClick={handleRemove}
           className="opacity-0 group-hover:opacity-100 text-stone-400 hover:text-red-500 px-0.5 transition-opacity"
         >
           <XMark className="w-4 h-4" />
@@ -485,11 +589,12 @@ export function ShoppingList({
                     <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
                     <div className="absolute right-0 top-10 z-50 w-48 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
                       {([
-                        { value: "department", label: "By department" },
-                        { value: "by-store", label: "By store" },
-                        { value: "alphabetical", label: "A-Z" },
-                        { value: "unchecked-first", label: "Unchecked first" },
-                      ] as const).map((opt) => (
+                        { value: "department" as SortMode, label: "By department" },
+                        { value: "by-store" as SortMode, label: "By store" },
+                        { value: "by-recipe" as SortMode, label: "By recipe" },
+                        { value: "alphabetical" as SortMode, label: "A-Z" },
+                        { value: "unchecked-first" as SortMode, label: "Unchecked first" },
+                      ]).map((opt) => (
                         <button
                           key={opt.value}
                           onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
@@ -588,7 +693,7 @@ export function ShoppingList({
       {/* ═══ LIST TAB ═══ */}
       {subTab === "list" && (
         <>
-          {/* Scan list camera card */}
+          {/* Scan list camera — collapsible at top */}
           {visionEnabled && (
             <div className="px-4 pt-3">
               <button
@@ -639,59 +744,8 @@ export function ShoppingList({
             </div>
           )}
 
-          {/* Store filter pills */}
-          {storeNames.length > 0 && (
-            <div className="flex gap-1.5 px-4 pt-2 pb-1 overflow-x-auto no-scrollbar">
-              <button
-                onClick={() => setStoreFilter(null)}
-                className={classNames(
-                  "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                  !storeFilter
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                )}
-              >
-                All
-              </button>
-              {storeNames.map((store) => (
-                <button
-                  key={store}
-                  onClick={() => setStoreFilter(storeFilter === store ? null : store)}
-                  className={classNames(
-                    "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                    storeFilter === store
-                      ? "bg-orange-500 text-white border-orange-500"
-                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                  )}
-                >
-                  {store}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Clear action pills */}
-          {totalCount > 0 && (
-            <div className="flex gap-1.5 px-4 pt-1 pb-1">
-              {checkedCount > 0 && (
-                <button
-                  onClick={onClearChecked}
-                  className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 transition-colors"
-                >
-                  Clear selected ({checkedCount})
-                </button>
-              )}
-              <button
-                onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
-                className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:border-stone-600 dark:hover:bg-stone-800 transition-colors"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
-
           {/* Quick add */}
-          <form onSubmit={handleAdd} className="flex gap-2 px-4 pt-1 pb-3">
+          <form onSubmit={handleAdd} className="flex gap-2 px-4 pt-3 pb-2">
             <input
               type="text"
               placeholder="+ Add item..."
@@ -738,6 +792,37 @@ export function ShoppingList({
             </div>
           )}
 
+          {/* Store filter pills — near the list */}
+          {storeNames.length > 0 && (
+            <div className="flex gap-1.5 px-4 pt-2 pb-1 overflow-x-auto no-scrollbar">
+              <button
+                onClick={() => setStoreFilter(null)}
+                className={classNames(
+                  "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                  !storeFilter
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                )}
+              >
+                All
+              </button>
+              {storeNames.map((store) => (
+                <button
+                  key={store}
+                  onClick={() => setStoreFilter(storeFilter === store ? null : store)}
+                  className={classNames(
+                    "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                    storeFilter === store
+                      ? "bg-orange-500 text-white border-orange-500"
+                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                  )}
+                >
+                  {store}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* List */}
           <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
             {totalCount === 0 ? (
@@ -766,6 +851,43 @@ export function ShoppingList({
                         {storeChecked > 0 && storeChecked < items.length && (
                           <span className="text-[10px] text-stone-400 dark:text-stone-500">
                             {storeChecked}/{items.length}
+                          </span>
+                        )}
+                      </div>
+                      <ul className="space-y-1">
+                        {sorted.map(renderItem)}
+                      </ul>
+                    </section>
+                  );
+                })}
+                <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
+                  {totalCount} item{totalCount !== 1 ? "s" : ""}
+                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
+                </div>
+              </div>
+            ) : sortMode === "by-recipe" && recipeGrouped ? (
+              <div className="space-y-4">
+                {recipeGrouped.map(([recipeId, items]) => {
+                  const sorted = [...items].sort((a, b) => {
+                    if (a.checked !== b.checked) return a.checked ? 1 : -1;
+                    return a.name.localeCompare(b.name);
+                  });
+                  const groupChecked = items.filter((i) => i.checked).length;
+                  const groupLabel = recipeId === "__manual__"
+                    ? "Manual / Other"
+                    : recipeNames.get(recipeId) ?? "Unknown Recipe";
+                  return (
+                    <section key={recipeId}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50 flex items-center gap-1.5">
+                          {groupLabel}
+                          <span className="font-normal text-stone-300 dark:text-stone-600">
+                            ({items.length})
+                          </span>
+                        </h3>
+                        {groupChecked > 0 && groupChecked < items.length && (
+                          <span className="text-[10px] text-stone-400 dark:text-stone-500">
+                            {groupChecked}/{items.length}
                           </span>
                         )}
                       </div>
@@ -850,116 +972,242 @@ export function ShoppingList({
       {/* ═══ SALES TAB ═══ */}
       {subTab === "sales" && (
         <div className="flex-1 overflow-y-auto pb-24">
-          {/* Scan ad card */}
+          {/* Scan ad — collapsible */}
           <div className="px-4 pt-3">
-            <Card>
-              <div className="p-1">
-                <p className="text-sm font-medium dark:text-stone-200 mb-2">
-                  Scan a Store Ad
-                </p>
-                {!visionEnabled && !chatEnabled ? (
-                  <p className="text-xs text-stone-500 dark:text-stone-400">
-                    Add an AI provider in Settings to scan deals
-                  </p>
-                ) : (
-                  <>
-                    {/* URL input + camera */}
-                    <div className="flex gap-2 mb-2">
-                      <div className="relative flex-1">
-                        <input
-                          type="url"
-                          value={dealUrl}
-                          onChange={(e) => {
-                            setDealUrl(e.target.value);
-                            if (e.target.value.trim()) setFlyerPreview(null);
-                          }}
-                          placeholder="Paste store ad URL..."
-                          className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-                        />
-                      </div>
-                      <button
-                        onClick={() => flyerInputRef.current?.click()}
-                        className="shrink-0 rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 p-2 text-stone-500 dark:text-stone-400 hover:border-orange-400"
-                        title="Upload screenshot or photo of ad"
-                      >
-                        <Camera className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <input
-                      ref={flyerInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleFlyerSelect}
-                      className="hidden"
-                    />
-
-                    {/* Photo preview */}
-                    {flyerPreview && (
-                      <div className="rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
-                        <img src={flyerPreview} alt="Flyer preview" className="w-full max-h-48 object-cover" />
-                      </div>
-                    )}
-
-                    {/* Scan button */}
-                    {hasScannedDealInput && (
-                      <Button
-                        fullWidth
-                        onClick={handleScanDeals}
-                        disabled={isScanningDeals}
-                      >
-                        {isScanningDeals
-                          ? "Scanning deals..."
-                          : scannedPageCount > 0
-                            ? `Scan Page ${scannedPageCount + 1}`
-                            : "Extract Deals"}
-                      </Button>
-                    )}
-                  </>
+            <button
+              onClick={() => setShowSalesScanner(!showSalesScanner)}
+              className="flex items-center gap-2 w-full"
+            >
+              <Camera className="w-4 h-4 text-stone-400 dark:text-stone-500" />
+              <span className="text-sm font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
+                Scan a Store Ad
+              </span>
+              <ChevronDown
+                className={classNames(
+                  "w-4 h-4 text-stone-400 ml-auto transition-transform",
+                  showSalesScanner && "rotate-180"
                 )}
+              />
+            </button>
+            {showSalesScanner && (
+              <div className="mt-2 mb-1">
+                <Card>
+                  <div className="p-1">
+                    {!visionEnabled && !chatEnabled ? (
+                      <p className="text-xs text-stone-500 dark:text-stone-400">
+                        Add an AI provider in Settings to scan deals
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex gap-2 mb-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="url"
+                              value={dealUrl}
+                              onChange={(e) => {
+                                setDealUrl(e.target.value);
+                                if (e.target.value.trim()) setFlyerPreview(null);
+                              }}
+                              placeholder="Paste store ad URL..."
+                              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+                            />
+                          </div>
+                          <button
+                            onClick={() => flyerInputRef.current?.click()}
+                            className={classNames(
+                              "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                              "bg-orange-500 hover:bg-orange-600 text-white"
+                            )}
+                            title="Upload screenshot or photo of ad"
+                          >
+                            <Camera className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <input
+                          ref={flyerInputRef}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFlyerSelect}
+                          className="hidden"
+                        />
 
-                {/* Scanned deals result */}
-                {(scannedDeals.length > 0 || scannedDealsMessage) && (
-                  <div className="mt-3 space-y-2">
-                    {scannedDealsMeta?.storeName && (
-                      <p className="text-sm font-semibold dark:text-stone-200">
-                        {scannedDealsMeta.storeName}
-                        {scannedDealsMeta.validDates && (
-                          <span className="ml-2 text-xs font-normal text-stone-400">
-                            {scannedDealsMeta.validDates}
-                          </span>
+                        {flyerPreview && (
+                          <div className="rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
+                            <img src={flyerPreview} alt="Flyer preview" className="w-full max-h-48 object-cover" />
+                          </div>
                         )}
-                      </p>
+
+                        {hasScannedDealInput && (
+                          <Button
+                            fullWidth
+                            onClick={handleScanDeals}
+                            disabled={isScanningDeals}
+                          >
+                            {isScanningDeals
+                              ? "Scanning deals..."
+                              : scannedPageCount > 0
+                                ? `Scan Page ${scannedPageCount + 1}`
+                                : "Extract Deals"}
+                          </Button>
+                        )}
+                      </>
                     )}
-                    {scannedPageCount > 1 && (
-                      <p className="text-xs text-stone-400 dark:text-stone-500">
-                        {scannedDeals.length} deals from {scannedPageCount} pages
-                      </p>
+
+                    {/* Scanned deals result */}
+                    {(scannedDeals.length > 0 || scannedDealsMessage) && (
+                      <div className="mt-3 space-y-2">
+                        {scannedDealsMeta?.storeName && (
+                          <p className="text-sm font-semibold dark:text-stone-200">
+                            {scannedDealsMeta.storeName}
+                            {scannedDealsMeta.validDates && (
+                              <span className="ml-2 text-xs font-normal text-stone-400">
+                                {scannedDealsMeta.validDates}
+                              </span>
+                            )}
+                          </p>
+                        )}
+                        {scannedPageCount > 1 && (
+                          <p className="text-xs text-stone-400 dark:text-stone-500">
+                            {scannedDeals.length} deals from {scannedPageCount} pages
+                          </p>
+                        )}
+                        {scannedDealsMessage && scannedDeals.length === 0 && (
+                          <p className="text-sm text-stone-500 dark:text-stone-400">{scannedDealsMessage}</p>
+                        )}
+                        {scannedDeals.length > 0 && (
+                          <div className="grid grid-cols-1 gap-1.5">
+                            {scannedDeals.map((deal, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-stone-50 dark:bg-stone-900"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium dark:text-stone-200 truncate">
+                                    {deal.item}
+                                  </p>
+                                  {deal.notes && (
+                                    <p className="text-[10px] text-stone-400 truncate">{deal.notes}</p>
+                                  )}
+                                </div>
+                                <div className="text-right ml-2 shrink-0">
+                                  <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
+                                    {deal.price}
+                                  </p>
+                                  {deal.originalPrice && (
+                                    <p className="text-[10px] line-through text-stone-400">{deal.originalPrice}</p>
+                                  )}
+                                  {deal.unit && (
+                                    <p className="text-[10px] text-stone-400">{deal.unit}</p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {scannedDeals.length > 0 && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            fullWidth
+                            onClick={handleResetScannedDeals}
+                          >
+                            Start Over
+                          </Button>
+                        )}
+                      </div>
                     )}
-                    {scannedDealsMessage && scannedDeals.length === 0 && (
-                      <p className="text-sm text-stone-500 dark:text-stone-400">{scannedDealsMessage}</p>
-                    )}
-                    {scannedDeals.length > 0 && (
-                      <div className="grid grid-cols-1 gap-1.5">
-                        {scannedDeals.map((deal, i) => (
+                  </div>
+                </Card>
+              </div>
+            )}
+          </div>
+
+          {/* Store cards — one per scanned store */}
+          {dealsByStore.length > 0 && (
+            <div className="px-4 mt-4 space-y-2">
+              {dealsByStore.map(([storeName, storeDeals]) => {
+                const isExpanded = dealStoreFilter === storeName;
+                const cheapest = storeDeals.reduce((min, d) => d.price < min ? d.price : min, Infinity);
+                return (
+                  <Card key={storeName}>
+                    <button
+                      onClick={() => setDealStoreFilter(isExpanded ? null : storeName)}
+                      className="w-full flex items-center justify-between p-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        <div className="text-left">
+                          <p className="text-sm font-semibold dark:text-stone-200">{storeName}</p>
+                          <p className="text-xs text-stone-400 dark:text-stone-500">
+                            {storeDeals.length} deal{storeDeals.length !== 1 ? "s" : ""}
+                            {cheapest < Infinity && ` · From $${cheapest.toFixed(2)}`}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronDown
+                        className={classNames(
+                          "w-4 h-4 text-stone-400 transition-transform",
+                          isExpanded && "rotate-180"
+                        )}
+                      />
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-2 space-y-1.5 pt-2 border-t border-stone-200 dark:border-stone-700">
+                        {/* Category filters for this store */}
+                        {dealCategories.length > 1 && (
+                          <div className="flex gap-1.5 mb-2 overflow-x-auto no-scrollbar">
+                            <button
+                              onClick={() => setDealCategoryFilter(null)}
+                              className={classNames(
+                                "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                                !dealCategoryFilter
+                                  ? "bg-green-500 text-white border-green-500"
+                                  : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                              )}
+                            >
+                              All
+                            </button>
+                            {dealCategories.map((cat) => (
+                              <button
+                                key={cat}
+                                onClick={() => setDealCategoryFilter(dealCategoryFilter === cat ? null : cat)}
+                                className={classNames(
+                                  "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                                  dealCategoryFilter === cat
+                                    ? "bg-green-500 text-white border-green-500"
+                                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                                )}
+                              >
+                                {CATEGORY_LABELS[cat as ShoppingCategory] ?? cat}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {storeDeals
+                          .filter((d) => !dealCategoryFilter || d.category === dealCategoryFilter)
+                          .map((deal) => (
                           <div
-                            key={i}
+                            key={deal.id}
                             className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-stone-50 dark:bg-stone-900"
                           >
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium dark:text-stone-200 truncate">
                                 {deal.item}
                               </p>
-                              {deal.notes && (
-                                <p className="text-[10px] text-stone-400 truncate">{deal.notes}</p>
-                              )}
+                              <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                                {deal.notes && `${deal.notes} · `}
+                                {deal.validTo && `Expires ${deal.validTo}`}
+                              </p>
                             </div>
                             <div className="text-right ml-2 shrink-0">
-                              <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
-                                {deal.price}
+                              <p className="text-sm font-bold text-green-600 dark:text-green-400">
+                                ${deal.price.toFixed(2)}
                               </p>
-                              {deal.originalPrice && (
-                                <p className="text-[10px] line-through text-stone-400">{deal.originalPrice}</p>
+                              {deal.originalPrice != null && (
+                                <p className="text-[10px] line-through text-stone-400">
+                                  ${deal.originalPrice.toFixed(2)}
+                                </p>
                               )}
                               {deal.unit && (
                                 <p className="text-[10px] text-stone-400">{deal.unit}</p>
@@ -969,129 +1217,9 @@ export function ShoppingList({
                         ))}
                       </div>
                     )}
-                    {scannedDeals.length > 0 && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        fullWidth
-                        onClick={handleResetScannedDeals}
-                      >
-                        Start Over
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </Card>
-          </div>
-
-          {/* Saved deals list */}
-          {deals.length > 0 && (
-            <div className="px-4 mt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
-                Active Deals ({filteredDeals.length})
-              </h3>
-
-              {/* Filter pills */}
-              {(dealStoreNames.length > 1 || dealCategories.length > 1) && (
-                <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
-                  {/* Store filters */}
-                  {dealStoreNames.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => setDealStoreFilter(null)}
-                        className={classNames(
-                          "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                          !dealStoreFilter
-                            ? "bg-orange-500 text-white border-orange-500"
-                            : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                        )}
-                      >
-                        All Stores
-                      </button>
-                      {dealStoreNames.map((store) => (
-                        <button
-                          key={store}
-                          onClick={() => setDealStoreFilter(dealStoreFilter === store ? null : store)}
-                          className={classNames(
-                            "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                            dealStoreFilter === store
-                              ? "bg-orange-500 text-white border-orange-500"
-                              : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                          )}
-                        >
-                          {store}
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Category filters */}
-              {dealCategories.length > 1 && (
-                <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
-                  <button
-                    onClick={() => setDealCategoryFilter(null)}
-                    className={classNames(
-                      "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                      !dealCategoryFilter
-                        ? "bg-green-500 text-white border-green-500"
-                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                    )}
-                  >
-                    All Categories
-                  </button>
-                  {dealCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setDealCategoryFilter(dealCategoryFilter === cat ? null : cat)}
-                      className={classNames(
-                        "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                        dealCategoryFilter === cat
-                          ? "bg-green-500 text-white border-green-500"
-                          : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                      )}
-                    >
-                      {CATEGORY_LABELS[cat as ShoppingCategory] ?? cat}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Deal items */}
-              <div className="space-y-1.5">
-                {filteredDeals.map((deal) => (
-                  <div
-                    key={deal.id}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 dark:bg-stone-900"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium dark:text-stone-200 truncate">
-                        {deal.item}
-                      </p>
-                      <p className="text-[10px] text-stone-400 dark:text-stone-500">
-                        {deal.storeName}
-                        {deal.notes && ` · ${deal.notes}`}
-                        {deal.validTo && ` · Expires ${deal.validTo}`}
-                      </p>
-                    </div>
-                    <div className="text-right ml-2 shrink-0">
-                      <p className="text-sm font-bold text-green-600 dark:text-green-400">
-                        ${deal.price.toFixed(2)}
-                      </p>
-                      {deal.originalPrice != null && (
-                        <p className="text-[10px] line-through text-stone-400">
-                          ${deal.originalPrice.toFixed(2)}
-                        </p>
-                      )}
-                      {deal.unit && (
-                        <p className="text-[10px] text-stone-400">{deal.unit}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
@@ -1110,39 +1238,55 @@ export function ShoppingList({
       {/* ═══ RECEIPTS TAB ═══ */}
       {subTab === "receipts" && (
         <div className="flex-1 overflow-y-auto pb-24">
-          {/* Receipt scan card */}
+          {/* Scan receipt — collapsible, matching Sales tab style */}
           <div className="px-4 pt-3">
-            <Card>
-              <div className="flex items-center gap-3 p-1">
-                <div className="flex-1">
-                  <p className="text-sm font-medium dark:text-stone-200">
-                    Scan a Receipt
-                  </p>
-                  <p className="text-xs text-stone-400 dark:text-stone-500">
-                    Photo a receipt to track spending
-                  </p>
-                </div>
-                <button
-                  onClick={handleReceiptScan}
-                  disabled={isScanning || !visionEnabled}
-                  className={classNames(
-                    "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
-                    isScanning
-                      ? "bg-stone-200 dark:bg-stone-700"
-                      : !visionEnabled
-                        ? "bg-stone-200 dark:bg-stone-700 text-stone-400"
-                        : "bg-orange-500 hover:bg-orange-600 text-white"
-                  )}
-                  title={!visionEnabled ? "Enable a vision AI provider in Settings" : "Scan receipt"}
-                >
-                  {isScanning ? (
-                    <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Camera className="w-5 h-5" />
-                  )}
-                </button>
+            <button
+              onClick={() => setShowReceiptScanner(!showReceiptScanner)}
+              className="flex items-center gap-2 w-full"
+            >
+              <Camera className="w-4 h-4 text-stone-400 dark:text-stone-500" />
+              <span className="text-sm font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
+                Scan a Receipt
+              </span>
+              <ChevronDown
+                className={classNames(
+                  "w-4 h-4 text-stone-400 ml-auto transition-transform",
+                  showReceiptScanner && "rotate-180"
+                )}
+              />
+            </button>
+            {showReceiptScanner && (
+              <div className="mt-2 mb-1">
+                <Card>
+                  <div className="flex items-center gap-3 p-1">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium dark:text-stone-200">
+                        Photo a receipt to track spending
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleReceiptScan}
+                      disabled={isScanning || !visionEnabled}
+                      className={classNames(
+                        "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                        isScanning
+                          ? "bg-stone-200 dark:bg-stone-700"
+                          : !visionEnabled
+                            ? "bg-stone-200 dark:bg-stone-700 text-stone-400"
+                            : "bg-orange-500 hover:bg-orange-600 text-white"
+                      )}
+                      title={!visionEnabled ? "Enable a vision AI provider in Settings" : "Scan receipt"}
+                    >
+                      {isScanning ? (
+                        <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Camera className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                </Card>
               </div>
-            </Card>
+            )}
           </div>
 
           {/* Scan error */}
@@ -1157,7 +1301,7 @@ export function ShoppingList({
             </div>
           )}
 
-          {/* Last scanned receipt */}
+          {/* Last scanned receipt — success banner */}
           {lastScannedReceipt && (
             <div className="mx-4 mt-2 px-3 py-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
               <div className="flex items-center justify-between mb-2">
@@ -1185,7 +1329,7 @@ export function ShoppingList({
             </div>
           )}
 
-          {/* Spending summary */}
+          {/* Spending summary card */}
           {currentWeekSpending && currentWeekSpending.total > 0 && (
             <div className="mx-4 mt-3">
               <Card>
@@ -1206,12 +1350,15 @@ export function ShoppingList({
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-stone-400 dark:text-stone-500">
-                    {showSpendingDetail ? "Hide" : "Details"}
-                  </span>
+                  <ChevronDown
+                    className={classNames(
+                      "w-4 h-4 text-stone-400 transition-transform",
+                      showSpendingDetail && "rotate-180"
+                    )}
+                  />
                 </button>
                 {showSpendingDetail && (
-                  <div className="mt-2 space-y-1.5 px-1 pb-1">
+                  <div className="mt-2 space-y-1.5 px-1 pb-1 border-t border-stone-200 dark:border-stone-700 pt-2">
                     {Object.entries(currentWeekSpending.byStore).length > 0 && (
                       <div>
                         <p className="text-[10px] font-semibold uppercase text-stone-400 dark:text-stone-500 mb-1">By Store</p>
@@ -1235,34 +1382,31 @@ export function ShoppingList({
             </div>
           )}
 
-          {/* Receipt history */}
+          {/* Receipt history — card-based */}
           {receipts.length > 0 && (
-            <div className="px-4 mt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+            <div className="px-4 mt-4 space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-1">
                 Receipt History
               </h3>
-              <div className="space-y-1.5">
-                {receipts.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 dark:bg-stone-900"
-                  >
+              {receipts.map((r) => (
+                <Card key={r.id}>
+                  <div className="flex items-center justify-between p-1">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium dark:text-stone-200 truncate">
+                      <p className="text-sm font-semibold dark:text-stone-200 truncate">
                         {r.store ?? "Unknown Store"}
                       </p>
-                      <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                      <p className="text-xs text-stone-400 dark:text-stone-500">
                         {new Date(r.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </p>
                     </div>
                     {r.total != null && (
-                      <p className="text-sm font-semibold dark:text-stone-200 ml-2">
+                      <p className="text-sm font-bold dark:text-stone-200 ml-2">
                         ${r.total.toFixed(2)}
                       </p>
                     )}
                   </div>
-                ))}
-              </div>
+                </Card>
+              ))}
             </div>
           )}
 
