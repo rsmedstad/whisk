@@ -148,6 +148,14 @@ export function Clock(props: IconProps) {
   );
 }
 
+export function Hourglass(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2M7.5 3h9M7.5 21h9M7.5 3v4.5a4.5 4.5 0 0 0 2.25 3.897L12 12.75l2.25-1.353A4.5 4.5 0 0 0 16.5 7.5V3M7.5 21v-4.5a4.5 4.5 0 0 1 2.25-3.897L12 11.25l2.25 1.353A4.5 4.5 0 0 1 16.5 16.5V21" />
+    </Icon>
+  );
+}
+
 export function Users(props: IconProps) {
   return (
     <Icon {...props}>

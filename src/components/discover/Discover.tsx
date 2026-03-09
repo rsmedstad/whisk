@@ -21,6 +21,7 @@ import {
   Check,
   PlayCircle,
   Sparkles,
+  Hourglass,
   ArrowUpDown,
   XMark,
   ChevronDown,
@@ -184,6 +185,13 @@ type DiscoverSort = "category" | "recent" | "alpha";
 function isNewItem(item: DiscoverFeedItem, lastRefreshed?: string): boolean {
   if (!item.addedAt || !lastRefreshed) return false;
   return item.addedAt === lastRefreshed;
+}
+
+/** An item is "expiring" if it's from a previous crawl (will likely be replaced on next refresh) */
+function isExpiringItem(item: DiscoverFeedItem, lastRefreshed?: string): boolean {
+  if (!item.addedAt || !lastRefreshed) return false;
+  // Not new = from a previous crawl, so it may not survive the next refresh
+  return item.addedAt < lastRefreshed;
 }
 
 /** Proxy external recipe images through our backend to avoid hotlinking blocks */
@@ -1670,6 +1678,7 @@ export function Discover({
                   )
                 : rawItems;
               const catNewCount = items.filter((i) => isNewItem(i, feed?.lastRefreshed)).length;
+              const catExpiringCount = items.filter((i) => !isNewItem(i, feed?.lastRefreshed) && isExpiringItem(i, feed?.lastRefreshed)).length;
               // Show drink pills if there's a mix of alcoholic and non-alcoholic
               const showDrinkPills = category === "drinks" && rawItems.length > 0 && (() => {
                 const alcCount = rawItems.filter(isAlcoholicDrink).length;
@@ -1686,6 +1695,11 @@ export function Discover({
                       {catNewCount > 0 && (
                         <span className="ml-1.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded-full">
                           {catNewCount} new
+                        </span>
+                      )}
+                      {catExpiringCount > 0 && (
+                        <span className="ml-1.5 text-[10px] font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-full">
+                          {catExpiringCount} leaving soon
                         </span>
                       )}
                       {showDrinkPills && (
@@ -1833,6 +1847,7 @@ function FeedCard({
   isSaving?: boolean;
 }) {
   const itemIsNew = isNewItem(item, lastRefreshed);
+  const itemIsExpiring = !itemIsNew && isExpiringItem(item, lastRefreshed);
   return (
     <button
       onClick={onClick}
@@ -1854,8 +1869,13 @@ function FeedCard({
           </div>
         )}
         {itemIsNew && (
-          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-orange-500/90 backdrop-blur-sm">
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-orange-500/90 backdrop-blur-sm" title="New recipe">
             <Sparkles className="w-3.5 h-3.5 text-white" />
+          </div>
+        )}
+        {itemIsExpiring && (
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-stone-500/70 backdrop-blur-sm" title="Leaving soon — save before next refresh">
+            <Hourglass className="w-3.5 h-3.5 text-white" />
           </div>
         )}
         {onQuickSave && (
