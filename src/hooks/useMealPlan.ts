@@ -119,6 +119,99 @@ export function useMealPlan() {
     [plan]
   );
 
+  const toggleCompleted = useCallback(
+    async (mealId: string) => {
+      await savePlan({
+        ...plan,
+        meals: plan.meals.map((m) =>
+          m.id === mealId ? { ...m, completed: !m.completed } : m
+        ),
+      });
+    },
+    [plan, savePlan]
+  );
+
+  // Clipboard for copy/paste week
+  const [copiedMeals, setCopiedMeals] = useState<PlannedMeal[] | null>(null);
+
+  const copyWeek = useCallback(() => {
+    setCopiedMeals(plan.meals);
+  }, [plan.meals]);
+
+  const pasteWeek = useCallback(
+    async (targetWeekId: string) => {
+      if (!copiedMeals || copiedMeals.length === 0) return;
+
+      // Calculate date offset from source week to target week
+      const sourceWeekDates = copiedMeals.map((m) => m.date).sort();
+      const firstSourceDate = sourceWeekDates[0];
+      if (!firstSourceDate) return;
+
+      // Parse target week ID to get the Monday of that week
+      const targetYear = parseInt(targetWeekId.slice(0, 4), 10);
+      const targetWeekNum = parseInt(targetWeekId.slice(6), 10);
+      // ISO week date: Jan 4 is always in week 1
+      const jan4 = new Date(targetYear, 0, 4);
+      const dayOfWeek = jan4.getDay() || 7; // Mon=1..Sun=7
+      const targetMonday = new Date(jan4);
+      targetMonday.setDate(jan4.getDate() - dayOfWeek + 1 + (targetWeekNum - 1) * 7);
+
+      const sourceDate = new Date(firstSourceDate + "T00:00:00");
+      const sourceDayOfWeek = sourceDate.getDay() || 7;
+      const sourceMonday = new Date(sourceDate);
+      sourceMonday.setDate(sourceDate.getDate() - sourceDayOfWeek + 1);
+
+      const dayOffset = Math.round(
+        (targetMonday.getTime() - sourceMonday.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      const newMeals = copiedMeals.map((m) => {
+        const d = new Date(m.date + "T00:00:00");
+        d.setDate(d.getDate() + dayOffset);
+        return {
+          ...m,
+          id: nanoid(10),
+          date: toDateString(d),
+          completed: false,
+        };
+      });
+
+      // Load target week's plan from cache or create empty
+      const cached = getLocal<MealPlan>(CACHE_KEYS.MEAL_PLAN(targetWeekId));
+      const targetPlan = cached ?? { id: targetWeekId, meals: [], updatedAt: "" };
+      await savePlan({
+        ...targetPlan,
+        meals: [...targetPlan.meals, ...newMeals],
+      });
+    },
+    [copiedMeals, savePlan]
+  );
+
+  const getWeekHistory = useCallback(
+    (count: number): { id: string; dateRange: string; mealCount: number; completionRate: number }[] => {
+      const history: { id: string; dateRange: string; mealCount: number; completionRate: number }[] = [];
+      const now = new Date();
+      for (let i = 1; i <= count; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i * 7);
+        const wId = getWeekId(d);
+        const cached = getLocal<MealPlan>(CACHE_KEYS.MEAL_PLAN(wId));
+        if (cached && cached.meals.length > 0) {
+          const weekDates = cached.meals.map((m) => m.date).sort();
+          const completed = cached.meals.filter((m) => m.completed).length;
+          history.push({
+            id: wId,
+            dateRange: `${weekDates[0]} – ${weekDates[weekDates.length - 1]}`,
+            mealCount: cached.meals.length,
+            completionRate: cached.meals.length > 0 ? completed / cached.meals.length : 0,
+          });
+        }
+      }
+      return history;
+    },
+    []
+  );
+
   return {
     plan,
     currentDate,
@@ -130,6 +223,11 @@ export function useMealPlan() {
     goToPrevWeek,
     goToToday,
     getMealsForDate,
+    toggleCompleted,
+    copyWeek,
+    pasteWeek,
+    copiedMeals,
+    getWeekHistory,
     fetchPlan: () => {},
   };
 }

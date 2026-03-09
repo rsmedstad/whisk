@@ -6,9 +6,9 @@ import { BookOpen, Globe, Sparkles, ShoppingCart, CalendarDays } from "./ui/Icon
 const tabs = [
   { to: "/", icon: BookOpen, label: "Recipes" },
   { to: "/discover", icon: Globe, label: "Discover" },
-  { to: "/suggest", icon: Sparkles, label: "Suggest" },
-  { to: "/list", icon: ShoppingCart, label: "List" },
   { to: "/plan", icon: CalendarDays, label: "Plan" },
+  { to: "/list", icon: ShoppingCart, label: "List" },
+  { to: "/ask", icon: Sparkles, label: "Ask" },
 ] as const;
 
 export function BottomNav() {

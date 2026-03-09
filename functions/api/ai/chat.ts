@@ -12,6 +12,10 @@ interface Env extends ProviderEnv {
 interface ChatBody {
   messages: { role: string; content: string }[];
   seasonalContext?: string;
+  mealPlan?: { date: string; slot: string; title: string; recipeId?: string; completed?: boolean }[];
+  shoppingList?: { name: string; checked: boolean; category: string }[];
+  deals?: { item: string; price: number; storeName: string; validTo: string }[];
+  preferences?: { dietaryRestrictions?: string[]; favoriteCuisines?: string[]; budgetPreference?: string; dislikedIngredients?: string[] };
 }
 
 // POST /api/ai/chat - Conversational recipe assistant
@@ -22,6 +26,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const seasonalContext = typeof body.seasonalContext === "string"
     ? body.seasonalContext.slice(0, 2000).replace(/[\x00-\x1f]/g, "")
     : undefined;
+
+  // Extract additional context (sanitized)
+  const mealPlanCtx = Array.isArray(body.mealPlan) ? body.mealPlan.slice(0, 30) : [];
+  const shoppingListCtx = Array.isArray(body.shoppingList) ? body.shoppingList.slice(0, 50) : [];
+  const dealsCtx = Array.isArray(body.deals) ? body.deals.slice(0, 30) : [];
+  const prefsCtx = body.preferences && typeof body.preferences === "object" ? body.preferences : null;
 
   // Input validation: enforce role, limit history, truncate content
   const messages = (Array.isArray(rawMessages) ? rawMessages : [])
@@ -76,6 +86,66 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "For holidays, suggest recipes that fit the occasion. For seasons, consider what ingredients are fresh and what cooking styles suit the weather."
     );
   }
+
+  // Meal plan context
+  if (mealPlanCtx.length > 0) {
+    const planSummary = mealPlanCtx
+      .map((m) => `- ${m.date} ${m.slot}: ${m.title}${m.completed ? " ✓" : ""}`)
+      .join("\n");
+    systemParts.push(
+      `\n--- This Week's Meal Plan ---\n${planSummary}`,
+      "Use this to avoid suggesting meals already planned and to help with shopping lists."
+    );
+  }
+
+  // Shopping list context
+  if (shoppingListCtx.length > 0) {
+    const unchecked = shoppingListCtx.filter((i) => !i.checked);
+    const checked = shoppingListCtx.filter((i) => i.checked);
+    const listSummary = unchecked.map((i) => `- ${i.name} (${i.category})`).join("\n");
+    systemParts.push(
+      `\n--- Shopping List (${unchecked.length} remaining, ${checked.length} checked off) ---\n${listSummary}`,
+      "Reference this when suggesting what to buy or when the user asks about their list."
+    );
+  }
+
+  // Active deals context
+  if (dealsCtx.length > 0) {
+    const dealSummary = dealsCtx
+      .map((d) => `- ${d.item}: $${d.price.toFixed(2)} at ${d.storeName} (until ${d.validTo})`)
+      .join("\n");
+    systemParts.push(
+      `\n--- Active Store Deals ---\n${dealSummary}`,
+      "Mention relevant deals when suggesting recipes or shopping. Help the user save money."
+    );
+  }
+
+  // User preferences
+  if (prefsCtx) {
+    const prefParts: string[] = [];
+    if (prefsCtx.dietaryRestrictions?.length) prefParts.push(`Dietary: ${prefsCtx.dietaryRestrictions.join(", ")}`);
+    if (prefsCtx.favoriteCuisines?.length) prefParts.push(`Favorite cuisines: ${prefsCtx.favoriteCuisines.join(", ")}`);
+    if (prefsCtx.budgetPreference && prefsCtx.budgetPreference !== "no-preference") prefParts.push(`Budget: ${prefsCtx.budgetPreference}`);
+    if (prefsCtx.dislikedIngredients?.length) prefParts.push(`Dislikes: ${prefsCtx.dislikedIngredients.join(", ")}`);
+    if (prefParts.length > 0) {
+      systemParts.push(
+        `\n--- User Preferences ---\n${prefParts.join("\n")}`,
+        "Always respect these preferences. Never suggest recipes with disliked ingredients or that violate dietary restrictions."
+      );
+    }
+  }
+
+  // Action markers instruction
+  systemParts.push(
+    "\n--- Actionable Suggestions ---",
+    "When suggesting specific actions, include these markers so the app can render action buttons:",
+    "- To add a meal to the plan: [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId]",
+    "  Slots: breakfast, lunch, dinner, snack",
+    "- To add an item to shopping list: [ADD_TO_LIST: item name, amount, unit, category]",
+    "- To search user's recipes: [SEARCH_RECIPES: search query]",
+    "Only use these markers when the user's request warrants taking action. For general conversation, just respond normally.",
+    "Place action markers on their own lines at the end of your response."
+  );
 
   if (recipeIndex.length > 0) {
     const recipeSummary = recipeIndex

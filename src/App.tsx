@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback } from "react";
+import { lazy, Suspense, useState, useCallback, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
@@ -8,12 +8,14 @@ import { useShoppingList } from "./hooks/useShoppingList";
 import { useMealPlan } from "./hooks/useMealPlan";
 import { useTimers } from "./hooks/useTimers";
 import { useTags } from "./hooks/useTags";
+import { useReceipts } from "./hooks/useReceipts";
+import { useDeals } from "./hooks/useDeals";
 import { useCapabilities } from "./hooks/useCapabilities";
 import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
-import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs } from "./types";
+import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs, UserPreferences } from "./types";
 
 // Retry dynamic imports on failure (stale chunks after deploy) by reloading once
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,7 +41,7 @@ const CookMode = lazyRetry(() => import("./components/recipes/CookMode"), "CookM
 const ShoppingList = lazyRetry(() => import("./components/list/ShoppingList"), "ShoppingList");
 const MealPlan = lazyRetry(() => import("./components/plan/MealPlan"), "MealPlan");
 const Discover = lazyRetry(() => import("./components/discover/Discover"), "Discover");
-const SuggestChat = lazyRetry(() => import("./components/suggest/SuggestChat"), "SuggestChat");
+const AskChat = lazyRetry(() => import("./components/suggest/SuggestChat"), "SuggestChat");
 const Settings = lazyRetry(() => import("./components/Settings"), "Settings");
 const ImportRecipes = lazyRetry(() => import("./components/import/ImportRecipes"), "ImportRecipes");
 
@@ -150,6 +152,16 @@ function AppShell({
   const timers = useTimers();
   const tags = useTags();
   const capabilities = useCapabilities();
+  const receiptData = useReceipts();
+  const dealsData = useDeals();
+
+  const userPreferences = useMemo((): UserPreferences | undefined => {
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      if (raw) return JSON.parse(raw) as UserPreferences;
+    } catch { /* ignore */ }
+    return undefined;
+  }, []);
 
   const handleStartTimer = (
     label: string,
@@ -235,7 +247,19 @@ function AppShell({
           {/* Other tabs — lazy loaded */}
           <Route path="/discover" element={<Discover onSaveRecipe={recipes.createRecipe} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
-          <Route path="/suggest" element={<SuggestChat chatEnabled={capabilities.chat} recipes={recipes.recipes} />} />
+          <Route path="/ask" element={
+            <AskChat
+              chatEnabled={capabilities.chat}
+              recipes={recipes.recipes}
+              mealPlan={mealPlan.plan.meals}
+              shoppingList={shoppingList.list.items}
+              deals={dealsData.deals}
+              preferences={userPreferences}
+              onAddMeal={mealPlan.addMeal}
+              onAddToList={(name: string) => shoppingList.addItem(name)}
+            />
+          } />
+          <Route path="/suggest" element={<Navigate to="/ask" replace />} />
           <Route
             path="/list"
             element={
@@ -253,6 +277,16 @@ function AppShell({
                 recipeIndex={recipes.recipes}
                 visionEnabled={capabilities.vision}
                 chatEnabled={capabilities.chat}
+                currentWeekSpending={receiptData.currentWeekSpending}
+                spendingTrend={receiptData.spendingTrend}
+                onScanReceipt={receiptData.scanReceipt}
+                isScanning={receiptData.isScanning}
+                scanError={receiptData.scanError}
+                lastScannedReceipt={receiptData.lastScannedReceipt}
+                onClearScanError={receiptData.clearScanError}
+                onClearLastScanned={receiptData.clearLastScanned}
+                dealMatches={dealsData.matchDeals(shoppingList.list.items)}
+                bestStore={dealsData.getBestStoreForList(shoppingList.list.items)}
               />
             }
           />
@@ -270,6 +304,13 @@ function AppShell({
                 isLoading={mealPlan.isLoading}
                 recipeIndex={recipes.recipes}
                 onGenerateShoppingList={shoppingList.addFromRecipe}
+                onToggleCompleted={mealPlan.toggleCompleted}
+                onCopyWeek={mealPlan.copyWeek}
+                onPasteWeek={mealPlan.pasteWeek}
+                copiedMeals={mealPlan.copiedMeals}
+                getWeekHistory={mealPlan.getWeekHistory}
+                weekId={mealPlan.plan.id}
+                deals={dealsData.deals}
               />
             }
           />
