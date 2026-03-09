@@ -256,11 +256,51 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
       if (dealsEnabled && zip.trim().length >= 5) {
         fetchFlippStores(zip.trim());
       }
+      syncDealsConfig({ zip: zip.trim() });
     } else {
       localStorage.removeItem("whisk_zip_code");
       setFlippStores([]);
+      syncDealsConfig({ zip: "" });
     }
   };
+
+  // Sync deals config to server for cron job
+  const syncDealsConfig = useCallback((
+    overrides?: { zip?: string; stores?: string[]; enabled?: boolean }
+  ) => {
+    const config = {
+      zip: overrides?.zip ?? zipCode.trim(),
+      preferredStores: overrides?.stores ?? preferredStores,
+      enabled: overrides?.enabled ?? dealsEnabled,
+    };
+    // Fire and forget — server saves for cron
+    api.put("/deals/config", config).catch(() => {});
+  }, [zipCode, preferredStores, dealsEnabled]);
+
+  // Scan Now state
+  const [isScanningNow, setIsScanningNow] = useState(false);
+  const [scanNowResult, setScanNowResult] = useState<string | null>(null);
+
+  const handleScanNow = useCallback(async () => {
+    setIsScanningNow(true);
+    setScanNowResult(null);
+    try {
+      const res = await api.post<{
+        flipp?: { deals: number; stores: number };
+        urlScans?: { refreshed: number };
+        error?: string;
+      }>("/deals/cron");
+      const parts: string[] = [];
+      if (res?.flipp) parts.push(`${res.flipp.deals} Flipp deals from ${res.flipp.stores} store(s)`);
+      if (res?.urlScans?.refreshed) parts.push(`${res.urlScans.refreshed} ad scan(s) refreshed`);
+      if (res?.error) parts.push(res.error);
+      setScanNowResult(parts.length > 0 ? parts.join(" · ") : "No stores configured to scan");
+    } catch {
+      setScanNowResult("Scan failed — check AI provider settings");
+    } finally {
+      setIsScanningNow(false);
+    }
+  }, []);
 
   const handleHouseholdChange = (size: number) => {
     const clamped = Math.max(1, Math.min(20, size));
@@ -871,6 +911,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     onChange={(updated) => {
                       setPreferredStores(updated);
                       localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
+                      syncDealsConfig({ stores: updated });
                     }}
                     flippStores={dealsEnabled ? flippStores : []}
                     isLoadingStores={isLoadingStores}
@@ -891,6 +932,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                           const next = !dealsEnabled;
                           setDealsEnabled(next);
                           localStorage.setItem("whisk_deals_enabled", String(next));
+                          syncDealsConfig({ enabled: next });
                           if (next && zipCode.trim().length >= 5) {
                             fetchFlippStores(zipCode.trim());
                           }
@@ -914,6 +956,34 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       </p>
                     )}
                   </div>
+
+                  {/* Scan Now button */}
+                  {dealsEnabled && zipCode.trim() && preferredStores.length > 0 && (
+                    <div>
+                      <Button
+                        fullWidth
+                        onClick={handleScanNow}
+                        disabled={isScanningNow}
+                      >
+                        {isScanningNow ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Scanning stores...
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4" />
+                            Scan Deals Now
+                          </span>
+                        )}
+                      </Button>
+                      {scanNowResult && (
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-1.5 text-center">
+                          {scanNowResult}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <div className="flex items-center justify-between">

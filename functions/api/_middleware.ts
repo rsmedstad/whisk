@@ -3,7 +3,7 @@ interface Env {
 }
 
 // Public routes that don't require auth
-const PUBLIC_PATHS = ["/api/auth", "/api/share/"];
+const PUBLIC_PATHS = ["/api/auth", "/api/share/", "/api/deals/cron"];
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url);
