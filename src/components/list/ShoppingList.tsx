@@ -34,6 +34,9 @@ interface ShoppingListProps {
   lastScannedReceipt?: Receipt | null;
   onClearScanError?: () => void;
   onClearLastScanned?: () => void;
+  // Deal props
+  dealMatches?: Map<string, import("../../types").Deal[]>;
+  bestStore?: { storeId: string; storeName: string; matchCount: number; estimatedSavings: number } | null;
 }
 
 export function ShoppingList({
@@ -58,6 +61,8 @@ export function ShoppingList({
   lastScannedReceipt,
   onClearScanError,
   onClearLastScanned,
+  dealMatches,
+  bestStore,
 }: ShoppingListProps) {
   const navigate = useNavigate();
   const [newItem, setNewItem] = useState("");
@@ -212,12 +217,26 @@ export function ShoppingList({
           )}
         </span>
 
-        {/* Deal badge */}
-        {item.dealMatch && (
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 whitespace-nowrap">
-            ${item.dealMatch.salePrice.toFixed(2)} @ {item.dealMatch.storeName}
-          </span>
-        )}
+        {/* Deal badge — from dealMatches prop or inline dealMatch */}
+        {(() => {
+          const matches = dealMatches?.get(item.id);
+          const best = matches?.[0];
+          if (best) {
+            return (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 whitespace-nowrap">
+                ${best.price.toFixed(2)} @ {best.storeName}
+              </span>
+            );
+          }
+          if (item.dealMatch) {
+            return (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 whitespace-nowrap">
+                ${item.dealMatch.salePrice.toFixed(2)} @ {item.dealMatch.storeName}
+              </span>
+            );
+          }
+          return null;
+        })()}
 
         {/* Store tag */}
         {editingStoreId === item.id ? (
@@ -445,6 +464,24 @@ export function ShoppingList({
           </button>
         </form>
       </div>
+
+      {/* Best store recommendation */}
+      {bestStore && bestStore.matchCount >= 2 && (
+        <div className="px-4 py-2 bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800">
+          <div className="flex items-center gap-2">
+            <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                Best store: {bestStore.storeName}
+              </p>
+              <p className="text-xs text-green-600 dark:text-green-500">
+                {bestStore.matchCount} item{bestStore.matchCount !== 1 ? "s" : ""} on sale
+                {bestStore.estimatedSavings > 0 && ` · Save ~$${bestStore.estimatedSavings.toFixed(2)}`}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Deals Scanner */}
       <DealsScanner visionEnabled={visionEnabled} chatEnabled={chatEnabled} />

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback } from "react";
+import { lazy, Suspense, useState, useCallback, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
@@ -9,6 +9,7 @@ import { useMealPlan } from "./hooks/useMealPlan";
 import { useTimers } from "./hooks/useTimers";
 import { useTags } from "./hooks/useTags";
 import { useReceipts } from "./hooks/useReceipts";
+import { useDeals } from "./hooks/useDeals";
 import { useCapabilities } from "./hooks/useCapabilities";
 import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
@@ -152,6 +153,7 @@ function AppShell({
   const tags = useTags();
   const capabilities = useCapabilities();
   const receiptData = useReceipts();
+  const dealsData = useDeals();
 
   const handleStartTimer = (
     label: string,
@@ -264,6 +266,8 @@ function AppShell({
                 lastScannedReceipt={receiptData.lastScannedReceipt}
                 onClearScanError={receiptData.clearScanError}
                 onClearLastScanned={receiptData.clearLastScanned}
+                dealMatches={dealsData.matchDeals(shoppingList.list.items)}
+                bestStore={dealsData.getBestStoreForList(shoppingList.list.items)}
               />
             }
           />
