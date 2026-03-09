@@ -150,8 +150,10 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
 
   // Auto-import from ?url= query param (e.g. from Suggest page)
   useEffect(() => {
-    const urlParam = searchParams.get("url");
+    let urlParam = searchParams.get("url")?.trim();
     if (!urlParam || isEditing || importTriggered.current) return;
+    // Auto-add https:// if no protocol
+    if (!/^https?:\/\//i.test(urlParam)) urlParam = `https://${urlParam}`;
     importTriggered.current = true;
     setImportUrl(urlParam);
     // Trigger import automatically
@@ -362,11 +364,15 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   };
 
   const handleImportUrl = async () => {
-    if (!importUrl.trim()) return;
+    let url = importUrl.trim();
+    if (!url) return;
+    // Auto-add https:// if no protocol
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    setImportUrl(url);
     setIsImporting(true);
 
     // Detect Instagram for progress messaging
-    const isInstagram = /instagram\.com|instagr\.am/i.test(importUrl);
+    const isInstagram = /instagram\.com|instagr\.am/i.test(url);
     setImportStep(isInstagram ? "Fetching Instagram post..." : "Fetching recipe page...");
 
     // Simulate progress steps while waiting for the single API call
@@ -387,7 +393,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
         },
-        body: JSON.stringify({ url: importUrl, downloadImage: true }),
+        body: JSON.stringify({ url, downloadImage: true }),
       });
       clearTimeout(stepTimer);
       clearTimeout(stepTimer2);

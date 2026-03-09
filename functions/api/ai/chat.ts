@@ -17,7 +17,28 @@ interface ChatBody {
 // POST /api/ai/chat - Conversational recipe assistant
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json()) as ChatBody;
-  const { messages, seasonalContext } = body;
+  const { messages: rawMessages } = body;
+  // Sanitize seasonalContext — limit length and strip control chars
+  const seasonalContext = typeof body.seasonalContext === "string"
+    ? body.seasonalContext.slice(0, 2000).replace(/[\x00-\x1f]/g, "")
+    : undefined;
+
+  // Input validation: enforce role, limit history, truncate content
+  const messages = (Array.isArray(rawMessages) ? rawMessages : [])
+    .slice(-50) // Max 50 messages in history
+    .map((m) => ({
+      role: m.role === "assistant" ? "assistant" as const : "user" as const, // Only allow user/assistant
+      content: typeof m.content === "string" ? m.content.slice(0, 4000) : "", // Max 4000 chars per message
+    }))
+    .filter((m) => m.content.length > 0);
+
+  if (messages.length === 0) {
+    return new Response(
+      JSON.stringify({ content: "Please send a message to get started!" }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const lastMessage = messages[messages.length - 1]?.content ?? "";
 
   const config = await loadAIConfig(env.WHISK_KV);

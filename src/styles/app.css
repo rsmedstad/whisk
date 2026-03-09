@@ -590,6 +590,13 @@ html.dark[data-style="glass"] .wk-badge.bg-orange-500 {
 html.dark[data-style="glass"] .text-orange-500 {
   color: rgb(148 163 184) !important; /* slate-400 */
 }
+/* Glass: header brand (W + whisk icon) should use the theme accent color, not slate */
+[data-style="glass"] .wk-header-decor .text-orange-500 {
+  color: var(--color-orange-500) !important;
+}
+html.dark[data-style="glass"] .wk-header-decor .text-orange-500 {
+  color: var(--color-orange-400) !important;
+}
 [data-style="glass"] .text-orange-600,
 [data-style="glass"] .text-orange-700 {
   color: rgb(30 41 59) !important; /* slate-800 — strong for active tabs */
@@ -615,13 +622,13 @@ html.dark[data-style="glass"] .ring-orange-500 {
   --tw-ring-color: rgb(148 163 184 / 0.2) !important;
 }
 
-/* Glass: bottom nav active icon needs stronger visual weight */
+/* Glass: bottom nav active icon uses theme accent color */
 [data-style="glass"] nav.fixed.bottom-0 .text-orange-500 {
-  color: rgb(15 23 42) !important; /* slate-900 — bold active */
+  color: var(--color-orange-600) !important;
   font-weight: 600;
 }
 html.dark[data-style="glass"] nav.fixed.bottom-0 .text-orange-500 {
-  color: rgb(248 250 252) !important; /* slate-50 — bright active */
+  color: var(--color-orange-400) !important;
 }
 
 /* Glass: recipe detail tab underline needs to be visible, not translucent */

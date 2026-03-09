@@ -42,8 +42,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
-  // Truncate very long inputs to avoid token limits
-  const truncated = text.slice(0, 15000);
+  // Truncate very long inputs and strip control characters
+  const truncated = text.slice(0, 15000).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
 
   const systemPrompt = `You are a data extraction assistant. The user will provide text that contains a list of recipes — it might be copied from a spreadsheet, a text document, a notes app, or any other format. Your job is to extract individual recipe entries.
 
