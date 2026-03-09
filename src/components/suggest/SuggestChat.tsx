@@ -111,17 +111,14 @@ function CategoryIcon({ category, className }: { category: string; className?: s
         </svg>
       );
     case "Sides":
-      // Ear of corn
+      // Salad bowl (Lucide)
       return (
         <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M7 22c0-3 2-5 5-5s5 2 5 5" />
-          <ellipse cx="12" cy="11" rx="4" ry="7" />
-          <path d="M12 4V2" />
-          <path d="M10 5c-.7-.7-2-1-3-1" />
-          <path d="M14 5c.7-.7 2-1 3-1" />
-          <line x1="10" y1="8" x2="14" y2="8" />
-          <line x1="10" y1="11" x2="14" y2="11" />
-          <line x1="10" y1="14" x2="14" y2="14" />
+          <path d="M7 21h10" />
+          <path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z" />
+          <path d="M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.37 3.37 2.4 2.4 0 0 1-1.1 3.7 2.51 2.51 0 0 1 .03 1.1" />
+          <path d="m13 12 4-4" />
+          <path d="M10.9 7.25A3.99 3.99 0 0 0 4 10c0 .73.2 1.41.54 2" />
         </svg>
       );
     default:
