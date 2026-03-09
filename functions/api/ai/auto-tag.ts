@@ -33,6 +33,20 @@ const PRESET_TAGS = [
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json()) as AutoTagBody;
 
+  // Input sanitization: truncate and strip control characters
+  const title = typeof body.title === "string" ? body.title.slice(0, 500).replace(/[\x00-\x1f]/g, "") : "";
+  const description = typeof body.description === "string" ? body.description.slice(0, 1000).replace(/[\x00-\x1f]/g, "") : undefined;
+  const ingredients = (Array.isArray(body.ingredients) ? body.ingredients : [])
+    .slice(0, 100)
+    .filter((i): i is string => typeof i === "string")
+    .map((i) => i.slice(0, 200).replace(/[\x00-\x1f]/g, ""));
+
+  if (!title) {
+    return new Response(JSON.stringify({ tags: [] }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const config = await loadAIConfig(env.WHISK_KV);
   const fnConfig = resolveConfig(config, "chat", env);
 
@@ -61,8 +75,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const validTags = new Set(allTags);
 
-  const ingredientList = body.ingredients.length > 0
-    ? `\nIngredients: ${body.ingredients.join(", ")}`
+  const ingredientList = ingredients.length > 0
+    ? `\nIngredients: ${ingredients.join(", ")}`
     : "";
 
   const systemPrompt = [
@@ -77,7 +91,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     '- Return a JSON object: { "tags": ["tag1", "tag2"] }',
   ].join("\n");
 
-  const userPrompt = `Title: ${body.title}${body.description ? `\nDescription: ${body.description}` : ""}${ingredientList}`;
+  const userPrompt = `Title: ${title}${description ? `\nDescription: ${description}` : ""}${ingredientList}`;
 
   try {
     const content = await callTextAI(
