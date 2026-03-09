@@ -596,6 +596,33 @@ const DRINK_HIDDEN_TAGS = new Set([
 
 const ALCOHOLIC_KEYWORDS = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
 
+/** Image that handles hotlink-blocked external URLs (e.g. Serious Eats / Dotdash Meredith) */
+function RecipeImage({ src, alt }: { src: string; alt: string }) {
+  const [useFallback, setUseFallback] = useState(false);
+  const isExternal = src.startsWith("http");
+
+  const displayUrl = !isExternal
+    ? src
+    : useFallback
+      ? `/api/image-proxy?url=${encodeURIComponent(src)}`
+      : src;
+
+  return (
+    <img
+      src={displayUrl}
+      alt={alt}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      referrerPolicy={isExternal && !useFallback ? "no-referrer" : undefined}
+      onError={() => {
+        if (isExternal && !useFallback) {
+          setUseFallback(true);
+        }
+      }}
+    />
+  );
+}
+
 function RecipeCard({
   recipe,
   onClick,
@@ -622,12 +649,7 @@ function RecipeCard({
       {/* Image */}
       <div className="relative aspect-3/2 w-full shrink-0 overflow-hidden bg-stone-100 dark:bg-stone-800">
         {recipe.thumbnailUrl ? (
-          <img
-            src={recipe.thumbnailUrl}
-            alt={recipe.title}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
+          <RecipeImage src={recipe.thumbnailUrl} alt={recipe.title} />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-stone-300 dark:text-stone-600">
             <WhiskLogo className="w-10 h-10" />
