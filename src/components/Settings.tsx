@@ -1652,7 +1652,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   );
 }
 
-const STORE_OPTIONS_FALLBACK = ["Jewel-Osco", "Trader Joe's", "Walmart", "Whole Foods", "Costco", "Aldi", "Target", "Meijer", "Kroger", "Mariano's"];
+const STORE_OPTIONS_FALLBACK = ["Jewel-Osco", "Mariano's", "Trader Joe's", "Aldi", "Whole Foods", "Costco", "Walmart", "Target", "Meijer", "Kroger", "Pete's Fresh Market", "Fresh Thyme", "H Mart", "Caputo's"];
 
 function PreferredStoresDropdown({
   stores,

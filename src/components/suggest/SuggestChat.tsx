@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } fro
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send, Tag } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -441,6 +441,78 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 ))}
               </div>
             </Card>
+
+            {/* This Week's Deals — show top deals from preferred stores */}
+            {deals.length > 0 && (
+              <Card>
+                <div className="flex items-center gap-2 mb-3">
+                  <Tag className="w-4.5 h-4.5 text-green-600 dark:text-green-400" />
+                  <h2 className="text-base font-semibold dark:text-stone-100">
+                    This Week&apos;s Deals
+                  </h2>
+                  <span className="ml-auto text-xs text-stone-400 dark:text-stone-500">
+                    {deals.length} deal{deals.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                {(() => {
+                  // Group deals by store, show top 3 stores with up to 3 deals each
+                  const byStore = new Map<string, typeof deals>();
+                  for (const d of deals) {
+                    const arr = byStore.get(d.storeName) ?? [];
+                    arr.push(d);
+                    byStore.set(d.storeName, arr);
+                  }
+                  const storeEntries = [...byStore.entries()]
+                    .sort((a, b) => b[1].length - a[1].length)
+                    .slice(0, 3);
+                  return (
+                    <div className="space-y-3">
+                      {storeEntries.map(([storeName, storeDeals]) => (
+                        <div key={storeName}>
+                          <p className="text-xs font-semibold text-stone-600 dark:text-stone-300 mb-1">
+                            {storeName}
+                            <span className="font-normal text-stone-400 dark:text-stone-500 ml-1">
+                              ({storeDeals.length})
+                            </span>
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {storeDeals.slice(0, 4).map((deal) => (
+                              <span
+                                key={deal.id}
+                                className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-2 py-0.5 text-[11px]"
+                              >
+                                <span className="text-stone-600 dark:text-stone-300 truncate max-w-[120px]">
+                                  {deal.item}
+                                </span>
+                                <span className="font-bold text-green-700 dark:text-green-400">
+                                  ${deal.price.toFixed(2)}
+                                </span>
+                                {deal.unit && (
+                                  <span className="text-stone-400 dark:text-stone-500">{deal.unit}</span>
+                                )}
+                              </span>
+                            ))}
+                            {storeDeals.length > 4 && (
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] text-stone-400 dark:text-stone-500">
+                                +{storeDeals.length - 4} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+                {chatEnabled && (
+                  <button
+                    onClick={() => sendMessage("What's on sale right now? Summarize the best deals across stores and suggest recipes that use those ingredients.")}
+                    className="mt-3 text-xs font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+                  >
+                    Ask about deals &rarr;
+                  </button>
+                )}
+              </Card>
+            )}
 
             {/* Suggestion */}
             {recipeCount > 0 && (

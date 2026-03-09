@@ -711,6 +711,34 @@ export function ShoppingList({
       {/* ═══ LIST TAB ═══ */}
       {subTab === "list" && (
         <>
+          {/* Deals callout banner — surfaces sales info on main list tab */}
+          {listDealMatches.length > 0 && (
+            <div className="px-4 pt-3">
+              <button
+                onClick={() => setSubTab("sales")}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 transition-colors hover:bg-green-100 dark:hover:bg-green-900/30"
+              >
+                <Tag className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                <div className="flex-1 text-left">
+                  <p className="text-xs font-semibold text-green-800 dark:text-green-300">
+                    {listDealMatches.length} item{listDealMatches.length !== 1 ? "s" : ""} on sale
+                    {bestStore && bestStore.matchCount >= 2 && (
+                      <span className="font-normal text-green-700 dark:text-green-400">
+                        {" "}— best at {bestStore.storeName}
+                        {bestStore.estimatedSavings > 0 && ` (~$${bestStore.estimatedSavings.toFixed(2)} savings)`}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-green-600 dark:text-green-500 mt-0.5">
+                    {listDealMatches.slice(0, 3).map(m => m.item.name).join(", ")}
+                    {listDealMatches.length > 3 && ` +${listDealMatches.length - 3} more`}
+                  </p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-green-500 -rotate-90 shrink-0" />
+              </button>
+            </div>
+          )}
+
           {/* Scan list camera — collapsible at top */}
           {visionEnabled && (
             <div className="px-4 pt-3">
