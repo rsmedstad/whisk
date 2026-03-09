@@ -10,6 +10,39 @@ const PANTRY_STAPLES = new Set([
   "cooking spray", "water", "ice", "nonstick spray", "oil",
 ]);
 
+// Tags that signal a recipe fits a particular meal slot
+const SLOT_TAGS: Record<MealSlot, string[]> = {
+  breakfast: ["breakfast", "brunch", "morning", "pancakes", "waffles", "eggs"],
+  lunch: ["lunch", "salad", "sandwich", "soup", "wrap", "light"],
+  dinner: ["dinner", "main", "entree", "entrée", "supper"],
+  snack: ["snack", "appetizer", "dip", "finger food", "side"],
+};
+
+/** Score a recipe for quick-add ranking. Higher = better suggestion. */
+function recipeScore(r: RecipeIndexEntry, slot: MealSlot): number {
+  let score = 0;
+
+  // Slot match bonus — strongest signal
+  const slotTags = SLOT_TAGS[slot] ?? [];
+  if (r.tags.some((t) => slotTags.includes(t.toLowerCase()))) score += 50;
+
+  // Rating (0-5 scale, weighted heavily)
+  if (r.avgRating) score += r.avgRating * 8;
+
+  // Cooked count — proven recipes bubble up
+  if (r.cookedCount) score += Math.min(r.cookedCount * 3, 30);
+
+  // Favorite — bonus but not the only signal
+  if (r.favorite) score += 15;
+
+  // Recency tiebreaker — recently updated recipes slightly preferred
+  const age = Date.now() - new Date(r.updatedAt).getTime();
+  const daysSinceUpdate = age / (1000 * 60 * 60 * 24);
+  if (daysSinceUpdate < 30) score += 5;
+
+  return score;
+}
+
 const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
   { slot: "lunch", label: "Lunch" },
@@ -701,19 +734,27 @@ export function MealPlan({
           </div>
         )}
 
-        {/* Favorites quick-add */}
+        {/* Quick-add suggestions — ranked by rating, usage, favorites, and slot fit */}
         {recipeIndex.length > 0 && addingSlot && (() => {
-          const favorites = recipeIndex
-            .filter((r) => r.favorite)
-            .slice(0, 10);
-          if (favorites.length === 0) return null;
+          const slot = addingSlot.slot;
+          // Exclude recipes already planned this week
+          const plannedIds = new Set(weekMeals.map((m) => m.recipeId).filter(Boolean));
+          const candidates = recipeIndex
+            .filter((r) => !plannedIds.has(r.id))
+            .map((r) => ({ recipe: r, score: recipeScore(r, slot) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 8)
+            .filter((c) => c.score > 0);
+          if (candidates.length === 0) return null;
+
+          const slotLabel = mealSlots.find((s) => s.slot === slot)?.label ?? slot;
           return (
             <div className="mx-4 mt-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-1.5">
-                Quick add from favorites
+                Suggested for {slotLabel}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {favorites.map((r) => (
+                {candidates.map(({ recipe: r }) => (
                   <button
                     key={r.id}
                     onClick={() => handleAddMeal(r.title, r.id)}
@@ -721,10 +762,15 @@ export function MealPlan({
                   >
                     {r.thumbnailUrl ? (
                       <img src={r.thumbnailUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
-                    ) : (
+                    ) : r.favorite ? (
                       <span className="text-orange-400">★</span>
+                    ) : (
+                      <span className="text-stone-300 dark:text-stone-600">○</span>
                     )}
                     <span className="truncate max-w-[120px]">{r.title}</span>
+                    {r.avgRating != null && r.avgRating > 0 && (
+                      <span className="text-[9px] text-amber-500">{r.avgRating.toFixed(1)}★</span>
+                    )}
                   </button>
                 ))}
               </div>
