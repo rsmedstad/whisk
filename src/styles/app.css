@@ -598,13 +598,20 @@ html.dark[data-style="glass"] .text-orange-500 {
 html.dark[data-style="glass"] .wk-header-decor .text-orange-500 {
   color: var(--color-orange-400) !important;
 }
-[data-style="glass"] .text-orange-600,
-[data-style="glass"] .text-orange-700 {
-  color: rgb(30 41 59) !important; /* slate-800 — strong for active tabs */
+html:not(.dark)[data-style="glass"] .text-orange-600,
+html:not(.dark)[data-style="glass"] .text-orange-700 {
+  color: rgb(30 41 59) !important; /* slate-800 — strong for active tabs (light only) */
 }
 html.dark[data-style="glass"] .text-orange-300,
-html.dark[data-style="glass"] .text-orange-400 {
+html.dark[data-style="glass"] .text-orange-400,
+html.dark[data-style="glass"] .dark\:text-orange-300,
+html.dark[data-style="glass"] .dark\:text-orange-400 {
   color: rgb(241 245 249) !important; /* slate-100 — bright for dark active */
+}
+/* Glass dark: override light-mode orange text classes that persist on elements in dark mode */
+html.dark[data-style="glass"] .text-orange-600,
+html.dark[data-style="glass"] .text-orange-700 {
+  color: rgb(241 245 249) !important; /* slate-100 — prevent dark text in dark mode */
 }
 /* Orange borders → white/silver glass borders */
 [data-style="glass"] .border-orange-500,
