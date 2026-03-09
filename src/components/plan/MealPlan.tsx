@@ -672,6 +672,66 @@ export function MealPlan({
           </div>
         )}
 
+        {/* Weekly summary card */}
+        {weekMeals.length > 0 && (
+          <div className="mx-4 mt-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 p-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+              Week Summary
+            </h3>
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-stone-700 dark:text-stone-200">{weekMeals.length}</p>
+                <p className="text-[10px] text-stone-400 dark:text-stone-500">planned</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-green-600 dark:text-green-400">{weekMeals.filter((m) => m.completed).length}</p>
+                <p className="text-[10px] text-stone-400 dark:text-stone-500">cooked</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-orange-500">{new Set(weekMeals.map((m) => m.title)).size}</p>
+                <p className="text-[10px] text-stone-400 dark:text-stone-500">unique</p>
+              </div>
+              {linkedRecipeIds.length > 0 && (
+                <div className="text-center">
+                  <p className="text-lg font-bold text-blue-500">{linkedRecipeIds.length}</p>
+                  <p className="text-[10px] text-stone-400 dark:text-stone-500">linked</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Favorites quick-add */}
+        {recipeIndex.length > 0 && addingSlot && (() => {
+          const favorites = recipeIndex
+            .filter((r) => r.favorite)
+            .slice(0, 10);
+          if (favorites.length === 0) return null;
+          return (
+            <div className="mx-4 mt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-1.5">
+                Quick add from favorites
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {favorites.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => handleAddMeal(r.title, r.id)}
+                    className="flex items-center gap-1.5 rounded-full border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 px-2.5 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  >
+                    {r.thumbnailUrl ? (
+                      <img src={r.thumbnailUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
+                    ) : (
+                      <span className="text-orange-400">★</span>
+                    )}
+                    <span className="truncate max-w-[120px]">{r.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Shopping list — below planned items */}
         {linkedRecipeIds.length > 0 && onGenerateShoppingList && (
           <div className="px-4 py-4 border-t border-stone-200 dark:border-stone-800">

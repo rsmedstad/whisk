@@ -165,7 +165,16 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isKeyboardOpen } = useKeyboard();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem("whisk_ask_messages");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Message[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(-30);
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [pickCategory, setPickCategory] = useState(() => {
@@ -216,12 +225,23 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
     });
   }, [messages, isKeyboardOpen]);
 
+  // Persist messages to localStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem("whisk_ask_messages", JSON.stringify(messages.slice(-30)));
+    } else {
+      localStorage.removeItem("whisk_ask_messages");
+    }
+  }, [messages]);
+
   // Auto-send query from URL param (e.g., from Discover card click)
   useEffect(() => {
     const q = searchParams.get("q");
-    if (q && !autoSentRef.current && messages.length === 0) {
+    if (q && !autoSentRef.current) {
       autoSentRef.current = true;
       setSearchParams({}, { replace: true });
+      // Start a fresh conversation with this query
+      setMessages([]);
       sendMessage(q);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
