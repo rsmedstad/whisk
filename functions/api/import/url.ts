@@ -29,16 +29,50 @@ interface RecipeData {
   keywords?: string | string[];
 }
 
+/** Normalize a user-provided URL: trim, add https://, validate protocol. Returns null if invalid. */
+function normalizeUrl(raw: string): string | null {
+  let u = raw.trim();
+  if (!u) return null;
+  // Reject dangerous protocols
+  if (/^(javascript|data|file|ftp|blob|vbscript):/i.test(u)) return null;
+  // Add https:// if no protocol
+  if (!/^https?:\/\//i.test(u)) {
+    u = `https://${u}`;
+  }
+  // Validate as a proper URL
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    // Reject localhost/private IPs to prevent SSRF
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" ||
+        host.startsWith("192.168.") || host.startsWith("10.") ||
+        host.startsWith("172.") || host === "[::1]") return null;
+    return u;
+  } catch {
+    return null;
+  }
+}
+
 // POST /api/import/url - Scrape recipe from URL
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    const { url, downloadImage } = (await request.json()) as {
+    const { url: rawUrl, downloadImage } = (await request.json()) as {
       url: string;
       downloadImage?: boolean;
     };
 
-    if (!url) {
+    if (!rawUrl) {
       return new Response(JSON.stringify({ error: "URL required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Normalize & validate URL ──
+    const url = normalizeUrl(rawUrl);
+    if (!url) {
+      return new Response(JSON.stringify({ error: "Invalid URL. Please provide an http or https URL." }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });

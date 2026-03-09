@@ -17,7 +17,11 @@ interface SuggestBody {
 // POST /api/ai/suggest - Seasonal recipe suggestions
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json()) as SuggestBody;
-  const { seasonalContext } = body;
+  // Sanitize seasonalContext — it's generated client-side from date logic,
+  // but the API accepts it as POST param so we limit length and strip control chars
+  const seasonalContext = typeof body.seasonalContext === "string"
+    ? body.seasonalContext.slice(0, 2000).replace(/[\x00-\x1f]/g, "")
+    : undefined;
 
   const config = await loadAIConfig(env.WHISK_KV);
   const fnConfig = resolveConfig(config, "suggestions", env);
