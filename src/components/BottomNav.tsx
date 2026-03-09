@@ -4,8 +4,8 @@ import { useKeyboard } from "../hooks/useKeyboard";
 import { BookOpen, Globe, Sparkles, ShoppingCart, CalendarDays } from "./ui/Icon";
 
 const tabs = [
-  { to: "/", icon: BookOpen, label: "Recipes" },
   { to: "/discover", icon: Globe, label: "Discover" },
+  { to: "/", icon: BookOpen, label: "Recipes" },
   { to: "/plan", icon: CalendarDays, label: "Plan" },
   { to: "/list", icon: ShoppingCart, label: "List" },
   { to: "/ask", icon: Sparkles, label: "Ask" },
