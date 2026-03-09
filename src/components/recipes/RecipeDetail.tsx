@@ -14,7 +14,7 @@ import {
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { TagChip } from "../ui/TagChip";
-import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun } from "../ui/Icon";
+import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun, ClipboardList } from "../ui/Icon";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { GroupedIngredients, StepsList } from "./RecipeComponents";
 import { categorizeIngredientForDrink } from "../../lib/categories";
@@ -39,7 +39,7 @@ const DRINK_NON_ESSENTIALS = new Set<string>(["garnish", "bitters_modifiers"]);
 export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShoppingList, onAddMeal }: RecipeDetailProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getRecipe, toggleFavorite, deleteRecipe, updateRecipe, markCooked } = useRecipes();
+  const { getRecipe, toggleFavorite, toggleWantToMake, deleteRecipe, updateRecipe, markCooked } = useRecipes();
   const tags = useTags();
   // Initialize from cache synchronously — no spinner for cached recipes
   const cachedRecipe = id ? getLocal<Recipe>(CACHE_KEYS.RECIPE(id)) : null;
@@ -363,6 +363,17 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               });
             }}
           />
+          <button
+            onClick={() => {
+              if (!recipe) return;
+              toggleWantToMake(recipe.id);
+              setRecipe((r) => r ? { ...r, wantToMake: !r.wantToMake } : r);
+            }}
+            className="p-2"
+            title={recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
+          >
+            <ClipboardList className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-500" : "text-stone-400")} />
+          </button>
           <button onClick={handleFavorite} className="p-2">
             {recipe.favorite ? (
               <HeartFilled className="w-5 h-5 text-red-500" />

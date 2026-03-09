@@ -8,6 +8,7 @@ export interface Recipe {
   steps: Step[];
   favorite: boolean;
   favoritedBy?: string[]; // user IDs who favorited this recipe
+  wantToMake?: boolean; // flagged as "want to make" for meal planning
 
   // Media
   photos: RecipePhoto[];
@@ -75,6 +76,7 @@ export interface RecipeIndexEntry {
   tags: string[];
   cuisine?: string;
   favorite: boolean;
+  wantToMake?: boolean;
   updatedAt: string;
   thumbnailUrl?: string;
   prepTime?: number;

@@ -106,6 +106,7 @@ interface MealPlanProps {
   getWeekHistory?: (count: number) => { id: string; dateRange: string; mealCount: number; completionRate: number }[];
   weekId?: string;
   deals?: Deal[];
+  onToggleWantToMake?: (id: string) => void;
 }
 
 export function MealPlan({
@@ -126,6 +127,7 @@ export function MealPlan({
   getWeekHistory,
   weekId,
   deals = [],
+  onToggleWantToMake,
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
@@ -166,6 +168,23 @@ export function MealPlan({
   });
 
   const today = toDateString(new Date());
+
+  // Want to Make recipes
+  const wantToMakeRecipes = useMemo(
+    () => recipeIndex.filter((r) => r.wantToMake),
+    [recipeIndex]
+  );
+  const [planningRecipe, setPlanningRecipe] = useState<RecipeIndexEntry | null>(null);
+  const [wtmPlanDate, setWtmPlanDate] = useState(() => toDateString(new Date()));
+  const [wtmPlanSlot, setWtmPlanSlot] = useState<MealSlot>("dinner");
+
+  const handleWtmAddToPlan = () => {
+    if (!planningRecipe) return;
+    const d = new Date(wtmPlanDate + "T12:00:00");
+    onAddMeal(d, wtmPlanSlot, planningRecipe.title, planningRecipe.id);
+    if (onToggleWantToMake) onToggleWantToMake(planningRecipe.id);
+    setPlanningRecipe(null);
+  };
 
   // Filter recipes based on input for autocomplete
   const suggestions = useMemo(() => {
@@ -443,6 +462,91 @@ export function MealPlan({
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* Want to Make section */}
+      {wantToMakeRecipes.length > 0 && (
+        <div className="border-b border-stone-200 dark:border-stone-800">
+          <div className="px-4 pt-3 pb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+              Want to Make
+            </h3>
+            <div className="max-h-32 overflow-y-auto space-y-1.5">
+              {wantToMakeRecipes.map((recipe) => (
+                <div
+                  key={recipe.id}
+                  className="flex items-center justify-between rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 px-3 py-2"
+                >
+                  <button
+                    onClick={() => navigate(`/recipes/${recipe.id}`)}
+                    className="flex-1 text-left text-sm font-medium text-stone-700 dark:text-stone-200 truncate mr-2"
+                  >
+                    {recipe.title}
+                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        setPlanningRecipe(recipe);
+                        setWtmPlanDate(toDateString(new Date()));
+                        setWtmPlanSlot("dinner");
+                      }}
+                      className="text-[11px] font-medium px-2 py-1 rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                    >
+                      Plan
+                    </button>
+                    <button
+                      onClick={() => onToggleWantToMake?.(recipe.id)}
+                      className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                      title="Remove"
+                    >
+                      <XMark className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Date/slot picker for planning a Want to Make recipe */}
+          {planningRecipe && (
+            <div className="px-4 pb-3">
+              <div className="rounded-lg border border-orange-300 dark:border-orange-800 bg-white dark:bg-stone-800 p-3">
+                <p className="text-xs font-medium text-stone-600 dark:text-stone-300 mb-2 truncate">
+                  Plan &ldquo;{planningRecipe.title}&rdquo;
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={wtmPlanDate}
+                    onChange={(e) => setWtmPlanDate(e.target.value)}
+                    className="flex-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <select
+                    value={wtmPlanSlot}
+                    onChange={(e) => setWtmPlanSlot(e.target.value as MealSlot)}
+                    className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  >
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner">Dinner</option>
+                    <option value="snack">Snack</option>
+                  </select>
+                  <button
+                    onClick={handleWtmAddToPlan}
+                    className="text-sm font-medium px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => setPlanningRecipe(null)}
+                    className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                  >
+                    <XMark className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

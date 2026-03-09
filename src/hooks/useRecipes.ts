@@ -148,6 +148,33 @@ export function useRecipes() {
     [recipes]
   );
 
+  const toggleWantToMake = useCallback(
+    async (id: string) => {
+      // Optimistic: toggle immediately
+      setRecipes((prev) => {
+        const updated = prev.map((r) =>
+          r.id === id ? { ...r, wantToMake: !r.wantToMake } : r
+        );
+        setLocal(CACHE_KEYS.RECIPE_INDEX, updated);
+        return updated;
+      });
+
+      const recipe = recipes.find((r) => r.id === id);
+      if (!recipe) return;
+
+      // Background sync
+      api.put(`/recipes/${id}`, { wantToMake: !recipe.wantToMake }).catch(() => {
+        // Revert on failure
+        setRecipes((prev) =>
+          prev.map((r) =>
+            r.id === id ? { ...r, wantToMake: recipe.wantToMake } : r
+          )
+        );
+      });
+    },
+    [recipes]
+  );
+
   const markCooked = useCallback(
     async (id: string) => {
       const now = new Date().toISOString();
@@ -185,6 +212,7 @@ export function useRecipes() {
     updateRecipe,
     deleteRecipe,
     toggleFavorite,
+    toggleWantToMake,
     markCooked,
   };
 }
