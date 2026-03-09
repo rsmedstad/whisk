@@ -15,7 +15,7 @@ import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
-import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs } from "./types";
+import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs, UserPreferences } from "./types";
 
 // Retry dynamic imports on failure (stale chunks after deploy) by reloading once
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,6 +155,14 @@ function AppShell({
   const receiptData = useReceipts();
   const dealsData = useDeals();
 
+  const userPreferences = useMemo((): UserPreferences | undefined => {
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      if (raw) return JSON.parse(raw) as UserPreferences;
+    } catch { /* ignore */ }
+    return undefined;
+  }, []);
+
   const handleStartTimer = (
     label: string,
     minutes: number,
@@ -239,7 +247,18 @@ function AppShell({
           {/* Other tabs — lazy loaded */}
           <Route path="/discover" element={<Discover onSaveRecipe={recipes.createRecipe} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
-          <Route path="/ask" element={<AskChat chatEnabled={capabilities.chat} recipes={recipes.recipes} />} />
+          <Route path="/ask" element={
+            <AskChat
+              chatEnabled={capabilities.chat}
+              recipes={recipes.recipes}
+              mealPlan={mealPlan.plan.meals}
+              shoppingList={shoppingList.list.items}
+              deals={dealsData.deals}
+              preferences={userPreferences}
+              onAddMeal={mealPlan.addMeal}
+              onAddToList={(name: string) => shoppingList.addItem(name)}
+            />
+          } />
           <Route path="/suggest" element={<Navigate to="/ask" replace />} />
           <Route
             path="/list"
