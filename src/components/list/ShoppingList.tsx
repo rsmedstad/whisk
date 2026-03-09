@@ -1,15 +1,17 @@
-import { useState, useMemo, useCallback, type FormEvent } from "react";
+import { useState, useMemo, useCallback, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Receipt, SpendingSummary } from "../../types";
+import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Receipt, SpendingSummary, Deal, Store } from "../../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categories";
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, WhiskLogo, Camera } from "../ui/Icon";
+import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, ChevronDown } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
-import { DealsScanner } from "../plan/DealsScanner";
+import { Card } from "../ui/Card";
+import { Button } from "../ui/Button";
 
 type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store";
+type SubTab = "list" | "sales" | "receipts";
 
 interface ShoppingListProps {
   list: ShoppingListType;
@@ -35,8 +37,11 @@ interface ShoppingListProps {
   onClearScanError?: () => void;
   onClearLastScanned?: () => void;
   // Deal props
-  dealMatches?: Map<string, import("../../types").Deal[]>;
+  dealMatches?: Map<string, Deal[]>;
   bestStore?: { storeId: string; storeName: string; matchCount: number; estimatedSavings: number } | null;
+  deals?: Deal[];
+  stores?: Store[];
+  receipts?: { id: string; date: string; store?: string; total?: number }[];
 }
 
 export function ShoppingList({
@@ -63,8 +68,12 @@ export function ShoppingList({
   onClearLastScanned,
   dealMatches,
   bestStore,
+  deals = [],
+  stores = [],
+  receipts = [],
 }: ShoppingListProps) {
   const navigate = useNavigate();
+  const [subTab, setSubTab] = useState<SubTab>("list");
   const [newItem, setNewItem] = useState("");
   const [showOverflow, setShowOverflow] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("department");
@@ -73,16 +82,30 @@ export function ShoppingList({
   const [storeInput, setStoreInput] = useState("");
   const [isClassifying, setIsClassifying] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const [scanMode, setScanMode] = useState<"list" | "receipt">("list");
   const [showSpendingDetail, setShowSpendingDetail] = useState(false);
+  // List scan
+  const [showListScan, setShowListScan] = useState(false);
+  const [isListScanning, setIsListScanning] = useState(false);
+  // Sales tab
+  const [dealCategoryFilter, setDealCategoryFilter] = useState<string | null>(null);
+  const [dealStoreFilter, setDealStoreFilter] = useState<string | null>(null);
+  // Sales scanner
+  const flyerInputRef = useRef<HTMLInputElement>(null);
+  const [flyerPreview, setFlyerPreview] = useState<string | null>(null);
+  const [dealUrl, setDealUrl] = useState("");
+  const [isScanningDeals, setIsScanningDeals] = useState(false);
+  const [scannedDeals, setScannedDeals] = useState<{ item: string; price: string; originalPrice?: string | null; unit?: string | null; category: string; notes?: string | null }[]>([]);
+  const [scannedDealsMeta, setScannedDealsMeta] = useState<{ storeName?: string | null; validDates?: string | null } | null>(null);
+  const [scannedDealsMessage, setScannedDealsMessage] = useState<string | null>(null);
+  const [scannedPageCount, setScannedPageCount] = useState(0);
 
   // Get unique store names from items
   const storeNames = useMemo(() => {
-    const stores = new Set<string>();
+    const s = new Set<string>();
     for (const item of list.items) {
-      if (item.store) stores.add(item.store);
+      if (item.store) s.add(item.store);
     }
-    return Array.from(stores).sort();
+    return Array.from(s).sort();
   }, [list.items]);
 
   // Filter items by store
@@ -110,7 +133,6 @@ export function ShoppingList({
   const sortedFlat = useMemo(() => {
     if (sortMode !== "alphabetical") return null;
     return [...filteredItems].sort((a, b) => {
-      // unchecked first, then alphabetical
       if (a.checked !== b.checked) return a.checked ? 1 : -1;
       return a.name.localeCompare(b.name);
     });
@@ -126,7 +148,6 @@ export function ShoppingList({
       arr.push(item);
       groups.set(store, arr);
     }
-    // Sort stores alphabetically, with "Unassigned" last
     const sorted = [...groups.entries()].sort(([a], [b]) => {
       if (a === "Unassigned") return 1;
       if (b === "Unassigned") return -1;
@@ -142,6 +163,34 @@ export function ShoppingList({
     }
     return map;
   }, [recipeIndex]);
+
+  // Deals filtering
+  const dealCategories = useMemo(() => {
+    const cats = new Set<string>();
+    for (const d of deals) {
+      if (d.category) cats.add(d.category);
+    }
+    return Array.from(cats).sort();
+  }, [deals]);
+
+  const dealStoreNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const d of deals) {
+      names.add(d.storeName);
+    }
+    return Array.from(names).sort();
+  }, [deals]);
+
+  const filteredDeals = useMemo(() => {
+    let result = deals;
+    if (dealCategoryFilter) {
+      result = result.filter((d) => d.category === dealCategoryFilter);
+    }
+    if (dealStoreFilter) {
+      result = result.filter((d) => d.storeName === dealStoreFilter);
+    }
+    return result;
+  }, [deals, dealCategoryFilter, dealStoreFilter]);
 
   const checkedCount = filteredItems.filter((i) => i.checked).length;
   const totalCount = filteredItems.length;
@@ -170,6 +219,117 @@ export function ShoppingList({
     onUpdateItem(itemId, { store: trimmed || undefined });
     setEditingStoreId(null);
     setStoreInput("");
+  };
+
+  const handleListScan = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setIsListScanning(true);
+      try {
+        const formData = new FormData();
+        formData.append("photo", file);
+        const token = localStorage.getItem("whisk_token");
+        const res = await fetch("/api/shopping/scan", {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { items?: { name: string }[] };
+          if (data.items) {
+            for (const item of data.items) {
+              if (item.name) onAddItem(item.name);
+            }
+          }
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        setIsListScanning(false);
+      }
+    };
+    input.click();
+  };
+
+  const handleReceiptScan = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file || !onScanReceipt) return;
+      await onScanReceipt(file);
+    };
+    input.click();
+  };
+
+  // Sales scanner handlers
+  const handleFlyerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFlyerPreview(URL.createObjectURL(file));
+    setDealUrl("");
+  };
+
+  const handleScanDeals = async () => {
+    const hasPhoto = flyerInputRef.current?.files?.[0];
+    const hasUrl = dealUrl.trim();
+    if (!hasPhoto && !hasUrl) return;
+
+    setIsScanningDeals(true);
+    try {
+      const formData = new FormData();
+      if (hasPhoto) {
+        formData.append("photo", flyerInputRef.current!.files![0]!);
+      } else {
+        formData.append("url", hasUrl);
+      }
+
+      const token = localStorage.getItem("whisk_token");
+      const res = await fetch("/api/discover/scan-deals", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Scan failed");
+      const data = (await res.json()) as { deals: typeof scannedDeals; storeName?: string | null; validDates?: string | null; message?: string };
+
+      setScannedDeals((prev) => [...prev, ...data.deals]);
+      if (data.storeName || data.validDates) {
+        setScannedDealsMeta((prev) => prev ?? { storeName: data.storeName, validDates: data.validDates });
+      }
+      if (data.deals.length === 0 && data.message) {
+        setScannedDealsMessage(data.message);
+      } else {
+        setScannedDealsMessage(null);
+      }
+      setScannedPageCount((n) => n + 1);
+
+      setFlyerPreview(null);
+      setDealUrl("");
+      if (flyerInputRef.current) flyerInputRef.current.value = "";
+    } catch {
+      setScannedDealsMessage("Failed to scan. Try a clearer image or different URL.");
+    } finally {
+      setIsScanningDeals(false);
+    }
+  };
+
+  const handleResetScannedDeals = () => {
+    setScannedDeals([]);
+    setScannedDealsMeta(null);
+    setScannedDealsMessage(null);
+    setScannedPageCount(0);
+    setFlyerPreview(null);
+    setDealUrl("");
+    if (flyerInputRef.current) flyerInputRef.current.value = "";
   };
 
   const renderItem = (item: ShoppingItem) => {
@@ -284,6 +444,8 @@ export function ShoppingList({
     );
   };
 
+  const hasScannedDealInput = flyerPreview || dealUrl.trim();
+
   return (
     <div className="flex flex-col h-full">
       {/* Store suggestions datalist (shared) */}
@@ -302,469 +464,817 @@ export function ShoppingList({
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">List</h1>
           </button>
-          <div className="flex items-center gap-1">
-            {/* Sort button */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSortMenu(!showSortMenu)}
-                className={classNames(
-                  "p-2 rounded-lg transition-colors",
-                  sortMode !== "department"
-                    ? "text-orange-500"
-                    : "text-stone-500 dark:text-stone-400"
+          {subTab === "list" && (
+            <div className="flex items-center gap-1">
+              {/* Sort button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSortMenu(!showSortMenu)}
+                  className={classNames(
+                    "p-2 rounded-lg transition-colors",
+                    sortMode !== "department"
+                      ? "text-orange-500"
+                      : "text-stone-500 dark:text-stone-400"
+                  )}
+                  title="Sort"
+                >
+                  <ArrowUpDown className="w-5 h-5" />
+                </button>
+                {showSortMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+                    <div className="absolute right-0 top-10 z-50 w-48 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                      {([
+                        { value: "department", label: "By department" },
+                        { value: "by-store", label: "By store" },
+                        { value: "alphabetical", label: "A-Z" },
+                        { value: "unchecked-first", label: "Unchecked first" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
+                          className={classNames(
+                            "w-full px-4 py-2.5 text-left text-sm",
+                            sortMode === opt.value
+                              ? "text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/30"
+                              : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
                 )}
-                title="Sort"
-              >
-                <ArrowUpDown className="w-5 h-5" />
-              </button>
-              {showSortMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-                  <div className="absolute right-0 top-10 z-50 w-48 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
-                    {([
-                      { value: "department", label: "By department" },
-                      { value: "by-store", label: "By store" },
-                      { value: "alphabetical", label: "A-Z" },
-                      { value: "unchecked-first", label: "Unchecked first" },
-                    ] as const).map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
-                        className={classNames(
-                          "w-full px-4 py-2.5 text-left text-sm",
-                          sortMode === opt.value
-                            ? "text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/30"
-                            : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+              </div>
 
-            {/* Overflow menu */}
-            <div className="relative">
-              <button
-                onClick={() => setShowOverflow(!showOverflow)}
-                className="p-2 text-stone-500 dark:text-stone-400"
-              >
-                <EllipsisVertical className="w-5 h-5" />
-              </button>
-              {showOverflow && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowOverflow(false)} />
-                  <div className="absolute right-0 top-10 z-50 w-52 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
-                    {checkedCount > 0 && (
+              {/* Overflow menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowOverflow(!showOverflow)}
+                  className="p-2 text-stone-500 dark:text-stone-400"
+                >
+                  <EllipsisVertical className="w-5 h-5" />
+                </button>
+                {showOverflow && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowOverflow(false)} />
+                    <div className="absolute right-0 top-10 z-50 w-52 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                      {checkedCount > 0 && (
+                        <button
+                          onClick={() => { onClearChecked(); setShowOverflow(false); }}
+                          className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700 flex items-center gap-2"
+                        >
+                          <Check className="w-4 h-4 text-stone-400" />
+                          Clear checked ({checkedCount})
+                        </button>
+                      )}
+                      {uncategorizedCount > 0 && (
+                        <button
+                          onClick={() => { handleClassify(); setShowOverflow(false); }}
+                          disabled={isClassifying}
+                          className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700 flex items-center gap-2"
+                        >
+                          <Sparkles className="w-4 h-4 text-orange-500" />
+                          {isClassifying ? "Classifying..." : `Auto-classify (${uncategorizedCount})`}
+                        </button>
+                      )}
                       <button
-                        onClick={() => { onClearChecked(); setShowOverflow(false); }}
-                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700 flex items-center gap-2"
+                        onClick={() => {
+                          if (confirm("Clear entire shopping list?")) {
+                            onClearAll();
+                          }
+                          setShowOverflow(false);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-stone-700 flex items-center gap-2"
                       >
-                        <Check className="w-4 h-4 text-stone-400" />
-                        Clear checked ({checkedCount})
+                        <Trash className="w-4 h-4" />
+                        Clear all
                       </button>
-                    )}
-                    {uncategorizedCount > 0 && (
-                      <button
-                        onClick={() => { handleClassify(); setShowOverflow(false); }}
-                        disabled={isClassifying}
-                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700 flex items-center gap-2"
-                      >
-                        <Sparkles className="w-4 h-4 text-orange-500" />
-                        {isClassifying ? "Classifying..." : `Auto-classify (${uncategorizedCount})`}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (confirm("Clear entire shopping list?")) {
-                          onClearAll();
-                        }
-                        setShowOverflow(false);
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-stone-700 flex items-center gap-2"
-                    >
-                      <Trash className="w-4 h-4" />
-                      Clear all
-                    </button>
-                  </div>
-                </>
-              )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Store filter pills */}
-        {storeNames.length > 0 && (
-          <div className="flex gap-1.5 pb-2 overflow-x-auto no-scrollbar">
+        {/* Sub-tabs — inspired by recipe detail ingredients/steps tabs */}
+        <div className="flex border-b border-stone-200 dark:border-stone-700 -mx-4 px-4">
+          {([
+            { key: "list" as const, label: "List", count: totalCount },
+            { key: "sales" as const, label: "Sales", count: deals.length },
+            { key: "receipts" as const, label: "Receipts", count: receipts.length },
+          ]).map((tab) => (
             <button
-              onClick={() => setStoreFilter(null)}
+              key={tab.key}
+              onClick={() => setSubTab(tab.key)}
               className={classNames(
-                "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                !storeFilter
-                  ? "bg-orange-500 text-white border-orange-500"
-                  : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
+                subTab === tab.key
+                  ? "text-orange-600 dark:text-orange-400"
+                  : "text-stone-500 dark:text-stone-400"
               )}
             >
-              All
+              {tab.label}{tab.count > 0 ? ` (${tab.count})` : ""}
+              {subTab === tab.key && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
+              )}
             </button>
-            {storeNames.map((store) => (
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ LIST TAB ═══ */}
+      {subTab === "list" && (
+        <>
+          {/* Scan list camera card */}
+          {visionEnabled && (
+            <div className="px-4 pt-3">
               <button
-                key={store}
-                onClick={() => setStoreFilter(storeFilter === store ? null : store)}
+                onClick={() => setShowListScan(!showListScan)}
+                className="flex items-center gap-2 w-full"
+              >
+                <Camera className="w-4 h-4 text-stone-400 dark:text-stone-500" />
+                <span className="text-sm font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
+                  Scan a List
+                </span>
+                <ChevronDown
+                  className={classNames(
+                    "w-4 h-4 text-stone-400 ml-auto transition-transform",
+                    showListScan && "rotate-180"
+                  )}
+                />
+              </button>
+              {showListScan && (
+                <div className="mt-2 mb-1">
+                  <Card>
+                    <div className="flex items-center gap-3 p-1">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium dark:text-stone-200">
+                          Snap a handwritten list
+                        </p>
+                        <p className="text-xs text-stone-400 dark:text-stone-500">
+                          Take a photo of your grocery list to add items automatically
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleListScan}
+                        disabled={isListScanning}
+                        className={classNames(
+                          "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                          isListScanning ? "bg-stone-200 dark:bg-stone-700" : "bg-orange-500 hover:bg-orange-600 text-white"
+                        )}
+                      >
+                        {isListScanning ? (
+                          <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Camera className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
+                  </Card>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Store filter pills */}
+          {storeNames.length > 0 && (
+            <div className="flex gap-1.5 px-4 pt-2 pb-1 overflow-x-auto no-scrollbar">
+              <button
+                onClick={() => setStoreFilter(null)}
                 className={classNames(
                   "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                  storeFilter === store
+                  !storeFilter
                     ? "bg-orange-500 text-white border-orange-500"
                     : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
                 )}
               >
-                {store}
+                All
               </button>
-            ))}
-          </div>
-        )}
-
-        {/* Clear action pills */}
-        {totalCount > 0 && (
-          <div className="flex gap-1.5 pb-2">
-            {checkedCount > 0 && (
-              <button
-                onClick={onClearChecked}
-                className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 transition-colors"
-              >
-                Clear selected ({checkedCount})
-              </button>
-            )}
-            <button
-              onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
-              className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:border-stone-600 dark:hover:bg-stone-800 transition-colors"
-            >
-              Clear all
-            </button>
-          </div>
-        )}
-
-        {/* Quick add */}
-        <form onSubmit={handleAdd} className="flex gap-2 pb-3">
-          <input
-            type="text"
-            placeholder="+ Add item..."
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            className="flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-          />
-          <button
-            type="submit"
-            disabled={!newItem.trim()}
-            className="px-3 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
-          >
-            Add
-          </button>
-        </form>
-      </div>
-
-      {/* Best store recommendation */}
-      {bestStore && bestStore.matchCount >= 2 && (
-        <div className="px-4 py-2 bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800">
-          <div className="flex items-center gap-2">
-            <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                Best store: {bestStore.storeName}
-              </p>
-              <p className="text-xs text-green-600 dark:text-green-500">
-                {bestStore.matchCount} item{bestStore.matchCount !== 1 ? "s" : ""} on sale
-                {bestStore.estimatedSavings > 0 && ` · Save ~$${bestStore.estimatedSavings.toFixed(2)}`}
-              </p>
+              {storeNames.map((store) => (
+                <button
+                  key={store}
+                  onClick={() => setStoreFilter(storeFilter === store ? null : store)}
+                  className={classNames(
+                    "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                    storeFilter === store
+                      ? "bg-orange-500 text-white border-orange-500"
+                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                  )}
+                >
+                  {store}
+                </button>
+              ))}
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Deals Scanner */}
-      <DealsScanner visionEnabled={visionEnabled} chatEnabled={chatEnabled} />
+          {/* Clear action pills */}
+          {totalCount > 0 && (
+            <div className="flex gap-1.5 px-4 pt-1 pb-1">
+              {checkedCount > 0 && (
+                <button
+                  onClick={onClearChecked}
+                  className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-800 transition-colors"
+                >
+                  Clear selected ({checkedCount})
+                </button>
+              )}
+              <button
+                onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
+                className="inline-flex items-center rounded-full border border-stone-300 px-2.5 py-0.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:border-stone-600 dark:hover:bg-stone-800 transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
 
-      {/* Spending summary */}
-      {currentWeekSpending && currentWeekSpending.total > 0 && (
-        <div className="px-4 py-2 border-b border-stone-200 dark:border-stone-800">
-          <button
-            onClick={() => setShowSpendingDetail(!showSpendingDetail)}
-            className="w-full flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold dark:text-stone-200">
-                This week: ${currentWeekSpending.total.toFixed(2)}
-              </span>
-              {spendingTrend && spendingTrend.direction !== "flat" && (
-                <span className={classNames(
-                  "text-xs font-medium",
-                  spendingTrend.direction === "down" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
-                )}>
-                  {spendingTrend.direction === "up" ? "\u2191" : "\u2193"} ${spendingTrend.amount.toFixed(2)}
-                </span>
+          {/* Quick add */}
+          <form onSubmit={handleAdd} className="flex gap-2 px-4 pt-1 pb-3">
+            <input
+              type="text"
+              placeholder="+ Add item..."
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              className="flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+            />
+            <button
+              type="submit"
+              disabled={!newItem.trim()}
+              className="px-3 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
+            >
+              Add
+            </button>
+          </form>
+
+          {/* Best store recommendation */}
+          {bestStore && bestStore.matchCount >= 2 && (
+            <div className="px-4 py-2 bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                    Best store: {bestStore.storeName}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-500">
+                    {bestStore.matchCount} item{bestStore.matchCount !== 1 ? "s" : ""} on sale
+                    {bestStore.estimatedSavings > 0 && ` · Save ~$${bestStore.estimatedSavings.toFixed(2)}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Scan error banner */}
+          {scanError && (
+            <div className="px-4 py-2 bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
+              <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>
+              {onClearScanError && (
+                <button onClick={onClearScanError} className="text-red-400 hover:text-red-600">
+                  <XMark className="w-4 h-4" />
+                </button>
               )}
             </div>
-            <span className="text-xs text-stone-400 dark:text-stone-500">
-              {showSpendingDetail ? "Hide" : "Details"}
-            </span>
-          </button>
-          {showSpendingDetail && (
-            <div className="mt-2 space-y-1.5">
-              {Object.entries(currentWeekSpending.byStore).length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase text-stone-400 dark:text-stone-500 mb-1">By Store</p>
-                  {Object.entries(currentWeekSpending.byStore).map(([store, amount]) => (
-                    <div key={store} className="flex justify-between text-xs dark:text-stone-300">
-                      <span>{store}</span>
-                      <span>${amount.toFixed(2)}</span>
+          )}
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
+            {totalCount === 0 ? (
+              <EmptyState
+                icon={<ShoppingCart className="w-12 h-12" />}
+                title={storeFilter ? `No items for ${storeFilter}` : "List is empty"}
+                description={storeFilter ? "Clear the filter to see all items" : "Add items above or from a recipe"}
+              />
+            ) : sortMode === "by-store" && storeGrouped ? (
+              <div className="space-y-4">
+                {storeGrouped.map(([store, items]) => {
+                  const sorted = [...items].sort((a, b) => {
+                    if (a.checked !== b.checked) return a.checked ? 1 : -1;
+                    return a.name.localeCompare(b.name);
+                  });
+                  const storeChecked = items.filter((i) => i.checked).length;
+                  return (
+                    <section key={store}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50 flex items-center gap-1.5">
+                          {store}
+                          <span className="font-normal text-stone-300 dark:text-stone-600">
+                            ({items.length})
+                          </span>
+                        </h3>
+                        {storeChecked > 0 && storeChecked < items.length && (
+                          <span className="text-[10px] text-stone-400 dark:text-stone-500">
+                            {storeChecked}/{items.length}
+                          </span>
+                        )}
+                      </div>
+                      <ul className="space-y-1">
+                        {sorted.map(renderItem)}
+                      </ul>
+                    </section>
+                  );
+                })}
+                <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
+                  {totalCount} item{totalCount !== 1 ? "s" : ""}
+                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
+                </div>
+              </div>
+            ) : sortMode === "alphabetical" && sortedFlat ? (
+              <div>
+                <ul className="space-y-1">
+                  {sortedFlat.map(renderItem)}
+                </ul>
+                <div className="border-t border-stone-200 dark:border-stone-800 pt-3 mt-4 text-sm text-stone-400 dark:text-stone-500 text-center">
+                  {totalCount} item{totalCount !== 1 ? "s" : ""}
+                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {CATEGORY_ORDER.map((cat) => {
+                  const items = grouped.get(cat) ?? [];
+                  if (items.length === 0) return null;
+
+                  const sorted = [...items].sort((a, b) => {
+                    if (a.checked !== b.checked) return a.checked ? 1 : -1;
+                    if (sortMode === "unchecked-first") return 0;
+                    return a.name.localeCompare(b.name);
+                  });
+
+                  const catChecked = items.filter((i) => i.checked).length;
+
+                  return (
+                    <section key={cat}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50 flex items-center gap-1.5">
+                          <span>{CATEGORY_EMOJI[cat]}</span>
+                          {CATEGORY_LABELS[cat]}
+                          <span className="font-normal text-stone-300 dark:text-stone-600">
+                            ({items.length})
+                          </span>
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          {catChecked > 0 && catChecked < items.length && (
+                            <span className="text-[10px] text-stone-400 dark:text-stone-500">
+                              {catChecked}/{items.length}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => onClearCategory(cat)}
+                            className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
+                            title={`Clear all ${CATEGORY_LABELS[cat]}`}
+                          >
+                            clear category
+                          </button>
+                        </div>
+                      </div>
+                      <ul className="space-y-1">
+                        {sorted.map(renderItem)}
+                      </ul>
+                    </section>
+                  );
+                })}
+
+                <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
+                  {totalCount} item{totalCount !== 1 ? "s" : ""}
+                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
+                  {storeFilter && ` \u00B7 filtered by ${storeFilter}`}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ═══ SALES TAB ═══ */}
+      {subTab === "sales" && (
+        <div className="flex-1 overflow-y-auto pb-24">
+          {/* Scan ad card */}
+          <div className="px-4 pt-3">
+            <Card>
+              <div className="p-1">
+                <p className="text-sm font-medium dark:text-stone-200 mb-2">
+                  Scan a Store Ad
+                </p>
+                {!visionEnabled && !chatEnabled ? (
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Add an AI provider in Settings to scan deals
+                  </p>
+                ) : (
+                  <>
+                    {/* URL input + camera */}
+                    <div className="flex gap-2 mb-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="url"
+                          value={dealUrl}
+                          onChange={(e) => {
+                            setDealUrl(e.target.value);
+                            if (e.target.value.trim()) setFlyerPreview(null);
+                          }}
+                          placeholder="Paste store ad URL..."
+                          className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+                        />
+                      </div>
+                      <button
+                        onClick={() => flyerInputRef.current?.click()}
+                        className="shrink-0 rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 p-2 text-stone-500 dark:text-stone-400 hover:border-orange-400"
+                        title="Upload screenshot or photo of ad"
+                      >
+                        <Camera className="w-5 h-5" />
+                      </button>
                     </div>
+                    <input
+                      ref={flyerInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFlyerSelect}
+                      className="hidden"
+                    />
+
+                    {/* Photo preview */}
+                    {flyerPreview && (
+                      <div className="rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
+                        <img src={flyerPreview} alt="Flyer preview" className="w-full max-h-48 object-cover" />
+                      </div>
+                    )}
+
+                    {/* Scan button */}
+                    {hasScannedDealInput && (
+                      <Button
+                        fullWidth
+                        onClick={handleScanDeals}
+                        disabled={isScanningDeals}
+                      >
+                        {isScanningDeals
+                          ? "Scanning deals..."
+                          : scannedPageCount > 0
+                            ? `Scan Page ${scannedPageCount + 1}`
+                            : "Extract Deals"}
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                {/* Scanned deals result */}
+                {(scannedDeals.length > 0 || scannedDealsMessage) && (
+                  <div className="mt-3 space-y-2">
+                    {scannedDealsMeta?.storeName && (
+                      <p className="text-sm font-semibold dark:text-stone-200">
+                        {scannedDealsMeta.storeName}
+                        {scannedDealsMeta.validDates && (
+                          <span className="ml-2 text-xs font-normal text-stone-400">
+                            {scannedDealsMeta.validDates}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    {scannedPageCount > 1 && (
+                      <p className="text-xs text-stone-400 dark:text-stone-500">
+                        {scannedDeals.length} deals from {scannedPageCount} pages
+                      </p>
+                    )}
+                    {scannedDealsMessage && scannedDeals.length === 0 && (
+                      <p className="text-sm text-stone-500 dark:text-stone-400">{scannedDealsMessage}</p>
+                    )}
+                    {scannedDeals.length > 0 && (
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {scannedDeals.map((deal, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-stone-50 dark:bg-stone-900"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium dark:text-stone-200 truncate">
+                                {deal.item}
+                              </p>
+                              {deal.notes && (
+                                <p className="text-[10px] text-stone-400 truncate">{deal.notes}</p>
+                              )}
+                            </div>
+                            <div className="text-right ml-2 shrink-0">
+                              <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
+                                {deal.price}
+                              </p>
+                              {deal.originalPrice && (
+                                <p className="text-[10px] line-through text-stone-400">{deal.originalPrice}</p>
+                              )}
+                              {deal.unit && (
+                                <p className="text-[10px] text-stone-400">{deal.unit}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {scannedDeals.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        fullWidth
+                        onClick={handleResetScannedDeals}
+                      >
+                        Start Over
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Saved deals list */}
+          {deals.length > 0 && (
+            <div className="px-4 mt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+                Active Deals ({filteredDeals.length})
+              </h3>
+
+              {/* Filter pills */}
+              {(dealStoreNames.length > 1 || dealCategories.length > 1) && (
+                <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
+                  {/* Store filters */}
+                  {dealStoreNames.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => setDealStoreFilter(null)}
+                        className={classNames(
+                          "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                          !dealStoreFilter
+                            ? "bg-orange-500 text-white border-orange-500"
+                            : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                        )}
+                      >
+                        All Stores
+                      </button>
+                      {dealStoreNames.map((store) => (
+                        <button
+                          key={store}
+                          onClick={() => setDealStoreFilter(dealStoreFilter === store ? null : store)}
+                          className={classNames(
+                            "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                            dealStoreFilter === store
+                              ? "bg-orange-500 text-white border-orange-500"
+                              : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                          )}
+                        >
+                          {store}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Category filters */}
+              {dealCategories.length > 1 && (
+                <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
+                  <button
+                    onClick={() => setDealCategoryFilter(null)}
+                    className={classNames(
+                      "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                      !dealCategoryFilter
+                        ? "bg-green-500 text-white border-green-500"
+                        : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                    )}
+                  >
+                    All Categories
+                  </button>
+                  {dealCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setDealCategoryFilter(dealCategoryFilter === cat ? null : cat)}
+                      className={classNames(
+                        "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
+                        dealCategoryFilter === cat
+                          ? "bg-green-500 text-white border-green-500"
+                          : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                      )}
+                    >
+                      {CATEGORY_LABELS[cat as ShoppingCategory] ?? cat}
+                    </button>
                   ))}
                 </div>
               )}
-              <p className="text-[10px] text-stone-400 dark:text-stone-500">
-                {currentWeekSpending.itemCount} receipt{currentWeekSpending.itemCount !== 1 ? "s" : ""} this week
-                {spendingTrend && spendingTrend.direction !== "flat" && (
-                  <> &middot; {spendingTrend.direction === "up" ? "up" : "down"} ${spendingTrend.amount.toFixed(2)} vs last week</>
-                )}
-              </p>
+
+              {/* Deal items */}
+              <div className="space-y-1.5">
+                {filteredDeals.map((deal) => (
+                  <div
+                    key={deal.id}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 dark:bg-stone-900"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium dark:text-stone-200 truncate">
+                        {deal.item}
+                      </p>
+                      <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                        {deal.storeName}
+                        {deal.notes && ` · ${deal.notes}`}
+                        {deal.validTo && ` · Expires ${deal.validTo}`}
+                      </p>
+                    </div>
+                    <div className="text-right ml-2 shrink-0">
+                      <p className="text-sm font-bold text-green-600 dark:text-green-400">
+                        ${deal.price.toFixed(2)}
+                      </p>
+                      {deal.originalPrice != null && (
+                        <p className="text-[10px] line-through text-stone-400">
+                          ${deal.originalPrice.toFixed(2)}
+                        </p>
+                      )}
+                      {deal.unit && (
+                        <p className="text-[10px] text-stone-400">{deal.unit}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {deals.length === 0 && scannedDeals.length === 0 && (
+            <div className="px-4 mt-8">
+              <EmptyState
+                icon={<Tag className="w-12 h-12" />}
+                title="No deals yet"
+                description="Scan a store ad above or paste a URL to extract deals"
+              />
             </div>
           )}
         </div>
       )}
 
-      {/* Scan error banner */}
-      {scanError && (
-        <div className="px-4 py-2 bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
-          <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>
-          {onClearScanError && (
-            <button onClick={onClearScanError} className="text-red-400 hover:text-red-600">
-              <XMark className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Receipt scan result preview */}
-      {lastScannedReceipt && (
-        <div className="px-4 py-3 bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-green-700 dark:text-green-400">
-              Receipt Scanned{lastScannedReceipt.store ? ` — ${lastScannedReceipt.store}` : ""}
-            </p>
-            {onClearLastScanned && (
-              <button onClick={onClearLastScanned} className="text-green-400 hover:text-green-600">
-                <XMark className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-green-600 dark:text-green-500">
-            {lastScannedReceipt.items.length} item{lastScannedReceipt.items.length !== 1 ? "s" : ""}
-            {lastScannedReceipt.total ? ` · Total: $${lastScannedReceipt.total.toFixed(2)}` : ""}
-          </p>
-          <div className="mt-2 max-h-32 overflow-y-auto space-y-0.5">
-            {lastScannedReceipt.items.map((item, i) => (
-              <div key={i} className="flex justify-between text-xs dark:text-stone-300">
-                <span className="truncate flex-1">{item.name}</span>
-                <span className="ml-2 text-stone-500">${item.price.toFixed(2)}</span>
+      {/* ═══ RECEIPTS TAB ═══ */}
+      {subTab === "receipts" && (
+        <div className="flex-1 overflow-y-auto pb-24">
+          {/* Receipt scan card */}
+          <div className="px-4 pt-3">
+            <Card>
+              <div className="flex items-center gap-3 p-1">
+                <div className="flex-1">
+                  <p className="text-sm font-medium dark:text-stone-200">
+                    Scan a Receipt
+                  </p>
+                  <p className="text-xs text-stone-400 dark:text-stone-500">
+                    Photo a receipt to track spending
+                  </p>
+                </div>
+                <button
+                  onClick={handleReceiptScan}
+                  disabled={isScanning || !visionEnabled}
+                  className={classNames(
+                    "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                    isScanning
+                      ? "bg-stone-200 dark:bg-stone-700"
+                      : !visionEnabled
+                        ? "bg-stone-200 dark:bg-stone-700 text-stone-400"
+                        : "bg-orange-500 hover:bg-orange-600 text-white"
+                  )}
+                  title={!visionEnabled ? "Enable a vision AI provider in Settings" : "Scan receipt"}
+                >
+                  {isScanning ? (
+                    <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5" />
+                  )}
+                </button>
               </div>
-            ))}
+            </Card>
           </div>
-        </div>
-      )}
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
-        {totalCount === 0 ? (
-          <EmptyState
-            icon={<ShoppingCart className="w-12 h-12" />}
-            title={storeFilter ? `No items for ${storeFilter}` : "List is empty"}
-            description={storeFilter ? "Clear the filter to see all items" : "Add items above or from a recipe"}
-          />
-        ) : sortMode === "by-store" && storeGrouped ? (
-          /* Store-grouped list */
-          <div className="space-y-4">
-            {storeGrouped.map(([store, items]) => {
-              const sorted = [...items].sort((a, b) => {
-                if (a.checked !== b.checked) return a.checked ? 1 : -1;
-                return a.name.localeCompare(b.name);
-              });
-              const storeChecked = items.filter((i) => i.checked).length;
-              return (
-                <section key={store}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50 flex items-center gap-1.5">
-                      {store}
-                      <span className="font-normal text-stone-300 dark:text-stone-600">
-                        ({items.length})
-                      </span>
-                    </h3>
-                    {storeChecked > 0 && storeChecked < items.length && (
-                      <span className="text-[10px] text-stone-400 dark:text-stone-500">
-                        {storeChecked}/{items.length}
+          {/* Scan error */}
+          {scanError && (
+            <div className="mx-4 mt-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800 flex items-center justify-between">
+              <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>
+              {onClearScanError && (
+                <button onClick={onClearScanError} className="text-red-400 hover:text-red-600">
+                  <XMark className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Last scanned receipt */}
+          {lastScannedReceipt && (
+            <div className="mx-4 mt-2 px-3 py-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                  Receipt Scanned{lastScannedReceipt.store ? ` — ${lastScannedReceipt.store}` : ""}
+                </p>
+                {onClearLastScanned && (
+                  <button onClick={onClearLastScanned} className="text-green-400 hover:text-green-600">
+                    <XMark className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-green-600 dark:text-green-500">
+                {lastScannedReceipt.items.length} item{lastScannedReceipt.items.length !== 1 ? "s" : ""}
+                {lastScannedReceipt.total ? ` · Total: $${lastScannedReceipt.total.toFixed(2)}` : ""}
+              </p>
+              <div className="mt-2 max-h-32 overflow-y-auto space-y-0.5">
+                {lastScannedReceipt.items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-xs dark:text-stone-300">
+                    <span className="truncate flex-1">{item.name}</span>
+                    <span className="ml-2 text-stone-500">${item.price.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Spending summary */}
+          {currentWeekSpending && currentWeekSpending.total > 0 && (
+            <div className="mx-4 mt-3">
+              <Card>
+                <button
+                  onClick={() => setShowSpendingDetail(!showSpendingDetail)}
+                  className="w-full flex items-center justify-between p-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold dark:text-stone-200">
+                      This week: ${currentWeekSpending.total.toFixed(2)}
+                    </span>
+                    {spendingTrend && spendingTrend.direction !== "flat" && (
+                      <span className={classNames(
+                        "text-xs font-medium",
+                        spendingTrend.direction === "down" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
+                      )}>
+                        {spendingTrend.direction === "up" ? "\u2191" : "\u2193"} ${spendingTrend.amount.toFixed(2)}
                       </span>
                     )}
                   </div>
-                  <ul className="space-y-1">
-                    {sorted.map(renderItem)}
-                  </ul>
-                </section>
-              );
-            })}
-            <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
-              {totalCount} item{totalCount !== 1 ? "s" : ""}
-              {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
-            </div>
-          </div>
-        ) : sortMode === "alphabetical" && sortedFlat ? (
-          /* Alphabetical flat list */
-          <div>
-            <ul className="space-y-1">
-              {sortedFlat.map(renderItem)}
-            </ul>
-            <div className="border-t border-stone-200 dark:border-stone-800 pt-3 mt-4 text-sm text-stone-400 dark:text-stone-500 text-center">
-              {totalCount} item{totalCount !== 1 ? "s" : ""}
-              {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
-            </div>
-          </div>
-        ) : (
-          /* Department grouped list */
-          <div className="space-y-4">
-            {CATEGORY_ORDER.map((cat) => {
-              const items = grouped.get(cat) ?? [];
-              if (items.length === 0) return null;
-
-              // Sort within category
-              const sorted = [...items].sort((a, b) => {
-                if (a.checked !== b.checked) return a.checked ? 1 : -1;
-                if (sortMode === "unchecked-first") return 0;
-                return a.name.localeCompare(b.name);
-              });
-
-              const catChecked = items.filter((i) => i.checked).length;
-
-              return (
-                <section key={cat}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50 flex items-center gap-1.5">
-                      <span>{CATEGORY_EMOJI[cat]}</span>
-                      {CATEGORY_LABELS[cat]}
-                      <span className="font-normal text-stone-300 dark:text-stone-600">
-                        ({items.length})
-                      </span>
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      {catChecked > 0 && catChecked < items.length && (
-                        <span className="text-[10px] text-stone-400 dark:text-stone-500">
-                          {catChecked}/{items.length}
-                        </span>
+                  <span className="text-xs text-stone-400 dark:text-stone-500">
+                    {showSpendingDetail ? "Hide" : "Details"}
+                  </span>
+                </button>
+                {showSpendingDetail && (
+                  <div className="mt-2 space-y-1.5 px-1 pb-1">
+                    {Object.entries(currentWeekSpending.byStore).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase text-stone-400 dark:text-stone-500 mb-1">By Store</p>
+                        {Object.entries(currentWeekSpending.byStore).map(([store, amount]) => (
+                          <div key={store} className="flex justify-between text-xs dark:text-stone-300">
+                            <span>{store}</span>
+                            <span>${amount.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                      {currentWeekSpending.itemCount} receipt{currentWeekSpending.itemCount !== 1 ? "s" : ""} this week
+                      {spendingTrend && spendingTrend.direction !== "flat" && (
+                        <> &middot; {spendingTrend.direction === "up" ? "up" : "down"} ${spendingTrend.amount.toFixed(2)} vs last week</>
                       )}
-                      <button
-                        onClick={() => onClearCategory(cat)}
-                        className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
-                        title={`Clear all ${CATEGORY_LABELS[cat]}`}
-                      >
-                        clear category
-                      </button>
-                    </div>
+                    </p>
                   </div>
-                  <ul className="space-y-1">
-                    {sorted.map(renderItem)}
-                  </ul>
-                </section>
-              );
-            })}
-
-            {/* Summary */}
-            <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
-              {totalCount} item{totalCount !== 1 ? "s" : ""}
-              {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
-              {storeFilter && ` \u00B7 filtered by ${storeFilter}`}
+                )}
+              </Card>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Camera FAB with scan mode toggle */}
-      {visionEnabled && (
-        <div className="no-print fixed bottom-20 right-4 z-30 flex flex-col items-end gap-2" style={{ marginBottom: "var(--sab)" }}>
-          {/* Mode toggle pills */}
-          <div className="flex rounded-full bg-stone-800/90 dark:bg-stone-700/90 p-0.5 shadow-lg">
-            <button
-              onClick={() => setScanMode("list")}
-              className={classNames(
-                "px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                scanMode === "list"
-                  ? "bg-orange-500 text-white"
-                  : "text-stone-300 hover:text-white"
-              )}
-            >
-              List
-            </button>
-            <button
-              onClick={() => setScanMode("receipt")}
-              className={classNames(
-                "px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                scanMode === "receipt"
-                  ? "bg-orange-500 text-white"
-                  : "text-stone-300 hover:text-white"
-              )}
-            >
-              Receipt
-            </button>
-          </div>
-          {/* FAB */}
-          <button
-            onClick={() => {
-              const input = document.createElement("input");
-              input.type = "file";
-              input.accept = "image/*";
-              input.capture = "environment";
-              input.onchange = async () => {
-                const file = input.files?.[0];
-                if (!file) return;
-                if (scanMode === "receipt" && onScanReceipt) {
-                  await onScanReceipt(file);
-                } else {
-                  // Shopping list scan — use existing /api/shopping/scan
-                  const formData = new FormData();
-                  formData.append("photo", file);
-                  const token = localStorage.getItem("whisk_token");
-                  try {
-                    const res = await fetch("/api/shopping/scan", {
-                      method: "POST",
-                      headers: token ? { Authorization: `Bearer ${token}` } : {},
-                      body: formData,
-                    });
-                    if (res.ok) {
-                      const data = (await res.json()) as { items?: { name: string }[] };
-                      if (data.items) {
-                        for (const item of data.items) {
-                          if (item.name) onAddItem(item.name);
-                        }
-                      }
-                    }
-                  } catch {
-                    // Silently fail — user can retry
-                  }
-                }
-              };
-              input.click();
-            }}
-            disabled={isScanning}
-            className={classNames(
-              "w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center transition-colors",
-              isScanning ? "bg-stone-400" : "bg-orange-500 hover:bg-orange-600"
-            )}
-            title={scanMode === "receipt" ? "Scan receipt" : "Scan shopping list"}
-          >
-            {isScanning ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Camera className="w-6 h-6" />
-            )}
-          </button>
+          {/* Receipt history */}
+          {receipts.length > 0 && (
+            <div className="px-4 mt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+                Receipt History
+              </h3>
+              <div className="space-y-1.5">
+                {receipts.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 dark:bg-stone-900"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium dark:text-stone-200 truncate">
+                        {r.store ?? "Unknown Store"}
+                      </p>
+                      <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                        {new Date(r.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                    {r.total != null && (
+                      <p className="text-sm font-semibold dark:text-stone-200 ml-2">
+                        ${r.total.toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {receipts.length === 0 && !lastScannedReceipt && (!currentWeekSpending || currentWeekSpending.total === 0) && (
+            <div className="px-4 mt-8">
+              <EmptyState
+                icon={<ShoppingCart className="w-12 h-12" />}
+                title="No receipts yet"
+                description="Scan a receipt to start tracking your spending"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
