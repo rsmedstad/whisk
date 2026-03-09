@@ -41,6 +41,8 @@ interface ShoppingListProps {
   bestStore?: { storeId: string; storeName: string; matchCount: number; estimatedSavings: number } | null;
   deals?: Deal[];
   stores?: Store[];
+  isRefreshingDeals?: boolean;
+  onRefreshDeals?: () => void;
   receipts?: { id: string; date: string; store?: string; total?: number }[];
 }
 
@@ -70,6 +72,8 @@ export function ShoppingList({
   bestStore,
   deals = [],
   stores = [],
+  isRefreshingDeals = false,
+  onRefreshDeals,
   receipts = [],
 }: ShoppingListProps) {
   const navigate = useNavigate();
@@ -274,6 +278,20 @@ export function ShoppingList({
     }
     return result;
   }, [deals, dealCategoryFilter, dealStoreFilter]);
+
+  // Items on the shopping list that have deal matches, grouped by item
+  const listDealMatches = useMemo(() => {
+    if (!dealMatches || dealMatches.size === 0) return [];
+    const unchecked = list.items.filter((i) => !i.checked);
+    const results: { item: ShoppingItem; deals: Deal[] }[] = [];
+    for (const item of unchecked) {
+      const matched = dealMatches.get(item.id);
+      if (matched && matched.length > 0) {
+        results.push({ item, deals: matched });
+      }
+    }
+    return results;
+  }, [list.items, dealMatches]);
 
   const checkedCount = filteredItems.filter((i) => i.checked).length;
   const totalCount = filteredItems.length;
@@ -972,6 +990,88 @@ export function ShoppingList({
       {/* ═══ SALES TAB ═══ */}
       {subTab === "sales" && (
         <div className="flex-1 overflow-y-auto pb-24">
+          {/* Deals matching your list */}
+          {listDealMatches.length > 0 && (
+            <div className="px-4 pt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
+                  Deals on your list
+                </span>
+                <span className="ml-auto text-xs text-stone-400 dark:text-stone-500">
+                  {listDealMatches.length} item{listDealMatches.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {listDealMatches.map(({ item, deals: matched }) => (
+                  <Card key={item.id}>
+                    <div className="p-1">
+                      <p className="text-sm font-medium dark:text-stone-200">
+                        {item.name}
+                      </p>
+                      <div className="mt-1 space-y-0.5">
+                        {matched.slice(0, 3).map((deal, i) => (
+                          <div key={deal.id} className="flex items-center justify-between text-xs">
+                            <span className={classNames(
+                              "text-stone-500 dark:text-stone-400",
+                              i === 0 && "font-medium text-green-700 dark:text-green-400"
+                            )}>
+                              {deal.storeName}
+                              {i === 0 && matched.length > 1 && (
+                                <span className="ml-1 text-[10px] text-green-600 dark:text-green-400 font-normal">
+                                  Best price
+                                </span>
+                              )}
+                            </span>
+                            <div className="text-right">
+                              <span className={classNames(
+                                "font-bold",
+                                i === 0 ? "text-green-600 dark:text-green-400" : "text-stone-600 dark:text-stone-300"
+                              )}>
+                                ${deal.price.toFixed(2)}
+                              </span>
+                              {deal.unit && (
+                                <span className="text-[10px] text-stone-400 ml-1">{deal.unit}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {matched[0]?.notes && (
+                          <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                            {matched[0].notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Best store banner */}
+          {bestStore && bestStore.matchCount >= 2 && (
+            <div className="px-4 mt-3">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <Tag className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                <p className="text-xs text-green-800 dark:text-green-300">
+                  <span className="font-semibold">{bestStore.storeName}</span> has the most deals matching your list ({bestStore.matchCount} items)
+                  {bestStore.estimatedSavings > 0 && (
+                    <span> &middot; ~${bestStore.estimatedSavings.toFixed(2)} in savings</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Refreshing indicator */}
+          {isRefreshingDeals && (
+            <div className="px-4 mt-2 flex items-center gap-2">
+              <span className="w-3 h-3 border-2 border-stone-300 border-t-orange-500 rounded-full animate-spin" />
+              <span className="text-xs text-stone-400 dark:text-stone-500">Updating deals...</span>
+            </div>
+          )}
+
           {/* Scan ad — collapsible */}
           <div className="px-4 pt-3">
             <button
@@ -1228,7 +1328,7 @@ export function ShoppingList({
               <EmptyState
                 icon={<Tag className="w-12 h-12" />}
                 title="No deals yet"
-                description="Scan a store ad above or paste a URL to extract deals"
+                description="Enable Weekly Deals in Settings to auto-fetch, or scan a store ad above"
               />
             </div>
           )}

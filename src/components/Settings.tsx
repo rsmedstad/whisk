@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
+import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry, FlippStore } from "../types";
 import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
@@ -105,6 +105,33 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
       return raw ? (JSON.parse(raw) as string[]) : [];
     } catch { return []; }
   });
+  const [dealsEnabled, setDealsEnabled] = useState(
+    () => localStorage.getItem("whisk_deals_enabled") === "true"
+  );
+  const [flippStores, setFlippStores] = useState<FlippStore[]>([]);
+  const [isLoadingStores, setIsLoadingStores] = useState(false);
+
+  // Fetch available Flipp stores when deals are enabled and zip is set
+  const fetchFlippStores = useCallback(async (zip: string) => {
+    if (!zip.trim()) return;
+    setIsLoadingStores(true);
+    try {
+      const data = await api.get<{ stores: FlippStore[] }>(`/deals/flipp?zip=${encodeURIComponent(zip.trim())}`);
+      if (data?.stores) {
+        setFlippStores(data.stores);
+      }
+    } catch {
+      // Silently fail — hardcoded fallback remains
+    } finally {
+      setIsLoadingStores(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (dealsEnabled && zipCode.trim()) {
+      fetchFlippStores(zipCode);
+    }
+  }, [dealsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showAccentPicker, setShowAccentPicker] = useState(false);
 
@@ -223,8 +250,12 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     setZipCode(zip);
     if (zip.trim()) {
       localStorage.setItem("whisk_zip_code", zip.trim());
+      if (dealsEnabled && zip.trim().length >= 5) {
+        fetchFlippStores(zip.trim());
+      }
     } else {
       localStorage.removeItem("whisk_zip_code");
+      setFlippStores([]);
     }
   };
 
@@ -768,7 +799,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       inputMode="numeric"
                     />
                     <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
-                      Used locally for seasonal suggestions. Not shared.
+                      Used for seasonal suggestions{dealsEnabled ? " and weekly deals" : ""}. Not shared.
                     </p>
                   </div>
                   <div>
@@ -838,7 +869,48 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       setPreferredStores(updated);
                       localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
                     }}
+                    flippStores={dealsEnabled ? flippStores : []}
+                    isLoadingStores={isLoadingStores}
                   />
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium dark:text-stone-200">
+                          Weekly Deals
+                        </label>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                          Auto-fetch grocery deals for your area
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const next = !dealsEnabled;
+                          setDealsEnabled(next);
+                          localStorage.setItem("whisk_deals_enabled", String(next));
+                          if (next && zipCode.trim().length >= 5) {
+                            fetchFlippStores(zipCode.trim());
+                          }
+                        }}
+                        className={classNames(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                          dealsEnabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                        )}
+                      >
+                        <span
+                          className={classNames(
+                            "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
+                            dealsEnabled ? "translate-x-5" : "translate-x-0"
+                          )}
+                        />
+                      </button>
+                    </div>
+                    {dealsEnabled && !zipCode.trim() && (
+                      <p className="text-xs text-orange-500 mt-1">
+                        Enter a zip code above to enable deal fetching
+                      </p>
+                    )}
+                  </div>
                 </div>
               </Card>
             </section>
@@ -1580,9 +1652,19 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   );
 }
 
-const STORE_OPTIONS = ["Jewel", "Trader Joe's", "Walmart", "Whole Foods", "Costco", "Aldi", "Target", "Other"];
+const STORE_OPTIONS_FALLBACK = ["Jewel-Osco", "Trader Joe's", "Walmart", "Whole Foods", "Costco", "Aldi", "Target", "Meijer", "Kroger", "Mariano's"];
 
-function PreferredStoresDropdown({ stores, onChange }: { stores: string[]; onChange: (stores: string[]) => void }) {
+function PreferredStoresDropdown({
+  stores,
+  onChange,
+  flippStores = [],
+  isLoadingStores = false,
+}: {
+  stores: string[];
+  onChange: (stores: string[]) => void;
+  flippStores?: FlippStore[];
+  isLoadingStores?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   const toggle = (store: string) => {
@@ -1591,6 +1673,14 @@ function PreferredStoresDropdown({ stores, onChange }: { stores: string[]; onCha
       : [...stores, store];
     onChange(updated);
   };
+
+  // Use Flipp stores if available, otherwise fall back to hardcoded list
+  const storeOptions = flippStores.length > 0
+    ? flippStores.map((s) => s.name)
+    : STORE_OPTIONS_FALLBACK;
+
+  // Also include any existing preferred stores not in the current options
+  const allOptions = [...new Set([...storeOptions, ...stores])];
 
   return (
     <div>
@@ -1602,17 +1692,28 @@ function PreferredStoresDropdown({ stores, onChange }: { stores: string[]; onCha
           onClick={() => setOpen(!open)}
           className="w-full flex items-center justify-between rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
         >
-          <span className={stores.length === 0 ? "text-stone-400 dark:text-stone-500" : ""}>
+          <span className={classNames("truncate", stores.length === 0 ? "text-stone-400 dark:text-stone-500" : "")}>
             {stores.length === 0 ? "Select stores..." : stores.join(", ")}
           </span>
-          <ChevronDown className={classNames("w-4 h-4 text-stone-400 transition-transform", open && "rotate-180")} />
+          <div className="flex items-center gap-1 ml-1 shrink-0">
+            {isLoadingStores && (
+              <span className="w-3 h-3 border-2 border-stone-300 border-t-orange-500 rounded-full animate-spin" />
+            )}
+            <ChevronDown className={classNames("w-4 h-4 text-stone-400 transition-transform", open && "rotate-180")} />
+          </div>
         </button>
         {open && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
             <div className="absolute z-20 mt-1 w-full rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1 max-h-60 overflow-y-auto">
-              {STORE_OPTIONS.map((store) => {
+              {flippStores.length > 0 && (
+                <p className="px-3 py-1 text-[10px] text-stone-400 dark:text-stone-500 uppercase tracking-wide">
+                  Stores in your area
+                </p>
+              )}
+              {allOptions.map((store) => {
                 const checked = stores.includes(store);
+                const isFlippStore = flippStores.some((f) => f.name === store);
                 return (
                   <button
                     key={store}
@@ -1627,7 +1728,10 @@ function PreferredStoresDropdown({ stores, onChange }: { stores: string[]; onCha
                     )}>
                       {checked && <Check className="w-3 h-3" />}
                     </span>
-                    <span className="dark:text-stone-200">{store}</span>
+                    <span className="dark:text-stone-200 flex-1">{store}</span>
+                    {isFlippStore && (
+                      <span className="text-[10px] text-green-600 dark:text-green-400">Deals</span>
+                    )}
                   </button>
                 );
               })}

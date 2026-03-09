@@ -9,17 +9,40 @@ function normalize(name: string): string {
     .trim();
 }
 
+/** Strip size/weight qualifiers (e.g., "16oz", "1 lb", "2-Pack"). */
+function stripQualifiers(name: string): string {
+  return name
+    .replace(/\b\d+(\.\d+)?\s*(oz|lb|lbs|ct|pk|pack|count|fl|gal|qt|pt|ml|l|kg|g)\b/gi, "")
+    .replace(/\b\d+\s*-?\s*(pack|count|ct)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Split Flipp deal names on "or" alternatives (e.g., "Strawberries 1 lb., or Cantaloupe"). */
+function splitAlternatives(dealName: string): string[] {
+  const parts = dealName.split(/,?\s+or\s+/i).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : [dealName];
+}
+
 /** Simple stem: strip common suffixes. */
 function stem(word: string): string {
   return word
-    .replace(/(es|s|ed|ing)$/, "")
-    .replace(/ies$/, "y");
+    .replace(/ies$/, "y")
+    .replace(/(es|s|ed|ing)$/, "");
 }
 
 /** Check if two normalized names are a fuzzy match. */
 function fuzzyMatch(itemName: string, dealName: string): boolean {
-  const a = normalize(itemName);
-  const b = normalize(dealName);
+  // Try each alternative in the deal name (Flipp often lists "X or Y")
+  const alternatives = splitAlternatives(dealName);
+  return alternatives.some((alt) => fuzzyMatchSingle(itemName, alt));
+}
+
+function fuzzyMatchSingle(itemName: string, dealName: string): boolean {
+  const a = normalize(stripQualifiers(itemName));
+  const b = normalize(stripQualifiers(dealName));
+
+  if (!a || !b) return false;
 
   // Exact match
   if (a === b) return true;

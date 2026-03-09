@@ -4,6 +4,9 @@ import { getLocal, setLocal, CACHE_KEYS } from "../lib/cache";
 import { matchDealsToList, getBestStore } from "../lib/deals";
 import type { Deal, DealIndex, ShoppingItem, Store } from "../types";
 
+const FLIPP_REFRESH_KEY = "whisk_flipp_last_refresh";
+const FLIPP_STALE_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 export function useDeals() {
   const [dealIndex, setDealIndex] = useState<DealIndex>(
     () => getLocal<DealIndex>(CACHE_KEYS.DEAL_INDEX) ?? { deals: [], lastScanned: {}, updatedAt: "" }
@@ -56,11 +59,51 @@ export function useDeals() {
     }
   }, [stores.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-refresh Flipp deals if enabled and stale
+  useEffect(() => {
+    const dealsEnabled = localStorage.getItem("whisk_deals_enabled") === "true";
+    if (!dealsEnabled) return;
+
+    const zip = localStorage.getItem("whisk_zip_code");
+    const storesRaw = localStorage.getItem("whisk_preferred_stores");
+    if (!zip || !storesRaw) return;
+
+    const lastRefresh = localStorage.getItem(FLIPP_REFRESH_KEY);
+    if (lastRefresh && Date.now() - new Date(lastRefresh).getTime() < FLIPP_STALE_MS) return;
+
+    try {
+      const preferred = JSON.parse(storesRaw) as string[];
+      if (preferred.length > 0) {
+        refreshFromFlipp(zip, preferred);
+      }
+    } catch {
+      // Invalid stored data
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const refreshDeals = useCallback(async () => {
     setIsRefreshing(true);
     try {
       await api.post("/deals/refresh");
       // Re-fetch updated deals
+      const data = await api.get<DealIndex>("/deals");
+      if (data) {
+        setDealIndex(data);
+        setLocal(CACHE_KEYS.DEAL_INDEX, data);
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  const refreshFromFlipp = useCallback(async (zip: string, preferredStores: string[]) => {
+    setIsRefreshing(true);
+    try {
+      await api.post("/deals/flipp", { zip, stores: preferredStores });
+      localStorage.setItem(FLIPP_REFRESH_KEY, new Date().toISOString());
+      // Re-fetch merged deal index
       const data = await api.get<DealIndex>("/deals");
       if (data) {
         setDealIndex(data);
@@ -120,6 +163,7 @@ export function useDeals() {
     stores,
     isRefreshing,
     refreshDeals,
+    refreshFromFlipp,
     scanAdUrl,
     getDealsForItem,
     getBestStoreForList,

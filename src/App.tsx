@@ -290,6 +290,8 @@ function AppShell({
                 bestStore={dealsData.getBestStoreForList(shoppingList.list.items)}
                 deals={dealsData.deals}
                 stores={dealsData.stores}
+                isRefreshingDeals={dealsData.isRefreshing}
+                onRefreshDeals={dealsData.refreshDeals}
                 receipts={receiptData.receipts}
               />
             }

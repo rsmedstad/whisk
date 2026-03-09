@@ -186,6 +186,13 @@ export interface Deal {
   validTo: string;
   notes?: string;
   scannedAt: string;
+  source?: "flipp" | "scan" | "manual";
+}
+
+export interface FlippStore {
+  id: number;
+  name: string;
+  flyerCount: number;
 }
 
 export interface DealIndex {
