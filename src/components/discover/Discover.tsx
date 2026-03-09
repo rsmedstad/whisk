@@ -409,6 +409,7 @@ export function Discover({
       try {
         const data = await api.post<ImportedRecipe>("/import/url", {
           url: item.url,
+          downloadImage: true,
         });
         if (data?.title) {
           setImportedRecipe(data);
