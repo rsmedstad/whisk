@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles } from "../ui/Icon";
 import type { IconProps } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
-import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
@@ -77,21 +75,19 @@ function extractUrls(text: string): string[] {
 }
 
 
-/** Tappable capability card for the Ask landing state */
-function CapabilityCard({ icon: Icon, title, description, onClick }: {
+/** Tappable quick-action pill for the Ask landing state */
+function QuickAction({ icon: Icon, label, onClick }: {
   icon: ComponentType<IconProps>;
-  title: string;
-  description: string;
+  label: string;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-start gap-1 rounded-lg border border-stone-200 dark:border-stone-700 p-2.5 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 dark:border-stone-700 px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
     >
-      <Icon className="w-4 h-4 text-orange-500" />
-      <p className="text-xs font-semibold text-stone-700 dark:text-stone-200">{title}</p>
-      <p className="text-[11px] text-stone-400 dark:text-stone-500 leading-tight">{description}</p>
+      <Icon className="w-3.5 h-3.5" />
+      {label}
     </button>
   );
 }
@@ -371,29 +367,6 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             )}
           </div>
         </div>
-        {/* Input bar in header — always visible when no messages */}
-        {messages.length === 0 && (
-          <div className="pb-2">
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <input
-                ref={chatInputRef}
-                type="text"
-                enterKeyHint="send"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="What should I cook?"
-                className="flex-1 rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading}
-                className="rounded-[var(--wk-radius-btn)] bg-orange-500 px-3 py-2 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
-        )}
       </div>
 
       <div
@@ -418,66 +391,71 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             {/* Suggestion — random recipe picker */}
             {recipeCount > 0 && (
               <Card>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-                    Wondering what to make?
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <select
-                      value={seasonFilter}
-                      onChange={(e) => {
-                        const newSeason = e.target.value;
-                        setSeasonFilter(newSeason);
-                        setPickedRecipe(null);
-                        setTimeout(() => {
-                          const pool = filterByCategory(recipes, pickCategory, newSeason);
-                          if (pool.length === 0) return;
-                          const idx = Math.floor(Math.random() * pool.length);
-                          const pick = pool[idx] ?? null;
-                          setPickedRecipe(pick);
-                          animateDice();
-                          if (pick) {
-                            localStorage.setItem("whisk_daily_pick", JSON.stringify({
-                              id: pick.id, cat: pickCategory, ts: Date.now(),
-                            }));
-                          }
-                        }, 0);
-                      }}
-                      className={classNames(
-                        "rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500",
-                        seasonFilter ? "text-stone-600 dark:text-stone-300" : "text-stone-400 dark:text-stone-500"
-                      )}
-                    >
-                      {seasonOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={pickCategory}
-                      onChange={(e) => {
-                        setPickCategory(e.target.value);
-                        setPickedRecipe(null);
-                        setTimeout(() => {
-                          const pool = filterByCategory(recipes, e.target.value, seasonFilter);
-                          if (pool.length === 0) return;
-                          const idx = Math.floor(Math.random() * pool.length);
-                          const pick = pool[idx] ?? null;
-                          setPickedRecipe(pick);
-                          animateDice();
-                          if (pick) {
-                            localStorage.setItem("whisk_daily_pick", JSON.stringify({
-                              id: pick.id, cat: e.target.value, ts: Date.now(),
-                            }));
-                          }
-                        }, 0);
-                      }}
-                      className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                    >
-                      {PICK_CATEGORIES.map((cat) => (
-                        <option key={cat.value} value={cat.value}>{cat.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-2">
+                  Wondering what to make?
+                </p>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <select
+                    value={seasonFilter}
+                    onChange={(e) => {
+                      const newSeason = e.target.value;
+                      setSeasonFilter(newSeason);
+                      setPickedRecipe(null);
+                      setTimeout(() => {
+                        const pool = filterByCategory(recipes, pickCategory, newSeason);
+                        if (pool.length === 0) return;
+                        const idx = Math.floor(Math.random() * pool.length);
+                        const pick = pool[idx] ?? null;
+                        setPickedRecipe(pick);
+                        animateDice();
+                        if (pick) {
+                          localStorage.setItem("whisk_daily_pick", JSON.stringify({
+                            id: pick.id, cat: pickCategory, ts: Date.now(),
+                          }));
+                        }
+                      }, 0);
+                    }}
+                    className={classNames(
+                      "rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500",
+                      seasonFilter ? "text-stone-600 dark:text-stone-300" : "text-stone-400 dark:text-stone-500"
+                    )}
+                  >
+                    {seasonOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={pickCategory}
+                    onChange={(e) => {
+                      setPickCategory(e.target.value);
+                      setPickedRecipe(null);
+                      setTimeout(() => {
+                        const pool = filterByCategory(recipes, e.target.value, seasonFilter);
+                        if (pool.length === 0) return;
+                        const idx = Math.floor(Math.random() * pool.length);
+                        const pick = pool[idx] ?? null;
+                        setPickedRecipe(pick);
+                        animateDice();
+                        if (pick) {
+                          localStorage.setItem("whisk_daily_pick", JSON.stringify({
+                            id: pick.id, cat: e.target.value, ts: Date.now(),
+                          }));
+                        }
+                      }, 0);
+                    }}
+                    className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  >
+                    {PICK_CATEGORIES.map((cat) => (
+                      <option key={cat.value} value={cat.value}>{cat.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleRandomPick()}
+                    className="ml-auto flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  >
+                    <Dice className={classNames("w-3.5 h-3.5", diceAnimating && "animate-dice")} />
+                    Roll
+                  </button>
                 </div>
 
                 {pickedRecipe ? (
@@ -493,113 +471,72 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                       <img
                         src={pickedRecipe.thumbnailUrl}
                         alt=""
-                        className="w-20 h-20 object-cover shrink-0"
+                        className="w-24 h-24 object-cover shrink-0"
                       />
                     ) : (
-                      <div className="w-20 h-20 bg-stone-100 dark:bg-stone-800 shrink-0" />
+                      <div className="w-24 h-24 bg-stone-100 dark:bg-stone-800 shrink-0" />
                     )}
-                    <div className="py-2 pr-3 min-w-0">
+                    <div className="py-2 pr-3 min-w-0 flex flex-col justify-center">
                       <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 line-clamp-2">
                         {pickedRecipe.title}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        {pickedRecipe.tags.length > 0 && (
-                          <p className="text-xs text-stone-400 dark:text-stone-500 truncate">
-                            {pickedRecipe.tags.slice(0, 3).join(" · ")}
-                          </p>
-                        )}
-                        {(pickedRecipe.prepTime ?? 0) + (pickedRecipe.cookTime ?? 0) > 0 && (
-                          <p className="text-xs text-stone-400 dark:text-stone-500 shrink-0">
-                            {(pickedRecipe.prepTime ?? 0) + (pickedRecipe.cookTime ?? 0)} min
-                          </p>
-                        )}
+                        {(() => {
+                          const totalMin = (pickedRecipe.prepTime ?? 0) + (pickedRecipe.cookTime ?? 0);
+                          if (totalMin <= 0) return null;
+                          const h = Math.floor(totalMin / 60);
+                          const m = totalMin % 60;
+                          const label = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m} min`;
+                          return <span className="text-xs text-stone-400 dark:text-stone-500 shrink-0">{label}</span>;
+                        })()}
+                        {pickedRecipe.servings && <span className="text-xs text-stone-400 dark:text-stone-500">Serves {pickedRecipe.servings}</span>}
                       </div>
+                      {pickedRecipe.tags.length > 0 && (
+                        <p className="text-xs text-stone-400 dark:text-stone-500 truncate mt-0.5">
+                          {pickedRecipe.tags.slice(0, 3).join(" · ")}
+                        </p>
+                      )}
                     </div>
                   </button>
                 ) : (
-                  <div className="flex items-center justify-center py-8 text-stone-300 dark:text-stone-600">
+                  <div className="flex items-center justify-center py-6 text-stone-300 dark:text-stone-600">
                     <p className="text-sm">No {pickCategory !== "any" ? pickCategory : ""} recipes found</p>
                   </div>
                 )}
-
-                <div className="mt-2 flex justify-end">
-                  <button
-                    onClick={() => handleRandomPick()}
-                    className="flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                  >
-                    <Dice className={classNames("w-3.5 h-3.5", diceAnimating && "animate-dice")} />
-                    Roll again
-                  </button>
-                </div>
               </Card>
             )}
 
-            {/* What can I help with? — capabilities grid */}
-            <Card>
-              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-3">
-                What can I help with?
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <CapabilityCard
-                  icon={CalendarDays}
-                  title="Plan meals"
-                  description="Fill your week with recipes"
-                  onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
-                />
-                {mealPlan.length > 0 ? (
-                  <CapabilityCard
-                    icon={ShoppingCart}
-                    title="Shopping list"
-                    description="Generate from your plan"
-                    onClick={() => sendMessage("Generate a shopping list from my meal plan for this week. Group items by category and skip anything already on my shopping list.")}
-                  />
-                ) : (
-                  <CapabilityCard
-                    icon={ShoppingCart}
-                    title="Shopping list"
-                    description="What to buy this week"
-                    onClick={() => sendMessage("What groceries should I buy this week? Suggest a balanced shopping list.")}
-                  />
+            {/* Quick actions — pills */}
+            <div className="flex flex-wrap gap-2">
+              <QuickAction
+                icon={CalendarDays}
+                label="Plan meals"
+                onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
+              />
+              <QuickAction
+                icon={ShoppingCart}
+                label="Shopping list"
+                onClick={() => sendMessage(
+                  mealPlan.length > 0
+                    ? "Generate a shopping list from my meal plan for this week. Group items by category and skip anything already on my shopping list."
+                    : "What groceries should I buy this week? Suggest a balanced shopping list."
                 )}
-                <CapabilityCard
-                  icon={BookOpen}
-                  title={recipeCount > 0 ? "Find recipes" : "Get ideas"}
-                  description={recipeCount > 0 ? "Search your collection" : "Discover new dishes"}
-                  onClick={() => sendMessage(recipeCount > 0 ? "Suggest a quick dinner from my recipes for tonight." : "Suggest some easy dinner recipes I should try.")}
-                />
-                <CapabilityCard
-                  icon={Sparkles}
-                  title="Discover new"
-                  description={`Get inspired by ${seasonal.season}`}
-                  onClick={() => sendMessage(
-                    seasonal.upcomingHolidays.length > 0
-                      ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
-                      : `What ${seasonal.season} recipes should I try?`
-                  )}
-                />
-              </div>
-              {/* Text input */}
-              <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
-                <input
-                  type="text"
-                  enterKeyHint="send"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={recipeCount > 0 ? "Ask me anything..." : "What should I cook?"}
-                  className="flex-1 rounded-[var(--wk-radius-input)] border-[length:var(--wk-border-input)] border-stone-300 bg-white px-3 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isLoading}
-                  className="rounded-[var(--wk-radius-btn)] bg-orange-500 px-3 py-2 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </Card>
-
-            {/* What's in Season — bottom */}
-            <SeasonalProduceCard />
+              />
+              <QuickAction
+                icon={BookOpen}
+                label={recipeCount > 0 ? "Find recipes" : "Get ideas"}
+                onClick={() => sendMessage(recipeCount > 0 ? "Suggest a quick dinner from my recipes for tonight." : "Suggest some easy dinner recipes I should try.")}
+              />
+              <QuickAction
+                icon={Sparkles}
+                label={`${seasonal.season} ideas`}
+                onClick={() => sendMessage(
+                  seasonal.upcomingHolidays.length > 0
+                    ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
+                    : `What ${seasonal.season} recipes should I try?`
+                )}
+              />
+            </div>
           </>
         )}
 
@@ -851,27 +788,30 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         )}
       </div>
 
-      {/* Input — always visible at bottom when in chat mode */}
-      {messages.length > 0 && (
-        <div className={classNames(
-          "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
-          isKeyboardOpen ? "bottom-0 pb-1" : "bottom-[calc(3.5rem+var(--sab))] pb-3"
-        )}>
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              enterKeyHint="send"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={recipeCount > 0 ? "Ask me anything..." : "What should I cook?"}
-              className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-            />
-            <Button type="submit" size="sm" disabled={!input.trim() || isLoading}>
-              Send
-            </Button>
-          </form>
-        </div>
-      )}
+      {/* Sticky input bar — always visible at bottom */}
+      <div className={classNames(
+        "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
+        isKeyboardOpen ? "bottom-0 pb-1" : "bottom-[calc(3.5rem+var(--sab))] pb-3"
+      )}>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            ref={chatInputRef}
+            type="text"
+            enterKeyHint="send"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={recipeCount > 0 ? "Ask me anything..." : "What should I cook?"}
+            className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            className="rounded-lg bg-orange-500 px-3 py-2 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

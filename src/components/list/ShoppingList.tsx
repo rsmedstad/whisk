@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, ChevronDown } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -47,7 +47,6 @@ export function ShoppingList({
   const navigate = useNavigate();
   const { isKeyboardOpen } = useKeyboard();
   const [newItem, setNewItem] = useState("");
-  const [showOverflow, setShowOverflow] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("department");
   const [storeFilter, setStoreFilter] = useState<string | null>(null);
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
@@ -55,7 +54,6 @@ export function ShoppingList({
   const [isClassifying, setIsClassifying] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   // List scan
-  const [showListScan, setShowListScan] = useState(false);
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
   const [listScanPreview, setListScanPreview] = useState<string | null>(null);
@@ -421,24 +419,151 @@ export function ShoppingList({
             <h1 className="text-lg font-bold dark:text-stone-100">List</h1>
           </button>
           <div className="flex items-center gap-1">
-              {/* Sort button */}
+            {visionEnabled && (
+              <button
+                onClick={handleListScan}
+                disabled={isListScanning}
+                className="p-2 text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
+                title="Scan a handwritten list"
+              >
+                {isListScanning ? (
+                  <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Camera className="w-5 h-5" />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ LIST CONTENT ═══ */}
+      <>
+          {/* Scan results / preview */}
+          {(listScanPreview || (listScanResult && !isListScanning) || (scanPendingItems.length > 0 && !isListScanning)) && (
+            <div className="px-4 pt-3">
+              <Card>
+                {listScanPreview && (
+                  <div className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
+                    <img
+                      src={listScanPreview}
+                      alt="Scanned list"
+                      className={classNames(
+                        "w-full max-h-32 object-cover transition-opacity",
+                        !isListScanning && "opacity-60"
+                      )}
+                    />
+                  </div>
+                )}
+                {isListScanning && (
+                  <p className="text-xs text-orange-500 animate-pulse">
+                    Reading your list...
+                  </p>
+                )}
+                {listScanResult && !isListScanning && scanPendingItems.length === 0 && (
+                  <div className={classNames(
+                    "px-3 py-2 rounded-lg text-xs",
+                    listScanResult.count > 0
+                      ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                      : "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                  )}>
+                    {listScanResult.count > 0
+                      ? `Added ${listScanResult.count} item${listScanResult.count !== 1 ? "s" : ""} to your list`
+                      : listScanResult.message}
+                  </div>
+                )}
+                {/* Pending scan items review */}
+                {scanPendingItems.length > 0 && !isListScanning && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-medium text-stone-600 dark:text-stone-300">
+                        {scanPendingItems.filter((i) => i.selected).length} of {scanPendingItems.length} selected
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setScanSortAZ((v) => !v)}
+                          className={classNames(
+                            "text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors",
+                            scanSortAZ ? "text-orange-600 dark:text-orange-400" : "text-stone-400 dark:text-stone-500"
+                          )}
+                        >
+                          A-Z
+                        </button>
+                        <button
+                          onClick={() => setScanPendingItems([])}
+                          className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                    </div>
+                    <ul className="space-y-1 max-h-48 overflow-y-auto">
+                      {(scanSortAZ ? [...scanPendingItems].sort((a, b) => a.name.localeCompare(b.name)) : scanPendingItems).map((item, idx) => {
+                        const realIdx = scanSortAZ ? scanPendingItems.indexOf(item) : idx;
+                        return (
+                          <li key={idx} className="flex items-center gap-2">
+                            <button
+                              onClick={() => setScanPendingItems((prev) => prev.map((p, i) => i === realIdx ? { ...p, selected: !p.selected } : p))}
+                              className={classNames(
+                                "h-4 w-4 rounded border shrink-0 flex items-center justify-center transition-colors",
+                                item.selected ? "bg-orange-500 border-orange-500 text-white" : "border-stone-300 dark:border-stone-600"
+                              )}
+                            >
+                              {item.selected && <Check className="w-2.5 h-2.5" />}
+                            </button>
+                            <span className={classNames("text-sm", !item.selected && "text-stone-400 line-through")}>{item.name}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => {
+                          const selected = scanPendingItems.filter((i) => i.selected);
+                          for (const item of selected) onAddItem(item.name);
+                          setListScanResult({ count: selected.length });
+                          setScanPendingItems([]);
+                          setScanSortAZ(false);
+                        }}
+                        disabled={scanPendingItems.every((i) => !i.selected)}
+                        className="flex-1 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
+                      >
+                        Add {scanPendingItems.filter((i) => i.selected).length} items
+                      </button>
+                      <button
+                        onClick={() => { setScanPendingItems([]); setListScanResult(null); setScanSortAZ(false); }}
+                        className="px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-600 text-xs font-medium text-stone-600 dark:text-stone-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
+
+          {/* Filter bar — sort, clear checked, clear all, auto-classify */}
+          {totalCount > 0 && (
+            <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 overflow-x-auto no-scrollbar">
+              {/* Sort dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setShowSortMenu(!showSortMenu)}
                   className={classNames(
-                    "p-2 rounded-lg transition-colors",
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors",
                     sortMode !== "department"
-                      ? "text-orange-500"
-                      : "text-stone-500 dark:text-stone-400"
+                      ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
+                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
                   )}
-                  title="Sort"
                 >
-                  <ArrowUpDown className="w-5 h-5" />
+                  <ArrowUpDown className="w-3 h-3" />
+                  {sortMode === "department" ? "Sort" : sortMode === "by-store" ? "By store" : sortMode === "by-recipe" ? "By recipe" : sortMode === "alphabetical" ? "A-Z" : "Unchecked"}
                 </button>
                 {showSortMenu && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-                    <div className="absolute right-0 top-10 z-50 w-48 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                    <div className="absolute left-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
                       {([
                         { value: "department" as SortMode, label: "By department" },
                         { value: "by-store" as SortMode, label: "By store" },
@@ -450,7 +575,7 @@ export function ShoppingList({
                           key={opt.value}
                           onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
                           className={classNames(
-                            "w-full px-4 py-2.5 text-left text-sm",
+                            "w-full px-3 py-2 text-left text-xs",
                             sortMode === opt.value
                               ? "text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/30"
                               : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
@@ -463,206 +588,29 @@ export function ShoppingList({
                   </>
                 )}
               </div>
-
-              {/* Overflow menu */}
-              <div className="relative">
+              {checkedCount > 0 && (
                 <button
-                  onClick={() => setShowOverflow(!showOverflow)}
-                  className="p-2 text-stone-500 dark:text-stone-400"
+                  onClick={onClearChecked}
+                  className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors"
                 >
-                  <EllipsisVertical className="w-5 h-5" />
+                  <Check className="w-3 h-3" /> Clear checked ({checkedCount})
                 </button>
-                {showOverflow && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowOverflow(false)} />
-                    <div className="absolute right-0 top-10 z-50 w-52 wk-dropdown rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
-                      {checkedCount > 0 && (
-                        <button
-                          onClick={() => { onClearChecked(); setShowOverflow(false); }}
-                          className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700 flex items-center gap-2"
-                        >
-                          <Check className="w-4 h-4 text-stone-400" />
-                          Clear checked ({checkedCount})
-                        </button>
-                      )}
-                      {uncategorizedCount > 0 && (
-                        <button
-                          onClick={() => { handleClassify(); setShowOverflow(false); }}
-                          disabled={isClassifying}
-                          className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700 flex items-center gap-2"
-                        >
-                          <Sparkles className="w-4 h-4 text-orange-500" />
-                          {isClassifying ? "Classifying..." : `Auto-classify (${uncategorizedCount})`}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          if (confirm("Clear entire shopping list?")) {
-                            onClearAll();
-                          }
-                          setShowOverflow(false);
-                        }}
-                        className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-stone-700 flex items-center gap-2"
-                      >
-                        <Trash className="w-4 h-4" />
-                        Clear all
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-        </div>
-
-      </div>
-
-      {/* ═══ LIST CONTENT ═══ */}
-      <>
-          {/* Scan list camera — collapsible at top */}
-          {visionEnabled && (
-            <div className="px-4 pt-3">
-              <button
-                onClick={() => setShowListScan(!showListScan)}
-                className="flex items-center gap-2 w-full"
-              >
-                <Camera className="w-4 h-4 text-stone-400 dark:text-stone-500" />
-                <span className="text-sm font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
-                  Scan a List
-                </span>
-                <ChevronDown
-                  className={classNames(
-                    "w-4 h-4 text-stone-400 ml-auto transition-transform",
-                    showListScan && "rotate-180"
-                  )}
-                />
-              </button>
-              {showListScan && (
-                <div className="mt-2 mb-1">
-                  <Card>
-                    <div className="flex items-center gap-3 p-1">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium dark:text-stone-200">
-                          Snap a handwritten list
-                        </p>
-                        <p className="text-xs text-stone-400 dark:text-stone-500">
-                          Take a photo of your grocery list to add items automatically
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleListScan}
-                        disabled={isListScanning}
-                        className={classNames(
-                          "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
-                          isListScanning ? "bg-stone-200 dark:bg-stone-700" : "bg-orange-500 hover:bg-orange-600 text-white"
-                        )}
-                      >
-                        {isListScanning ? (
-                          <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Camera className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
-                    {/* Photo preview during/after scan */}
-                    {listScanPreview && (
-                      <div className="mt-2 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
-                        <img
-                          src={listScanPreview}
-                          alt="Scanned list"
-                          className={classNames(
-                            "w-full max-h-40 object-cover transition-opacity",
-                            !isListScanning && "opacity-60"
-                          )}
-                        />
-                      </div>
-                    )}
-                    {isListScanning && (
-                      <p className="text-xs text-orange-500 mt-2 animate-pulse">
-                        Reading your list...
-                      </p>
-                    )}
-                    {listScanResult && !isListScanning && scanPendingItems.length === 0 && (
-                      <div className={classNames(
-                        "mt-2 px-3 py-2 rounded-lg text-xs",
-                        listScanResult.count > 0
-                          ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
-                          : "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
-                      )}>
-                        {listScanResult.count > 0
-                          ? `Added ${listScanResult.count} item${listScanResult.count !== 1 ? "s" : ""} to your list`
-                          : listScanResult.message}
-                      </div>
-                    )}
-                    {/* Pending scan items review */}
-                    {scanPendingItems.length > 0 && !isListScanning && (
-                      <div className="mt-2">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-medium text-stone-600 dark:text-stone-300">
-                            {scanPendingItems.filter((i) => i.selected).length} of {scanPendingItems.length} selected
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setScanSortAZ((v) => !v)}
-                              className={classNames(
-                                "text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors",
-                                scanSortAZ ? "text-orange-600 dark:text-orange-400" : "text-stone-400 dark:text-stone-500"
-                              )}
-                            >
-                              A-Z
-                            </button>
-                            <button
-                              onClick={() => setScanPendingItems([])}
-                              className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
-                            >
-                              Clear all
-                            </button>
-                          </div>
-                        </div>
-                        <ul className="space-y-1 max-h-48 overflow-y-auto">
-                          {(scanSortAZ ? [...scanPendingItems].sort((a, b) => a.name.localeCompare(b.name)) : scanPendingItems).map((item, idx) => {
-                            const realIdx = scanSortAZ ? scanPendingItems.indexOf(item) : idx;
-                            return (
-                              <li key={idx} className="flex items-center gap-2">
-                                <button
-                                  onClick={() => setScanPendingItems((prev) => prev.map((p, i) => i === realIdx ? { ...p, selected: !p.selected } : p))}
-                                  className={classNames(
-                                    "h-4 w-4 rounded border shrink-0 flex items-center justify-center transition-colors",
-                                    item.selected ? "bg-orange-500 border-orange-500 text-white" : "border-stone-300 dark:border-stone-600"
-                                  )}
-                                >
-                                  {item.selected && <Check className="w-2.5 h-2.5" />}
-                                </button>
-                                <span className={classNames("text-sm", !item.selected && "text-stone-400 line-through")}>{item.name}</span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            onClick={() => {
-                              const selected = scanPendingItems.filter((i) => i.selected);
-                              for (const item of selected) onAddItem(item.name);
-                              setListScanResult({ count: selected.length });
-                              setScanPendingItems([]);
-                              setScanSortAZ(false);
-                            }}
-                            disabled={scanPendingItems.every((i) => !i.selected)}
-                            className="flex-1 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
-                          >
-                            Add {scanPendingItems.filter((i) => i.selected).length} items
-                          </button>
-                          <button
-                            onClick={() => { setScanPendingItems([]); setListScanResult(null); setScanSortAZ(false); }}
-                            className="px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-600 text-xs font-medium text-stone-600 dark:text-stone-400"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
-                </div>
               )}
+              {uncategorizedCount > 0 && chatEnabled && (
+                <button
+                  onClick={handleClassify}
+                  disabled={isClassifying}
+                  className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
+                >
+                  <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "..." : `Classify (${uncategorizedCount})`}
+                </button>
+              )}
+              <button
+                onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
+                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
+              >
+                <Trash className="w-3 h-3" /> Clear all
+              </button>
             </div>
           )}
 

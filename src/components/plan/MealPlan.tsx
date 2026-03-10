@@ -8,9 +8,26 @@ import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 
 const PANTRY_STAPLES = new Set([
-  "salt", "pepper", "black pepper", "olive oil", "vegetable oil", "canola oil",
-  "cooking spray", "water", "ice", "nonstick spray", "oil",
+  "salt", "pepper", "black pepper", "kosher salt", "sea salt", "table salt",
+  "salt & pepper", "salt and pepper", "freshly ground black pepper", "ground pepper",
+  "olive oil", "vegetable oil", "canola oil", "extra virgin olive oil", "extra-virgin olive oil",
+  "cooking spray", "nonstick spray", "oil", "ice",
 ]);
+
+/** Check if an ingredient name is a pantry staple that should be excluded */
+function isPantryStaple(name: string): boolean {
+  const lower = name.toLowerCase().trim();
+  // Exact match
+  if (PANTRY_STAPLES.has(lower)) return true;
+  // "water" — exclude plain water but keep sparkling, flavored, etc.
+  if (/^water$/.test(lower) || /^\d+.*\btap water\b/.test(lower) || /^\d+[\s-]*(tbsp|tsp|cup|ml|oz)?\s*water$/i.test(lower)) return true;
+  // Grouped items like "salt & pepper", "salt, pepper" split check
+  if (lower.includes("&") || lower.includes(" and ") || lower.includes(",")) {
+    const parts = lower.split(/[&,]|\band\b/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0 && parts.every((p) => PANTRY_STAPLES.has(p))) return true;
+  }
+  return false;
+}
 
 // Tags that signal a recipe fits a particular meal slot
 const SLOT_TAGS: Record<MealSlot, string[]> = {
@@ -270,7 +287,7 @@ export function MealPlan({
         if (!fullRecipe.ingredients?.length) continue;
 
         const ings = essentialsOnly
-          ? fullRecipe.ingredients.filter((i) => !PANTRY_STAPLES.has(i.name.toLowerCase().trim()))
+          ? fullRecipe.ingredients.filter((i) => !isPantryStaple(i.name))
           : fullRecipe.ingredients;
 
         const result = await onGenerateShoppingList(ings, recipeId);
@@ -567,6 +584,48 @@ export function MealPlan({
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-24">
+        {/* Plan / Quick fill action bar */}
+        <div className="flex gap-2 px-4 pt-3 pb-1">
+          <button
+            onClick={() => navigate("/ask?q=" + encodeURIComponent(
+              weekMeals.length > 0
+                ? "Suggest more meal ideas for my week. I already have some planned — fill in the gaps or offer alternatives."
+                : "Plan my dinners for this week using my recipes. Consider variety and what's in season."
+            ))}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+            {weekMeals.length > 0 ? "Get suggestions" : "Plan my week"}
+          </button>
+          {(() => {
+            // Check if there are empty slots
+            const hasGaps = weekDates.some((date) => {
+              const meals = getMealsForDate(date);
+              return mealSlots.some(({ slot }) => !meals.some((m) => m.slot === slot));
+            });
+            if (hasGaps && recipeIndex.length > 0) {
+              return (
+                <button
+                  onClick={handleAutoFillEmptySlots}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                >
+                  <CalendarDays className="w-3.5 h-3.5 text-orange-500" />
+                  Quick fill gaps
+                </button>
+              );
+            }
+            return (
+              <button
+                onClick={() => navigate("/list")}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+              >
+                <ShoppingCart className="w-3.5 h-3.5 text-orange-500" />
+                View shopping list
+              </button>
+            );
+          })()}
+        </div>
+
         {planLayout === "tiles" ? (
           /* Tile view — compact grid */
           <div className="grid grid-cols-2 gap-2 px-4 py-3">
@@ -691,6 +750,33 @@ export function MealPlan({
                 </div>
               );
             })}
+            {/* 8th tile: Shopping list */}
+            {linkedRecipeIds.length > 0 && onGenerateShoppingList ? (
+              <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 p-3 flex flex-col">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <ShoppingCart className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
+                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">Shopping</span>
+                </div>
+                <p className="text-[10px] text-stone-400 dark:text-stone-500 mb-2">
+                  {linkedRecipeIds.length} recipe{linkedRecipeIds.length !== 1 ? "s" : ""} linked
+                </p>
+                <button
+                  onClick={() => handleGenerateShoppingList(true)}
+                  disabled={shoppingListStatus === "loading"}
+                  className="mt-auto text-[10px] font-medium text-white bg-orange-500 px-2 py-1.5 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                >
+                  {shoppingListStatus === "loading" ? "Adding..." : "Add Essentials"}
+                </button>
+                {shoppingListStatus && shoppingListStatus !== "loading" && (
+                  <p className="mt-1 text-[9px] text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-stone-200 dark:border-stone-800 p-3 flex flex-col items-center justify-center text-center">
+                <ShoppingCart className="w-5 h-5 text-stone-300 dark:text-stone-600 mb-1" />
+                <p className="text-[10px] text-stone-400 dark:text-stone-500">Add recipes to generate a shopping list</p>
+              </div>
+            )}
           </div>
         ) : (
           /* List view — detailed day-by-day */
@@ -924,72 +1010,31 @@ export function MealPlan({
           );
         })()}
 
-        {/* Shopping list — inline when recipes are linked */}
-        {linkedRecipeIds.length > 0 && onGenerateShoppingList && (
-          <div className="mx-4 mt-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 flex items-center gap-1.5">
-                <ShoppingCart className="w-3.5 h-3.5" />
-                Shopping List
-              </h3>
-              <span className="text-[10px] text-stone-400 dark:text-stone-500">
-                {linkedRecipeIds.length} linked recipe{linkedRecipeIds.length !== 1 ? "s" : ""}
+        {/* Shopping list — compact card for list view */}
+        {planLayout === "list" && linkedRecipeIds.length > 0 && onGenerateShoppingList && (
+          <div className="mx-4 mt-3 flex items-center justify-between rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-3.5 h-3.5 text-stone-400" />
+              <span className="text-xs text-stone-500 dark:text-stone-400">
+                {linkedRecipeIds.length} recipe{linkedRecipeIds.length !== 1 ? "s" : ""} linked
               </span>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleGenerateShoppingList(true)}
-                disabled={shoppingListStatus === "loading"}
-                className="flex-1 text-xs font-medium text-white bg-orange-500 px-2.5 py-1.5 rounded-[var(--wk-radius-btn)] hover:bg-orange-600 transition-colors disabled:opacity-50"
-              >
-                Add Essentials
-              </button>
-              <button
-                onClick={() => handleGenerateShoppingList(false)}
-                disabled={shoppingListStatus === "loading"}
-                className="flex-1 text-xs font-medium text-orange-600 dark:text-orange-400 border border-orange-500 px-2.5 py-1.5 rounded-[var(--wk-radius-btn)] hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
-              >
-                Add All
-              </button>
-            </div>
-            <p className="mt-1.5 text-[10px] text-stone-400 dark:text-stone-500">
-              Essentials skips salt, pepper, oil &amp; pantry staples
-            </p>
-            {shoppingListStatus && shoppingListStatus !== "loading" && (
-              <p className="mt-1.5 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
-            )}
+            <button
+              onClick={() => handleGenerateShoppingList(true)}
+              disabled={shoppingListStatus === "loading"}
+              className="text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors disabled:opacity-50"
+            >
+              {shoppingListStatus === "loading" ? "Adding..." : "Add Essentials"}
+            </button>
           </div>
         )}
+        {shoppingListStatus && shoppingListStatus !== "loading" && planLayout === "list" && (
+          <p className="mx-4 mt-1 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
+        )}
 
-        {/* Help me plan */}
-        <div className="px-4 py-4 space-y-2.5">
+        {/* What's in Season */}
+        <div className="px-4 py-3">
           <SeasonalProduceCard compact />
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate("/ask?q=" + encodeURIComponent("Plan my dinners for this week using my recipes. Consider variety and what's in season."))}
-              className="flex-1 flex items-center gap-2 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
-            >
-              <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">Plan my week</p>
-                <p className="text-[10px] text-stone-400 dark:text-stone-500">Opens Ask</p>
-              </div>
-            </button>
-
-            {recipeIndex.length > 0 && (
-              <button
-                onClick={handleAutoFillEmptySlots}
-                className="flex-1 flex items-center gap-2 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
-              >
-                <CalendarDays className="w-4 h-4 text-orange-500 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">Quick fill</p>
-                  <p className="text-[10px] text-stone-400 dark:text-stone-500">Auto-fill gaps</p>
-                </div>
-              </button>
-            )}
-          </div>
         </div>
       </div>
     </div>
