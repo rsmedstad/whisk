@@ -314,15 +314,19 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
       console.error("[Whisk] Chat send failed:", errMsg);
       const isAuthError = errMsg.includes("401") || errMsg.includes("403");
       const isTimeout = errMsg.includes("timeout") || errMsg.includes("abort");
+      const isEmptyResponse = errMsg.includes("Empty response");
+      const userMessage = isAuthError
+        ? "Your session may have expired. Try refreshing the page or logging in again."
+        : isTimeout
+          ? "The AI took too long to respond. Try again with a simpler question, or check your AI provider status in Settings."
+          : isEmptyResponse
+            ? "The AI returned an empty response. This can happen when the model is overloaded — try again in a moment."
+            : "Something went wrong getting a response. Check Settings to make sure your AI provider is configured correctly.";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: isAuthError
-            ? "Your session may have expired. Try refreshing the page or logging in again."
-            : isTimeout
-              ? "The AI took too long to respond. Try again with a simpler question, or check your AI provider status in Settings."
-              : "Something went wrong getting a response. Check Settings to make sure your AI provider is configured correctly.",
+          content: `${userMessage}\n\n(${errMsg})`,
         },
       ]);
     } finally {
