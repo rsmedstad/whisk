@@ -8,6 +8,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, ChevronDown } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
+import { useKeyboard } from "../../hooks/useKeyboard";
 
 
 type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store" | "by-recipe";
@@ -44,6 +45,7 @@ export function ShoppingList({
   chatEnabled = false,
 }: ShoppingListProps) {
   const navigate = useNavigate();
+  const { isKeyboardOpen } = useKeyboard();
   const [newItem, setNewItem] = useState("");
   const [showOverflow, setShowOverflow] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("department");
@@ -57,6 +59,8 @@ export function ShoppingList({
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
   const [listScanPreview, setListScanPreview] = useState<string | null>(null);
+  const [scanPendingItems, setScanPendingItems] = useState<{ name: string; selected: boolean }[]>([]);
+  const [scanSortAZ, setScanSortAZ] = useState(false);
 
   // Get unique store names from items
   const storeNames = useMemo(() => {
@@ -263,15 +267,10 @@ export function ShoppingList({
           return;
         }
         const items = data.items ?? [];
-        let added = 0;
-        for (const item of items) {
-          if (item.name) {
-            onAddItem(item.name);
-            added++;
-          }
-        }
-        if (added > 0) {
-          setListScanResult({ count: added });
+        const validItems = items.filter((item) => item.name).map((item) => ({ name: item.name, selected: true }));
+        if (validItems.length > 0) {
+          setScanPendingItems(validItems);
+          setListScanResult({ count: validItems.length });
         } else {
           setListScanResult({ count: 0, message: data.message ?? "No items found in the image. Try a clearer photo." });
         }
@@ -582,7 +581,7 @@ export function ShoppingList({
                         Reading your list...
                       </p>
                     )}
-                    {listScanResult && !isListScanning && (
+                    {listScanResult && !isListScanning && scanPendingItems.length === 0 && (
                       <div className={classNames(
                         "mt-2 px-3 py-2 rounded-lg text-xs",
                         listScanResult.count > 0
@@ -594,29 +593,78 @@ export function ShoppingList({
                           : listScanResult.message}
                       </div>
                     )}
+                    {/* Pending scan items review */}
+                    {scanPendingItems.length > 0 && !isListScanning && (
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-medium text-stone-600 dark:text-stone-300">
+                            {scanPendingItems.filter((i) => i.selected).length} of {scanPendingItems.length} selected
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setScanSortAZ((v) => !v)}
+                              className={classNames(
+                                "text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors",
+                                scanSortAZ ? "text-orange-600 dark:text-orange-400" : "text-stone-400 dark:text-stone-500"
+                              )}
+                            >
+                              A-Z
+                            </button>
+                            <button
+                              onClick={() => setScanPendingItems([])}
+                              className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                        </div>
+                        <ul className="space-y-1 max-h-48 overflow-y-auto">
+                          {(scanSortAZ ? [...scanPendingItems].sort((a, b) => a.name.localeCompare(b.name)) : scanPendingItems).map((item, idx) => {
+                            const realIdx = scanSortAZ ? scanPendingItems.indexOf(item) : idx;
+                            return (
+                              <li key={idx} className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setScanPendingItems((prev) => prev.map((p, i) => i === realIdx ? { ...p, selected: !p.selected } : p))}
+                                  className={classNames(
+                                    "h-4 w-4 rounded border shrink-0 flex items-center justify-center transition-colors",
+                                    item.selected ? "bg-orange-500 border-orange-500 text-white" : "border-stone-300 dark:border-stone-600"
+                                  )}
+                                >
+                                  {item.selected && <Check className="w-2.5 h-2.5" />}
+                                </button>
+                                <span className={classNames("text-sm", !item.selected && "text-stone-400 line-through")}>{item.name}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => {
+                              const selected = scanPendingItems.filter((i) => i.selected);
+                              for (const item of selected) onAddItem(item.name);
+                              setListScanResult({ count: selected.length });
+                              setScanPendingItems([]);
+                              setScanSortAZ(false);
+                            }}
+                            disabled={scanPendingItems.every((i) => !i.selected)}
+                            className="flex-1 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
+                          >
+                            Add {scanPendingItems.filter((i) => i.selected).length} items
+                          </button>
+                          <button
+                            onClick={() => { setScanPendingItems([]); setListScanResult(null); setScanSortAZ(false); }}
+                            className="px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-600 text-xs font-medium text-stone-600 dark:text-stone-400"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 </div>
               )}
             </div>
           )}
-
-          {/* Quick add */}
-          <form onSubmit={handleAdd} className="flex gap-2 px-4 pt-3 pb-2">
-            <input
-              type="text"
-              placeholder="+ Add item..."
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              className="flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-            />
-            <button
-              type="submit"
-              disabled={!newItem.trim()}
-              className="px-3 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
-            >
-              Add
-            </button>
-          </form>
 
           {/* Store filter pills — near the list */}
           {storeNames.length > 0 && (
@@ -655,7 +703,7 @@ export function ShoppingList({
               <EmptyState
                 icon={<ShoppingCart className="w-12 h-12" />}
                 title={storeFilter ? `No items for ${storeFilter}` : "List is empty"}
-                description={storeFilter ? "Clear the filter to see all items" : "Add items above or from a recipe"}
+                description={storeFilter ? "Clear the filter to see all items" : "Add items below or from a recipe"}
               />
             ) : sortMode === "by-store" && storeGrouped ? (
               <div className="space-y-4">
@@ -793,6 +841,30 @@ export function ShoppingList({
             )}
           </div>
         </>
+
+      {/* Sticky add-item bar at bottom */}
+      <div className={classNames(
+        "sticky left-0 right-0 bg-white dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800 px-4 py-3",
+        isKeyboardOpen ? "bottom-0 pb-1" : "bottom-[calc(3.5rem+var(--sab))] pb-3"
+      )}>
+        <form onSubmit={handleAdd} className="flex gap-2">
+          <input
+            type="text"
+            enterKeyHint="done"
+            placeholder="+ Add item..."
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+          />
+          <button
+            type="submit"
+            disabled={!newItem.trim()}
+            className="px-3 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
+          >
+            Add
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
