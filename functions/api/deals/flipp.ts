@@ -52,6 +52,19 @@ interface DealIndex {
 
 const FLIPP_BASE = "https://backflipp.wishabi.com/flipp";
 
+// Major US grocery chains — normalized names for fuzzy matching.
+// Stores matching this list (or with 2+ active flyers) are flagged as "popular".
+const KNOWN_CHAINS = new Set([
+  "aldi", "costco", "heb", "harristeeter", "hyve", "jewelosco",
+  "kingsooper", "kroger", "lidl", "marianos", "meijer", "picknsave",
+  "publix", "ralphs", "safeway", "samsclub", "shaws", "shoprite",
+  "smiths", "sprouts", "staterbrothers", "stopshop", "target",
+  "traderjoes", "vons", "walmart", "wegmans", "wholefoods",
+  "winndixie", "wincofood", "foodlion", "giantfood", "gianteagle",
+  "freshthyme", "petesfreshmarket", "caputos", "hmart", "freshmarket",
+  "aldisud", "savemart", "foodcity", "pigglywiggly", "bjs",
+]);
+
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -144,24 +157,36 @@ export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
     const flyers: FlippFlyer[] = Array.isArray(flyersData) ? flyersData : (flyersData as { flyers?: FlippFlyer[] }).flyers ?? [];
 
     // Filter to grocery flyers and deduplicate by merchant
-    const groceryMerchants = new Map<number, { id: number; name: string; flyerCount: number }>();
+    const groceryMerchants = new Map<number, { id: number; name: string; flyerCount: number; popular: boolean }>();
     for (const flyer of flyers) {
       if (!flyer.categories?.some((c) => c.toLowerCase().includes("grocer"))) continue;
       const existing = groceryMerchants.get(flyer.merchant_id);
       if (existing) {
         existing.flyerCount++;
       } else {
+        const normalized = normalizeStoreName(flyer.merchant);
+        const isKnownChain = [...KNOWN_CHAINS].some(
+          (chain) => normalized.includes(chain) || chain.includes(normalized)
+        );
         groceryMerchants.set(flyer.merchant_id, {
           id: flyer.merchant_id,
           name: flyer.merchant,
           flyerCount: 1,
+          popular: isKnownChain,
         });
       }
     }
 
-    const stores = Array.from(groceryMerchants.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+    // Mark stores with 2+ flyers as popular even if not in the known list
+    for (const store of groceryMerchants.values()) {
+      if (store.flyerCount >= 2) store.popular = true;
+    }
+
+    // Sort: popular first (alphabetical), then others (alphabetical)
+    const stores = Array.from(groceryMerchants.values()).sort((a, b) => {
+      if (a.popular !== b.popular) return a.popular ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
 
     return jsonResponse({ stores });
   } catch (err) {

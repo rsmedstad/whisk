@@ -1778,6 +1778,9 @@ function PreferredStoresDropdown({
     onChange(updated);
   };
 
+  // Build a popularity lookup from Flipp data
+  const popularSet = new Set(flippStores.filter((f) => f.popular).map((f) => f.name));
+
   // Only show Flipp stores for the user's zip code
   const storeOptions = flippStores.map((s) => s.name);
 
@@ -1789,10 +1792,16 @@ function PreferredStoresDropdown({
     ? allOptions.filter((s) => s.toLowerCase().includes(search.toLowerCase()))
     : allOptions;
 
-  // Show selected first, then limit unselected
+  // Show selected first, then split unselected into popular vs other
   const selected = filtered.filter((s) => stores.includes(s));
   const unselected = filtered.filter((s) => !stores.includes(s));
-  const visibleUnselected = showAll || search.trim() ? unselected : unselected.slice(0, 6);
+  const popularUnselected = unselected.filter((s) => popularSet.has(s));
+  const otherUnselected = unselected.filter((s) => !popularSet.has(s));
+  const visibleUnselected = search.trim()
+    ? unselected
+    : showAll
+      ? [...popularUnselected, ...otherUnselected]
+      : popularUnselected;
 
   return (
     <div>
@@ -1858,12 +1867,12 @@ function PreferredStoresDropdown({
             </button>
           );
         })}
-        {!showAll && !search.trim() && unselected.length > 6 && (
+        {!showAll && !search.trim() && otherUnselected.length > 0 && (
           <button
             onClick={() => setShowAll(true)}
             className="px-2.5 py-1 rounded-full text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
           >
-            +{unselected.length - 6} more
+            +{otherUnselected.length} more
           </button>
         )}
         {search.trim() && filtered.length === 0 && (
