@@ -10,11 +10,15 @@ interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
 }
 
+/** Categories we care about for deal scanning — fresh food + pantry staples. */
+const FRESH_FOOD_CATEGORIES = new Set(["produce", "dairy", "meat", "pantry", "frozen", "bakery"]);
+
 const DEAL_PROMPT_RULES = [
   "Respond with ONLY a JSON object (no markdown) with this structure:",
-  '{ "deals": [ { "item": "product name", "price": "sale price as string (e.g. $2.99)", "originalPrice": "original price if shown or null", "unit": "per lb, each, per pack, etc. or null", "category": "produce" | "dairy" | "meat" | "pantry" | "snacks" | "frozen" | "bakery" | "beverages" | "other", "notes": "any qualifier like BOGO, limit 2, member price, etc. or null" } ], "storeName": "detected store name or null", "validDates": "sale date range if visible or null" }',
+  '{ "deals": [ { "item": "product name", "price": "sale price as string (e.g. $2.99)", "originalPrice": "original price if shown or null", "unit": "per lb, each, per pack, etc. or null", "category": "produce" | "dairy" | "meat" | "pantry" | "frozen" | "bakery", "notes": "any qualifier like BOGO, limit 2, member price, etc. or null" } ], "storeName": "detected store name or null", "validDates": "sale date range if visible or null" }',
   "Rules:",
-  "- Extract every deal/sale item visible",
+  "- ONLY extract deals for fresh food and pantry staples: produce, dairy, meat, frozen, bakery, and pantry items (pasta, rice, canned goods, cooking essentials)",
+  "- SKIP snacks (chips, crackers, cookies, candy), beverages (soda, juice, water, coffee, alcohol), and non-food items (household, toiletries, cleaning supplies)",
   "- Normalize product names to common terms",
   "- Include the sale price exactly as shown",
   "- Note any restrictions (member-only, limit, BOGO, etc.)",
@@ -172,7 +176,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
 function parseAIResponse(content: string): Record<string, unknown> {
   const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  return JSON.parse(jsonStr) as Record<string, unknown>;
+  const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+  // Filter to fresh food categories only
+  if (Array.isArray(parsed["deals"])) {
+    parsed["deals"] = (parsed["deals"] as Array<Record<string, unknown>>).filter(
+      (d) => !d["category"] || FRESH_FOOD_CATEGORIES.has(d["category"] as string)
+    );
+  }
+  return parsed;
 }
 
 function jsonResponse(data: unknown, status = 200): Response {

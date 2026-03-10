@@ -130,6 +130,40 @@ function parseFlippPrice(item: FlippItem): { price: number; unit?: string; notes
   return { price, unit, notes };
 }
 
+/** Keywords indicating snacks, beverages, or non-food items we want to skip. */
+const SKIP_KEYWORDS = [
+  // Beverages
+  "soda", "cola", "pepsi", "coke", "sprite", "fanta", "dr pepper", "mountain dew",
+  "gatorade", "powerade", "energy drink", "red bull", "monster energy",
+  "sparkling water", "la croix", "lacroix", "topo chico",
+  "juice box", "capri sun", "kool-aid",
+  "beer", "wine", "vodka", "whiskey", "bourbon", "tequila", "rum", "gin",
+  "hard seltzer", "white claw", "truly", "smirnoff",
+  "bottled water", "water bottles", "case of water",
+  // Snacks
+  "chips", "doritos", "cheetos", "fritos", "lays", "pringles", "ruffles", "tostitos",
+  "crackers", "goldfish", "cheez-it", "ritz",
+  "cookies", "oreo", "chips ahoy", "nutter butter",
+  "candy", "chocolate bar", "gummy", "skittles", "m&m", "snickers", "reese",
+  "popcorn", "microwave popcorn",
+  "pretzels", "trail mix", "granola bar", "protein bar",
+  // Non-food
+  "paper towel", "toilet paper", "tissue", "napkin",
+  "detergent", "laundry", "fabric softener", "dryer sheet",
+  "dish soap", "dishwasher", "cleaning", "disinfectant", "bleach", "wipes",
+  "trash bag", "garbage bag", "aluminum foil", "plastic wrap", "ziploc",
+  "shampoo", "conditioner", "body wash", "soap bar", "deodorant", "toothpaste",
+  "pet food", "dog food", "cat food", "cat litter",
+  "diapers", "baby wipes",
+  "batteries", "light bulb",
+];
+
+/** Check if a Flipp item name matches something we want to skip. */
+function shouldSkipItem(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SKIP_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
 /** Clean up a Flipp item name for display. */
 function cleanItemName(name: string): string {
   return name
@@ -251,6 +285,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
         for (const item of items) {
           if (!item.name?.trim()) continue;
+          if (shouldSkipItem(item.name)) continue; // skip snacks, beverages, non-food
 
           const { price, unit, notes } = parseFlippPrice(item);
           if (price <= 0) continue; // skip items with no price
