@@ -131,10 +131,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   }, []);
 
   useEffect(() => {
-    if (dealsEnabled && zipCode.trim()) {
-      fetchFlippStores(zipCode);
+    if (zipCode.trim().length >= 5) {
+      fetchFlippStores(zipCode.trim());
     }
-  }, [dealsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showAccentPicker, setShowAccentPicker] = useState(false);
 
@@ -253,7 +253,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     setZipCode(zip);
     if (zip.trim()) {
       localStorage.setItem("whisk_zip_code", zip.trim());
-      if (dealsEnabled && zip.trim().length >= 5) {
+      if (zip.trim().length >= 5) {
         fetchFlippStores(zip.trim());
       }
       syncDealsConfig({ zip: zip.trim() });
@@ -913,7 +913,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
                       syncDealsConfig({ stores: updated });
                     }}
-                    flippStores={dealsEnabled ? flippStores : []}
+                    flippStores={flippStores}
                     isLoadingStores={isLoadingStores}
                   />
 
@@ -1756,7 +1756,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   );
 }
 
-const STORE_OPTIONS_FALLBACK = ["Jewel-Osco", "Mariano's", "Trader Joe's", "Aldi", "Whole Foods", "Costco", "Walmart", "Target", "Meijer", "Kroger", "Pete's Fresh Market", "Fresh Thyme", "H Mart", "Caputo's"];
 
 function PreferredStoresDropdown({
   stores,
@@ -1779,10 +1778,8 @@ function PreferredStoresDropdown({
     onChange(updated);
   };
 
-  // Use Flipp stores if available, otherwise fall back to hardcoded list
-  const storeOptions = flippStores.length > 0
-    ? flippStores.map((s) => s.name)
-    : STORE_OPTIONS_FALLBACK;
+  // Only show Flipp stores for the user's zip code
+  const storeOptions = flippStores.map((s) => s.name);
 
   // Also include any existing preferred stores not in the current options
   const allOptions = [...new Set([...storeOptions, ...stores])];
@@ -1811,14 +1808,20 @@ function PreferredStoresDropdown({
         )}
       </p>
 
-      {/* Search input */}
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search stores..."
-        className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-1.5 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 mb-2"
-      />
+      {/* Search input — only show when stores are available */}
+      {allOptions.length > 0 ? (
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search stores..."
+          className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-1.5 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 mb-2"
+        />
+      ) : !isLoadingStores ? (
+        <p className="text-xs text-stone-400 dark:text-stone-500 italic">
+          Enter a zip code above to see available stores
+        </p>
+      ) : null}
 
       {/* Selected stores as removable chips */}
       {selected.length > 0 && (
@@ -1864,12 +1867,9 @@ function PreferredStoresDropdown({
           </button>
         )}
         {search.trim() && filtered.length === 0 && (
-          <button
-            onClick={() => { toggle(search.trim()); setSearch(""); }}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-dashed border-orange-400 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors"
-          >
-            + Add "{search.trim()}"
-          </button>
+          <span className="text-xs text-stone-400 dark:text-stone-500 px-1 py-1">
+            No matching stores found
+          </span>
         )}
       </div>
     </div>
