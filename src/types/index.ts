@@ -193,6 +193,7 @@ export interface FlippStore {
   id: number;
   name: string;
   flyerCount: number;
+  popular?: boolean;
 }
 
 export interface DealIndex {
