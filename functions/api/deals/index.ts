@@ -38,8 +38,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const index = JSON.parse(raw) as DealIndex;
   const today = new Date().toISOString().slice(0, 10);
 
-  // Filter expired deals
-  let activeDeals = index.deals.filter((d) => d.validTo >= today);
+  // Filter expired deals and non-fresh categories (legacy data cleanup)
+  const freshCategories = new Set(["produce", "dairy", "meat", "pantry", "frozen", "bakery"]);
+  let activeDeals = index.deals.filter(
+    (d) => d.validTo >= today && (!d.category || freshCategories.has(d.category))
+  );
 
   // Filter by store if requested
   if (storeFilter) {

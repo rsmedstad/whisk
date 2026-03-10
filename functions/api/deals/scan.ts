@@ -26,11 +26,15 @@ interface ScanResponse {
   message?: string;
 }
 
+/** Categories we care about for deal scanning — fresh food + pantry staples. */
+const FRESH_FOOD_CATEGORIES = new Set(["produce", "dairy", "meat", "pantry", "frozen", "bakery"]);
+
 const DEAL_PROMPT_RULES = [
   "Respond with ONLY a JSON object (no markdown) with this structure:",
-  '{ "deals": [ { "item": "product name", "price": "sale price as string (e.g. $2.99)", "originalPrice": "original price if shown or null", "unit": "per lb, each, per pack, etc. or null", "category": "produce" | "dairy" | "meat" | "pantry" | "snacks" | "frozen" | "bakery" | "beverages" | "other", "notes": "any qualifier like BOGO, limit 2, member price, etc. or null" } ], "storeName": "detected store name or null", "validDates": "sale date range if visible or null" }',
+  '{ "deals": [ { "item": "product name", "price": "sale price as string (e.g. $2.99)", "originalPrice": "original price if shown or null", "unit": "per lb, each, per pack, etc. or null", "category": "produce" | "dairy" | "meat" | "pantry" | "frozen" | "bakery", "notes": "any qualifier like BOGO, limit 2, member price, etc. or null" } ], "storeName": "detected store name or null", "validDates": "sale date range if visible or null" }',
   "Rules:",
-  "- Extract every deal/sale item visible",
+  "- ONLY extract deals for fresh food and pantry staples: produce, dairy, meat, frozen, bakery, and pantry items (pasta, rice, canned goods, cooking essentials)",
+  "- SKIP snacks (chips, crackers, cookies, candy), beverages (soda, juice, water, coffee, alcohol), and non-food items (household, toiletries, cleaning supplies)",
   "- Normalize product names to common terms",
   "- Include the sale price exactly as shown",
   "- Note any restrictions (member-only, limit, BOGO, etc.)",
@@ -142,8 +146,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const resolvedStoreId = storeId ?? crypto.randomUUID().slice(0, 8);
   const storeName = scanResult.storeName ?? "Unknown Store";
 
-  // Convert raw deals to typed deals
-  const deals = scanResult.deals.map((d) => ({
+  // Filter to fresh food categories only, then convert to typed deals
+  const freshDeals = scanResult.deals.filter(
+    (d) => !d.category || FRESH_FOOD_CATEGORIES.has(d.category)
+  );
+  const deals = freshDeals.map((d) => ({
     id: crypto.randomUUID().slice(0, 12),
     storeId: resolvedStoreId,
     storeName,
