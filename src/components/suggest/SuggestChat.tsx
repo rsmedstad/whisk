@@ -484,24 +484,22 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   <button
                     onClick={() => navigate(`/recipes/${pickedRecipe.id}`)}
                     className={classNames(
-                      "w-full rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden text-left",
+                      "flex gap-3 w-full rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden text-left",
                       "hover:border-orange-300 dark:hover:border-orange-700 transition-colors",
                       diceAnimating && "animate-pulse"
                     )}
                   >
                     {pickedRecipe.thumbnailUrl ? (
-                      <div className="relative aspect-[16/9] w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
-                        <img
-                          src={pickedRecipe.thumbnailUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
+                      <img
+                        src={pickedRecipe.thumbnailUrl}
+                        alt=""
+                        className="w-20 h-20 object-cover shrink-0"
+                      />
                     ) : (
-                      <div className="aspect-[16/9] w-full bg-stone-100 dark:bg-stone-800" />
+                      <div className="w-20 h-20 bg-stone-100 dark:bg-stone-800 shrink-0" />
                     )}
-                    <div className="p-3">
-                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                    <div className="py-2 pr-3 min-w-0">
+                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 line-clamp-2">
                         {pickedRecipe.title}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
