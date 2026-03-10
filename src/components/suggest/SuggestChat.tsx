@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles, MessageCircle } from "../ui/Icon";
 import type { IconProps } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
@@ -35,6 +35,14 @@ function filterByCategory(recipes: RecipeIndexEntry[], categoryValue: string, se
   if (cat && cat.tags.length > 0) {
     filtered = filtered.filter((r) =>
       r.tags.some((t) => cat.tags.includes(t.toLowerCase()))
+    );
+  }
+
+  // Exclude drinks unless user explicitly selected the Drinks category
+  if (categoryValue !== "drinks") {
+    const drinkTags = new Set(["drinks", "cocktail", "cocktails", "drink", "beverage", "beverages"]);
+    filtered = filtered.filter((r) =>
+      !r.tags.some((t) => drinkTags.has(t.toLowerCase()))
     );
   }
 
@@ -75,7 +83,7 @@ function extractUrls(text: string): string[] {
 }
 
 
-/** Tappable quick-action pill for the Ask landing state */
+/** Tappable quick-action pill for the Ask landing state — styled as chat prompts */
 function QuickAction({ icon: Icon, label, onClick }: {
   icon: ComponentType<IconProps>;
   label: string;
@@ -84,7 +92,7 @@ function QuickAction({ icon: Icon, label, onClick }: {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 dark:border-stone-700 px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-950/20 px-3 py-1.5 text-xs font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/40 hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
     >
       <Icon className="w-3.5 h-3.5" />
       {label}
@@ -356,13 +364,26 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             <h1 className="text-lg font-bold dark:text-stone-100">Ask</h1>
           </button>
           <div className="flex items-center gap-2">
-            {messages.length > 0 && (
+            {messages.length > 0 ? (
               <button
                 onClick={handleNewChat}
                 className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 New chat
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate("/settings")}
+                className={classNames(
+                  "flex items-center gap-1 text-xs font-medium transition-colors",
+                  chatEnabled
+                    ? "text-green-500 dark:text-green-400"
+                    : "text-stone-400 dark:text-stone-500 hover:text-orange-500"
+                )}
+                title={chatEnabled ? "AI connected" : "Configure AI"}
+              >
+                <Sparkles className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -416,7 +437,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                       }, 0);
                     }}
                     className={classNames(
-                      "rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500",
+                      "rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 dark:scheme-dark px-2 py-1 text-xs font-medium focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500",
                       seasonFilter ? "text-stone-600 dark:text-stone-300" : "text-stone-400 dark:text-stone-500"
                     )}
                   >
@@ -443,7 +464,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                         }
                       }, 0);
                     }}
-                    className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 dark:scheme-dark px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                   >
                     {PICK_CATEGORIES.map((cat) => (
                       <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -506,36 +527,42 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               </Card>
             )}
 
-            {/* Quick actions — pills */}
-            <div className="flex flex-wrap gap-2">
-              <QuickAction
-                icon={CalendarDays}
-                label="Plan meals"
-                onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
-              />
-              <QuickAction
-                icon={ShoppingCart}
-                label="Shopping list"
-                onClick={() => sendMessage(
-                  mealPlan.length > 0
-                    ? "Generate a shopping list from my meal plan for this week. Group items by category and skip anything already on my shopping list."
-                    : "What groceries should I buy this week? Suggest a balanced shopping list."
-                )}
-              />
-              <QuickAction
-                icon={BookOpen}
-                label={recipeCount > 0 ? "Find recipes" : "Get ideas"}
-                onClick={() => sendMessage(recipeCount > 0 ? "Suggest a quick dinner from my recipes for tonight." : "Suggest some easy dinner recipes I should try.")}
-              />
-              <QuickAction
-                icon={Sparkles}
-                label={`${seasonal.season} ideas`}
-                onClick={() => sendMessage(
-                  seasonal.upcomingHolidays.length > 0
-                    ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
-                    : `What ${seasonal.season} recipes should I try?`
-                )}
-              />
+            {/* Quick ask — chat prompt suggestions */}
+            <div className="mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <MessageCircle className="w-3.5 h-3.5 text-orange-400" />
+                <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Quick ask</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <QuickAction
+                  icon={CalendarDays}
+                  label="Plan meals"
+                  onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
+                />
+                <QuickAction
+                  icon={ShoppingCart}
+                  label="Shopping list"
+                  onClick={() => sendMessage(
+                    mealPlan.length > 0
+                      ? "Generate a shopping list from my meal plan for this week. Group items by category and skip anything already on my shopping list."
+                      : "What groceries should I buy this week? Suggest a balanced shopping list."
+                  )}
+                />
+                <QuickAction
+                  icon={BookOpen}
+                  label={recipeCount > 0 ? "Find recipes" : "Get ideas"}
+                  onClick={() => sendMessage(recipeCount > 0 ? "Suggest a quick dinner from my recipes for tonight." : "Suggest some easy dinner recipes I should try.")}
+                />
+                <QuickAction
+                  icon={Sparkles}
+                  label={`${seasonal.season} ideas`}
+                  onClick={() => sendMessage(
+                    seasonal.upcomingHolidays.length > 0
+                      ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
+                      : `What ${seasonal.season} recipes should I try?`
+                  )}
+                />
+              </div>
             </div>
           </>
         )}

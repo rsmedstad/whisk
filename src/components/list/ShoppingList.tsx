@@ -444,7 +444,7 @@ export function ShoppingList({
             <div className="px-4 pt-3">
               <Card>
                 {listScanPreview && (
-                  <div className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
+                  <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
                     <img
                       src={listScanPreview}
                       alt="Scanned list"
@@ -453,6 +453,23 @@ export function ShoppingList({
                         !isListScanning && "opacity-60"
                       )}
                     />
+                    <button
+                      onClick={() => {
+                        setListScanPreview((prev) => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return null;
+                        });
+                        if (!isListScanning) {
+                          setListScanResult(null);
+                          setScanPendingItems([]);
+                          setScanSortAZ(false);
+                        }
+                      }}
+                      className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
+                      title="Close preview"
+                    >
+                      <XMark className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
                 {isListScanning && (
@@ -545,7 +562,7 @@ export function ShoppingList({
 
           {/* Filter bar — sort, clear checked, clear all, auto-classify */}
           {totalCount > 0 && (
-            <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 overflow-x-auto no-scrollbar">
+            <div className={classNames("flex items-center gap-1.5 px-4 pt-3 pb-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
               {/* Sort dropdown */}
               <div className="relative">
                 <button

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { getSeasonalContext } from "../../lib/seasonal";
-import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, Check, EllipsisVertical, Clock, Sparkles } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, Check, EllipsisVertical, Clock, Sparkles, MessageCircle } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 
@@ -350,17 +350,24 @@ export function MealPlan({
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Plan</h1>
           </button>
+          {/* Today button — centered, highlights when viewing a different week */}
+          {(() => {
+            const isOnCurrentWeek = weekDates.some((d) => toDateString(d) === today);
+            return (
+              <button
+                onClick={onToday}
+                className={classNames(
+                  "text-xs font-medium px-3 py-1 rounded-full border transition-colors",
+                  isOnCurrentWeek
+                    ? "border-stone-200 dark:border-stone-700 text-stone-400 dark:text-stone-500"
+                    : "border-orange-500 text-orange-500 bg-orange-50 dark:bg-orange-950/30"
+                )}
+              >
+                Today
+              </button>
+            );
+          })()}
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={classNames(
-                "p-1.5 transition-colors",
-                showHistory ? "text-orange-500" : "text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300"
-              )}
-              title="History"
-            >
-              <Clock className="w-4.5 h-4.5" />
-            </button>
             <button
               onClick={() => {
                 const next = planLayout === "list" ? "tiles" : "list";
@@ -388,6 +395,15 @@ export function MealPlan({
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowOverflowMenu(false)} />
                   <div className="absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                    {getWeekHistory && (
+                      <button
+                        onClick={() => { setShowHistory(!showHistory); setShowOverflowMenu(false); }}
+                        className="w-full px-4 py-2.5 text-left text-sm dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-2"
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        Recent weeks
+                      </button>
+                    )}
                     {onCopyWeek && (
                       <button
                         onClick={() => { onCopyWeek(); setShowOverflowMenu(false); }}
@@ -408,12 +424,6 @@ export function MealPlan({
                 </>
               )}
             </div>
-            <button
-              onClick={onToday}
-              className="text-xs font-medium text-orange-500 border border-orange-500 px-2 py-1 rounded-md"
-            >
-              Today
-            </button>
           </div>
         </div>
 
@@ -585,7 +595,7 @@ export function MealPlan({
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-24">
         {/* Plan / Quick fill action bar */}
-        <div className="flex gap-2 px-4 pt-3 pb-1">
+        <div className="flex gap-2 px-4 pt-3 pb-3">
           <button
             onClick={() => navigate("/ask?q=" + encodeURIComponent(
               weekMeals.length > 0
@@ -594,7 +604,7 @@ export function MealPlan({
             ))}
             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
           >
-            <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+            <MessageCircle className="w-3.5 h-3.5 text-orange-500" />
             {weekMeals.length > 0 ? "Get suggestions" : "Plan my week"}
           </button>
           {(() => {
@@ -625,6 +635,9 @@ export function MealPlan({
             );
           })()}
         </div>
+
+        {/* Divider between actions and week plan */}
+        <div className="border-t border-stone-200 dark:border-stone-800 mx-4" />
 
         {planLayout === "tiles" ? (
           /* Tile view — compact grid */
