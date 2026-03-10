@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-type IconProps = SVGProps<SVGSVGElement>;
+export type IconProps = SVGProps<SVGSVGElement>;
 
 const defaults: IconProps = {
   xmlns: "http://www.w3.org/2000/svg",

@@ -59,14 +59,14 @@ src/
   styles/
     app.css            # Tailwind imports + seasonal accent palette overrides
   components/
-    BottomNav.tsx      # 5-tab navigation (Recipes, Discover, Suggest, List, Plan)
+    BottomNav.tsx      # 5-tab navigation (Recipes, Discover, Ask, Plan, List)
     InstallPrompt.tsx  # Platform-aware PWA install instructions
     Settings.tsx       # Full settings page (theme, units, AI status, data, danger zone)
     auth/Login.tsx     # Onboarding: join existing book or setup new
     ui/                # Reusable primitives (Button, Card, Input, TextArea, etc.)
     recipes/           # RecipeList, RecipeDetail, RecipeForm, CookMode
     discover/          # Discover tab (recipe browser + AI identify)
-    suggest/           # SuggestChat (AI-powered recipe discovery)
+    suggest/           # SuggestChat / Ask tab (AI assistant with agentic capabilities)
     list/              # ShoppingList
     plan/              # MealPlan
 

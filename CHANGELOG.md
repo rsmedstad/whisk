@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.4.0] - 2026-03-10
+
+### Tab Reorganization
+
+- Reordered tabs: Recipes | Discover | **Ask** (center) | Plan | List
+- Ask tab gets a raised orange pill icon — visually distinguishes it as the app's main feature
+- Ask is now the center tab reflecting its role as the AI-powered differentiator
+
+### Ask Tab Redesign
+
+- New landing state: recipe suggestion card at top, 2x2 capabilities grid, seasonal card at bottom
+- Capabilities grid: "Plan meals", "Shopping list", "Find recipes", "Discover new" — each sends a contextual prompt
+- Rich recipe cards: AI can now render tappable recipe cards from your collection in chat responses
+- External recipe save cards: styled import cards for AI-suggested URLs
+- Bulk "Add all to plan" button when AI suggests 3+ meals at once
+- Individual plan actions show recipe title instead of generic "Add to Plan"
+
+### Plan Tab Enhancement
+
+- "Help me plan" section at the bottom of the week view:
+  - "Plan my week" — opens Ask with a pre-filled planning prompt
+  - "Quick fill gaps" — auto-fills empty slots using recipe scoring (slot fit, season, rating, cooked count)
+  - "What's in Season" compact card showing seasonal produce
+- Extracted `SeasonalProduceCard` as a shared component used by both Ask and Plan tabs
+
+### Agentic AI Features
+
+- New backend action markers: `RECIPE_CARD` (inline recipe cards), `SAVE_RECIPE` (import cards)
+- Recipe IDs now included in AI context so the model can reference specific recipes
+- Planning workflow instructions: AI suggests meals for empty slots with one-tap add-to-plan
+- Multi-turn planning: AI checks existing plan, avoids duplicates, offers shopping list generation
+
+### Removed Features
+
+- Removed store ads / weekly deals feature (Flipp API integration, deal scanning, store preferences)
+- Removed `useDeals` hook, `deals.ts` utility, and all `/api/deals/` and `/api/stores` endpoints
+- Cleaned up related props from ShoppingList, MealPlan, SuggestChat, and Settings components
+
+### Bug Fixes
+
+- Fixed missing images on Discover overview page (added HTML image index for NYT scraper)
+- Fixed missing horizontal scrollbars on desktop in Discover category rows
+- Fixed person/state images appearing on recipe cards (enhanced `isPersonImage()` URL patterns)
+- Fixed St. Patrick's Day icons using emoji instead of SVG (brand icon + CSS decoration)
+
+---
+
 ## [0.3.4] - 2026-03-08
 
 ### Discover & Recipes UX

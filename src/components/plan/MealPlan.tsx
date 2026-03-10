@@ -1,10 +1,11 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient, Deal } from "../../types";
+import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { getSeasonalContext } from "../../lib/seasonal";
-import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, Check, EllipsisVertical, Clock } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, Check, EllipsisVertical, Clock, Sparkles } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
+import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 
 const PANTRY_STAPLES = new Set([
   "salt", "pepper", "black pepper", "olive oil", "vegetable oil", "canola oil",
@@ -25,7 +26,6 @@ function recipeScore(
   slot: MealSlot,
   seasonalIngredients: string[],
   seasonalTags: string[],
-  dealItems: string[],
 ): number {
   let score = 0;
 
@@ -43,15 +43,6 @@ function recipeScore(
     const text = `${titleLower} ${descLower}`;
     const matches = seasonalIngredients.filter((ing) => text.includes(ing));
     score += Math.min(matches.length * 10, 30);
-  }
-
-  // Deal match — recipe uses ingredients currently on sale
-  if (dealItems.length > 0) {
-    const titleLower = r.title.toLowerCase();
-    const descLower = (r.description ?? "").toLowerCase();
-    const text = `${titleLower} ${descLower}`;
-    const matches = dealItems.filter((item) => text.includes(item));
-    score += Math.min(matches.length * 12, 25);
   }
 
   // Rating (0-5 scale, weighted heavily)
@@ -105,7 +96,6 @@ interface MealPlanProps {
   copiedMeals?: PlannedMeal[] | null;
   getWeekHistory?: (count: number) => { id: string; dateRange: string; mealCount: number; completionRate: number }[];
   weekId?: string;
-  deals?: Deal[];
   onToggleWantToMake?: (id: string) => void;
 }
 
@@ -126,7 +116,6 @@ export function MealPlan({
   copiedMeals,
   getWeekHistory,
   weekId,
-  deals = [],
   onToggleWantToMake,
 }: MealPlanProps) {
   const navigate = useNavigate();
@@ -137,11 +126,7 @@ export function MealPlan({
   const seasonalIngredients = seasonal.seasonalIngredients;
   const seasonalTags = seasonal.seasonalTags;
 
-  // Deal items normalized for matching against recipe titles
-  const dealItems = useMemo(
-    () => deals.map((d) => d.item.toLowerCase()),
-    [deals]
-  );
+
 
   const enabledSlots = useMemo(() => getEnabledSlots(), []);
   const mealSlots = useMemo(
@@ -306,6 +291,36 @@ export function MealPlan({
       setTimeout(() => setShoppingListStatus(null), 3000);
     }
   };
+
+  const handleAutoFillEmptySlots = useCallback(() => {
+    const usedRecipeIds = new Set<string>();
+    // Gather already-planned recipe IDs for this week
+    for (const date of weekDates) {
+      const meals = getMealsForDate(date);
+      for (const meal of meals) {
+        if (meal.recipeId) usedRecipeIds.add(meal.recipeId);
+      }
+    }
+    let filled = 0;
+    for (const date of weekDates) {
+      const meals = getMealsForDate(date);
+      for (const { slot } of mealSlots) {
+        const hasMeal = meals.some((m) => m.slot === slot);
+        if (hasMeal) continue;
+        const candidates = recipeIndex
+          .filter((r) => !usedRecipeIds.has(r.id))
+          .map((r) => ({ recipe: r, score: recipeScore(r, slot, seasonalIngredients, seasonalTags) }))
+          .sort((a, b) => b.score - a.score);
+        const best = candidates[0];
+        if (best) {
+          onAddMeal(date, slot, best.recipe.title, best.recipe.id);
+          usedRecipeIds.add(best.recipe.id);
+          filled++;
+        }
+      }
+    }
+    return filled;
+  }, [weekDates, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal]);
 
   return (
     <div className="flex flex-col h-full">
@@ -887,7 +902,7 @@ export function MealPlan({
           const plannedIds = new Set(weekMeals.map((m) => m.recipeId).filter(Boolean));
           const candidates = recipeIndex
             .filter((r) => !plannedIds.has(r.id))
-            .map((r) => ({ recipe: r, score: recipeScore(r, slot, seasonalIngredients, seasonalTags, dealItems) }))
+            .map((r) => ({ recipe: r, score: recipeScore(r, slot, seasonalIngredients, seasonalTags) }))
             .sort((a, b) => b.score - a.score)
             .slice(0, 8)
             .filter((c) => c.score > 0);
@@ -906,18 +921,15 @@ export function MealPlan({
                   const text = `${titleLower} ${descLower}`;
                   const isSeasonal = seasonalIngredients.some((ing) => text.includes(ing))
                     || seasonalTags.some((tag) => r.tags.some((t) => t.toLowerCase() === tag));
-                  const hasDeal = dealItems.some((item) => text.includes(item));
                   return (
                     <button
                       key={r.id}
                       onClick={() => handleAddMeal(r.title, r.id)}
                       className={classNames(
                         "flex items-center gap-1.5 rounded-full border bg-white dark:bg-stone-800 px-2.5 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors",
-                        hasDeal
-                          ? "border-green-300 dark:border-green-700"
-                          : isSeasonal
-                            ? "border-emerald-200 dark:border-emerald-800"
-                            : "border-stone-200 dark:border-stone-700"
+                        isSeasonal
+                          ? "border-emerald-200 dark:border-emerald-800"
+                          : "border-stone-200 dark:border-stone-700"
                       )}
                     >
                       {r.thumbnailUrl ? (
@@ -932,7 +944,6 @@ export function MealPlan({
                         <span className="text-[9px] text-amber-500">{r.avgRating.toFixed(1)}★</span>
                       )}
                       {isSeasonal && <span className="text-[9px] text-emerald-500" title="In season">🌿</span>}
-                      {hasDeal && <span className="text-[9px] text-green-600" title="On sale">💲</span>}
                     </button>
                   );
                 })}
@@ -975,6 +986,43 @@ export function MealPlan({
             )}
           </div>
         )}
+
+        {/* Help me plan */}
+        <div className="px-4 py-4 space-y-2.5">
+          <h2 className="text-[10px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+            Help me plan
+          </h2>
+
+          <button
+            onClick={() => navigate("/ask?q=" + encodeURIComponent("Plan my dinners for this week using my recipes. Consider variety and what's in season."))}
+            className="w-full flex items-center gap-3 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+          >
+            <Sparkles className="w-5 h-5 text-orange-500 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">Plan my week</p>
+              <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">
+                AI suggests meals for empty slots based on your recipes
+              </p>
+            </div>
+          </button>
+
+          {recipeIndex.length > 0 && (
+            <button
+              onClick={handleAutoFillEmptySlots}
+              className="w-full flex items-center gap-3 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+            >
+              <CalendarDays className="w-5 h-5 text-orange-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">Quick fill gaps</p>
+                <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">
+                  Auto-fill empty slots with top-scored recipes
+                </p>
+              </div>
+            </button>
+          )}
+
+          <SeasonalProduceCard compact />
+        </div>
       </div>
     </div>
   );

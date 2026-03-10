@@ -1,28 +1,17 @@
-import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Leaf, Flower, Sun, Snowflake, Send, Sparkles } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles } from "../ui/Icon";
+import type { IconProps } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
+import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
-import { getSeasonalContext, buildSeasonalSystemContext, SEASONAL_CATEGORIES } from "../../lib/seasonal";
-import type { RecipeIndexEntry, PlannedMeal, ShoppingItem, Deal, UserPreferences, MealSlot } from "../../types";
+import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
+import type { RecipeIndexEntry, PlannedMeal, ShoppingItem, UserPreferences, MealSlot } from "../../types";
 import { toDateString } from "../../lib/utils";
 
-const SEASON_ICON: Record<string, typeof Leaf> = {
-  spring: Flower,
-  summer: Sun,
-  fall: Leaf,
-  winter: Snowflake,
-};
-
-const SEASON_ICON_COLOR: Record<string, string> = {
-  spring: "text-pink-500 dark:text-pink-400",
-  summer: "text-amber-500 dark:text-amber-400",
-  fall: "text-orange-600 dark:text-orange-400",
-  winter: "text-sky-500 dark:text-sky-400",
-};
 
 interface Message {
   role: "user" | "assistant";
@@ -71,7 +60,6 @@ interface SuggestChatProps {
   recipes?: RecipeIndexEntry[];
   mealPlan?: PlannedMeal[];
   shoppingList?: ShoppingItem[];
-  deals?: Deal[];
   preferences?: UserPreferences;
   onAddMeal?: (date: Date, slot: MealSlot, title: string, recipeId?: string) => Promise<void>;
   onAddToList?: (name: string) => void;
@@ -88,56 +76,33 @@ function extractUrls(text: string): string[] {
   });
 }
 
-/** Category icon (inline SVG for small custom icons) */
-function CategoryIcon({ category, className }: { category: string; className?: string }) {
-  const cn = className ?? "w-3.5 h-3.5";
-  switch (category) {
-    case "Fruit":
-      // Apple (Lucide)
-      return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 6.528V3a1 1 0 0 1 1-1h0" />
-          <path d="M18.237 21A15 15 0 0 0 22 11a6 6 0 0 0-10-4.472A6 6 0 0 0 2 11a15.1 15.1 0 0 0 3.763 10 3 3 0 0 0 3.648.648 5.5 5.5 0 0 1 5.178 0A3 3 0 0 0 18.237 21" />
-        </svg>
-      );
-    case "Vegetables":
-      // Carrot (Lucide)
-      return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2.27 21.7s9.87-3.5 12.73-6.36a4.5 4.5 0 0 0-6.36-6.37C5.77 11.84 2.27 21.7 2.27 21.7zM8.64 14l-2.05-2.04M15.34 15l-2.46-2.46" />
-          <path d="M22 9s-1.33-2-3.5-2C16.86 7 15 9 15 9s1.33 2 3.5 2S22 9 22 9z" />
-          <path d="M15 2s-2 1.33-2 3.5S15 9 15 9s2-1.84 2-3.5C17 3.33 15 2 15 2z" />
-        </svg>
-      );
-    case "Mains":
-      // Drumstick (Lucide)
-      return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M15.4 15.63a7.875 6 135 1 1 6.23-6.23 4.5 3.43 135 0 0-6.23 6.23" />
-          <path d="m8.29 12.71-2.6 2.6a2.5 2.5 0 1 0-1.65 4.65A2.5 2.5 0 1 0 8.7 18.3l2.59-2.59" />
-        </svg>
-      );
-    case "Sides":
-      // Salad bowl (Lucide)
-      return (
-        <svg className={cn} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M7 21h10" />
-          <path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z" />
-          <path d="M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.37 3.37 2.4 2.4 0 0 1-1.1 3.7 2.51 2.51 0 0 1 .03 1.1" />
-          <path d="m13 12 4-4" />
-          <path d="M10.9 7.25A3.99 3.99 0 0 0 4 10c0 .73.2 1.41.54 2" />
-        </svg>
-      );
-    default:
-      return null;
-  }
+
+/** Tappable capability card for the Ask landing state */
+function CapabilityCard({ icon: Icon, title, description, onClick }: {
+  icon: ComponentType<IconProps>;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-start gap-1 rounded-lg border border-stone-200 dark:border-stone-700 p-2.5 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+    >
+      <Icon className="w-4 h-4 text-orange-500" />
+      <p className="text-xs font-semibold text-stone-700 dark:text-stone-200">{title}</p>
+      <p className="text-[11px] text-stone-400 dark:text-stone-500 leading-tight">{description}</p>
+    </button>
+  );
 }
 
 // Parse action markers from AI responses
-const ACTION_REGEX = /\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES):\s*([^\]]+)\]/g;
+const ACTION_REGEX = /\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):\s*([^\]]+)\]/g;
+
+type ActionType = "ADD_TO_PLAN" | "ADD_TO_LIST" | "SEARCH_RECIPES" | "RECIPE_CARD" | "SAVE_RECIPE";
 
 interface ParsedAction {
-  type: "ADD_TO_PLAN" | "ADD_TO_LIST" | "SEARCH_RECIPES";
+  type: ActionType;
   raw: string;
   params: string;
 }
@@ -160,7 +125,7 @@ function stripActionMarkers(text: string): string {
   return text.replace(ACTION_REGEX, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], shoppingList = [], deals = [], preferences, onAddMeal, onAddToList }: SuggestChatProps) {
+export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], shoppingList = [], preferences, onAddMeal, onAddToList }: SuggestChatProps) {
   const recipeCount = recipes.length;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -214,10 +179,6 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
     return options;
   }, [seasonal]);
 
-  // Get seasonal categories for display
-  const categories = useMemo(() => {
-    return SEASONAL_CATEGORIES[seasonal.season] ?? [];
-  }, [seasonal.season]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -290,8 +251,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           seasonalContext: buildSeasonalSystemContext(new Date(), householdSize),
           mealPlan: mealPlan.length > 0 ? mealPlan.slice(0, 30) : undefined,
           shoppingList: shoppingList.length > 0 ? shoppingList.map((i) => ({ name: i.name, checked: i.checked, category: i.category })).slice(0, 50) : undefined,
-          deals: deals.length > 0 ? deals.slice(0, 30).map((d) => ({ item: d.item, price: d.price, storeName: d.storeName, validTo: d.validTo })) : undefined,
-          preferences: freshPreferences ?? preferences ?? undefined,
+          preferences: preferences ?? undefined,
         }),
       });
 
@@ -452,48 +412,15 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           </div>
         )}
 
-        {/* Landing state: seasonal info + suggestion + mood */}
+        {/* Landing state: suggestion + capabilities + seasonal */}
         {messages.length === 0 && (
           <>
-            {/* What's in Season */}
-            <Card>
-              <div className="flex items-center gap-2 mb-3">
-                {(() => { const SeasonIcon = SEASON_ICON[seasonal.season] ?? Leaf; return <SeasonIcon className={`w-4.5 h-4.5 ${SEASON_ICON_COLOR[seasonal.season] ?? "text-green-600 dark:text-green-400"}`} />; })()}
-                <h2 className="text-base font-semibold dark:text-stone-100">
-                  What&apos;s in Season
-                </h2>
-                {seasonal.upcomingHolidays.length > 0 && (
-                  <span className="ml-auto inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-950 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300">
-                    {seasonal.upcomingHolidays[0]!.name}
-                    {seasonal.upcomingHolidays[0]!.daysAway > 0 && (
-                      <span className="ml-1 text-orange-500/70">{seasonal.upcomingHolidays[0]!.daysAway}d</span>
-                    )}
-                  </span>
-                )}
-              </div>
-              <div className="space-y-2.5">
-                {categories.map((cat) => (
-                  <div key={cat.label} className="flex items-start gap-2">
-                    <CategoryIcon category={cat.label} className="w-4 h-4 text-stone-400 dark:text-stone-500 mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-stone-600 dark:text-stone-300">
-                        {cat.label}
-                      </p>
-                      <p className="text-xs text-stone-400 dark:text-stone-500">
-                        {cat.items.join(", ")}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Suggestion */}
+            {/* Suggestion — random recipe picker */}
             {recipeCount > 0 && (
               <Card>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-                    Suggestion
+                    Wondering what to make?
                   </p>
                   <div className="flex items-center gap-1.5">
                     <select
@@ -609,111 +536,51 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               </Card>
             )}
 
-            {/* Cook What's on Sale — AI-powered recipe suggestions from deals */}
-            {deals.length > 0 && chatEnabled && localStorage.getItem("whisk_sale_suggestions") !== "false" && (
-              <Card>
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4.5 h-4.5 text-orange-500" />
-                  <h2 className="text-base font-semibold dark:text-stone-100">
-                    Cook What&apos;s on Sale
-                  </h2>
-                </div>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mb-3">
-                  Get recipe ideas based on what&apos;s on sale at your stores
-                  {recipeCount > 0 && ", matched to your collection"}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => sendMessage(
-                      recipeCount > 0
-                        ? "Look at what's on sale right now at my preferred stores. Find recipes from my collection that use those sale ingredients, and suggest 2-3 new recipe ideas that take advantage of the best deals. Consider my dietary preferences."
-                        : "Based on what's currently on sale at my preferred stores, suggest 3-4 budget-friendly recipe ideas that use the sale ingredients. Consider my dietary preferences and what's in season."
-                    )}
-                    className="wk-pill rounded-full border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 text-xs text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
-                  >
-                    Meal ideas from sales
-                  </button>
-                  {recipeCount > 0 && (
-                    <button
-                      onClick={() => sendMessage("Plan this week's dinners prioritizing ingredients that are on sale right now. Use my existing recipes where possible and suggest new ones for the best deals.")}
-                      className="wk-pill rounded-full border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 px-3 py-1.5 text-xs text-green-600 dark:text-green-400 font-medium hover:border-green-500 transition-colors"
-                    >
-                      Week plan from deals
-                    </button>
-                  )}
-                </div>
-              </Card>
-            )}
-
-            {/* Ask anything */}
+            {/* What can I help with? — capabilities grid */}
             <Card>
-              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-1">
-                Ask anything
+              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-3">
+                What can I help with?
               </p>
-              <p className="text-xs text-stone-400 dark:text-stone-500 mb-3">
-                {recipeCount > 0
-                  ? `Get ideas from your ${recipeCount} recipes, plan meals, check deals, or explore ${seasonal.season} cooking`
-                  : `Discover new recipe ideas, plan meals, or get inspiration for ${seasonal.season}`}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {/* Primary contextual chips */}
-                {recipeCount > 0 && (
-                  <button
-                    onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety, what's in season, and what's on sale.")}
-                    className="wk-pill rounded-full border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 px-3 py-1 text-xs text-orange-600 dark:text-orange-400 font-medium hover:border-orange-500 transition-colors"
-                  >
-                    Plan my week
-                  </button>
-                )}
-                {deals.length > 0 && (
-                  <button
-                    onClick={() => sendMessage("What's on sale right now? Summarize the best deals across stores and suggest recipes that use those ingredients.")}
-                    className="wk-pill rounded-full border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 px-3 py-1 text-xs text-green-600 dark:text-green-400 font-medium hover:border-green-500 transition-colors"
-                  >
-                    What&apos;s on sale?
-                  </button>
-                )}
-                {mealPlan.length > 0 && (
-                  <button
+              <div className="grid grid-cols-2 gap-2">
+                <CapabilityCard
+                  icon={CalendarDays}
+                  title="Plan meals"
+                  description="Fill your week with recipes"
+                  onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
+                />
+                {mealPlan.length > 0 ? (
+                  <CapabilityCard
+                    icon={ShoppingCart}
+                    title="Shopping list"
+                    description="Generate from your plan"
                     onClick={() => sendMessage("Generate a shopping list from my meal plan for this week. Group items by category and skip anything already on my shopping list.")}
-                    className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                  >
-                    List from plan
-                  </button>
+                  />
+                ) : (
+                  <CapabilityCard
+                    icon={ShoppingCart}
+                    title="Shopping list"
+                    description="What to buy this week"
+                    onClick={() => sendMessage("What groceries should I buy this week? Suggest a balanced shopping list.")}
+                  />
                 )}
-                {recipeCount > 0 && (
-                  <button
-                    onClick={() => sendMessage("Suggest a dinner from my recipes for tonight. Something quick and easy.")}
-                    className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                  >
-                    Suggest dinner
-                  </button>
-                )}
-                <button
-                  onClick={() => sendMessage("What can I make with common pantry staples? Suggest recipes that don't need a special trip to the store.")}
-                  className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                >
-                  What can I make?
-                </button>
-                {/* Seasonal / holiday chip */}
-                {seasonal.upcomingHolidays.length > 0 && (
-                  <button
-                    onClick={() => sendMessage(`Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`)}
-                    className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                  >
-                    {seasonal.upcomingHolidays[0]!.name} ideas
-                  </button>
-                )}
-                {seasonal.upcomingHolidays.length === 0 && (
-                  <button
-                    onClick={() => sendMessage(`What ${seasonal.season} recipes should I try?`)}
-                    className="wk-pill rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs text-stone-600 dark:text-stone-300 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                  >
-                    {seasonal.season.charAt(0).toUpperCase() + seasonal.season.slice(1)} ideas
-                  </button>
-                )}
+                <CapabilityCard
+                  icon={BookOpen}
+                  title={recipeCount > 0 ? "Find recipes" : "Get ideas"}
+                  description={recipeCount > 0 ? "Search your collection" : "Discover new dishes"}
+                  onClick={() => sendMessage(recipeCount > 0 ? "Suggest a quick dinner from my recipes for tonight." : "Suggest some easy dinner recipes I should try.")}
+                />
+                <CapabilityCard
+                  icon={Sparkles}
+                  title="Discover new"
+                  description={`Get inspired by ${seasonal.season}`}
+                  onClick={() => sendMessage(
+                    seasonal.upcomingHolidays.length > 0
+                      ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
+                      : `What ${seasonal.season} recipes should I try?`
+                  )}
+                />
               </div>
-              {/* Visible text input for custom prompts */}
+              {/* Text input */}
               <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
                 <input
                   type="text"
@@ -732,6 +599,9 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 </button>
               </form>
             </Card>
+
+            {/* What's in Season — bottom */}
+            <SeasonalProduceCard />
           </>
         )}
 
@@ -740,6 +610,13 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           const urls = msg.role === "assistant" ? extractUrls(msg.content) : [];
           const actions = msg.role === "assistant" ? parseActions(msg.content) : [];
           const displayContent = actions.length > 0 ? stripActionMarkers(msg.content) : msg.content;
+
+          // Separate action types for grouped rendering
+          const recipeCards = actions.filter((a) => a.type === "RECIPE_CARD");
+          const saveRecipes = actions.filter((a) => a.type === "SAVE_RECIPE");
+          const planActions = actions.filter((a) => a.type === "ADD_TO_PLAN");
+          const otherActions = actions.filter((a) => a.type !== "RECIPE_CARD" && a.type !== "SAVE_RECIPE" && a.type !== "ADD_TO_PLAN");
+
           return (
             <div
               key={i}
@@ -755,12 +632,96 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 }`}
               >
                 <p className="whitespace-pre-wrap">{displayContent}</p>
-                {/* Actionable buttons from AI response markers */}
-                {actions.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2 border-t border-stone-200 dark:border-stone-700 pt-2">
-                    {actions.map((action, ai) => {
-                      if (action.type === "ADD_TO_PLAN") {
-                        // params: "date, slot, title, recipeId?"
+
+                {/* Recipe cards from user's collection */}
+                {recipeCards.length > 0 && (
+                  <div className="mt-2 space-y-1.5 border-t border-stone-200 dark:border-stone-700 pt-2">
+                    {recipeCards.map((action, ai) => {
+                      const parts = action.params.split(",").map((s) => s.trim());
+                      const recipeId = parts[0] ?? "";
+                      const recipe = recipes.find((r) => r.id === recipeId);
+                      if (!recipe) return null;
+                      const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0);
+                      return (
+                        <button
+                          key={ai}
+                          onClick={() => navigate(`/recipes/${recipe.id}`)}
+                          className="flex gap-2 w-full rounded-lg border border-stone-200 dark:border-stone-600 overflow-hidden text-left hover:border-orange-300 dark:hover:border-orange-600 transition-colors"
+                        >
+                          {recipe.thumbnailUrl ? (
+                            <img src={recipe.thumbnailUrl} alt="" className="w-16 h-16 object-cover shrink-0" />
+                          ) : (
+                            <div className="w-16 h-16 bg-stone-200 dark:bg-stone-700 shrink-0" />
+                          )}
+                          <div className="py-1.5 pr-2 min-w-0">
+                            <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">{recipe.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {totalTime > 0 && <span className="text-xs text-stone-400">{totalTime} min</span>}
+                              {recipe.servings && <span className="text-xs text-stone-400">Serves {recipe.servings}</span>}
+                            </div>
+                            {recipe.tags.length > 0 && (
+                              <p className="text-xs text-stone-400 truncate mt-0.5">{recipe.tags.slice(0, 3).join(" · ")}</p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* External recipe save cards */}
+                {saveRecipes.length > 0 && (
+                  <div className="mt-2 space-y-1.5 border-t border-stone-200 dark:border-stone-700 pt-2">
+                    {saveRecipes.map((action, ai) => {
+                      const commaIdx = action.params.indexOf(",");
+                      const url = commaIdx >= 0 ? action.params.slice(0, commaIdx).trim() : action.params.trim();
+                      const title = commaIdx >= 0 ? action.params.slice(commaIdx + 1).trim() : "";
+                      let displayHost = "";
+                      try { displayHost = new URL(url).hostname; } catch { displayHost = url; }
+                      return (
+                        <button
+                          key={ai}
+                          onClick={() => navigate(`/recipes/new?url=${encodeURIComponent(url)}`)}
+                          className="flex items-center gap-2 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20 p-2.5 text-left hover:border-orange-400 transition-colors"
+                        >
+                          <Plus className="w-4 h-4 text-orange-500 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
+                              {title || displayHost}
+                            </p>
+                            <p className="text-xs text-stone-400 truncate">{url}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Bulk "Add all to plan" + individual plan actions */}
+                {planActions.length > 0 && (
+                  <div className="mt-2 space-y-1.5 border-t border-stone-200 dark:border-stone-700 pt-2">
+                    {planActions.length >= 3 && (
+                      <button
+                        onClick={() => {
+                          for (const action of planActions) {
+                            const parts = action.params.split(",").map((s) => s.trim());
+                            const dateStr = parts[0] ?? "";
+                            const slot = (parts[1] ?? "dinner") as MealSlot;
+                            const title = parts[2] ?? "Meal";
+                            const recipeId = parts[3];
+                            if (onAddMeal) {
+                              const d = dateStr ? new Date(dateStr + "T00:00:00") : new Date();
+                              onAddMeal(d, slot, title, recipeId);
+                            }
+                          }
+                        }}
+                        className="w-full rounded-lg bg-orange-500 text-white py-2 text-sm font-medium hover:bg-orange-600 transition-colors"
+                      >
+                        Add all {planActions.length} meals to plan
+                      </button>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {planActions.map((action, ai) => {
                         const parts = action.params.split(",").map((s) => s.trim());
                         const dateStr = parts[0] ?? "";
                         const slot = (parts[1] ?? "dinner") as MealSlot;
@@ -777,12 +738,19 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                             }}
                             className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900 transition-colors"
                           >
-                            <Plus className="w-3 h-3" /> Add to Plan
+                            <Plus className="w-3 h-3" /> {title}
                           </button>
                         );
-                      }
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Other action buttons (ADD_TO_LIST, SEARCH_RECIPES) */}
+                {otherActions.length > 0 && (
+                  <div className={classNames("flex flex-wrap gap-2", (recipeCards.length > 0 || saveRecipes.length > 0 || planActions.length > 0) ? "mt-1" : "mt-2 border-t border-stone-200 dark:border-stone-700 pt-2")}>
+                    {otherActions.map((action, ai) => {
                       if (action.type === "ADD_TO_LIST") {
-                        // params: "itemName, amount?, unit?, category?"
                         const parts = action.params.split(",").map((s) => s.trim());
                         const itemName = parts[0] ?? "Item";
                         const amount = parts[1];
@@ -814,6 +782,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                     })}
                   </div>
                 )}
+
+                {/* URL-based save buttons (fallback for URLs not caught by SAVE_RECIPE markers) */}
                 {urls.length > 0 && (
                   <div className={classNames("flex flex-wrap gap-2", actions.length > 0 ? "mt-1" : "mt-2 border-t border-stone-200 dark:border-stone-700 pt-2")}>
                     {urls.map((url) => (

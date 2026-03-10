@@ -125,9 +125,8 @@ export interface ShoppingItem {
   sourceRecipeId?: string;
   addedBy?: "manual" | "recipe" | "ai" | "scan";
   addedByUser?: string; // user name who added this item
-  store?: string; // optional store tag for filtering (e.g. "Costco", "Trader Joe's")
+  store?: string; // optional store tag for grouping (e.g. "Costco", "Trader Joe's")
   price?: number; // from receipt scanning
-  dealMatch?: { storeId: string; storeName: string; salePrice: number };
 }
 
 export type ShoppingCategory =
@@ -162,45 +161,6 @@ export interface PlannedMeal {
 
 export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 
-// ── Store & Deals ──────────────────────────────────────
-
-export interface Store {
-  id: string;
-  name: string;
-  adUrl?: string;
-  adFormat?: "pdf" | "html" | "image";
-  refreshDay?: number; // 0=Sun..6=Sat (when new ads drop)
-  location?: string;
-}
-
-export interface Deal {
-  id: string;
-  storeId: string;
-  storeName: string;
-  item: string;
-  price: number;
-  originalPrice?: number;
-  unit?: string;
-  category?: ShoppingCategory;
-  validFrom: string;
-  validTo: string;
-  notes?: string;
-  scannedAt: string;
-  source?: "flipp" | "scan" | "manual";
-}
-
-export interface FlippStore {
-  id: number;
-  name: string;
-  flyerCount: number;
-  popular?: boolean;
-}
-
-export interface DealIndex {
-  deals: Deal[];
-  lastScanned: Record<string, string>; // storeId → ISO timestamp
-  updatedAt: string;
-}
 
 // ── Receipt & Spending ─────────────────────────────────
 

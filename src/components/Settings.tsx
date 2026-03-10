@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry, FlippStore } from "../types";
+import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
 import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
@@ -105,36 +105,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
       return raw ? (JSON.parse(raw) as string[]) : [];
     } catch { return []; }
   });
-  const [dealsEnabled, setDealsEnabled] = useState(
-    () => localStorage.getItem("whisk_deals_enabled") === "true"
-  );
-  const [saleSuggestionsEnabled, setSaleSuggestionsEnabled] = useState(
-    () => localStorage.getItem("whisk_sale_suggestions") !== "false"
-  );
-  const [flippStores, setFlippStores] = useState<FlippStore[]>([]);
-  const [isLoadingStores, setIsLoadingStores] = useState(false);
-
-  // Fetch available Flipp stores when deals are enabled and zip is set
-  const fetchFlippStores = useCallback(async (zip: string) => {
-    if (!zip.trim()) return;
-    setIsLoadingStores(true);
-    try {
-      const data = await api.get<{ stores: FlippStore[] }>(`/deals/flipp?zip=${encodeURIComponent(zip.trim())}`);
-      if (data?.stores) {
-        setFlippStores(data.stores);
-      }
-    } catch {
-      // Silently fail — hardcoded fallback remains
-    } finally {
-      setIsLoadingStores(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (zipCode.trim().length >= 5) {
-      fetchFlippStores(zipCode.trim());
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showAccentPicker, setShowAccentPicker] = useState(false);
 
@@ -253,54 +223,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     setZipCode(zip);
     if (zip.trim()) {
       localStorage.setItem("whisk_zip_code", zip.trim());
-      if (zip.trim().length >= 5) {
-        fetchFlippStores(zip.trim());
-      }
-      syncDealsConfig({ zip: zip.trim() });
     } else {
       localStorage.removeItem("whisk_zip_code");
-      setFlippStores([]);
-      syncDealsConfig({ zip: "" });
     }
   };
-
-  // Sync deals config to server for cron job
-  const syncDealsConfig = useCallback((
-    overrides?: { zip?: string; stores?: string[]; enabled?: boolean }
-  ) => {
-    const config = {
-      zip: overrides?.zip ?? zipCode.trim(),
-      preferredStores: overrides?.stores ?? preferredStores,
-      enabled: overrides?.enabled ?? dealsEnabled,
-    };
-    // Fire and forget — server saves for cron
-    api.put("/deals/config", config).catch(() => {});
-  }, [zipCode, preferredStores, dealsEnabled]);
-
-  // Scan Now state
-  const [isScanningNow, setIsScanningNow] = useState(false);
-  const [scanNowResult, setScanNowResult] = useState<string | null>(null);
-
-  const handleScanNow = useCallback(async () => {
-    setIsScanningNow(true);
-    setScanNowResult(null);
-    try {
-      const res = await api.post<{
-        flipp?: { deals: number; stores: number };
-        urlScans?: { refreshed: number };
-        error?: string;
-      }>("/deals/cron");
-      const parts: string[] = [];
-      if (res?.flipp) parts.push(`${res.flipp.deals} Flipp deals from ${res.flipp.stores} store(s)`);
-      if (res?.urlScans?.refreshed) parts.push(`${res.urlScans.refreshed} ad scan(s) refreshed`);
-      if (res?.error) parts.push(res.error);
-      setScanNowResult(parts.length > 0 ? parts.join(" · ") : "No stores configured to scan");
-    } catch {
-      setScanNowResult("Scan failed — check AI provider settings");
-    } finally {
-      setIsScanningNow(false);
-    }
-  }, []);
 
   const handleHouseholdChange = (size: number) => {
     const clamped = Math.max(1, Math.min(20, size));
@@ -842,7 +768,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       inputMode="numeric"
                     />
                     <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
-                      Used for seasonal suggestions{dealsEnabled ? " and weekly deals" : ""}. Not shared.
+                      Used for seasonal suggestions. Not shared.
                     </p>
                   </div>
                   <div>
@@ -911,110 +837,8 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     onChange={(updated) => {
                       setPreferredStores(updated);
                       localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
-                      syncDealsConfig({ stores: updated });
                     }}
-                    flippStores={flippStores}
-                    isLoadingStores={isLoadingStores}
                   />
-
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="text-sm font-medium dark:text-stone-200">
-                          Weekly Deals
-                        </label>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                          Auto-fetch grocery deals for your area
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          const next = !dealsEnabled;
-                          setDealsEnabled(next);
-                          localStorage.setItem("whisk_deals_enabled", String(next));
-                          syncDealsConfig({ enabled: next });
-                          if (next && zipCode.trim().length >= 5) {
-                            fetchFlippStores(zipCode.trim());
-                          }
-                        }}
-                        className={classNames(
-                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                          dealsEnabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
-                        )}
-                      >
-                        <span
-                          className={classNames(
-                            "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
-                            dealsEnabled ? "translate-x-5" : "translate-x-0"
-                          )}
-                        />
-                      </button>
-                    </div>
-                    {dealsEnabled && !zipCode.trim() && (
-                      <p className="text-xs text-orange-500 mt-1">
-                        Enter a zip code above to enable deal fetching
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Scan Now button */}
-                  {dealsEnabled && zipCode.trim() && preferredStores.length > 0 && (
-                    <div>
-                      <Button
-                        fullWidth
-                        onClick={handleScanNow}
-                        disabled={isScanningNow}
-                      >
-                        {isScanningNow ? (
-                          <span className="flex items-center gap-2">
-                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Scanning stores...
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <RefreshCw className="w-4 h-4" />
-                            Scan Deals Now
-                          </span>
-                        )}
-                      </Button>
-                      {scanNowResult && (
-                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-1.5 text-center">
-                          {scanNowResult}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="text-sm font-medium dark:text-stone-200">
-                          Sale-Based Suggestions
-                        </label>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                          Suggest recipes using ingredients on sale at your stores
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          const next = !saleSuggestionsEnabled;
-                          setSaleSuggestionsEnabled(next);
-                          localStorage.setItem("whisk_sale_suggestions", String(next));
-                        }}
-                        className={classNames(
-                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                          saleSuggestionsEnabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
-                        )}
-                      >
-                        <span
-                          className={classNames(
-                            "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
-                            saleSuggestionsEnabled ? "translate-x-5" : "translate-x-0"
-                          )}
-                        />
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </Card>
             </section>
@@ -1756,20 +1580,16 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   );
 }
 
+const STORE_OPTIONS = ["Jewel-Osco", "Trader Joe's", "Walmart", "Whole Foods", "Costco", "Aldi", "Target", "Meijer", "Kroger", "Mariano's"];
 
 function PreferredStoresDropdown({
   stores,
   onChange,
-  flippStores = [],
-  isLoadingStores = false,
 }: {
   stores: string[];
   onChange: (stores: string[]) => void;
-  flippStores?: FlippStore[];
-  isLoadingStores?: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [showAll, setShowAll] = useState(false);
 
   const toggle = (store: string) => {
     const updated = stores.includes(store)
@@ -1778,30 +1598,14 @@ function PreferredStoresDropdown({
     onChange(updated);
   };
 
-  // Build a popularity lookup from Flipp data
-  const popularSet = new Set(flippStores.filter((f) => f.popular).map((f) => f.name));
+  const allOptions = [...new Set([...STORE_OPTIONS, ...stores])];
 
-  // Only show Flipp stores for the user's zip code
-  const storeOptions = flippStores.map((s) => s.name);
-
-  // Also include any existing preferred stores not in the current options
-  const allOptions = [...new Set([...storeOptions, ...stores])];
-
-  // Filter by search
   const filtered = search.trim()
     ? allOptions.filter((s) => s.toLowerCase().includes(search.toLowerCase()))
     : allOptions;
 
-  // Show selected first, then split unselected into popular vs other
   const selected = filtered.filter((s) => stores.includes(s));
   const unselected = filtered.filter((s) => !stores.includes(s));
-  const popularUnselected = unselected.filter((s) => popularSet.has(s));
-  const otherUnselected = unselected.filter((s) => !popularSet.has(s));
-  const visibleUnselected = search.trim()
-    ? unselected
-    : showAll
-      ? [...popularUnselected, ...otherUnselected]
-      : popularUnselected;
 
   return (
     <div>
@@ -1810,71 +1614,41 @@ function PreferredStoresDropdown({
       </label>
       <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
         Tap to select your grocery stores
-        {isLoadingStores && (
-          <span className="ml-1 inline-flex items-center">
-            <span className="w-3 h-3 border-2 border-stone-300 border-t-orange-500 rounded-full animate-spin" />
-          </span>
-        )}
       </p>
 
-      {/* Search input — only show when stores are available */}
-      {allOptions.length > 0 ? (
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search stores..."
-          className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-1.5 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 mb-2"
-        />
-      ) : !isLoadingStores ? (
-        <p className="text-xs text-stone-400 dark:text-stone-500 italic">
-          Enter a zip code above to see available stores
-        </p>
-      ) : null}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search stores..."
+        className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-1.5 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 mb-2"
+      />
 
-      {/* Selected stores as removable chips */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {selected.map((store) => {
-            const isFlipp = flippStores.some((f) => f.name === store);
-            return (
-              <button
-                key={store}
-                onClick={() => toggle(store)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500 text-white transition-colors hover:bg-orange-600"
-              >
-                {store}
-                {isFlipp && <span className="text-orange-200 text-[9px]">Deals</span>}
-                <XMark className="w-3 h-3 ml-0.5" />
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Available stores as tappable chips */}
-      <div className="flex flex-wrap gap-1.5">
-        {visibleUnselected.map((store) => {
-          const isFlipp = flippStores.some((f) => f.name === store);
-          return (
+          {selected.map((store) => (
             <button
               key={store}
               onClick={() => toggle(store)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400 transition-colors hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500 text-white transition-colors hover:bg-orange-600"
             >
               {store}
-              {isFlipp && <span className="text-[9px] text-green-600 dark:text-green-400">Deals</span>}
+              <XMark className="w-3 h-3 ml-0.5" />
             </button>
-          );
-        })}
-        {!showAll && !search.trim() && otherUnselected.length > 0 && (
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {unselected.map((store) => (
           <button
-            onClick={() => setShowAll(true)}
-            className="px-2.5 py-1 rounded-full text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
+            key={store}
+            onClick={() => toggle(store)}
+            className="px-2.5 py-1 rounded-full text-xs font-medium border border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400 transition-colors hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400"
           >
-            +{otherUnselected.length} more
+            {store}
           </button>
-        )}
+        ))}
         {search.trim() && filtered.length === 0 && (
           <span className="text-xs text-stone-400 dark:text-stone-500 px-1 py-1">
             No matching stores found

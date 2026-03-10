@@ -757,6 +757,17 @@ async function scrapeNYTCooking(env: Env): Promise<FeedItem[]> {
       if (metaItem) items.push(metaItem);
     }
 
+    // Build an image index from HTML <img> tags to fill in missing images
+    // (same approach as Serious Eats — associate images with nearby recipe URLs)
+    const imageIndex = buildNYTImageIndex(html);
+    for (const item of items) {
+      if (!item.imageUrl) {
+        const key = normalizeUrl(item.url);
+        item.imageUrl = imageIndex.get(key)
+          ?? imageIndex.get(item.title.toLowerCase());
+      }
+    }
+
     // Deduplicate by URL, then by title similarity
     const seen = new Set<string>();
     const urlDeduped = items.filter((item) => {
@@ -769,6 +780,48 @@ async function scrapeNYTCooking(env: Env): Promise<FeedItem[]> {
   } catch {
     return [];
   }
+}
+
+/** Build an image index from NYT Cooking HTML — associate <img> tags with nearby recipe URLs */
+function buildNYTImageIndex(html: string): Map<string, string> {
+  const index = new Map<string, string>();
+  // Match img tags with NYT image CDN URLs (static01.nyt.com, nyt.com/images, etc.)
+  const imgRegex = /<img[^>]+(?:src|data-src|srcset)="(https?:\/\/[^"\s]*(?:static01\.nyt|nyt\.com\/images|cooking\.nytimes)[^"\s]*)"/gi;
+  let m;
+  while ((m = imgRegex.exec(html)) !== null) {
+    let imgUrl = m[1]!;
+    // For srcset, take just the first URL
+    if (imgUrl.includes(" ")) imgUrl = imgUrl.split(" ")[0]!;
+    if (isPersonImage(imgUrl)) continue;
+    // Look for alt text on this image
+    const tagEnd = html.indexOf(">", m.index);
+    const tag = html.slice(m.index, tagEnd);
+    const altMatch = tag.match(/alt="([^"]+)"/i);
+    if (altMatch?.[1]) {
+      index.set(altMatch[1].toLowerCase().trim(), imgUrl);
+    }
+    // Look for nearby recipe URL to associate image with recipe
+    const ctx = html.slice(Math.max(0, m.index - 1500), m.index + 1500);
+    const urlMatch = ctx.match(/(?:href="|(?:cooking\.nytimes\.com))(\/recipes\/\d+[-a-z0-9]*)/i);
+    if (urlMatch?.[1]) {
+      const fullUrl = `https://cooking.nytimes.com${urlMatch[1]}`;
+      index.set(normalizeUrl(fullUrl), imgUrl);
+    }
+  }
+  // Also try <source> inside <picture> elements
+  const srcRegex = /<source[^>]+srcset="(https?:\/\/[^"\s]*(?:static01\.nyt|nyt\.com\/images)[^"\s]*)/gi;
+  while ((m = srcRegex.exec(html)) !== null) {
+    let imgUrl = m[1]!;
+    if (imgUrl.includes(" ")) imgUrl = imgUrl.split(" ")[0]!;
+    if (isPersonImage(imgUrl)) continue;
+    const ctx = html.slice(Math.max(0, m.index - 1500), m.index + 1500);
+    const urlMatch = ctx.match(/(?:href="|(?:cooking\.nytimes\.com))(\/recipes\/\d+[-a-z0-9]*)/i);
+    if (urlMatch?.[1]) {
+      const fullUrl = `https://cooking.nytimes.com${urlMatch[1]}`;
+      index.set(normalizeUrl(fullUrl), imgUrl);
+    }
+  }
+  return index;
 }
 
 /**
@@ -1427,6 +1480,9 @@ function isPersonImage(url: string): boolean {
 
   // NYT-specific: author photos often in /images/... with small crop dimensions
   if (lc.includes("nyt.com") && /author|byline/i.test(lc)) return true;
+
+  // NYT / editorial images that show places, maps, or non-food content
+  if (/(?:\/maps\/|\/places\/|\/region\/|\/illustration|\/graphic|promo-image|newsletter)/i.test(lc)) return true;
 
   return false;
 }

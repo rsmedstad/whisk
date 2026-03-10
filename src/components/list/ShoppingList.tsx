@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback, useRef, type FormEvent } from "react";
+import { useState, useMemo, useCallback, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Receipt, SpendingSummary, Deal, Store } from "../../types";
+import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Receipt, SpendingSummary } from "../../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categories";
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
@@ -8,10 +8,10 @@ import { EmptyState } from "../ui/EmptyState";
 import { EllipsisVertical, Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, ChevronDown } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
+
 
 type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store" | "by-recipe";
-type SubTab = "list" | "sales" | "receipts";
+type SubTab = "list" | "receipts";
 
 interface ShoppingListProps {
   list: ShoppingListType;
@@ -36,13 +36,6 @@ interface ShoppingListProps {
   lastScannedReceipt?: Receipt | null;
   onClearScanError?: () => void;
   onClearLastScanned?: () => void;
-  // Deal props
-  dealMatches?: Map<string, Deal[]>;
-  bestStore?: { storeId: string; storeName: string; matchCount: number; estimatedSavings: number } | null;
-  deals?: Deal[];
-  stores?: Store[];
-  isRefreshingDeals?: boolean;
-  onRefreshDeals?: () => void;
   receipts?: { id: string; date: string; store?: string; total?: number }[];
 }
 
@@ -68,12 +61,6 @@ export function ShoppingList({
   lastScannedReceipt,
   onClearScanError,
   onClearLastScanned,
-  dealMatches,
-  bestStore,
-  deals = [],
-  stores = [],
-  isRefreshingDeals = false,
-  onRefreshDeals,
   receipts = [],
 }: ShoppingListProps) {
   const navigate = useNavigate();
@@ -92,20 +79,7 @@ export function ShoppingList({
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
   const [listScanPreview, setListScanPreview] = useState<string | null>(null);
-  // Sales tab
-  const [dealCategoryFilter, setDealCategoryFilter] = useState<string | null>(null);
-  const [dealStoreFilter, setDealStoreFilter] = useState<string | null>(null);
-  // Sales scanner
-  const [showSalesScanner, setShowSalesScanner] = useState(false);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
-  const flyerInputRef = useRef<HTMLInputElement>(null);
-  const [flyerPreview, setFlyerPreview] = useState<string | null>(null);
-  const [dealUrl, setDealUrl] = useState("");
-  const [isScanningDeals, setIsScanningDeals] = useState(false);
-  const [scannedDeals, setScannedDeals] = useState<{ item: string; price: string; originalPrice?: string | null; unit?: string | null; category: string; notes?: string | null }[]>([]);
-  const [scannedDealsMeta, setScannedDealsMeta] = useState<{ storeName?: string | null; validDates?: string | null } | null>(null);
-  const [scannedDealsMessage, setScannedDealsMessage] = useState<string | null>(null);
-  const [scannedPageCount, setScannedPageCount] = useState(0);
 
   // Get unique store names from items
   const storeNames = useMemo(() => {
@@ -242,59 +216,6 @@ export function ShoppingList({
     return map;
   }, [recipeIndex]);
 
-  // Deals filtering
-  const dealCategories = useMemo(() => {
-    const cats = new Set<string>();
-    for (const d of deals) {
-      if (d.category) cats.add(d.category);
-    }
-    return Array.from(cats).sort();
-  }, [deals]);
-
-  const dealStoreNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const d of deals) {
-      names.add(d.storeName);
-    }
-    return Array.from(names).sort();
-  }, [deals]);
-
-  // Deals grouped by store for store cards
-  const dealsByStore = useMemo(() => {
-    const groups = new Map<string, Deal[]>();
-    for (const d of deals) {
-      const arr = groups.get(d.storeName) ?? [];
-      arr.push(d);
-      groups.set(d.storeName, arr);
-    }
-    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [deals]);
-
-  const filteredDeals = useMemo(() => {
-    let result = deals;
-    if (dealCategoryFilter) {
-      result = result.filter((d) => d.category === dealCategoryFilter);
-    }
-    if (dealStoreFilter) {
-      result = result.filter((d) => d.storeName === dealStoreFilter);
-    }
-    return result;
-  }, [deals, dealCategoryFilter, dealStoreFilter]);
-
-  // Items on the shopping list that have deal matches, grouped by item
-  const listDealMatches = useMemo(() => {
-    if (!dealMatches || dealMatches.size === 0) return [];
-    const unchecked = list.items.filter((i) => !i.checked);
-    const results: { item: ShoppingItem; deals: Deal[] }[] = [];
-    for (const item of unchecked) {
-      const matched = dealMatches.get(item.id);
-      if (matched && matched.length > 0) {
-        results.push({ item, deals: matched });
-      }
-    }
-    return results;
-  }, [list.items, dealMatches]);
-
   const checkedCount = filteredItems.filter((i) => i.checked).length;
   const totalCount = filteredItems.length;
   const uncategorizedCount = list.items.filter((i) => i.category === "other").length;
@@ -406,69 +327,6 @@ export function ShoppingList({
     input.click();
   };
 
-  // Sales scanner handlers
-  const handleFlyerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFlyerPreview(URL.createObjectURL(file));
-    setDealUrl("");
-  };
-
-  const handleScanDeals = async () => {
-    const hasPhoto = flyerInputRef.current?.files?.[0];
-    const hasUrl = dealUrl.trim();
-    if (!hasPhoto && !hasUrl) return;
-
-    setIsScanningDeals(true);
-    try {
-      const formData = new FormData();
-      if (hasPhoto) {
-        formData.append("photo", flyerInputRef.current!.files![0]!);
-      } else {
-        formData.append("url", hasUrl);
-      }
-
-      const token = localStorage.getItem("whisk_token");
-      const res = await fetch("/api/discover/scan-deals", {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error("Scan failed");
-      const data = (await res.json()) as { deals: typeof scannedDeals; storeName?: string | null; validDates?: string | null; message?: string };
-
-      setScannedDeals((prev) => [...prev, ...data.deals]);
-      if (data.storeName || data.validDates) {
-        setScannedDealsMeta((prev) => prev ?? { storeName: data.storeName, validDates: data.validDates });
-      }
-      if (data.deals.length === 0 && data.message) {
-        setScannedDealsMessage(data.message);
-      } else {
-        setScannedDealsMessage(null);
-      }
-      setScannedPageCount((n) => n + 1);
-
-      setFlyerPreview(null);
-      setDealUrl("");
-      if (flyerInputRef.current) flyerInputRef.current.value = "";
-    } catch {
-      setScannedDealsMessage("Failed to scan. Try a clearer image or different URL.");
-    } finally {
-      setIsScanningDeals(false);
-    }
-  };
-
-  const handleResetScannedDeals = () => {
-    setScannedDeals([]);
-    setScannedDealsMeta(null);
-    setScannedDealsMessage(null);
-    setScannedPageCount(0);
-    setFlyerPreview(null);
-    setDealUrl("");
-    if (flyerInputRef.current) flyerInputRef.current.value = "";
-  };
-
   const renderItem = (item: ShoppingItem & { _mergedIds?: string[]; _mergedSources?: string[] }) => {
     const displayText = abbreviateName(item.name);
     const shortUnit = abbreviateUnit(item.unit);
@@ -535,27 +393,6 @@ export function ShoppingList({
           )}
         </span>
 
-        {/* Deal badge — from dealMatches prop or inline dealMatch */}
-        {(() => {
-          const matches = dealMatches?.get(item.id);
-          const best = matches?.[0];
-          if (best) {
-            return (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 whitespace-nowrap">
-                ${best.price.toFixed(2)} @ {best.storeName}
-              </span>
-            );
-          }
-          if (item.dealMatch) {
-            return (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 whitespace-nowrap">
-                ${item.dealMatch.salePrice.toFixed(2)} @ {item.dealMatch.storeName}
-              </span>
-            );
-          }
-          return null;
-        })()}
-
         {/* Store tag */}
         {editingStoreId === item.id ? (
           <form
@@ -601,8 +438,6 @@ export function ShoppingList({
       </li>
     );
   };
-
-  const hasScannedDealInput = flyerPreview || dealUrl.trim();
 
   return (
     <div className="flex flex-col h-full">
@@ -722,7 +557,6 @@ export function ShoppingList({
         <div className="flex border-b border-stone-200 dark:border-stone-700 -mx-4 px-4">
           {([
             { key: "list" as const, label: "List", count: totalCount },
-            { key: "sales" as const, label: "Sales", count: deals.length },
             { key: "receipts" as const, label: "Receipts", count: receipts.length },
           ]).map((tab) => (
             <button
@@ -747,34 +581,6 @@ export function ShoppingList({
       {/* ═══ LIST TAB ═══ */}
       {subTab === "list" && (
         <>
-          {/* Deals callout banner — surfaces sales info on main list tab */}
-          {listDealMatches.length > 0 && (
-            <div className="px-4 pt-3">
-              <button
-                onClick={() => setSubTab("sales")}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 transition-colors hover:bg-green-100 dark:hover:bg-green-900/30"
-              >
-                <Tag className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
-                <div className="flex-1 text-left">
-                  <p className="text-xs font-semibold text-green-800 dark:text-green-300">
-                    {listDealMatches.length} item{listDealMatches.length !== 1 ? "s" : ""} on sale
-                    {bestStore && bestStore.matchCount >= 2 && (
-                      <span className="font-normal text-green-700 dark:text-green-400">
-                        {" "}— best at {bestStore.storeName}
-                        {bestStore.estimatedSavings > 0 && ` (~$${bestStore.estimatedSavings.toFixed(2)} savings)`}
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-[10px] text-green-600 dark:text-green-500 mt-0.5">
-                    {listDealMatches.slice(0, 3).map(m => m.item.name).join(", ")}
-                    {listDealMatches.length > 3 && ` +${listDealMatches.length - 3} more`}
-                  </p>
-                </div>
-                <ChevronDown className="w-4 h-4 text-green-500 -rotate-90 shrink-0" />
-              </button>
-            </div>
-          )}
-
           {/* Scan list camera — collapsible at top */}
           {visionEnabled && (
             <div className="px-4 pt-3">
@@ -873,24 +679,6 @@ export function ShoppingList({
               Add
             </button>
           </form>
-
-          {/* Best store recommendation */}
-          {bestStore && bestStore.matchCount >= 2 && (
-            <div className="px-4 py-2 bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800">
-              <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                    Best store: {bestStore.storeName}
-                  </p>
-                  <p className="text-xs text-green-600 dark:text-green-500">
-                    {bestStore.matchCount} item{bestStore.matchCount !== 1 ? "s" : ""} on sale
-                    {bestStore.estimatedSavings > 0 && ` · Save ~$${bestStore.estimatedSavings.toFixed(2)}`}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Scan error banner */}
           {scanError && (
@@ -1081,358 +869,10 @@ export function ShoppingList({
         </>
       )}
 
-      {/* ═══ SALES TAB ═══ */}
-      {subTab === "sales" && (
-        <div className="flex-1 overflow-y-auto pb-24">
-          {/* Deals matching your list */}
-          {listDealMatches.length > 0 && (
-            <div className="px-4 pt-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
-                  Deals on your list
-                </span>
-                <span className="ml-auto text-xs text-stone-400 dark:text-stone-500">
-                  {listDealMatches.length} item{listDealMatches.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {listDealMatches.map(({ item, deals: matched }) => (
-                  <Card key={item.id}>
-                    <div className="p-1">
-                      <p className="text-sm font-medium dark:text-stone-200">
-                        {item.name}
-                      </p>
-                      <div className="mt-1 space-y-0.5">
-                        {matched.slice(0, 3).map((deal, i) => (
-                          <div key={deal.id} className="flex items-center justify-between text-xs">
-                            <span className={classNames(
-                              "text-stone-500 dark:text-stone-400",
-                              i === 0 && "font-medium text-green-700 dark:text-green-400"
-                            )}>
-                              {deal.storeName}
-                              {i === 0 && matched.length > 1 && (
-                                <span className="ml-1 text-[10px] text-green-600 dark:text-green-400 font-normal">
-                                  Best price
-                                </span>
-                              )}
-                            </span>
-                            <div className="text-right">
-                              <span className={classNames(
-                                "font-bold",
-                                i === 0 ? "text-green-600 dark:text-green-400" : "text-stone-600 dark:text-stone-300"
-                              )}>
-                                ${deal.price.toFixed(2)}
-                              </span>
-                              {deal.unit && (
-                                <span className="text-[10px] text-stone-400 ml-1">{deal.unit}</span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {matched[0]?.notes && (
-                          <p className="text-[10px] text-stone-400 dark:text-stone-500">
-                            {matched[0].notes}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Best store banner */}
-          {bestStore && bestStore.matchCount >= 2 && (
-            <div className="px-4 mt-3">
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                <Tag className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
-                <p className="text-xs text-green-800 dark:text-green-300">
-                  <span className="font-semibold">{bestStore.storeName}</span> has the most deals matching your list ({bestStore.matchCount} items)
-                  {bestStore.estimatedSavings > 0 && (
-                    <span> &middot; ~${bestStore.estimatedSavings.toFixed(2)} in savings</span>
-                  )}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Refreshing indicator */}
-          {isRefreshingDeals && (
-            <div className="px-4 mt-2 flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-stone-300 border-t-orange-500 rounded-full animate-spin" />
-              <span className="text-xs text-stone-400 dark:text-stone-500">Updating deals...</span>
-            </div>
-          )}
-
-          {/* Scan ad — collapsible */}
-          <div className="px-4 pt-3">
-            <button
-              onClick={() => setShowSalesScanner(!showSalesScanner)}
-              className="flex items-center gap-2 w-full"
-            >
-              <Camera className="w-4 h-4 text-stone-400 dark:text-stone-500" />
-              <span className="text-sm font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
-                Scan a Store Ad
-              </span>
-              <ChevronDown
-                className={classNames(
-                  "w-4 h-4 text-stone-400 ml-auto transition-transform",
-                  showSalesScanner && "rotate-180"
-                )}
-              />
-            </button>
-            {showSalesScanner && (
-              <div className="mt-2 mb-1">
-                <Card>
-                  <div className="p-1">
-                    {!visionEnabled && !chatEnabled ? (
-                      <p className="text-xs text-stone-500 dark:text-stone-400">
-                        Add an AI provider in Settings to scan deals
-                      </p>
-                    ) : (
-                      <>
-                        <div className="flex gap-2 mb-2">
-                          <div className="relative flex-1">
-                            <input
-                              type="url"
-                              value={dealUrl}
-                              onChange={(e) => {
-                                setDealUrl(e.target.value);
-                                if (e.target.value.trim()) setFlyerPreview(null);
-                              }}
-                              placeholder="Paste store ad URL..."
-                              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
-                            />
-                          </div>
-                          <button
-                            onClick={() => flyerInputRef.current?.click()}
-                            className={classNames(
-                              "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
-                              "bg-orange-500 hover:bg-orange-600 text-white"
-                            )}
-                            title="Upload screenshot or photo of ad"
-                          >
-                            <Camera className="w-5 h-5" />
-                          </button>
-                        </div>
-                        <input
-                          ref={flyerInputRef}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleFlyerSelect}
-                          className="hidden"
-                        />
-
-                        {flyerPreview && (
-                          <div className="rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
-                            <img src={flyerPreview} alt="Flyer preview" className="w-full max-h-48 object-cover" />
-                          </div>
-                        )}
-
-                        {hasScannedDealInput && (
-                          <Button
-                            fullWidth
-                            onClick={handleScanDeals}
-                            disabled={isScanningDeals}
-                          >
-                            {isScanningDeals
-                              ? "Scanning deals..."
-                              : scannedPageCount > 0
-                                ? `Scan Page ${scannedPageCount + 1}`
-                                : "Extract Deals"}
-                          </Button>
-                        )}
-                      </>
-                    )}
-
-                    {/* Scanned deals result */}
-                    {(scannedDeals.length > 0 || scannedDealsMessage) && (
-                      <div className="mt-3 space-y-2">
-                        {scannedDealsMeta?.storeName && (
-                          <p className="text-sm font-semibold dark:text-stone-200">
-                            {scannedDealsMeta.storeName}
-                            {scannedDealsMeta.validDates && (
-                              <span className="ml-2 text-xs font-normal text-stone-400">
-                                {scannedDealsMeta.validDates}
-                              </span>
-                            )}
-                          </p>
-                        )}
-                        {scannedPageCount > 1 && (
-                          <p className="text-xs text-stone-400 dark:text-stone-500">
-                            {scannedDeals.length} deals from {scannedPageCount} pages
-                          </p>
-                        )}
-                        {scannedDealsMessage && scannedDeals.length === 0 && (
-                          <p className="text-sm text-stone-500 dark:text-stone-400">{scannedDealsMessage}</p>
-                        )}
-                        {scannedDeals.length > 0 && (
-                          <div className="grid grid-cols-1 gap-1.5">
-                            {scannedDeals.map((deal, i) => (
-                              <div
-                                key={i}
-                                className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-stone-50 dark:bg-stone-900"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium dark:text-stone-200 truncate">
-                                    {deal.item}
-                                  </p>
-                                  {deal.notes && (
-                                    <p className="text-[10px] text-stone-400 truncate">{deal.notes}</p>
-                                  )}
-                                </div>
-                                <div className="text-right ml-2 shrink-0">
-                                  <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
-                                    {deal.price}
-                                  </p>
-                                  {deal.originalPrice && (
-                                    <p className="text-[10px] line-through text-stone-400">{deal.originalPrice}</p>
-                                  )}
-                                  {deal.unit && (
-                                    <p className="text-[10px] text-stone-400">{deal.unit}</p>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {scannedDeals.length > 0 && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            fullWidth
-                            onClick={handleResetScannedDeals}
-                          >
-                            Start Over
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              </div>
-            )}
-          </div>
-
-          {/* Store cards — one per scanned store */}
-          {dealsByStore.length > 0 && (
-            <div className="px-4 mt-4 space-y-2">
-              {dealsByStore.map(([storeName, storeDeals]) => {
-                const isExpanded = dealStoreFilter === storeName;
-                const cheapest = storeDeals.reduce((min, d) => d.price < min ? d.price : min, Infinity);
-                return (
-                  <Card key={storeName}>
-                    <button
-                      onClick={() => setDealStoreFilter(isExpanded ? null : storeName)}
-                      className="w-full flex items-center justify-between p-1"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Tag className="w-4 h-4 text-green-600 dark:text-green-400" />
-                        <div className="text-left">
-                          <p className="text-sm font-semibold dark:text-stone-200">{storeName}</p>
-                          <p className="text-xs text-stone-400 dark:text-stone-500">
-                            {storeDeals.length} deal{storeDeals.length !== 1 ? "s" : ""}
-                            {cheapest < Infinity && ` · From $${cheapest.toFixed(2)}`}
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronDown
-                        className={classNames(
-                          "w-4 h-4 text-stone-400 transition-transform",
-                          isExpanded && "rotate-180"
-                        )}
-                      />
-                    </button>
-                    {isExpanded && (
-                      <div className="mt-2 space-y-1.5 pt-2 border-t border-stone-200 dark:border-stone-700">
-                        {/* Category filters for this store */}
-                        {dealCategories.length > 1 && (
-                          <div className="flex gap-1.5 mb-2 overflow-x-auto no-scrollbar">
-                            <button
-                              onClick={() => setDealCategoryFilter(null)}
-                              className={classNames(
-                                "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                                !dealCategoryFilter
-                                  ? "bg-green-500 text-white border-green-500"
-                                  : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                              )}
-                            >
-                              All
-                            </button>
-                            {dealCategories.map((cat) => (
-                              <button
-                                key={cat}
-                                onClick={() => setDealCategoryFilter(dealCategoryFilter === cat ? null : cat)}
-                                className={classNames(
-                                  "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                                  dealCategoryFilter === cat
-                                    ? "bg-green-500 text-white border-green-500"
-                                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                                )}
-                              >
-                                {CATEGORY_LABELS[cat as ShoppingCategory] ?? cat}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {storeDeals
-                          .filter((d) => !dealCategoryFilter || d.category === dealCategoryFilter)
-                          .map((deal) => (
-                          <div
-                            key={deal.id}
-                            className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-stone-50 dark:bg-stone-900"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium dark:text-stone-200 truncate">
-                                {deal.item}
-                              </p>
-                              <p className="text-[10px] text-stone-400 dark:text-stone-500">
-                                {deal.notes && `${deal.notes} · `}
-                                {deal.validTo && `Expires ${deal.validTo}`}
-                              </p>
-                            </div>
-                            <div className="text-right ml-2 shrink-0">
-                              <p className="text-sm font-bold text-green-600 dark:text-green-400">
-                                ${deal.price.toFixed(2)}
-                              </p>
-                              {deal.originalPrice != null && (
-                                <p className="text-[10px] line-through text-stone-400">
-                                  ${deal.originalPrice.toFixed(2)}
-                                </p>
-                              )}
-                              {deal.unit && (
-                                <p className="text-[10px] text-stone-400">{deal.unit}</p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          {deals.length === 0 && scannedDeals.length === 0 && (
-            <div className="px-4 mt-8">
-              <EmptyState
-                icon={<Tag className="w-12 h-12" />}
-                title="No deals yet"
-                description="Enable Weekly Deals in Settings to auto-fetch, or scan a store ad above"
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ═══ RECEIPTS TAB ═══ */}
       {subTab === "receipts" && (
         <div className="flex-1 overflow-y-auto pb-24">
-          {/* Scan receipt — collapsible, matching Sales tab style */}
+          {/* Scan receipt — collapsible */}
           <div className="px-4 pt-3">
             <button
               onClick={() => setShowReceiptScanner(!showReceiptScanner)}

@@ -9,7 +9,6 @@ import { useMealPlan } from "./hooks/useMealPlan";
 import { useTimers } from "./hooks/useTimers";
 import { useTags } from "./hooks/useTags";
 import { useReceipts } from "./hooks/useReceipts";
-import { useDeals } from "./hooks/useDeals";
 import { useCapabilities } from "./hooks/useCapabilities";
 import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
@@ -153,7 +152,6 @@ function AppShell({
   const tags = useTags();
   const capabilities = useCapabilities();
   const receiptData = useReceipts();
-  const dealsData = useDeals();
 
   const userPreferences = useMemo((): UserPreferences | undefined => {
     try {
@@ -254,7 +252,6 @@ function AppShell({
               recipes={recipes.recipes}
               mealPlan={mealPlan.plan.meals}
               shoppingList={shoppingList.list.items}
-              deals={dealsData.deals}
               preferences={userPreferences}
               onAddMeal={mealPlan.addMeal}
               onAddToList={(name: string) => shoppingList.addItem(name)}
@@ -286,12 +283,6 @@ function AppShell({
                 lastScannedReceipt={receiptData.lastScannedReceipt}
                 onClearScanError={receiptData.clearScanError}
                 onClearLastScanned={receiptData.clearLastScanned}
-                dealMatches={dealsData.matchDeals(shoppingList.list.items)}
-                bestStore={dealsData.getBestStoreForList(shoppingList.list.items)}
-                deals={dealsData.deals}
-                stores={dealsData.stores}
-                isRefreshingDeals={dealsData.isRefreshing}
-                onRefreshDeals={dealsData.refreshDeals}
                 receipts={receiptData.receipts}
               />
             }
@@ -316,7 +307,6 @@ function AppShell({
                 copiedMeals={mealPlan.copiedMeals}
                 getWeekHistory={mealPlan.getWeekHistory}
                 weekId={mealPlan.plan.id}
-                deals={dealsData.deals}
                 onToggleWantToMake={recipes.toggleWantToMake}
               />
             }
