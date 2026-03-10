@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.4.1] - 2026-03-10
+
+### Shopping List UX
+
+- Add-item input moved to sticky bottom bar (always visible above nav)
+- Scan results now show as a reviewable checklist before adding to list
+  - Toggle individual items, A-Z sort, clear all, confirm or cancel
+
+### Ask Tab
+
+- Retry button on failed chat messages — red error bubble with reason and one-tap retry
+
+### Bug Fixes
+
+- Fixed duplicate images in recipe detail gallery (thumbnailUrl-aware dedup pass)
+- Fixed tab order: Discover | Recipes | Ask | Plan | List
+- Fixed Discover carousel snap-scroll offset on desktop (`scroll-pl-4`)
+- Removed holiday header decorations (St. Patrick's Day clover, etc.)
+- Feed PATCH endpoint now sanitizes images through `sanitizeImageUrl()`
+
+### Removed Features
+
+- Removed receipt scanning from Shopping List (kept handwritten list scan)
+
+### Plan Tab
+
+- Removed week summary card
+- Compact inline shopping list (only when recipes are linked)
+- "Plan my week" + "Quick fill" on same row with subtitles indicating behavior
+
+---
+
 ## [0.4.0] - 2026-03-10
 
 ### Tab Reorganization
