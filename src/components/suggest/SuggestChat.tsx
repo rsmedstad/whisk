@@ -286,7 +286,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         ...prev,
         {
           role: "assistant",
-          content: `${userMessage}\n\n(${errMsg})`,
+          content: `${userMessage}\n\n(${errMsg})\n[ERROR]`,
         },
       ]);
     } finally {
@@ -607,9 +607,25 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
 
         {/* Messages */}
         {messages.map((msg, i) => {
+          const isError = msg.role === "user" && msg.content.endsWith("[ERROR]");
           const urls = msg.role === "assistant" ? extractUrls(msg.content) : [];
           const actions = msg.role === "assistant" ? parseActions(msg.content) : [];
-          const displayContent = actions.length > 0 ? stripActionMarkers(msg.content) : msg.content;
+          let displayContent = actions.length > 0 ? stripActionMarkers(msg.content) : msg.content;
+
+          // For error messages, extract the original user text and error reason
+          let errorReason = "";
+          let originalText = "";
+          if (isError) {
+            const raw = msg.content.replace(/\[ERROR\]$/, "").trim();
+            const parenMatch = raw.match(/\n\n\((.+)\)$/s);
+            if (parenMatch) {
+              errorReason = parenMatch[1] ?? "";
+              originalText = raw.slice(0, -(parenMatch[0]?.length ?? 0)).trim();
+            } else {
+              originalText = raw;
+            }
+            displayContent = originalText;
+          }
 
           // Separate action types for grouped rendering
           const recipeCards = actions.filter((a) => a.type === "RECIPE_CARD");
@@ -625,13 +641,33 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               }
             >
               <div
-                className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm ${
-                  msg.role === "user"
-                    ? "bg-orange-500 text-white"
-                    : "bg-stone-100 dark:bg-stone-800 dark:text-stone-200"
-                }`}
+                className={classNames(
+                  "max-w-[85%] rounded-xl px-4 py-2.5 text-sm",
+                  isError
+                    ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"
+                    : msg.role === "user"
+                      ? "bg-orange-500 text-white"
+                      : "bg-stone-100 dark:bg-stone-800 dark:text-stone-200"
+                )}
               >
                 <p className="whitespace-pre-wrap">{displayContent}</p>
+                {isError && (
+                  <div className="mt-2 flex items-center gap-2 border-t border-red-200 dark:border-red-800 pt-2">
+                    <p className="text-xs text-red-600 dark:text-red-400 flex-1">
+                      {errorReason || "Failed to send"}
+                    </p>
+                    <button
+                      onClick={() => {
+                        setMessages((prev) => prev.filter((_, idx) => idx !== i));
+                        sendMessage(originalText, true);
+                      }}
+                      disabled={isLoading}
+                      className="inline-flex items-center gap-1 rounded-full bg-red-200 dark:bg-red-900 px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-300 dark:hover:bg-red-800 transition-colors disabled:opacity-40"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Retry
+                    </button>
+                  </div>
+                )}
 
                 {/* Recipe cards from user's collection */}
                 {recipeCards.length > 0 && (

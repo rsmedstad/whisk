@@ -1860,7 +1860,7 @@ export function Discover({
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory px-4">
+                  <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory px-4 scroll-pl-4">
                     {items.map((item, i) => (
                       <FeedCard
                         key={`${category}-${i}`}

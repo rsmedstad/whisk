@@ -126,7 +126,6 @@ export interface ShoppingItem {
   addedBy?: "manual" | "recipe" | "ai" | "scan";
   addedByUser?: string; // user name who added this item
   store?: string; // optional store tag for grouping (e.g. "Costco", "Trader Joe's")
-  price?: number; // from receipt scanning
 }
 
 export type ShoppingCategory =
@@ -161,33 +160,6 @@ export interface PlannedMeal {
 
 export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 
-
-// ── Receipt & Spending ─────────────────────────────────
-
-export interface Receipt {
-  id: string;
-  store?: string;
-  date: string;
-  items: ReceiptItem[];
-  total?: number;
-  scannedAt: string;
-}
-
-export interface ReceiptItem {
-  name: string;
-  price: number;
-  quantity?: number;
-  unit?: string;
-  category?: ShoppingCategory;
-}
-
-export interface SpendingSummary {
-  weekOf: string;
-  total: number;
-  byStore: Record<string, number>;
-  byCategory: Record<string, number>;
-  itemCount: number;
-}
 
 // ── User Preferences (for Ask tab context) ─────────────
 

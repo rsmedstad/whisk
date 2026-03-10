@@ -866,34 +866,6 @@ export function MealPlan({
           </div>
         )}
 
-        {/* Weekly summary card */}
-        {weekMeals.length > 0 && (
-          <div className="mx-4 mt-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 p-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
-              Week Summary
-            </h3>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <p className="text-lg font-bold text-stone-700 dark:text-stone-200">{weekMeals.length}</p>
-                <p className="text-[10px] text-stone-400 dark:text-stone-500">planned</p>
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-bold text-green-600 dark:text-green-400">{weekMeals.filter((m) => m.completed).length}</p>
-                <p className="text-[10px] text-stone-400 dark:text-stone-500">cooked</p>
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-bold text-orange-500">{new Set(weekMeals.map((m) => m.title)).size}</p>
-                <p className="text-[10px] text-stone-400 dark:text-stone-500">unique</p>
-              </div>
-              {linkedRecipeIds.length > 0 && (
-                <div className="text-center">
-                  <p className="text-lg font-bold text-blue-500">{linkedRecipeIds.length}</p>
-                  <p className="text-[10px] text-stone-400 dark:text-stone-500">linked</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Quick-add suggestions — ranked by rating, usage, favorites, and slot fit */}
         {recipeIndex.length > 0 && addingSlot && (() => {
@@ -952,76 +924,72 @@ export function MealPlan({
           );
         })()}
 
-        {/* Shopping list — below planned items */}
+        {/* Shopping list — inline when recipes are linked */}
         {linkedRecipeIds.length > 0 && onGenerateShoppingList && (
-          <div className="px-4 py-4 border-t border-stone-200 dark:border-stone-800">
-            <h3 className="text-sm font-semibold text-stone-500 dark:text-stone-400 mb-2 flex items-center gap-1.5">
-              <ShoppingCart className="w-4 h-4" />
-              Shopping List
-            </h3>
-            <p className="text-xs text-stone-400 dark:text-stone-500 mb-3">
-              Add ingredients from this week&apos;s {linkedRecipeIds.length} linked recipe{linkedRecipeIds.length !== 1 ? "s" : ""} to your shopping list.
-            </p>
+          <div className="mx-4 mt-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 flex items-center gap-1.5">
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Shopping List
+              </h3>
+              <span className="text-[10px] text-stone-400 dark:text-stone-500">
+                {linkedRecipeIds.length} linked recipe{linkedRecipeIds.length !== 1 ? "s" : ""}
+              </span>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={() => handleGenerateShoppingList(true)}
                 disabled={shoppingListStatus === "loading"}
-                className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium text-white bg-orange-500 px-3 py-2 rounded-[var(--wk-radius-btn)] hover:bg-orange-600 transition-colors disabled:opacity-50"
+                className="flex-1 text-xs font-medium text-white bg-orange-500 px-2.5 py-1.5 rounded-[var(--wk-radius-btn)] hover:bg-orange-600 transition-colors disabled:opacity-50"
               >
                 Add Essentials
               </button>
               <button
                 onClick={() => handleGenerateShoppingList(false)}
                 disabled={shoppingListStatus === "loading"}
-                className="shrink-0 flex items-center justify-center gap-1.5 text-sm font-medium text-orange-600 dark:text-orange-400 border border-orange-500 px-3 py-2 rounded-[var(--wk-radius-btn)] hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
+                className="flex-1 text-xs font-medium text-orange-600 dark:text-orange-400 border border-orange-500 px-2.5 py-1.5 rounded-[var(--wk-radius-btn)] hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
               >
                 Add All
               </button>
             </div>
-            <p className="mt-1.5 text-[11px] text-stone-400 dark:text-stone-500">
-              Essentials skips salt, pepper, oil &amp; common pantry staples
+            <p className="mt-1.5 text-[10px] text-stone-400 dark:text-stone-500">
+              Essentials skips salt, pepper, oil &amp; pantry staples
             </p>
             {shoppingListStatus && shoppingListStatus !== "loading" && (
-              <p className="mt-2 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
+              <p className="mt-1.5 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
             )}
           </div>
         )}
 
         {/* Help me plan */}
         <div className="px-4 py-4 space-y-2.5">
-          <h2 className="text-[10px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
-            Help me plan
-          </h2>
+          <SeasonalProduceCard compact />
 
-          <button
-            onClick={() => navigate("/ask?q=" + encodeURIComponent("Plan my dinners for this week using my recipes. Consider variety and what's in season."))}
-            className="w-full flex items-center gap-3 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
-          >
-            <Sparkles className="w-5 h-5 text-orange-500 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">Plan my week</p>
-              <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">
-                AI suggests meals for empty slots based on your recipes
-              </p>
-            </div>
-          </button>
-
-          {recipeIndex.length > 0 && (
+          <div className="flex gap-2">
             <button
-              onClick={handleAutoFillEmptySlots}
-              className="w-full flex items-center gap-3 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+              onClick={() => navigate("/ask?q=" + encodeURIComponent("Plan my dinners for this week using my recipes. Consider variety and what's in season."))}
+              className="flex-1 flex items-center gap-2 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
             >
-              <CalendarDays className="w-5 h-5 text-orange-500 shrink-0" />
+              <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">Quick fill gaps</p>
-                <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">
-                  Auto-fill empty slots with top-scored recipes
-                </p>
+                <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">Plan my week</p>
+                <p className="text-[10px] text-stone-400 dark:text-stone-500">Opens Ask</p>
               </div>
             </button>
-          )}
 
-          <SeasonalProduceCard compact />
+            {recipeIndex.length > 0 && (
+              <button
+                onClick={handleAutoFillEmptySlots}
+                className="flex-1 flex items-center gap-2 rounded-[var(--wk-radius-card)] border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+              >
+                <CalendarDays className="w-4 h-4 text-orange-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">Quick fill</p>
+                  <p className="text-[10px] text-stone-400 dark:text-stone-500">Auto-fill gaps</p>
+                </div>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

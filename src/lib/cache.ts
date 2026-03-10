@@ -166,7 +166,5 @@ export const CACHE_KEYS = {
   SHOPPING_LIST: "shopping_list",
   MEAL_PLAN: (weekId: string) => `meal_plan_${weekId}`,
   TAG_INDEX: "tag_index",
-  RECEIPTS: "receipts",
-  SPENDING: (weekId: string) => `spending_${weekId}`,
   USER_PREFERENCES: "preferences",
 } as const;

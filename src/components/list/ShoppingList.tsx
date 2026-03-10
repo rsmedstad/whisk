@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Receipt, SpendingSummary } from "../../types";
+import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry } from "../../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categories";
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
@@ -11,7 +11,6 @@ import { Card } from "../ui/Card";
 
 
 type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store" | "by-recipe";
-type SubTab = "list" | "receipts";
 
 interface ShoppingListProps {
   list: ShoppingListType;
@@ -27,16 +26,6 @@ interface ShoppingListProps {
   recipeIndex?: RecipeIndexEntry[];
   visionEnabled?: boolean;
   chatEnabled?: boolean;
-  // Receipt / spending props
-  currentWeekSpending?: SpendingSummary | null;
-  spendingTrend?: { amount: number; direction: "up" | "down" | "flat" } | null;
-  onScanReceipt?: (photo: File) => Promise<Receipt | null>;
-  isScanning?: boolean;
-  scanError?: string | null;
-  lastScannedReceipt?: Receipt | null;
-  onClearScanError?: () => void;
-  onClearLastScanned?: () => void;
-  receipts?: { id: string; date: string; store?: string; total?: number }[];
 }
 
 export function ShoppingList({
@@ -53,18 +42,8 @@ export function ShoppingList({
   recipeIndex = [],
   visionEnabled = false,
   chatEnabled = false,
-  currentWeekSpending,
-  spendingTrend,
-  onScanReceipt,
-  isScanning = false,
-  scanError,
-  lastScannedReceipt,
-  onClearScanError,
-  onClearLastScanned,
-  receipts = [],
 }: ShoppingListProps) {
   const navigate = useNavigate();
-  const [subTab, setSubTab] = useState<SubTab>("list");
   const [newItem, setNewItem] = useState("");
   const [showOverflow, setShowOverflow] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("department");
@@ -73,13 +52,11 @@ export function ShoppingList({
   const [storeInput, setStoreInput] = useState("");
   const [isClassifying, setIsClassifying] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const [showSpendingDetail, setShowSpendingDetail] = useState(false);
   // List scan
   const [showListScan, setShowListScan] = useState(false);
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
   const [listScanPreview, setListScanPreview] = useState<string | null>(null);
-  const [showReceiptScanner, setShowReceiptScanner] = useState(false);
 
   // Get unique store names from items
   const storeNames = useMemo(() => {
@@ -314,19 +291,6 @@ export function ShoppingList({
     input.click();
   };
 
-  const handleReceiptScan = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.capture = "environment";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file || !onScanReceipt) return;
-      await onScanReceipt(file);
-    };
-    input.click();
-  };
-
   const renderItem = (item: ShoppingItem & { _mergedIds?: string[]; _mergedSources?: string[] }) => {
     const displayText = abbreviateName(item.name);
     const shortUnit = abbreviateUnit(item.unit);
@@ -457,8 +421,7 @@ export function ShoppingList({
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">List</h1>
           </button>
-          {subTab === "list" && (
-            <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1">
               {/* Sort button */}
               <div className="relative">
                 <button
@@ -550,37 +513,12 @@ export function ShoppingList({
                 )}
               </div>
             </div>
-          )}
         </div>
 
-        {/* Sub-tabs — inspired by recipe detail ingredients/steps tabs */}
-        <div className="flex border-b border-stone-200 dark:border-stone-700 -mx-4 px-4">
-          {([
-            { key: "list" as const, label: "List", count: totalCount },
-            { key: "receipts" as const, label: "Receipts", count: receipts.length },
-          ]).map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setSubTab(tab.key)}
-              className={classNames(
-                "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
-                subTab === tab.key
-                  ? "text-orange-600 dark:text-orange-400"
-                  : "text-stone-500 dark:text-stone-400"
-              )}
-            >
-              {tab.label}{tab.count > 0 ? ` (${tab.count})` : ""}
-              {subTab === tab.key && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
-              )}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* ═══ LIST TAB ═══ */}
-      {subTab === "list" && (
-        <>
+      {/* ═══ LIST CONTENT ═══ */}
+      <>
           {/* Scan list camera — collapsible at top */}
           {visionEnabled && (
             <div className="px-4 pt-3">
@@ -679,18 +617,6 @@ export function ShoppingList({
               Add
             </button>
           </form>
-
-          {/* Scan error banner */}
-          {scanError && (
-            <div className="px-4 py-2 bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
-              <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>
-              {onClearScanError && (
-                <button onClick={onClearScanError} className="text-red-400 hover:text-red-600">
-                  <XMark className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          )}
 
           {/* Store filter pills — near the list */}
           {storeNames.length > 0 && (
@@ -867,194 +793,6 @@ export function ShoppingList({
             )}
           </div>
         </>
-      )}
-
-      {/* ═══ RECEIPTS TAB ═══ */}
-      {subTab === "receipts" && (
-        <div className="flex-1 overflow-y-auto pb-24">
-          {/* Scan receipt — collapsible */}
-          <div className="px-4 pt-3">
-            <button
-              onClick={() => setShowReceiptScanner(!showReceiptScanner)}
-              className="flex items-center gap-2 w-full"
-            >
-              <Camera className="w-4 h-4 text-stone-400 dark:text-stone-500" />
-              <span className="text-sm font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
-                Scan a Receipt
-              </span>
-              <ChevronDown
-                className={classNames(
-                  "w-4 h-4 text-stone-400 ml-auto transition-transform",
-                  showReceiptScanner && "rotate-180"
-                )}
-              />
-            </button>
-            {showReceiptScanner && (
-              <div className="mt-2 mb-1">
-                <Card>
-                  <div className="flex items-center gap-3 p-1">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium dark:text-stone-200">
-                        Photo a receipt to track spending
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleReceiptScan}
-                      disabled={isScanning || !visionEnabled}
-                      className={classNames(
-                        "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
-                        isScanning
-                          ? "bg-stone-200 dark:bg-stone-700"
-                          : !visionEnabled
-                            ? "bg-stone-200 dark:bg-stone-700 text-stone-400"
-                            : "bg-orange-500 hover:bg-orange-600 text-white"
-                      )}
-                      title={!visionEnabled ? "Enable a vision AI provider in Settings" : "Scan receipt"}
-                    >
-                      {isScanning ? (
-                        <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Camera className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-                </Card>
-              </div>
-            )}
-          </div>
-
-          {/* Scan error */}
-          {scanError && (
-            <div className="mx-4 mt-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800 flex items-center justify-between">
-              <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>
-              {onClearScanError && (
-                <button onClick={onClearScanError} className="text-red-400 hover:text-red-600">
-                  <XMark className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Last scanned receipt — success banner */}
-          {lastScannedReceipt && (
-            <div className="mx-4 mt-2 px-3 py-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                  Receipt Scanned{lastScannedReceipt.store ? ` — ${lastScannedReceipt.store}` : ""}
-                </p>
-                {onClearLastScanned && (
-                  <button onClick={onClearLastScanned} className="text-green-400 hover:text-green-600">
-                    <XMark className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <p className="text-xs text-green-600 dark:text-green-500">
-                {lastScannedReceipt.items.length} item{lastScannedReceipt.items.length !== 1 ? "s" : ""}
-                {lastScannedReceipt.total ? ` · Total: $${lastScannedReceipt.total.toFixed(2)}` : ""}
-              </p>
-              <div className="mt-2 max-h-32 overflow-y-auto space-y-0.5">
-                {lastScannedReceipt.items.map((item, i) => (
-                  <div key={i} className="flex justify-between text-xs dark:text-stone-300">
-                    <span className="truncate flex-1">{item.name}</span>
-                    <span className="ml-2 text-stone-500">${item.price.toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Spending summary card */}
-          {currentWeekSpending && currentWeekSpending.total > 0 && (
-            <div className="mx-4 mt-3">
-              <Card>
-                <button
-                  onClick={() => setShowSpendingDetail(!showSpendingDetail)}
-                  className="w-full flex items-center justify-between p-1"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold dark:text-stone-200">
-                      This week: ${currentWeekSpending.total.toFixed(2)}
-                    </span>
-                    {spendingTrend && spendingTrend.direction !== "flat" && (
-                      <span className={classNames(
-                        "text-xs font-medium",
-                        spendingTrend.direction === "down" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
-                      )}>
-                        {spendingTrend.direction === "up" ? "\u2191" : "\u2193"} ${spendingTrend.amount.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                  <ChevronDown
-                    className={classNames(
-                      "w-4 h-4 text-stone-400 transition-transform",
-                      showSpendingDetail && "rotate-180"
-                    )}
-                  />
-                </button>
-                {showSpendingDetail && (
-                  <div className="mt-2 space-y-1.5 px-1 pb-1 border-t border-stone-200 dark:border-stone-700 pt-2">
-                    {Object.entries(currentWeekSpending.byStore).length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase text-stone-400 dark:text-stone-500 mb-1">By Store</p>
-                        {Object.entries(currentWeekSpending.byStore).map(([store, amount]) => (
-                          <div key={store} className="flex justify-between text-xs dark:text-stone-300">
-                            <span>{store}</span>
-                            <span>${amount.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-[10px] text-stone-400 dark:text-stone-500">
-                      {currentWeekSpending.itemCount} receipt{currentWeekSpending.itemCount !== 1 ? "s" : ""} this week
-                      {spendingTrend && spendingTrend.direction !== "flat" && (
-                        <> &middot; {spendingTrend.direction === "up" ? "up" : "down"} ${spendingTrend.amount.toFixed(2)} vs last week</>
-                      )}
-                    </p>
-                  </div>
-                )}
-              </Card>
-            </div>
-          )}
-
-          {/* Receipt history — card-based */}
-          {receipts.length > 0 && (
-            <div className="px-4 mt-4 space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-1">
-                Receipt History
-              </h3>
-              {receipts.map((r) => (
-                <Card key={r.id}>
-                  <div className="flex items-center justify-between p-1">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold dark:text-stone-200 truncate">
-                        {r.store ?? "Unknown Store"}
-                      </p>
-                      <p className="text-xs text-stone-400 dark:text-stone-500">
-                        {new Date(r.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </p>
-                    </div>
-                    {r.total != null && (
-                      <p className="text-sm font-bold dark:text-stone-200 ml-2">
-                        ${r.total.toFixed(2)}
-                      </p>
-                    )}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {receipts.length === 0 && !lastScannedReceipt && (!currentWeekSpending || currentWeekSpending.total === 0) && (
-            <div className="px-4 mt-8">
-              <EmptyState
-                icon={<ShoppingCart className="w-12 h-12" />}
-                title="No receipts yet"
-                description="Scan a receipt to start tracking your spending"
-              />
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -561,7 +561,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
   let updated = false;
   for (const item of archive.items) {
     if (normalizeUrl(item.url) === normalizeUrl(url)) {
-      if (imageUrl) item.imageUrl = imageUrl;
+      if (imageUrl) item.imageUrl = sanitizeImageUrl(imageUrl);
       if (totalTime) item.totalTime = totalTime;
       updated = true;
       break;
