@@ -271,6 +271,13 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
     // Use ref to get latest messages for the API call (avoids stale closure)
     const currentMessages = isRetry ? messagesRef.current : [...messagesRef.current, userMsg];
 
+    // Read preferences fresh from localStorage (avoids stale prop after Settings changes)
+    let freshPreferences: typeof preferences | undefined;
+    try {
+      const raw = localStorage.getItem("whisk_preferences");
+      if (raw) freshPreferences = JSON.parse(raw) as typeof preferences;
+    } catch { /* ignore malformed preferences */ }
+
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
@@ -284,23 +291,42 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           mealPlan: mealPlan.length > 0 ? mealPlan.slice(0, 30) : undefined,
           shoppingList: shoppingList.length > 0 ? shoppingList.map((i) => ({ name: i.name, checked: i.checked, category: i.category })).slice(0, 50) : undefined,
           deals: deals.length > 0 ? deals.slice(0, 30).map((d) => ({ item: d.item, price: d.price, storeName: d.storeName, validTo: d.validTo })) : undefined,
-          preferences: preferences ?? undefined,
+          preferences: freshPreferences ?? preferences ?? undefined,
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to get response");
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        console.error(`[Whisk] Chat API error ${res.status}:`, errorText);
+        throw new Error(`API error ${res.status}`);
+      }
       const data = (await res.json()) as { content: string };
+      if (!data.content) {
+        console.warn("[Whisk] Chat API returned empty content");
+        throw new Error("Empty response");
+      }
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.content },
       ]);
-    } catch {
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Unknown error";
+      console.error("[Whisk] Chat send failed:", errMsg);
+      const isAuthError = errMsg.includes("401") || errMsg.includes("403");
+      const isTimeout = errMsg.includes("timeout") || errMsg.includes("abort");
+      const isEmptyResponse = errMsg.includes("Empty response");
+      const userMessage = isAuthError
+        ? "Your session may have expired. Try refreshing the page or logging in again."
+        : isTimeout
+          ? "The AI took too long to respond. Try again with a simpler question, or check your AI provider status in Settings."
+          : isEmptyResponse
+            ? "The AI returned an empty response. This can happen when the model is overloaded — try again in a moment."
+            : "Something went wrong getting a response. Check Settings to make sure your AI provider is configured correctly.";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content:
-            "Sorry, AI suggestions aren't available yet. Configure API keys in settings to enable this feature.",
+          content: `${userMessage}\n\n(${errMsg})`,
         },
       ]);
     } finally {
