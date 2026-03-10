@@ -196,7 +196,8 @@ async function refreshFlippDeals(
   );
   if (!flyersRes.ok) throw new Error(`Flipp API returned ${flyersRes.status}`);
 
-  const allFlyers = (await flyersRes.json()) as FlippFlyer[];
+  const flyersData = await flyersRes.json();
+  const allFlyers: FlippFlyer[] = Array.isArray(flyersData) ? flyersData : (flyersData as { flyers?: FlippFlyer[] }).flyers ?? [];
 
   // Match preferred stores
   const matchedFlyers = allFlyers.filter(

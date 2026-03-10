@@ -140,7 +140,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
     );
     if (!res.ok) return jsonResponse({ error: `Flipp API returned ${res.status}` }, 502);
 
-    const flyers = (await res.json()) as FlippFlyer[];
+    const flyersData = await res.json();
+    const flyers: FlippFlyer[] = Array.isArray(flyersData) ? flyersData : (flyersData as { flyers?: FlippFlyer[] }).flyers ?? [];
 
     // Filter to grocery flyers and deduplicate by merchant
     const groceryMerchants = new Map<number, { id: number; name: string; flyerCount: number }>();
@@ -187,7 +188,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
     if (!flyersRes.ok) return jsonResponse({ error: `Flipp API returned ${flyersRes.status}` }, 502);
 
-    const allFlyers = (await flyersRes.json()) as FlippFlyer[];
+    const flyersData = await flyersRes.json();
+    const allFlyers: FlippFlyer[] = Array.isArray(flyersData) ? flyersData : (flyersData as { flyers?: FlippFlyer[] }).flyers ?? [];
 
     // 2. Match preferred stores to Flipp merchants
     const matchedFlyers: FlippFlyer[] = [];
