@@ -190,6 +190,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   const chatInputRef = useRef<HTMLInputElement>(null);
   const autoSentRef = useRef(false);
   const autoPickedRef = useRef(false);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   const householdSize = useMemo(() => {
     return parseInt(localStorage.getItem("whisk_household_size") ?? "4", 10);
@@ -222,7 +224,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, isKeyboardOpen]);
+  }, [messages, isLoading, isKeyboardOpen]);
 
   // Persist messages to localStorage
   useEffect(() => {
@@ -232,6 +234,18 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
       localStorage.removeItem("whisk_ask_messages");
     }
   }, [messages]);
+
+  // Recover orphaned user messages — if the last message is from the user
+  // (e.g., user navigated away before the AI response arrived), auto-retry
+  const recoveredRef = useRef(false);
+  useEffect(() => {
+    if (recoveredRef.current) return;
+    const last = messages[messages.length - 1];
+    if (messages.length > 0 && last?.role === "user" && !isLoading && chatEnabled) {
+      recoveredRef.current = true;
+      sendMessage(last.content, true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-send query from URL param (e.g., from Discover card click)
   useEffect(() => {
@@ -245,11 +259,17 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, isRetry = false) => {
     const userMsg: Message = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    // On retry (orphaned message recovery), the user message is already in state
+    if (!isRetry) {
+      setMessages((prev) => [...prev, userMsg]);
+    }
     setInput("");
     setIsLoading(true);
+
+    // Use ref to get latest messages for the API call (avoids stale closure)
+    const currentMessages = isRetry ? messagesRef.current : [...messagesRef.current, userMsg];
 
     try {
       const res = await fetch("/api/ai/chat", {
@@ -259,7 +279,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
         },
         body: JSON.stringify({
-          messages: [...messages, userMsg],
+          messages: currentMessages,
           seasonalContext: buildSeasonalSystemContext(new Date(), householdSize),
           mealPlan: mealPlan.length > 0 ? mealPlan.slice(0, 30) : undefined,
           shoppingList: shoppingList.length > 0 ? shoppingList.map((i) => ({ name: i.name, checked: i.checked, category: i.category })).slice(0, 50) : undefined,
