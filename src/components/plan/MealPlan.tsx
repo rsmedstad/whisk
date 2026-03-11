@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { getSeasonalContext } from "../../lib/seasonal";
-import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, Check, EllipsisVertical, Clock, Sparkles, MessageCircle } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, MessageCircle } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 
@@ -107,7 +107,6 @@ interface MealPlanProps {
   isLoading: boolean;
   recipeIndex?: RecipeIndexEntry[];
   onGenerateShoppingList?: (ingredients: Ingredient[], recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
-  onToggleCompleted?: (mealId: string) => void;
   onCopyWeek?: () => void;
   onPasteWeek?: (targetWeekId: string) => void;
   copiedMeals?: PlannedMeal[] | null;
@@ -127,7 +126,6 @@ export function MealPlan({
   isLoading,
   recipeIndex = [],
   onGenerateShoppingList,
-  onToggleCompleted,
   onCopyWeek,
   onPasteWeek,
   copiedMeals,
@@ -450,7 +448,7 @@ export function MealPlan({
       {/* History panel */}
       {showHistory && getWeekHistory && (
         <div className="px-4 py-3 border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 mb-2">
             Recent Weeks
           </h3>
           {(() => {
@@ -511,7 +509,7 @@ export function MealPlan({
       {wantToMakeRecipes.length > 0 && (
         <div className="border-b border-stone-200 dark:border-stone-800">
           <div className="px-4 pt-3 pb-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 mb-2">
               Want to Make
             </h3>
             <div className="max-h-32 overflow-y-auto space-y-1.5">
@@ -669,28 +667,13 @@ export function MealPlan({
                     <div className="space-y-1">
                       {filledMeals.map((meal) => (
                         <div key={meal.id} className="flex items-center justify-between gap-1">
-                          {onToggleCompleted && (
-                            <button
-                              onClick={() => onToggleCompleted(meal.id)}
-                              className={classNames(
-                                "h-4 w-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
-                                meal.completed
-                                  ? "bg-green-500 border-green-500 text-white"
-                                  : "border-stone-300 dark:border-stone-600"
-                              )}
-                            >
-                              {meal.completed && <Check className="w-2.5 h-2.5" />}
-                            </button>
-                          )}
                           <button
                             onClick={() => { if (meal.recipeId) navigate(`/recipes/${meal.recipeId}`); }}
                             className={classNames(
                               "text-xs truncate flex-1 text-left",
-                              meal.completed
-                                ? "line-through text-stone-400 dark:text-stone-500"
-                                : meal.recipeId
-                                  ? "text-orange-600 dark:text-orange-400 font-medium"
-                                  : "text-stone-600 dark:text-stone-300"
+                              meal.recipeId
+                                ? "text-orange-600 dark:text-orange-400 font-medium"
+                                : "text-stone-600 dark:text-stone-300"
                             )}
                           >
                             {meal.title}
@@ -834,19 +817,6 @@ export function MealPlan({
                         {meal ? (
                           <div className="flex-1 flex items-center justify-between min-w-0">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {onToggleCompleted && (
-                                <button
-                                  onClick={() => onToggleCompleted(meal.id)}
-                                  className={classNames(
-                                    "h-5 w-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
-                                    meal.completed
-                                      ? "bg-green-500 border-green-500 text-white"
-                                      : "border-stone-300 dark:border-stone-600"
-                                  )}
-                                >
-                                  {meal.completed && <Check className="w-3 h-3" />}
-                                </button>
-                              )}
                               <button
                                 onClick={() => {
                                   if (meal.recipeId)
@@ -854,11 +824,9 @@ export function MealPlan({
                                 }}
                                 className={classNames(
                                   "text-sm truncate",
-                                  meal.completed
-                                    ? "line-through text-stone-400 dark:text-stone-500"
-                                    : meal.recipeId
-                                      ? "text-orange-600 dark:text-orange-400 font-medium"
-                                      : "text-stone-700 dark:text-stone-300"
+                                  meal.recipeId
+                                    ? "text-orange-600 dark:text-orange-400 font-medium"
+                                    : "text-stone-700 dark:text-stone-300"
                                 )}
                               >
                                 {meal.title}
@@ -982,7 +950,7 @@ export function MealPlan({
           const slotLabel = mealSlots.find((s) => s.slot === slot)?.label ?? slot;
           return (
             <div className="mx-4 mt-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 mb-1.5">
                 Suggested for {slotLabel}
               </p>
               <div className="flex flex-wrap gap-1.5">

@@ -290,7 +290,6 @@ function AppShell({
                 isLoading={mealPlan.isLoading}
                 recipeIndex={recipes.recipes}
                 onGenerateShoppingList={shoppingList.addFromRecipe}
-                onToggleCompleted={mealPlan.toggleCompleted}
                 onCopyWeek={mealPlan.copyWeek}
                 onPasteWeek={mealPlan.pasteWeek}
                 copiedMeals={mealPlan.copiedMeals}
