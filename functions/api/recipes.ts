@@ -17,15 +17,15 @@ interface RecipeIndexEntry {
   description?: string;
   ingredientCount?: number;
   stepCount?: number;
-  complexity?: "simple" | "moderate" | "elaborate";
+  difficulty?: "easy" | "medium" | "hard";
 }
 
-function computeComplexity(totalMinutes: number, ingredientCount: number, stepCount: number): "simple" | "moderate" | "elaborate" {
+function computeDifficulty(totalMinutes: number, ingredientCount: number, stepCount: number): "easy" | "medium" | "hard" {
   const t = totalMinutes <= 0 ? 1 : totalMinutes <= 35 ? 0 : totalMinutes <= 60 ? 1 : 2;
   const i = ingredientCount <= 7 ? 0 : ingredientCount <= 12 ? 1 : 2;
   const s = stepCount <= 5 ? 0 : stepCount <= 10 ? 1 : 2;
   const score = t + i + s;
-  return score <= 2 ? "simple" : score <= 4 ? "moderate" : "elaborate";
+  return score <= 2 ? "easy" : score <= 4 ? "medium" : "hard";
 }
 
 // GET /api/recipes - List all recipes (returns index with per-user favorites)
@@ -95,7 +95,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data }) 
       description: recipe.description as string | undefined,
       ingredientCount,
       stepCount,
-      complexity: computeComplexity(totalMinutes, ingredientCount, stepCount),
+      difficulty: computeDifficulty(totalMinutes, ingredientCount, stepCount),
     };
 
     index.unshift(entry);

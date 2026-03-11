@@ -1,10 +1,10 @@
-// Recipe complexity scoring
-// Computes a "simple" | "moderate" | "elaborate" label from recipe metrics
+// Recipe difficulty scoring
+// Computes an "easy" | "medium" | "hard" label from recipe metrics
 
-export type Complexity = "simple" | "moderate" | "elaborate";
+export type Difficulty = "easy" | "medium" | "hard";
 
-/** Numeric complexity score (0–6) from recipe metrics */
-export function complexityScore(opts: {
+/** Numeric difficulty score (0–6) from recipe metrics */
+export function difficultyScore(opts: {
   totalMinutes: number; // prepTime + cookTime
   ingredientCount: number;
   stepCount: number;
@@ -24,23 +24,23 @@ export function complexityScore(opts: {
 }
 
 /** Label from recipe metrics */
-export function computeComplexity(opts: {
+export function computeDifficulty(opts: {
   totalMinutes: number;
   ingredientCount: number;
   stepCount: number;
-}): Complexity {
-  const score = complexityScore(opts);
-  if (score <= 2) return "simple";
-  if (score <= 4) return "moderate";
-  return "elaborate";
+}): Difficulty {
+  const score = difficultyScore(opts);
+  if (score <= 2) return "easy";
+  if (score <= 4) return "medium";
+  return "hard";
 }
 
-/** Numeric sort value for complexity (lower = simpler) */
-export function complexitySortValue(c: Complexity | undefined): number {
-  switch (c) {
-    case "simple": return 0;
-    case "moderate": return 1;
-    case "elaborate": return 2;
-    default: return 1; // treat unknown as moderate
+/** Numeric sort value for difficulty (lower = easier) */
+export function difficultySortValue(d: Difficulty | undefined): number {
+  switch (d) {
+    case "easy": return 0;
+    case "medium": return 1;
+    case "hard": return 2;
+    default: return 1; // treat unknown as medium
   }
 }

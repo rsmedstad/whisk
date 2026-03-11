@@ -284,11 +284,11 @@ export function filterAndSortRecipes(
       );
       break;
     case "simple": {
-      const complexityOrder = { simple: 0, moderate: 1, elaborate: 2 };
+      const difficultyOrder = { easy: 0, medium: 1, hard: 2 };
       filtered.sort((a, b) => {
-        const ca = complexityOrder[a.complexity ?? "moderate"];
-        const cb = complexityOrder[b.complexity ?? "moderate"];
-        return ca !== cb ? ca - cb : a.title.localeCompare(b.title);
+        const da = difficultyOrder[a.difficulty ?? "medium"];
+        const db = difficultyOrder[b.difficulty ?? "medium"];
+        return da !== db ? da - db : a.title.localeCompare(b.title);
       });
       break;
     }

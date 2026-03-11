@@ -52,6 +52,7 @@ interface DiscoverProps {
   ) => Promise<Recipe>;
   onUpdateRecipe?: (id: string, updates: Partial<Recipe>) => Promise<Recipe>;
   chatEnabled?: boolean;
+  recipes?: Recipe[];
 }
 
 // ── Constants ───────────────────────────────────────────
@@ -297,6 +298,7 @@ export function Discover({
   onSaveRecipe,
   onUpdateRecipe,
   chatEnabled,
+  recipes: savedRecipes,
 }: DiscoverProps) {
   const navigate = useNavigate();
   const tags = useTags();
@@ -421,6 +423,43 @@ export function Discover({
     }
     init();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Backfill missing feed images from saved recipes ──
+  useEffect(() => {
+    if (!feed || !savedRecipes?.length) return;
+    // Build a map from source URL → thumbnailUrl for saved recipes that have both
+    const urlToThumb = new Map<string, string>();
+    for (const r of savedRecipes) {
+      if (r.source?.url && r.thumbnailUrl) {
+        urlToThumb.set(r.source.url.replace(/\/$/, "").replace(/^http:/, "https:"), r.thumbnailUrl);
+      }
+    }
+    if (urlToThumb.size === 0) return;
+
+    let hasUpdates = false;
+    const updated = { ...feed, categories: { ...feed.categories } };
+    for (const cat of Object.keys(updated.categories) as DiscoverCategory[]) {
+      const items = updated.categories[cat];
+      if (!items) continue;
+      const patched = items.map((item) => {
+        if (item.imageUrl) return item;
+        const norm = item.url.replace(/\/$/, "").replace(/^http:/, "https:");
+        const thumb = urlToThumb.get(norm);
+        if (thumb) {
+          hasUpdates = true;
+          // Persist fix to server
+          api.patch("/discover/feed", { url: item.url, imageUrl: thumb }).catch(() => {});
+          return { ...item, imageUrl: thumb };
+        }
+        return item;
+      });
+      updated.categories[cat] = patched;
+    }
+    if (hasUpdates) {
+      setFeed(updated);
+      setLocal(FEED_CACHE_KEY, updated);
+    }
+  }, [feed?.lastRefreshed, savedRecipes]); // Only re-run when feed is loaded or recipes change
 
   // ── Feed item click → import recipe ──
 
@@ -594,6 +633,28 @@ export function Discover({
         source: data.source as Recipe["source"],
       });
       setSavedUrls((prev) => new Set(prev).add(item.url));
+      // Backfill feed image if the import got one and the feed card didn't have one
+      const importedImage = data.thumbnailUrl ?? data.photos?.[0]?.url;
+      if (importedImage && !item.imageUrl) {
+        setFeed((prev) => {
+          if (!prev) return prev;
+          const updated = { ...prev, categories: { ...prev.categories } };
+          for (const cat of Object.keys(updated.categories) as DiscoverCategory[]) {
+            const items = updated.categories[cat];
+            if (!items) continue;
+            const idx = items.findIndex((i) => i.url === item.url);
+            if (idx !== -1) {
+              updated.categories[cat] = items.map((i, j) =>
+                j === idx ? { ...i, imageUrl: importedImage } : i
+              );
+              break;
+            }
+          }
+          setLocal(FEED_CACHE_KEY, updated);
+          return updated;
+        });
+        api.patch("/discover/feed", { url: item.url, imageUrl: importedImage }).catch(() => {});
+      }
     } catch {
       // Import failed — button stays as +
     } finally {
@@ -2002,7 +2063,7 @@ export function Discover({
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory px-4 scroll-pl-4">
+                  <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 px-4 scroll-pl-4">
                     {items.map((item, i) => (
                       <FeedCard
                         key={`${category}-${i}`}

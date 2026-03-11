@@ -21,15 +21,15 @@ interface RecipeIndexEntry {
   ratingCount?: number;
   ingredientCount?: number;
   stepCount?: number;
-  complexity?: "simple" | "moderate" | "elaborate";
+  difficulty?: "easy" | "medium" | "hard";
 }
 
-function computeComplexity(totalMinutes: number, ingredientCount: number, stepCount: number): "simple" | "moderate" | "elaborate" {
+function computeDifficulty(totalMinutes: number, ingredientCount: number, stepCount: number): "easy" | "medium" | "hard" {
   const t = totalMinutes <= 0 ? 1 : totalMinutes <= 35 ? 0 : totalMinutes <= 60 ? 1 : 2;
   const i = ingredientCount <= 7 ? 0 : ingredientCount <= 12 ? 1 : 2;
   const s = stepCount <= 5 ? 0 : stepCount <= 10 ? 1 : 2;
   const score = t + i + s;
-  return score <= 2 ? "simple" : score <= 4 ? "moderate" : "elaborate";
+  return score <= 2 ? "easy" : score <= 4 ? "medium" : "hard";
 }
 
 function computeAvgRating(ratings: Record<string, number> | undefined): number | undefined {
@@ -146,7 +146,7 @@ export const onRequestPut: PagesFunction<Env> = async ({
       ratingCount: Object.keys((updated.ratings as Record<string, number>) ?? {}).length || undefined,
       ingredientCount: ingCount,
       stepCount: stpCount,
-      complexity: computeComplexity(totalMin, ingCount, stpCount),
+      difficulty: computeDifficulty(totalMin, ingCount, stpCount),
     };
   });
 

@@ -88,9 +88,9 @@ export interface RecipeIndexEntry {
   avgRating?: number; // pre-computed average of ratings
   ratingCount?: number; // number of users who rated
   spirits?: string[]; // display-only: primary liquors for drinks
-  ingredientCount?: number; // number of ingredients (for complexity)
-  stepCount?: number; // number of steps (for complexity)
-  complexity?: "simple" | "moderate" | "elaborate"; // computed from time + ingredients + steps
+  ingredientCount?: number; // number of ingredients (for difficulty)
+  stepCount?: number; // number of steps (for difficulty)
+  difficulty?: "easy" | "medium" | "hard"; // computed from time + ingredients + steps
 }
 
 // ── Tags ────────────────────────────────────────────────

@@ -66,7 +66,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // Fetch recipe index and external recipe suggestions in parallel
   const externalSearchPromise = searchExternalRecipes(lastMessage, messages);
   const indexData = await env.WHISK_KV.get("recipes:index", "text");
-  const recipeIndex: { id: string; title: string; tags: string[]; cuisine?: string; prepTime?: number; cookTime?: number; servings?: number; description?: string; cookedCount?: number; complexity?: string }[] = indexData ? JSON.parse(indexData) : [];
+  const recipeIndex: { id: string; title: string; tags: string[]; cuisine?: string; prepTime?: number; cookTime?: number; servings?: number; description?: string; cookedCount?: number; difficulty?: string }[] = indexData ? JSON.parse(indexData) : [];
   const externalRecipes = await externalSearchPromise;
 
   // Build system prompt
@@ -175,7 +175,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         const totalTime = (r.prepTime ?? 0) + (r.cookTime ?? 0);
         if (totalTime > 0) parts.push(`${totalTime}min`);
         if (r.servings) parts.push(`serves ${r.servings}`);
-        if (r.complexity) parts.push(`[${r.complexity}]`);
+        if (r.difficulty) parts.push(`[${r.difficulty}]`);
         if (r.cookedCount) parts.push(`cooked ${r.cookedCount}x`);
         if (r.description) parts.push(`— ${r.description}`);
         return parts.join(" ");

@@ -71,12 +71,33 @@ function recipeScore(
   // Favorite — bonus but not the only signal
   if (r.favorite) score += 15;
 
+  // Prefer easier recipes — hard ones are unlikely "quick fill" choices
+  if (r.difficulty === "easy") score += 15;
+  else if (r.difficulty === "medium") score += 5;
+  else if (r.difficulty === "hard") score -= 20;
+
   // Recency tiebreaker — recently updated recipes slightly preferred
   const age = Date.now() - new Date(r.updatedAt).getTime();
   const daysSinceUpdate = age / (1000 * 60 * 60 * 24);
   if (daysSinceUpdate < 30) score += 5;
 
   return score;
+}
+
+/** Pick a random recipe from the top candidates using weighted selection */
+function weightedRandomPick<T extends { score: number }>(candidates: T[]): T | undefined {
+  if (candidates.length === 0) return undefined;
+  // Use top candidates (score > 0), add randomness so it's not always the same
+  const pool = candidates.filter((c) => c.score > 0).slice(0, 12);
+  if (pool.length === 0) return candidates[0];
+  // Weighted random: score acts as weight
+  const totalWeight = pool.reduce((sum, c) => sum + Math.max(c.score, 1), 0);
+  let roll = Math.random() * totalWeight;
+  for (const c of pool) {
+    roll -= Math.max(c.score, 1);
+    if (roll <= 0) return c;
+  }
+  return pool[pool.length - 1];
 }
 
 const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
@@ -330,10 +351,10 @@ export function MealPlan({
           .filter((r) => !usedRecipeIds.has(r.id))
           .map((r) => ({ recipe: r, score: recipeScore(r, slot, seasonalIngredients, seasonalTags) }))
           .sort((a, b) => b.score - a.score);
-        const best = candidates[0];
-        if (best) {
-          onAddMeal(date, slot, best.recipe.title, best.recipe.id);
-          usedRecipeIds.add(best.recipe.id);
+        const pick = weightedRandomPick(candidates);
+        if (pick) {
+          onAddMeal(date, slot, pick.recipe.title, pick.recipe.id);
+          usedRecipeIds.add(pick.recipe.id);
           filled++;
         }
       }

@@ -81,6 +81,8 @@ functions/api/         # Cloudflare Pages Functions (serverless API)
   plan.ts              # GET/PUT /api/plan
   ai/chat.ts           # POST /api/ai/chat
   ai/suggest.ts        # POST /api/ai/suggest
+  ai/auto-tag.ts       # POST /api/ai/auto-tag — AI tag + difficulty estimation
+  discover/feed.ts     # GET/POST/PATCH/DELETE /api/discover/feed — curated feed management
   identify/photo.ts    # POST /api/identify/photo
   import/url.ts        # POST /api/import/url — scrape recipe from URL (with Browser Rendering fallback)
   import/parse.ts      # POST /api/import/parse — AI-powered text parsing for bulk import
