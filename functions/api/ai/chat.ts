@@ -266,24 +266,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    // Action markers instruction
+    // Action markers — keep concise so smaller models follow them
     systemParts.push(
-      "\n--- Action Markers ---",
-      "Include these markers for interactive elements:",
-      "- [RECIPE_CARD: recipeId, Recipe Title] — show recipe from collection",
-      "- [SAVE_RECIPE: url, Recipe Title] — suggest saving external recipe",
-      "- [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId] — add to meal plan (slots: breakfast, lunch, dinner, snack, dessert)",
-      "- [ADD_TO_LIST: item name, amount, unit, category] — add to shopping list",
-      "ALWAYS use [RECIPE_CARD] when mentioning collection recipes. Place markers on their own lines after text."
+      "\n--- Output Format ---",
+      "When mentioning a recipe from the collection, ALWAYS output this marker on its own line:",
+      "[RECIPE_CARD: recipeId, Recipe Title]",
+      "For external recipes: [SAVE_RECIPE: url, Recipe Title]",
+      "For meal plan: [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId]",
+      "For shopping: [ADD_TO_LIST: item, amount, unit, category]",
+      "Example: Here's a great option:\n[RECIPE_CARD: r_abc123, Chicken Tikka Masala]"
     );
 
-    // Planning workflow instructions — only when planning
+    // Planning workflow — only when planning
     if (/\b(plan|week|suggest|meal|ideas?|fill|gap)\b/i.test(lastMessage)) {
       systemParts.push(
         "\n--- Planning ---",
-        "Suggest 2-3 recipes. Check empty slots in meal plan and fill those first.",
-        "Use [RECIPE_CARD] + [ADD_TO_PLAN] for each. Keep explanations minimal.",
-        "Vary suggestions — avoid repeating the same recipe across the week."
+        "Suggest 2-3 recipes. Use [RECIPE_CARD] + [ADD_TO_PLAN] for each. Keep explanations minimal."
       );
     }
   }
