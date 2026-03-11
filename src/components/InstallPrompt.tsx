@@ -101,9 +101,14 @@ export function InstallPrompt() {
       <Card>
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-semibold dark:text-stone-100">
-              Install Whisk for the best experience
-            </p>
+            <div>
+              <p className="text-sm font-semibold dark:text-stone-100">
+                Install Whisk
+              </p>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                Works offline, launches full-screen, and feels like a native app
+              </p>
+            </div>
             <button
               onClick={handleDismiss}
               className="text-stone-400 hover:text-stone-600 text-lg leading-none shrink-0"
@@ -148,9 +153,6 @@ export function InstallPrompt() {
             </div>
           )}
 
-          <p className="text-xs text-stone-400 dark:text-stone-500">
-            Whisk works offline and feels like a native app when installed
-          </p>
         </div>
       </Card>
     </div>
