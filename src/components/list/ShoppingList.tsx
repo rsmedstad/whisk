@@ -814,7 +814,7 @@ export function ShoppingList({
                       disabled={isPlanAdding}
                       className="text-xs font-medium text-orange-600 dark:text-orange-400 active:opacity-70 disabled:opacity-50"
                     >
-                      {isPlanAdding ? "Adding..." : "Add Essentials"}
+                      {isPlanAdding ? "Adding..." : "Add Essentials from Plan"}
                     </button>
                   </>
                 )}
