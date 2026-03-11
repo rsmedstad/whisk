@@ -876,7 +876,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 <QuickAction
                   icon={CalendarDays}
                   label="What should I make this week?"
-                  onClick={() => sendMessage("Suggest 2-3 dinner ideas from my recipes for this week. Keep it brief — just the recipe names and a short reason each one fits.")}
+                  onClick={() => sendMessage("Suggest 2-3 dinner ideas from my recipes for this week. Keep it brief — just the recipe names.")}
                 />
                 <QuickAction
                   icon={Sparkles}
@@ -903,6 +903,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
 
         {/* Messages */}
         {messages.map((msg, i) => {
+          // Skip empty placeholder assistant messages (shown as "Thinking..." below)
+          if (msg.role === "assistant" && !msg.content) return null;
           const isError = msg.role === "user" && msg.content.endsWith("[ERROR]");
           const urls = msg.role === "assistant" ? extractUrls(msg.content) : [];
           const actions = msg.role === "assistant" ? parseActions(msg.content) : [];
@@ -928,6 +930,26 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           const saveRecipes = actions.filter((a) => a.type === "SAVE_RECIPE");
           const planActions = actions.filter((a) => a.type === "ADD_TO_PLAN");
           const otherActions = actions.filter((a) => a.type !== "RECIPE_CARD" && a.type !== "SAVE_RECIPE" && a.type !== "ADD_TO_PLAN");
+
+          // Match plan actions to recipe cards by recipeId
+          const planByRecipeId = new Map<string, { dateStr: string; slot: MealSlot; title: string; recipeId?: string }>();
+          for (const action of planActions) {
+            const parts = action.params.split(",").map((s) => s.trim());
+            const recipeId = parts[3];
+            if (recipeId) {
+              planByRecipeId.set(recipeId, {
+                dateStr: parts[0] ?? "",
+                slot: (parts[1] ?? "dinner") as MealSlot,
+                title: parts[2] ?? "Meal",
+                recipeId,
+              });
+            }
+          }
+          // Plan actions not matched to any recipe card
+          const unmatchedPlanActions = planActions.filter((a) => {
+            const recipeId = a.params.split(",").map((s) => s.trim())[3];
+            return !recipeId || !recipeCards.some((rc) => rc.params.split(",")[0]?.trim() === recipeId);
+          });
 
           return (
             <div
@@ -968,34 +990,66 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 {/* Recipe cards from user's collection */}
                 {recipeCards.length > 0 && (
                   <div className="mt-2 space-y-1.5 border-t border-stone-200 dark:border-stone-700 pt-2">
+                    {/* Bulk "Add all to plan" when 2+ plan actions match cards */}
+                    {planActions.length >= 2 && (
+                      <button
+                        onClick={() => {
+                          for (const action of planActions) {
+                            const parts = action.params.split(",").map((s) => s.trim());
+                            const dateStr = parts[0] ?? "";
+                            const slot = (parts[1] ?? "dinner") as MealSlot;
+                            const title = parts[2] ?? "Meal";
+                            const recipeId = parts[3];
+                            if (onAddMeal) {
+                              const d = dateStr ? new Date(dateStr + "T00:00:00") : new Date();
+                              onAddMeal(d, slot, title, recipeId);
+                            }
+                          }
+                        }}
+                        className="w-full rounded-lg bg-orange-500 text-white py-2 text-sm font-medium hover:bg-orange-600 transition-colors"
+                      >
+                        Add all {planActions.length} meals to plan
+                      </button>
+                    )}
                     {recipeCards.map((action, ai) => {
                       const parts = action.params.split(",").map((s) => s.trim());
                       const recipeId = parts[0] ?? "";
                       const recipe = recipes.find((r) => r.id === recipeId);
                       if (!recipe) return null;
                       const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0);
+                      const matchedPlan = planByRecipeId.get(recipeId);
                       return (
-                        <button
-                          key={ai}
-                          onClick={() => navigate(`/recipes/${recipe.id}`)}
-                          className="flex gap-2 w-full rounded-lg border border-stone-200 dark:border-stone-600 overflow-hidden text-left hover:border-orange-300 dark:hover:border-orange-600 transition-colors"
-                        >
-                          {recipe.thumbnailUrl ? (
-                            <img src={recipe.thumbnailUrl} alt="" className="w-16 h-16 object-cover shrink-0" />
-                          ) : (
-                            <div className="w-16 h-16 bg-stone-200 dark:bg-stone-700 shrink-0" />
-                          )}
-                          <div className="py-1.5 pr-2 min-w-0">
-                            <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">{recipe.title}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {totalTime > 0 && <span className="text-xs text-stone-400">{totalTime} min</span>}
-                              {recipe.servings && <span className="text-xs text-stone-400">Serves {recipe.servings}</span>}
-                            </div>
-                            {recipe.tags.length > 0 && (
-                              <p className="text-xs text-stone-400 truncate mt-0.5">{recipe.tags.slice(0, 3).join(" · ")}</p>
+                        <div key={ai} className="flex items-stretch gap-0 rounded-lg border border-stone-200 dark:border-stone-600 overflow-hidden hover:border-orange-300 dark:hover:border-orange-600 transition-colors">
+                          <button
+                            onClick={() => navigate(`/recipes/${recipe.id}`)}
+                            className="flex gap-2 flex-1 min-w-0 text-left"
+                          >
+                            {recipe.thumbnailUrl ? (
+                              <img src={recipe.thumbnailUrl} alt="" className="w-14 h-14 object-cover shrink-0" />
+                            ) : (
+                              <div className="w-14 h-14 bg-stone-200 dark:bg-stone-700 shrink-0" />
                             )}
-                          </div>
-                        </button>
+                            <div className="py-1.5 pr-1 min-w-0">
+                              <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">{recipe.title}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {totalTime > 0 && <span className="text-xs text-stone-400">{totalTime} min</span>}
+                                {recipe.servings && <span className="text-xs text-stone-400">Serves {recipe.servings}</span>}
+                              </div>
+                            </div>
+                          </button>
+                          {matchedPlan && onAddMeal && (
+                            <button
+                              onClick={() => {
+                                const d = matchedPlan.dateStr ? new Date(matchedPlan.dateStr + "T00:00:00") : new Date();
+                                onAddMeal(d, matchedPlan.slot, matchedPlan.title, matchedPlan.recipeId);
+                              }}
+                              className="flex items-center justify-center w-11 shrink-0 border-l border-stone-200 dark:border-stone-600 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 active:bg-orange-100 dark:active:bg-orange-950/50 transition-colors"
+                              title="Add to plan"
+                            >
+                              <CalendarDays className="w-4.5 h-4.5" />
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -1029,31 +1083,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   </div>
                 )}
 
-                {/* Bulk "Add all to plan" + individual plan actions */}
-                {planActions.length > 0 && (
+                {/* Plan actions not already shown on recipe cards */}
+                {unmatchedPlanActions.length > 0 && (
                   <div className="mt-2 space-y-1.5 border-t border-stone-200 dark:border-stone-700 pt-2">
-                    {planActions.length >= 3 && (
-                      <button
-                        onClick={() => {
-                          for (const action of planActions) {
-                            const parts = action.params.split(",").map((s) => s.trim());
-                            const dateStr = parts[0] ?? "";
-                            const slot = (parts[1] ?? "dinner") as MealSlot;
-                            const title = parts[2] ?? "Meal";
-                            const recipeId = parts[3];
-                            if (onAddMeal) {
-                              const d = dateStr ? new Date(dateStr + "T00:00:00") : new Date();
-                              onAddMeal(d, slot, title, recipeId);
-                            }
-                          }
-                        }}
-                        className="w-full rounded-lg bg-orange-500 text-white py-2 text-sm font-medium hover:bg-orange-600 transition-colors"
-                      >
-                        Add all {planActions.length} meals to plan
-                      </button>
-                    )}
                     <div className="flex flex-wrap gap-1.5">
-                      {planActions.map((action, ai) => {
+                      {unmatchedPlanActions.map((action, ai) => {
                         const parts = action.params.split(",").map((s) => s.trim());
                         const dateStr = parts[0] ?? "";
                         const slot = (parts[1] ?? "dinner") as MealSlot;
@@ -1070,7 +1104,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                             }}
                             className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900 transition-colors"
                           >
-                            <Plus className="w-3 h-3" /> {title}
+                            <CalendarDays className="w-3 h-3" /> {title}
                           </button>
                         );
                       })}
@@ -1138,12 +1172,15 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           );
         })}
 
-        {isLoading && (
+        {isLoading && !messages.some((m, idx) => m.role === "assistant" && m.content && idx === messages.length - 1) && (
           <div className="flex justify-start">
-            <div className="bg-stone-100 dark:bg-stone-800 rounded-xl px-4 py-2.5">
-              <span className="animate-pulse text-sm text-stone-400">
-                Thinking...
+            <div className="flex items-center gap-1.5 text-sm text-stone-400">
+              <span className="inline-flex gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-stone-300 dark:bg-stone-600 animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-stone-300 dark:bg-stone-600 animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-stone-300 dark:bg-stone-600 animate-bounce" style={{ animationDelay: "300ms" }} />
               </span>
+              Thinking
             </div>
           </div>
         )}
