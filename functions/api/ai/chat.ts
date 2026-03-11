@@ -156,26 +156,49 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   //  - semantic: vague/broad suggestion requests — needs Vectorize for relevance scoring
   const lower = lastMessage.toLowerCase();
 
+  // Normalize contractions so regex matching works (what's → what is, etc.)
+  const normalized = lower
+    .replace(/what[''\u2019]s/g, "what is")
+    .replace(/how[''\u2019]s/g, "how is")
+    .replace(/where[''\u2019]s/g, "where is")
+    .replace(/when[''\u2019]s/g, "when is")
+    .replace(/who[''\u2019]s/g, "who is");
+
   // General cooking questions that don't need any collection data
-  const isGeneralQuestion = /\b(how (do|to|long|much|many)|what (is|are|does)|can (i|you)|should i|temperature|substitute|convert|difference between|tip|technique|safe|storage|shelf life|calories|nutrition|serving size)\b/i.test(lastMessage)
-    && !/\b(my recipe|my collection|from my|in my|suggest|recommend|plan|what should i (make|cook)|meal plan|shopping list)\b/i.test(lastMessage);
+  const isGeneralQuestion = /\b(how (do|to|long|much|many|is)|what (is|are|does)|can (i|you)|should i|why (did|does|do|is|are|won't|isn't)|temperature|temp\b|substitut\w*|replace\w*|alternativ\w*|instead of|convert|difference between|tips?|technique|safe|storage|freeze|freezer|thaw|reheat|shelf life|calories|nutrition|serving size|in season|seasonal|what.{0,10}season|pairs? with|goes well with|side dish|best .{0,15} for|vs\b|better than|compared to)\b/i.test(normalized)
+    && !/\b(my recipe|my collection|from my|in my|suggest|recommend|plan|what should i (make|cook)|meal plan|shopping list)\b/i.test(normalized);
 
   // References the user's personal data (recipes, plan, list)
-  const referencesCollection = /\b(my recipe|my collection|from my|in my|suggest|recommend|what should i (make|cook)|meal plan|plan my|shopping list|what do i have|from the collection)\b/i.test(lastMessage);
+  const referencesCollection = /\b(my recipe|my collection|from my|in my|suggest|recommend|what should i (make|cook)|meal plan|plan my|shopping list|what do i have|from the collection)\b/i.test(normalized);
 
   // Needs recipe context if: explicitly references collection, or is a multi-turn chat
   // that previously referenced recipes (check if prior assistant messages had RECIPE_CARD markers)
-  const priorHadRecipes = messages.length > 2 && messages.some(
-    (m) => m.role === "assistant" && /\[RECIPE_CARD:/.test(m.content)
-  );
-  const needsRecipeContext = !isGeneralQuestion && (referencesCollection || priorHadRecipes);
+  const priorRecipeIds = new Set<string>();
+  if (messages.length > 2) {
+    for (const m of messages) {
+      if (m.role === "assistant") {
+        for (const match of m.content.matchAll(/\[RECIPE_CARD:\s*([^,\]]+)/g)) {
+          const id = match[1]?.trim();
+          if (id) priorRecipeIds.add(id);
+        }
+      }
+    }
+  }
+  const priorHadRecipes = priorRecipeIds.size > 0;
+
+  // Follow-up about previously mentioned recipes — no need for full index or Vectorize,
+  // just include the specific recipes already in the conversation
+  const isFollowUp = priorHadRecipes && !referencesCollection && !isGeneralQuestion;
+
+  // Full collection context only when explicitly referencing collection or asking for new suggestions
+  const needsRecipeContext = !isGeneralQuestion && !isFollowUp && (referencesCollection || priorHadRecipes);
 
   // Semantic search only when the query is broad enough to benefit from embeddings
   // (not for specific recipe lookups or simple questions about a named dish)
   const needsSemanticSearch = needsRecipeContext
-    && !/\b(how|what is|what are|can i|should i|temperature|substitute)\b/i.test(lastMessage);
+    && !/\b(how|what is|what are|can i|should i|temperature|substitut|replac|alternativ)\b/i.test(normalized);
 
-  const needsExternalSearch = needsRecipeContext && /\b(new|outside|ideas?|different|something else|never tried)\b/i.test(lastMessage);
+  const needsExternalSearch = needsRecipeContext && /\b(new|outside|ideas?|different|something else|never tried)\b/i.test(normalized);
 
   // Fetch only what we need in parallel — skip heavy lookups for general questions
   const configPromise = loadAIConfig(env.WHISK_KV);
@@ -225,6 +248,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "If the user explicitly asks for new recipe ideas outside their collection, you may suggest new ones. When doing so, prefer recipes from the Curated Recipe Ideas section below (if available). Clearly note these are not in their collection.",
       "Suggest 3 recipes unless the user asks for a different number. Format recipe names exactly as they appear in the collection.",
       "ALWAYS include a brief, friendly intro sentence before any recipe cards (e.g., 'Here are a few ideas from your collection:'). Never output only action markers with no text.",
+    );
+  }
+
+  if (isFollowUp) {
+    // Lightweight follow-up: only include recipes already mentioned in conversation
+    systemParts.push(
+      "The user is continuing a conversation about recipes already discussed. Answer their follow-up question using the conversation context.",
+      "If they want to explore more recipes from their collection, let them know they can ask you to suggest more.",
+      "\n--- Output Format ---",
+      "When mentioning a recipe from the collection, ALWAYS output on its own line: [RECIPE_CARD: recipeId, Recipe Title]",
+      "For shopping: [ADD_TO_LIST: item, amount, unit, category]",
     );
   }
 

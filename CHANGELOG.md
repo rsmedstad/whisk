@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.1] - 2026-03-11
+
+### AI Chat — Smarter Query Classification
+
+- **Three-tier query routing**: General, Follow-up, and Collection tiers skip unnecessary KV/Vectorize/NYT lookups
+  - **General questions** (substitutions, temps, seasonal, troubleshooting, pairings) go straight to the LLM with no data fetches
+  - **Follow-up questions** in multi-turn chats skip full index reload — the LLM already has the conversation context
+  - **Collection queries** ("suggest from my recipes", "meal plan") still load the full recipe index + Vectorize
+- **Contraction normalization**: "what's", "how's", etc. now correctly match query classification patterns
+- **Expanded general patterns**: `temp`, `tips`, `freeze`/`thaw`/`reheat`, `why did...`, `pairs with`, `best...for`, `vs`/`better than`, `substitute`/`replace`/`alternative`/`instead of`, `in season`/`seasonal`
+- **Faster follow-ups**: Asking "what temp for that?" or "can I freeze the leftovers?" after getting recipe cards no longer re-fetches the entire recipe index and Vectorize embeddings
+
+---
+
 ## [0.5.0] - 2026-03-11
 
 ### AI Chat — Vectorize RAG & Streaming
