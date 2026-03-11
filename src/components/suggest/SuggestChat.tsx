@@ -400,16 +400,19 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Ask</h1>
           </button>
-          <div className="flex items-center gap-1">
-            {messages.length > 0 && (
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors mr-1"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                New chat
-              </button>
+          {/* New chat pill — centered, highlights when there's an active conversation */}
+          <button
+            onClick={handleNewChat}
+            className={classNames(
+              "text-xs font-medium px-3 py-1 rounded-full border transition-colors",
+              messages.length > 0
+                ? "border-orange-500 text-orange-500 bg-orange-50 dark:bg-orange-950/30"
+                : "border-stone-200 dark:border-stone-700 text-stone-400 dark:text-stone-500"
             )}
+          >
+            New chat
+          </button>
+          <div className="flex items-center gap-1">
             <button
               onClick={() => {
                 setSearchOpen((prev) => {
