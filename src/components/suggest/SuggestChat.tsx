@@ -1037,11 +1037,12 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                               </div>
                             </div>
                           </button>
-                          {matchedPlan && onAddMeal && (
+                          {onAddMeal && (
                             <button
                               onClick={() => {
-                                const d = matchedPlan.dateStr ? new Date(matchedPlan.dateStr + "T00:00:00") : new Date();
-                                onAddMeal(d, matchedPlan.slot, matchedPlan.title, matchedPlan.recipeId);
+                                const plan = matchedPlan ?? { dateStr: "", slot: "dinner" as MealSlot, title: recipe.title, recipeId };
+                                const d = plan.dateStr ? new Date(plan.dateStr + "T00:00:00") : new Date();
+                                onAddMeal(d, plan.slot, plan.title, plan.recipeId);
                               }}
                               className="flex items-center justify-center w-11 shrink-0 border-l border-stone-200 dark:border-stone-600 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 active:bg-orange-100 dark:active:bg-orange-950/50 transition-colors"
                               title="Add to plan"
@@ -1083,8 +1084,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   </div>
                 )}
 
-                {/* Plan actions not already shown on recipe cards */}
-                {unmatchedPlanActions.length > 0 && (
+                {/* Plan actions for recipes not shown as cards (e.g. external or unmatched) */}
+                {unmatchedPlanActions.filter((a) => {
+                  const rid = a.params.split(",").map((s) => s.trim())[3];
+                  return !rid || !recipeCards.some((rc) => rc.params.split(",")[0]?.trim() === rid);
+                }).length > 0 && recipeCards.length === 0 && (
                   <div className="mt-2 space-y-1.5 border-t border-stone-200 dark:border-stone-700 pt-2">
                     <div className="flex flex-wrap gap-1.5">
                       {unmatchedPlanActions.map((action, ai) => {
