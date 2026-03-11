@@ -77,7 +77,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         body: JSON.stringify({
           title: t,
           description: desc,
-          ingredients: ings.filter((i) => i.name.trim()).map((i) => i.name),
+          ingredients: ings.filter((i) => (i.name ?? "").trim()).map((i) => i.name),
         }),
       });
       if (!res.ok) return;
@@ -111,7 +111,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           body: JSON.stringify({
             title: t,
             description: desc,
-            ingredients: ings.filter((i) => i.name.trim()).map((i) => i.name),
+            ingredients: ings.filter((i) => (i.name ?? "").trim()).map((i) => i.name),
           }),
         });
         if (!res.ok) return;
@@ -216,9 +216,9 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       const recipeData = {
         title: title.trim(),
         description: description.trim() || undefined,
-        ingredients: ingredients.filter((i) => i.name.trim()),
+        ingredients: ingredients.filter((i) => (i.name ?? "").trim()),
         steps: steps
-          .filter((s) => s.text.trim())
+          .filter((s) => (s.text ?? "").trim())
           .map((s) => ({
             ...s,
             timerMinutes: s.timerMinutes ?? parseTimerFromText(s.text) ?? undefined,
