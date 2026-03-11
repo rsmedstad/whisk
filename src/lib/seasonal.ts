@@ -282,10 +282,10 @@ function getHolidayAccentRanges(year: number): HolidayAccentRange[] {
     { accent: "halloween",    start: new Date(year, 9, 10),  end: new Date(year, 10, 1) },
     // Thanksgiving: 10 days before through day after (dynamic date)
     { accent: "thanksgiving", start: addDays(thanksgiving, -10), end: addDays(thanksgiving, 1) },
-    // Valentine's Day: Feb 1 - Feb 15 (2 weeks of romance)
-    { accent: "valentine",    start: new Date(year, 1, 1),   end: new Date(year, 1, 15) },
-    // St. Patrick's Day: Mar 10 - Mar 18 (1 week buildup + day)
-    { accent: "stpatrick",    start: new Date(year, 2, 10),  end: new Date(year, 2, 18) },
+    // Valentine's Day: Feb 10 - Feb 15 (short buildup + day after)
+    { accent: "valentine",    start: new Date(year, 1, 10),  end: new Date(year, 1, 15) },
+    // St. Patrick's Day: Mar 14 - Mar 18 (3-day buildup + day after)
+    { accent: "stpatrick",    start: new Date(year, 2, 14),  end: new Date(year, 2, 18) },
     // Easter: 7 days before through day after (dynamic date)
     { accent: "easter",       start: addDays(easter, -7),    end: addDays(easter, 1) },
     // 4th of July: Jun 25 - Jul 5 (10 days patriotic)
