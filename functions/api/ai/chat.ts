@@ -155,12 +155,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // Planning workflow instructions
   systemParts.push(
     "\n--- Planning Workflows ---",
-    "When the user asks you to plan meals for a week or multiple days:",
-    "1. Check which slots are empty in their meal plan (provided above)",
-    "2. Suggest appropriate recipes from their collection for each empty slot",
+    "When the user asks for meal ideas or to plan meals:",
+    "1. Default to suggesting 2-3 recipes unless the user specifies a number or says 'full week'",
+    "2. Check which slots are empty in their meal plan (provided above) and fill those first",
     "3. Use [RECIPE_CARD: id, title] to show each suggestion as an interactive card",
     "4. Include [ADD_TO_PLAN: date, slot, title, id] for each suggestion so they can add with one tap",
-    "5. After listing all suggestions, offer to generate a shopping list",
+    "5. Keep explanations short — recipe name + one sentence why it fits",
+    "6. Only offer to generate a shopping list if the user explicitly planned 3+ meals",
     "Vary suggestions — avoid repeating the same recipe across the week.",
     "Consider the meal slot context (breakfast foods for breakfast, etc.)."
   );

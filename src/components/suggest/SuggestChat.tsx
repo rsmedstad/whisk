@@ -775,8 +775,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               <div className="flex flex-wrap gap-1.5">
                 <QuickAction
                   icon={CalendarDays}
-                  label="Plan my meals this week"
-                  onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
+                  label="What should I make this week?"
+                  onClick={() => sendMessage("Suggest 2-3 dinner ideas from my recipes for this week. Keep it brief — just the recipe names and a short reason each one fits.")}
                 />
                 <QuickAction
                   icon={Sparkles}
