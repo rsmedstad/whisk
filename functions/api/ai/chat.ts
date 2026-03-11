@@ -92,26 +92,29 @@ async function logAIInteraction(kv: KVNamespace, entry: AILogEntry): Promise<voi
 
 /** Format a user-friendly error message from an AI provider failure */
 function formatAIError(errMsg: string, provider: string, model: string): string {
+  // Look up the display name for the provider
+  const displayName = ({ groq: "Groq", cerebras: "Cerebras", openai: "OpenAI", anthropic: "Anthropic", gemini: "Gemini", xai: "xAI Grok" } as Record<string, string>)[provider] ?? provider;
   const lower = errMsg.toLowerCase();
   if (lower.includes("no api key")) {
-    return `The ${provider} API key is missing or not configured. Check Settings > AI to make sure it's set up correctly.`;
+    return `The ${displayName} API key is missing or not configured. Check Settings > AI to make sure it's set up correctly.`;
   }
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid api key") || lower.includes("invalid_api_key")) {
-    return `The ${provider} API key appears to be invalid or expired. Check Settings > AI to update it.`;
+    return `The ${displayName} API key appears to be invalid or expired. Check Settings > AI to update it.`;
   }
   if (lower.includes("rate_limit") || lower.includes("429") || lower.includes("too many requests")) {
-    return `${provider} rate limit reached for ${model}. This usually resolves in a minute — try again shortly, or switch to a different model in Settings > AI.`;
+    return `${displayName} rate limit reached for ${model}. This usually resolves in a minute — try again shortly, or switch to a different model in Settings > AI.`;
   }
   if (lower.includes("request too large") || lower.includes("tokens per minute") || lower.includes("context_length") || lower.includes("maximum context")) {
     return `The request was too large for ${model} (your recipe collection may exceed its token limit). Try a model with a larger context window, or try again with a shorter conversation. You can change models in Settings > AI.`;
   }
-  if (lower.includes("timeout") || lower.includes("timed out")) {
-    return `The ${provider} service timed out. This can happen when the service is under heavy load — try again in a moment.`;
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("aborted")) {
+    return `The ${displayName} service timed out. This can happen when the service is under heavy load — try again in a moment.`;
   }
   if (lower.includes("500") || lower.includes("502") || lower.includes("503") || lower.includes("internal server error") || lower.includes("service unavailable")) {
-    return `The ${provider} service is having issues right now (${model}). Try again in a moment, or switch to a different provider in Settings > AI.`;
+    return `The ${displayName} service is having issues right now (${model}). Try again in a moment, or switch to a different provider in Settings > AI.`;
   }
-  return `I'm having trouble connecting to ${provider} (${model}). Error: ${errMsg.slice(0, 200)}. Check Settings > AI or try again.`;
+  // Include the raw error for unrecognized errors to aid debugging
+  return `${displayName} (${model}) error: ${errMsg.slice(0, 300)}. Check Settings > AI or try again.`;
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -410,9 +413,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         },
       });
     } catch (streamErr) {
-      // Log stream error
+      // Log stream error with provider details for debugging
       const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
-      console.error("[Whisk] Stream error, falling back to non-streaming:", errMsg);
+      console.error(`[Whisk] Stream error (${fnConfig.provider}/${fnConfig.model}):`, errMsg);
       logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: false, durationMs: Date.now() - startTime, error: `stream: ${errMsg.slice(0, 500)}` }).catch(() => {});
 
       // Don't retry on rate limits — a second call will just hit the same limit
