@@ -856,9 +856,11 @@ export function Discover({
         });
       }
     }
-    // Deduplicate by URL
+    // Deduplicate by URL and filter out items without images
+    // (imageless items are typically roundup/collection pages that fail on import)
     const seen = new Set<string>();
     return items.filter((item) => {
+      if (!item.imageUrl) return false;
       if (seen.has(item.url)) return false;
       seen.add(item.url);
       return true;

@@ -495,14 +495,23 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   /** Pick N random recipes from the collection, excluding already-planned ones.
    *  Generates an assistant message with RECIPE_CARD markers so the existing
    *  card rendering kicks in automatically — no AI call needed. */
-  const handleLocalSuggestion = useCallback((userText: string, count = 3, category?: string) => {
+  const handleLocalSuggestion = useCallback((userText: string, count = 3, category?: string, themeKeywords?: string[]) => {
     // Add user message to chat
     setMessages((prev) => [...prev, { role: "user", content: userText }]);
     setInput("");
 
     // Determine which pool to pick from
     const cat = category ?? "dinner";
-    const pool = filterByCategory(recipes, cat);
+    let pool = filterByCategory(recipes, cat);
+
+    // If theme keywords provided (e.g. holiday name words), prefer matching recipes
+    if (themeKeywords && themeKeywords.length > 0) {
+      const themed = pool.filter((r) => {
+        const text = `${r.title} ${r.tags.join(" ")} ${r.cuisine ?? ""}`.toLowerCase();
+        return themeKeywords.some((kw) => text.includes(kw.toLowerCase()));
+      });
+      if (themed.length > 0) pool = themed;
+    }
 
     // Exclude recipes already in this week's meal plan
     const plannedIds = new Set(mealPlan.map((m) => m.recipeId).filter(Boolean));
@@ -529,9 +538,10 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
 
     // Build assistant response with framing text + action markers
     const catLabel = cat === "any" ? "" : ` ${cat}`;
+    const themeLabel = themeKeywords ? ` for ${themeKeywords.join(" ")}` : "";
     const intro = picks.length === 1
-      ? `Here's a${catLabel} idea from your collection:`
-      : `Here are ${picks.length}${catLabel} ideas from your collection:`;
+      ? `Here's a${catLabel} idea${themeLabel} from your collection:`
+      : `Here are ${picks.length}${catLabel} ideas${themeLabel} from your collection:`;
     const cards = picks.map((r) => `[RECIPE_CARD: ${r.id}, ${r.title}]`).join("\n");
     const content = `${intro}\n\n${cards}`;
 
@@ -963,9 +973,14 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   }
                   onClick={() => {
                     const soonHoliday = seasonal.upcomingHolidays.find((h) => h.daysAway <= 7);
-                    if (soonHoliday) {
-                      // Holidays need AI for thematic reasoning
-                      sendMessage(`Suggest a recipe from my collection for ${soonHoliday.name}. Keep it brief.`);
+                    if (soonHoliday && recipeCount > 0) {
+                      // Instant client-side: filter by holiday-related keywords
+                      const keywords = soonHoliday.name.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+                      handleLocalSuggestion(
+                        `What should I make for ${soonHoliday.name}?`, 3, "any", keywords
+                      );
+                    } else if (soonHoliday) {
+                      sendMessage(`Suggest a recipe for ${soonHoliday.name}. Keep it brief.`);
                     } else if (recipeCount > 0) {
                       handleLocalSuggestion("What's a quick dinner tonight?", 1, "dinner");
                     } else {

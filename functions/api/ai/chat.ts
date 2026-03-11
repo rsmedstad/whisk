@@ -162,14 +162,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     .replace(/how[''\u2019]s/g, "how is")
     .replace(/where[''\u2019]s/g, "where is")
     .replace(/when[''\u2019]s/g, "when is")
-    .replace(/who[''\u2019]s/g, "who is");
+    .replace(/who[''\u2019]s/g, "who is")
+    .replace(/i[''\u2019]m/g, "i am")
+    .replace(/don[''\u2019]t/g, "do not")
+    .replace(/can[''\u2019]t/g, "cannot")
+    .replace(/won[''\u2019]t/g, "will not")
+    .replace(/let[''\u2019]s/g, "let us");
 
   // General cooking questions that don't need any collection data
-  const isGeneralQuestion = /\b(how (do|to|long|much|many|is)|what (is|are|does)|when (does|do|is|will|did)|can (i|you)|should i|why (did|does|do|is|are|won't|isn't)|temperature|temp\b|substitut\w*|replace\w*|alternativ\w*|instead of|convert|difference between|tips?|technique|safe|storage|freeze|freezer|thaw|reheat|shelf life|calories|nutrition|serving size|in season|seasonal|season\b|spring|summer|fall|autumn|winter|holiday|holidays|easter|thanksgiving|christmas|what.{0,10}season|pairs? with|goes well with|side dish|best .{0,15} for|vs\b|better than|compared to)\b/i.test(normalized)
-    && !/\b(my recipe|my collection|from my|in my|suggest|recommend|plan (my|a|the|this)|what should i (make|cook)|meal plan|shopping list)\b/i.test(normalized);
+  const isGeneralQuestion = /\b(how (do|to|long|much|many|is)|what (is|are|does)|when (does|do|is|will|did)|can (i|you)|should i|why (did|does|do|is|are|won't|will not|isn't)|temperature|temp\b|substitut\w*|replace\w*|alternativ\w*|instead of|convert|difference between|tips?|technique|safe|storage|freeze|freezer|thaw|reheat|shelf life|calories|nutrition|protein|carbs?|fat|fiber|sodium|serving size|in season|seasonal|season\b|spring|summer|fall|autumn|winter|holiday|holidays|easter|thanksgiving|christmas|hanukkah|valentine|st\.? patrick|fourth of july|4th of july|memorial day|labor day|new year|what.{0,10}season|pairs? with|goes well with|side dish|best .{0,15} for|vs\b|better than|compared to|how .{0,10} (cook|bake|roast|grill|fry|saut[eé]|steam|boil|braise|smoke|poach|blanch)|internal temp|done.?ness|resting time|marinate|brine|proof|knead|ferment|food safe|cross.?contaminat|expir|spoil)\b/i.test(normalized)
+    && !/\b(my recipe|my collection|from my|in my|suggest|recommend|plan (my|a|the|this)|what should i (make|cook)|meal plan|shopping list|i am craving|craving\b|something (with|easy|healthy)|give me)\b/i.test(normalized);
 
-  // References the user's personal data (recipes, plan, list)
-  const referencesCollection = /\b(my recipe|my collection|from my|in my|suggest|recommend|what should i (make|cook)|meal plan|plan my|plan a\b|shopping list|what do i have|from the collection)\b/i.test(normalized);
+  // References the user's personal data (recipes, plan, list), or implicitly asks for
+  // recipe suggestions (cravings, bare meal requests, ingredient-based queries)
+  const referencesCollection = /\b(my recipe|my collection|from my|in my|suggest|recommend|what should i (make|cook)|meal plan|plan my|plan a\b|shopping list|what do i have|from the collection|i am craving|craving\b|something (with|easy|healthy|quick|light|hearty|warm|cold|spicy|simple|fancy|special|vegetarian|vegan)|quick (dinner|lunch|breakfast|meal|recipe)|easy (dinner|lunch|breakfast|meal|recipe)|dinner (for|tonight|idea|this)|lunch (for|today|idea)|breakfast (for|today|idea)|weeknight (meal|dinner|recipe)|what (can|could) i (make|cook|do) with|recipe for\b|give me .{0,15}(recipe|meal|dinner|idea)|i (want|need) .{0,15}(recipe|dinner|lunch|meal|to (cook|make|eat)))\b/i.test(normalized);
 
   // Needs recipe context if: explicitly references collection, or is a multi-turn chat
   // that previously referenced recipes (check if prior assistant messages had RECIPE_CARD markers)

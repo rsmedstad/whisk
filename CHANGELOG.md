@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.5.2] - 2026-03-11
+
+### Discover — Feed Quality
+
+- **Hide imageless feed items**: Discover cards without images (typically roundup/collection pages) are now filtered from display — prevents broken "Could not load recipe" experiences
+- These items were being scraped from homepage links but had no extractable image or single-recipe data
+
+### Ask Tab — Faster Pill Suggestions
+
+- **Holiday pill now deterministic**: "What should I make for [Holiday]?" pill now uses instant client-side filtering by holiday keywords instead of an LLM call
+- Both "Or try asking" pills are now fully client-side when the user has recipes — zero network latency
+- `handleLocalSuggestion` now accepts optional theme keywords for tag/title-based recipe filtering
+
+### AI Chat — Expanded Query Routing
+
+- **Implicit suggestion detection**: Bare requests like "something with chicken", "quick weeknight meal", "I'm craving pasta", "dinner tonight" now correctly route to the collection tier with full recipe context
+- **More general patterns**: Added cooking verbs (roast, grill, saut, braise, smoke, poach, blanch), food safety terms (cross-contamination, expiration, spoilage), nutrition terms (protein, carbs, fiber, sodium), and more holidays (Hanukkah, Valentine's, St. Patrick's, Memorial Day, Labor Day)
+- **Better contraction handling**: Added normalization for I'm, don't, can't, won't, let's
+- **Fewer false negatives**: Queries that previously fell through as "unclassified" (no recipe context, no streaming) now correctly get collection data
+
+---
+
 ## [0.5.1] - 2026-03-11
 
 ### AI Chat — Smarter Query Classification
