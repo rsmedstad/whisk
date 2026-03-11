@@ -87,6 +87,8 @@ export function Login({
             </p>
           </div>
 
+          <InstallPrompt />
+
           <div className="space-y-3">
             <Button fullWidth onClick={() => setScreen("join")}>
               Join an Existing Book
@@ -95,8 +97,6 @@ export function Login({
               Set Up a New Book
             </Button>
           </div>
-
-          <InstallPrompt />
         </div>
       </div>
     );

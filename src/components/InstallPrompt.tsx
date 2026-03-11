@@ -15,23 +15,57 @@ function detectPlatform(): Platform {
   return "desktop";
 }
 
-function getBrowserName(): string {
-  const ua = navigator.userAgent;
-  if (/CriOS/.test(ua)) return "Chrome";
-  if (/FxiOS/.test(ua)) return "Firefox";
-  if (/EdgiOS/.test(ua)) return "Edge";
-  if (/OPiOS/.test(ua)) return "Opera";
-  if (/Brave/.test(ua)) return "Brave";
-  if (/Safari/.test(ua) && !/Chrome/.test(ua)) return "Safari";
-  if (/SamsungBrowser/.test(ua)) return "Samsung Internet";
-  if (/Chrome/.test(ua)) return "Chrome";
-  if (/Firefox/.test(ua)) return "Firefox";
-  return "your browser";
+/** Inline iOS Safari ellipsis icon (three dots in a circle) */
+function EllipsisIcon() {
+  return (
+    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-500 text-white align-middle mx-0.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+        <circle cx="6" cy="12" r="1.5" />
+        <circle cx="12" cy="12" r="1.5" />
+        <circle cx="18" cy="12" r="1.5" />
+      </svg>
+    </span>
+  );
+}
+
+/** Inline iOS share icon (square with arrow up) */
+function ShareIcon() {
+  return (
+    <span className="inline-flex items-center justify-center w-5 h-5 align-middle mx-0.5">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15m0-3-3-3m0 0-3 3m3-3v12" />
+      </svg>
+    </span>
+  );
+}
+
+/** Inline "Add to Home Screen" icon (plus in a square) */
+function AddToHomeIcon() {
+  return (
+    <span className="inline-flex items-center justify-center w-5 h-5 align-middle mx-0.5">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.75h10.5a3 3 0 0 1 3 3v10.5a3 3 0 0 1-3 3H6.75a3 3 0 0 1-3-3V6.75a3 3 0 0 1 3-3Z" />
+      </svg>
+    </span>
+  );
+}
+
+/** Inline Android Chrome three-dot menu icon */
+function VerticalDotsIcon() {
+  return (
+    <span className="inline-flex items-center justify-center w-5 h-5 align-middle mx-0.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+        <circle cx="12" cy="5" r="1.5" />
+        <circle cx="12" cy="12" r="1.5" />
+        <circle cx="12" cy="19" r="1.5" />
+      </svg>
+    </span>
+  );
 }
 
 export function InstallPrompt() {
   const [platform, setPlatform] = useState<Platform>("desktop");
-  const [browserName, setBrowserName] = useState("your browser");
   const [dismissed, setDismissed] = useState(() => {
     return localStorage.getItem("whisk_install_dismissed") === "true";
   });
@@ -39,7 +73,6 @@ export function InstallPrompt() {
 
   useEffect(() => {
     setPlatform(detectPlatform());
-    setBrowserName(getBrowserName());
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -82,16 +115,16 @@ export function InstallPrompt() {
           {platform === "ios" && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
-                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">1</span>
-                Tap the share button in {browserName}
+                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded shrink-0">1</span>
+                <span>Tap <EllipsisIcon /> in the address bar</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
-                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">2</span>
-                Scroll down and tap &ldquo;Add to Home Screen&rdquo;
+                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded shrink-0">2</span>
+                <span>Tap <ShareIcon /> <strong>Share</strong></span>
               </div>
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
-                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">3</span>
-                Tap &ldquo;Add&rdquo; to confirm
+                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded shrink-0">3</span>
+                <span>Tap <AddToHomeIcon /> <strong>Add to Home Screen</strong></span>
               </div>
             </div>
           )}
@@ -105,12 +138,12 @@ export function InstallPrompt() {
           {platform === "android" && !deferredPrompt && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
-                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">1</span>
-                Open the menu in {browserName}
+                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded shrink-0">1</span>
+                <span>Tap <VerticalDotsIcon /> in the top right corner</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
-                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">2</span>
-                Tap &ldquo;Add to Home screen&rdquo; or &ldquo;Install app&rdquo;
+                <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded shrink-0">2</span>
+                <span>Tap <AddToHomeIcon /> <strong>Add to Home screen</strong> or <strong>Install app</strong></span>
               </div>
             </div>
           )}
