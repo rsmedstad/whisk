@@ -268,6 +268,27 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = async (text: string, isRetry = false) => {
+    // Detect simple "suggest from my collection" requests and handle locally
+    // Only for fresh messages (not retries) and when user has recipes
+    if (!isRetry && recipes.length > 0 && messages.length === 0) {
+      const lower = text.toLowerCase();
+      const isSimpleSuggestion = /\b(suggest|recommend|what should i (make|cook)|give me|pick|ideas? for)\b/.test(lower)
+        && /\b(dinner|breakfast|lunch|meal|week|tonight|dessert|recipe)\b/.test(lower)
+        && !/\b(new|outside|different|never tried|with .{3,}|using .{3,}|without .{3,}|substitute|instead|how|why|leftover|ingredient)\b/.test(lower);
+      if (isSimpleSuggestion) {
+        // Detect category from the message
+        const cat = /\bbreakfast\b/.test(lower) ? "breakfast"
+          : /\bdessert\b/.test(lower) ? "dessert"
+          : /\blunch\b/.test(lower) ? "any"
+          : /\bappetizer\b/.test(lower) ? "appetizer"
+          : /\bsnack\b/.test(lower) ? "snack"
+          : /\bdrink|cocktail\b/.test(lower) ? "drinks"
+          : "dinner";
+        handleLocalSuggestion(text, 3, cat);
+        return;
+      }
+    }
+
     const userMsg: Message = { role: "user", content: text };
     // On retry (orphaned message recovery), the user message is already in state
     if (!isRetry) {
@@ -467,6 +488,47 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
       }));
     }
   }, [recipes, pickCategory, seasonFilter, animateDice]);
+
+  /** Pick N random recipes from the collection, excluding already-planned ones.
+   *  Generates an assistant message with RECIPE_CARD markers so the existing
+   *  card rendering kicks in automatically — no AI call needed. */
+  const handleLocalSuggestion = useCallback((userText: string, count = 3, category?: string) => {
+    // Add user message to chat
+    setMessages((prev) => [...prev, { role: "user", content: userText }]);
+    setInput("");
+
+    // Determine which pool to pick from
+    const cat = category ?? "dinner";
+    const pool = filterByCategory(recipes, cat);
+
+    // Exclude recipes already in this week's meal plan
+    const plannedIds = new Set(mealPlan.map((m) => m.recipeId).filter(Boolean));
+    const available = pool.filter((r) => !plannedIds.has(r.id));
+    const source = available.length >= count ? available : pool;
+
+    if (source.length === 0) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "You don't have enough recipes in your collection yet. Try adding some recipes first!" }]);
+      return;
+    }
+
+    // Fisher-Yates shuffle to pick N random recipes
+    const shuffled = [...source];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+    }
+    const picks = shuffled.slice(0, Math.min(count, shuffled.length));
+
+    // Build assistant response with framing text + action markers
+    const catLabel = cat === "any" ? "" : ` ${cat}`;
+    const intro = picks.length === 1
+      ? `Here's a${catLabel} idea from your collection:`
+      : `Here are ${picks.length}${catLabel} ideas from your collection:`;
+    const cards = picks.map((r) => `[RECIPE_CARD: ${r.id}, ${r.title}]`).join("\n");
+    const content = `${intro}\n\n${cards}`;
+
+    setMessages((prev) => [...prev, { role: "assistant", content }]);
+  }, [recipes, mealPlan]);
 
   // Auto-pick on load: restore cached pick or roll a new one
   useEffect(() => {
@@ -876,7 +938,13 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 <QuickAction
                   icon={CalendarDays}
                   label="What should I make this week?"
-                  onClick={() => sendMessage("Suggest 2-3 dinner ideas from my recipes for this week. Keep it brief — just the recipe names.")}
+                  onClick={() => {
+                    if (recipeCount > 0) {
+                      handleLocalSuggestion("What should I make this week?", 3, "dinner");
+                    } else {
+                      sendMessage("Suggest some easy dinner recipes I should try this week.");
+                    }
+                  }}
                 />
                 <QuickAction
                   icon={Sparkles}
@@ -887,13 +955,14 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   }
                   onClick={() => {
                     const soonHoliday = seasonal.upcomingHolidays.find((h) => h.daysAway <= 7);
-                    sendMessage(
-                      soonHoliday
-                        ? `Suggest one recipe from my collection and maybe one new idea for ${soonHoliday.name}. Keep it brief.`
-                        : recipeCount > 0
-                          ? "Suggest a quick dinner from my recipes for tonight."
-                          : "Suggest some easy dinner recipes I should try."
-                    );
+                    if (soonHoliday) {
+                      // Holidays need AI for thematic reasoning
+                      sendMessage(`Suggest a recipe from my collection for ${soonHoliday.name}. Keep it brief.`);
+                    } else if (recipeCount > 0) {
+                      handleLocalSuggestion("What's a quick dinner tonight?", 1, "dinner");
+                    } else {
+                      sendMessage("Suggest some easy dinner recipes I should try.");
+                    }
                   }}
                 />
               </div>

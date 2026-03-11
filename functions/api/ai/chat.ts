@@ -202,7 +202,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     systemParts.push(
       "IMPORTANT: Only recommend recipes that exist in the user's collection listed below. Never invent or fabricate recipe names. If no recipe matches, say so honestly.",
       "If the user explicitly asks for new recipe ideas outside their collection, you may suggest new ones. When doing so, prefer recipes from the Curated Recipe Ideas section below (if available). Clearly note these are not in their collection.",
-      "Suggest 1-2 recipes unless the user asks for more. Format recipe names exactly as they appear in the collection.",
+      "Suggest 3 recipes unless the user asks for a different number. Format recipe names exactly as they appear in the collection.",
+      "ALWAYS include a brief, friendly intro sentence before any recipe cards (e.g., 'Here are a few ideas from your collection:'). Never output only action markers with no text.",
     );
   }
 
@@ -278,7 +279,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Planning workflow — only when planning
     if (/\b(plan|week|suggest|meal|ideas?|fill|gap)\b/i.test(lastMessage)) {
       systemParts.push(
-        "Suggest 2-3 recipes using [RECIPE_CARD] for each. Keep explanations minimal."
+        "Suggest 3 recipes using [RECIPE_CARD] for each. Include a brief intro sentence, then the recipe cards."
       );
     }
   }
@@ -293,7 +294,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const keywords = extractKeywords(lastMessage);
     const scored = recipeIndex.map((r) => ({
       ...r,
-      _score: scoreRecipe(r, keywords) + (vectorizeIds?.has(r.id) ? 15 : 0),
+      // Add small random jitter (0-3) so ties are broken randomly across requests
+      _score: scoreRecipe(r, keywords) + (vectorizeIds?.has(r.id) ? 15 : 0) + Math.random() * 3,
     }));
     scored.sort((a, b) => b._score - a._score);
 
