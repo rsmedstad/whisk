@@ -94,7 +94,7 @@ function QuickAction({ icon: Icon, label, onClick }: {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 dark:bg-orange-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 dark:hover:bg-orange-500 active:scale-95 transition-all"
+      className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 dark:bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 dark:hover:bg-orange-500 active:scale-95 transition-all"
     >
       <Icon className="w-3.5 h-3.5" />
       {label}
@@ -138,10 +138,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   // Load discover items from localStorage cache for combined search
   const discoverItems = useMemo(() => {
     try {
-      const raw = localStorage.getItem("discover_feed");
+      const raw = localStorage.getItem("whisk_cache_discover_feed");
       if (!raw) return [] as DiscoverFeedItem[];
-      const feed = JSON.parse(raw) as { categories?: Record<string, DiscoverFeedItem[]> };
-      if (!feed.categories) return [] as DiscoverFeedItem[];
+      const cached = JSON.parse(raw) as { data?: { categories?: Record<string, DiscoverFeedItem[]> } };
+      const feed = cached.data;
+      if (!feed?.categories) return [] as DiscoverFeedItem[];
       return Object.values(feed.categories).flat();
     } catch { return [] as DiscoverFeedItem[]; }
   }, []);
@@ -399,16 +400,19 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Ask</h1>
           </button>
-          <div className="flex items-center gap-3">
-            {messages.length > 0 && (
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                New chat
-              </button>
+          {/* New chat pill — centered, highlights when there's an active conversation */}
+          <button
+            onClick={handleNewChat}
+            className={classNames(
+              "text-xs font-medium px-3 py-1 rounded-full border transition-colors",
+              messages.length > 0
+                ? "border-orange-500 text-orange-500 bg-orange-50 dark:bg-orange-950/30"
+                : "border-stone-200 dark:border-stone-700 text-stone-400 dark:text-stone-500"
             )}
+          >
+            New chat
+          </button>
+          <div className="flex items-center gap-1">
             <button
               onClick={() => {
                 setSearchOpen((prev) => {
@@ -418,21 +422,21 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 });
               }}
               className={classNames(
-                "p-1 transition-colors",
+                "p-2 rounded-lg transition-all",
                 searchOpen
-                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700 rounded-md"
-                  : "text-stone-400 dark:text-stone-500 hover:text-orange-500"
+                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
+                  : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
               )}
               title="Search recipes"
             >
-              {searchOpen ? <XMark className="w-4.5 h-4.5" /> : <MagnifyingGlass className="w-4.5 h-4.5" />}
+              {searchOpen ? <XMark className="w-5 h-5" /> : <MagnifyingGlass className="w-5 h-5" />}
             </button>
             <button
               onClick={() => chatInputRef.current?.focus()}
-              className="p-1 text-stone-400 dark:text-stone-500 hover:text-orange-500 transition-colors"
+              className="p-2 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-all"
               title={chatEnabled ? "AI connected — start chatting" : "Configure AI in Settings"}
             >
-              <Sparkles className="w-4.5 h-4.5" />
+              <Sparkles className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -764,11 +768,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
 
             {/* Try asking — question pills */}
             <Card>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-1.5">
                 <MessageCircle className="w-4 h-4 text-stone-400 dark:text-stone-500" />
                 <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">Or try asking</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 <QuickAction
                   icon={CalendarDays}
                   label="Plan my meals this week"

@@ -482,6 +482,77 @@ export function ShoppingList({
             </div>
           </div>
         )}
+
+        {/* Filter bar — sort, clear checked, clear all, auto-classify */}
+        {totalCount > 0 && (
+          <div className={classNames("flex items-center gap-1.5 px-4 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
+            {/* Sort dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSortMenu(!showSortMenu)}
+                className={classNames(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors",
+                  sortMode !== "department"
+                    ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
+                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                )}
+              >
+                <ArrowUpDown className="w-3 h-3" />
+                {sortMode === "department" ? "Sort" : sortMode === "by-store" ? "By store" : sortMode === "by-recipe" ? "By recipe" : sortMode === "alphabetical" ? "A-Z" : "Unchecked"}
+              </button>
+              {showSortMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+                  <div className="absolute left-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                    {([
+                      { value: "department" as SortMode, label: "By department" },
+                      { value: "by-store" as SortMode, label: "By store" },
+                      { value: "by-recipe" as SortMode, label: "By recipe" },
+                      { value: "alphabetical" as SortMode, label: "A-Z" },
+                      { value: "unchecked-first" as SortMode, label: "Unchecked first" },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
+                        className={classNames(
+                          "w-full px-3 py-2 text-left text-xs",
+                          sortMode === opt.value
+                            ? "text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/30"
+                            : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            {checkedCount > 0 && (
+              <button
+                onClick={onClearChecked}
+                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors"
+              >
+                <Check className="w-3 h-3" /> Clear checked ({checkedCount})
+              </button>
+            )}
+            {uncategorizedCount > 0 && chatEnabled && (
+              <button
+                onClick={handleClassify}
+                disabled={isClassifying}
+                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
+              >
+                <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "..." : `Classify (${uncategorizedCount})`}
+              </button>
+            )}
+            <button
+              onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
+              className="ml-auto inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
+            >
+              <Trash className="w-3 h-3" /> Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ═══ LIST CONTENT ═══ */}
@@ -604,77 +675,6 @@ export function ShoppingList({
                   </div>
                 )}
               </Card>
-            </div>
-          )}
-
-          {/* Filter bar — sort, clear checked, clear all, auto-classify */}
-          {totalCount > 0 && (
-            <div className={classNames("flex items-center gap-1.5 px-4 pt-3 pb-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
-              {/* Sort dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowSortMenu(!showSortMenu)}
-                  className={classNames(
-                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors",
-                    sortMode !== "department"
-                      ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
-                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                  )}
-                >
-                  <ArrowUpDown className="w-3 h-3" />
-                  {sortMode === "department" ? "Sort" : sortMode === "by-store" ? "By store" : sortMode === "by-recipe" ? "By recipe" : sortMode === "alphabetical" ? "A-Z" : "Unchecked"}
-                </button>
-                {showSortMenu && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-                    <div className="absolute left-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
-                      {([
-                        { value: "department" as SortMode, label: "By department" },
-                        { value: "by-store" as SortMode, label: "By store" },
-                        { value: "by-recipe" as SortMode, label: "By recipe" },
-                        { value: "alphabetical" as SortMode, label: "A-Z" },
-                        { value: "unchecked-first" as SortMode, label: "Unchecked first" },
-                      ]).map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
-                          className={classNames(
-                            "w-full px-3 py-2 text-left text-xs",
-                            sortMode === opt.value
-                              ? "text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/30"
-                              : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
-                          )}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-              {checkedCount > 0 && (
-                <button
-                  onClick={onClearChecked}
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors"
-                >
-                  <Check className="w-3 h-3" /> Clear checked ({checkedCount})
-                </button>
-              )}
-              {uncategorizedCount > 0 && chatEnabled && (
-                <button
-                  onClick={handleClassify}
-                  disabled={isClassifying}
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
-                >
-                  <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "..." : `Classify (${uncategorizedCount})`}
-                </button>
-              )}
-              <button
-                onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
-                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
-              >
-                <Trash className="w-3 h-3" /> Clear all
-              </button>
             </div>
           )}
 

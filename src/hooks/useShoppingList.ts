@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { getLocal, setLocal, CACHE_KEYS } from "../lib/cache";
 import { nanoid } from "nanoid";
@@ -19,6 +19,8 @@ export function useShoppingList() {
   const [isLoading, setIsLoading] = useState(
     () => !getLocal(CACHE_KEYS.SHOPPING_LIST)
   );
+  const listRef = useRef(list);
+  listRef.current = list;
 
   // Background sync on mount
   useEffect(() => {
@@ -36,6 +38,7 @@ export function useShoppingList() {
   // Optimistic save: update local instantly, network in background
   const saveList = useCallback(async (updated: ShoppingList) => {
     const withTimestamp = { ...updated, updatedAt: new Date().toISOString() };
+    listRef.current = withTimestamp; // Update ref immediately for callers in the same tick
     setList(withTimestamp);
     setLocal(CACHE_KEYS.SHOPPING_LIST, withTimestamp);
     api.put("/shopping", withTimestamp).catch(() => {});
@@ -107,9 +110,12 @@ export function useShoppingList() {
       ingredients: { name: string; amount?: string; unit?: string; category?: string }[],
       recipeId: string
     ): Promise<{ added: number; skippedDuplicates: number }> => {
+      // Use ref to get latest list state (avoids stale closure when called in a loop)
+      const currentList = listRef.current;
+
       // Check if any items from this recipe are already on the list
       const existingFromRecipe = new Set(
-        list.items
+        currentList.items
           .filter((i) => i.sourceRecipeId === recipeId)
           .map((i) => i.name.toLowerCase())
       );
@@ -130,7 +136,7 @@ export function useShoppingList() {
         }));
 
       if (newItems.length > 0) {
-        await saveList({ ...list, items: [...list.items, ...newItems] });
+        await saveList({ ...currentList, items: [...currentList.items, ...newItems] });
       }
 
       return {
@@ -138,7 +144,7 @@ export function useShoppingList() {
         skippedDuplicates: ingredients.length - newItems.length,
       };
     },
-    [list, saveList]
+    [saveList]
   );
 
   const removeFromRecipe = useCallback(

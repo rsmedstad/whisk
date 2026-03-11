@@ -14,7 +14,7 @@ import {
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { TagChip } from "../ui/TagChip";
-import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun, ClipboardList } from "../ui/Icon";
+import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun, CalendarDays } from "../ui/Icon";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { GroupedIngredients, StepsList } from "./RecipeComponents";
 import { categorizeIngredientForDrink } from "../../lib/categories";
@@ -381,7 +381,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             className="p-2"
             title={recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
           >
-            <ClipboardList className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-500" : "text-stone-400")} />
+            <CalendarDays className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-500" : "text-stone-400")} />
           </button>
           <button onClick={handleFavorite} className="p-2">
             {recipe.favorite ? (
