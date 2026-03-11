@@ -5,6 +5,20 @@ import { nanoid } from "nanoid";
 import type { ShoppingList, ShoppingItem, ShoppingCategory } from "../types";
 import { categorizeIngredient } from "../lib/categories";
 
+const VALID_CATEGORIES = new Set<ShoppingCategory>([
+  "produce", "dairy", "meat", "pantry", "snacks", "frozen", "bakery", "beverages", "other",
+]);
+
+/** Clean ingredient name: strip trailing junk like ", and", leading/trailing whitespace */
+function cleanIngredientName(name: string): string {
+  return name
+    .replace(/[,;]\s*(and\s*)?$/i, "")  // trailing ", and"
+    .replace(/\s+and\s*$/i, "")          // trailing " and"
+    .replace(/\([\d\s.\/oz_lbgkgmlcup]*\)?/gi, "") // parenthetical amounts
+    .replace(/[_]+/g, " ")              // underscores → spaces
+    .trim();
+}
+
 const EMPTY_LIST: ShoppingList = {
   id: "current",
   items: [],
@@ -121,18 +135,26 @@ export function useShoppingList() {
 
       const userName = localStorage.getItem("whisk_display_name") ?? undefined;
       const newItems: ShoppingItem[] = ingredients
-        .filter((ing) => !existingNames.has(ing.name.toLowerCase().trim()))
-        .map((ing) => ({
-          id: nanoid(10),
-          name: ing.name,
-          amount: ing.amount,
-          unit: ing.unit,
-          category: (ing.category as ShoppingCategory) ?? categorizeIngredient(ing.name),
-          checked: false,
-          sourceRecipeId: recipeId,
-          addedBy: "recipe" as const,
-          addedByUser: userName,
-        }));
+        .filter((ing) => !existingNames.has(cleanIngredientName(ing.name).toLowerCase()))
+        .map((ing) => {
+          const name = cleanIngredientName(ing.name);
+          // Only use recipe's category if it's a valid ShoppingCategory, otherwise re-categorize
+          const recipeCategory = ing.category?.toLowerCase() as ShoppingCategory | undefined;
+          const category = (recipeCategory && VALID_CATEGORIES.has(recipeCategory))
+            ? recipeCategory
+            : categorizeIngredient(name);
+          return {
+            id: nanoid(10),
+            name,
+            amount: ing.amount,
+            unit: ing.unit,
+            category,
+            checked: false,
+            sourceRecipeId: recipeId,
+            addedBy: "recipe" as const,
+            addedByUser: userName,
+          };
+        });
 
       if (newItems.length > 0) {
         await saveList({ ...currentList, items: [...currentList.items, ...newItems] });

@@ -13,7 +13,7 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
     "green bean", "green onion", "guava", "herb", "honeydew",
     "jalapeno", "jicama", "kale", "kiwi", "kohlrabi", "kumquat",
     "leek", "lemon", "lettuce", "lime", "lychee", "mango", "melon",
-    "mint", "mushroom", "nectarine", "okra", "olive", "onion", "orange",
+    "mint", "mushroom", "nectarine", "okra", "onion", "orange",
     "oregano", "papaya", "parsley", "parsnip", "passion fruit", "pea",
     "peach", "pear", "pepper", "persimmon", "pineapple", "plantain",
     "plum", "pomegranate", "potato", "pumpkin", "radicchio", "radish",
@@ -81,7 +81,8 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
     "turmeric", "vanilla", "vegetable oil", "vinegar", "walnut",
     "wasabi", "white rice", "wild rice", "worcestershire", "yeast",
     "kidney bean", "pinto bean", "navy bean", "cannellini", "white bean",
-    "refried bean", "lima bean", "canned", "dried", "seed",
+    "refried bean", "lima bean", "olive", "kalamata", "castelvetrano",
+    "canned", "dried", "seed",
   ],
   snacks: [
     "chip", "corn chip", "crouton", "dip", "fruit snack",

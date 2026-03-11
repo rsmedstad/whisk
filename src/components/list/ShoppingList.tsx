@@ -108,6 +108,8 @@ export function ShoppingList({
 
     if (PANTRY_STAPLES.has(lower)) return true;
     if (/^water$/.test(lower) || /\btap water\b/.test(lower)) return true;
+    // Any kind of salt is a staple (kosher salt, sea salt, flaky salt, etc.)
+    if (/\bsalt\b/.test(lower)) return true;
     // Try splitting compound items: "dried oregano, salt & pepper"
     if (lower.includes("&") || lower.includes(" and ") || lower.includes(",")) {
       const parts = lower.split(/[&,]|\band\b/).map((s) => s.trim()).filter(Boolean);
