@@ -331,8 +331,9 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           stream: true,
         }),
       });
+      const ttfbMs = Math.round(performance.now() - fetchStart);
       const serverTiming = res.headers.get("X-Whisk-Timing") ?? "";
-      console.log(`[Whisk] Response in ${Math.round(performance.now() - fetchStart)}ms | server: ${serverTiming}`);
+      console.log(`[Whisk] TTFB=${ttfbMs}ms | server: ${serverTiming}`);
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => "");
@@ -347,6 +348,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let fullContent = "";
+        let firstChunkTime = 0;
+        const streamStart = performance.now();
 
         // Add placeholder assistant message
         setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
@@ -364,6 +367,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             try {
               const data = JSON.parse(trimmed.slice(6)) as { text?: string };
               if (data.text) {
+                if (!firstChunkTime) firstChunkTime = performance.now();
                 fullContent += data.text;
                 setMessages((prev) => {
                   const updated = [...prev];
@@ -375,6 +379,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             } catch { /* skip malformed chunk */ }
           }
         }
+        const streamEnd = performance.now();
+        console.log(`[Whisk] Stream: first-chunk=${firstChunkTime ? Math.round(firstChunkTime - streamStart) : "n/a"}ms total-stream=${Math.round(streamEnd - streamStart)}ms total-e2e=${Math.round(streamEnd - fetchStart)}ms response=${fullContent.length}chars`);
 
         if (!fullContent) {
           console.warn("[Whisk] Stream returned empty content, retrying without streaming");

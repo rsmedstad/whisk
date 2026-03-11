@@ -1087,6 +1087,8 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </Card>
             </section>
+
+            <AIPerformanceLogs />
           </>
         )}
 
@@ -1556,6 +1558,251 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
         </div>
       )}
     </div>
+  );
+}
+
+// ── AI Performance Logs ─────────────────────────────────────
+
+interface AILogTiming {
+  classifyMs: number;
+  fetchMs: number;
+  configMs: number;
+  indexMs: number;
+  nytMs: number;
+  vectorizeMs: number;
+  llmMs?: number;
+}
+
+interface AILogEntry {
+  timestamp: string;
+  provider: string;
+  model: string;
+  success: boolean;
+  durationMs: number;
+  error?: string;
+  feature?: string;
+  // Chat-specific fields
+  userMessage?: string;
+  systemPromptLength?: number;
+  recipeCount?: number;
+  vectorizeHits?: number;
+  streaming?: boolean;
+  responseLength?: number;
+  tier?: string;
+  // Scan-specific fields
+  itemCount?: number;
+  photoSizeKB?: number;
+  // Timing — shape varies by feature
+  timing?: AILogTiming & {
+    uploadProcessMs?: number;
+    visionMs?: number;
+  };
+}
+
+function TimingBar({ label, ms, maxMs }: { label: string; ms: number; maxMs: number }) {
+  const pct = maxMs > 0 ? Math.min((ms / maxMs) * 100, 100) : 0;
+  const color = ms > 500 ? "bg-red-500" : ms > 200 ? "bg-amber-500" : "bg-green-500";
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-16 text-right text-stone-500 dark:text-stone-400 shrink-0">{label}</span>
+      <div className="flex-1 h-3 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-14 text-right font-mono text-stone-600 dark:text-stone-300 shrink-0">{ms}ms</span>
+    </div>
+  );
+}
+
+function formatLogForCopy(log: AILogEntry): string {
+  const time = new Date(log.timestamp);
+  const isScan = log.feature === "scan";
+
+  if (isScan) {
+    const st = log.timing;
+    const lines = [
+      `[${time.toLocaleString()}] LIST SCAN`,
+      `  provider: ${log.provider}/${log.model} | ${log.success ? "ok" : "FAIL"} | ${log.itemCount ?? 0} items | ${log.photoSizeKB ?? "?"}KB photo`,
+    ];
+    if (st) {
+      lines.push(`  timing: config=${st.configMs}ms upload=${st.uploadProcessMs ?? 0}ms vision=${st.visionMs ?? 0}ms total=${log.durationMs}ms`);
+    } else {
+      lines.push(`  total: ${log.durationMs}ms`);
+    }
+    if (log.error) lines.push(`  error: ${log.error}`);
+    return lines.join("\n");
+  }
+
+  const t = log.timing;
+  const lines = [
+    `[${time.toLocaleString()}] "${log.userMessage ?? ""}"`,
+    `  provider: ${log.provider}/${log.model} | tier: ${log.tier ?? "?"} | ${log.streaming ? "stream" : "non-stream"} | ${log.success ? "ok" : "FAIL"}`,
+    `  recipes: ${log.recipeCount ?? 0} | vectorize hits: ${log.vectorizeHits ?? 0} | prompt: ${log.systemPromptLength ?? 0}chars (~${Math.round((log.systemPromptLength ?? 0) / 4)}tok)`,
+  ];
+  if (t) {
+    lines.push(`  timing: config=${t.configMs}ms index=${t.indexMs}ms vectorize=${t.vectorizeMs}ms nyt=${t.nytMs}ms fetch(total)=${t.fetchMs}ms${t.llmMs !== undefined ? ` llm=${t.llmMs}ms` : ""} total=${log.durationMs}ms`);
+  } else {
+    lines.push(`  total: ${log.durationMs}ms`);
+  }
+  if (log.responseLength) lines.push(`  response: ${log.responseLength}chars`);
+  if (log.error) lines.push(`  error: ${log.error}`);
+  return lines.join("\n");
+}
+
+function AIPerformanceLogs() {
+  const [logs, setLogs] = useState<AILogEntry[] | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [copied, setCopied] = useState<number | "all" | null>(null);
+
+  const loadLogs = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.get<AILogEntry[]>("/api/ai/logs");
+      setLogs(data);
+    } catch {
+      setLogs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggle = () => {
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next && !logs) loadLogs();
+  };
+
+  const copyToClipboard = (text: string, id: number | "all") => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    }).catch(() => {});
+  };
+
+  return (
+    <section>
+      <button
+        onClick={handleToggle}
+        className="flex items-center gap-1.5 text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3"
+      >
+        <ChevronDown className={classNames("w-3.5 h-3.5 transition-transform", isOpen ? "" : "-rotate-90")} />
+        AI Performance
+      </button>
+      {isOpen && (
+        <Card>
+          <div className="space-y-3">
+            {isLoading && <p className="text-xs text-stone-400">Loading logs...</p>}
+            {logs && logs.length === 0 && (
+              <p className="text-xs text-stone-400">No AI logs yet. Send a message in the Ask tab to generate data.</p>
+            )}
+            {logs && logs.length > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-stone-400 dark:text-stone-500">Last {logs.length} requests</p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        const text = logs.slice(0, 10).map(formatLogForCopy).join("\n\n");
+                        copyToClipboard(text, "all");
+                      }}
+                      className="text-xs text-orange-600 dark:text-orange-400 hover:underline"
+                    >
+                      {copied === "all" ? "Copied!" : "Copy All"}
+                    </button>
+                    <button onClick={loadLogs} className="text-xs text-orange-600 dark:text-orange-400 hover:underline">
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {logs.slice(0, 10).map((log, i) => {
+                    const t = log.timing;
+                    const isScan = log.feature === "scan";
+                    const maxMs = Math.max(log.durationMs, t?.fetchMs ?? 0, t?.llmMs ?? 0, t?.visionMs ?? 0, 500);
+                    const time = new Date(log.timestamp);
+                    const timeStr = time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                    return (
+                      <div key={i} className="border-b border-stone-100 dark:border-stone-800 pb-3 last:border-0 last:pb-0">
+                        <div className="flex items-start justify-between mb-1.5">
+                          <p className="text-xs text-stone-600 dark:text-stone-300 font-medium truncate max-w-[70%]">
+                            {isScan ? (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">SCAN</span>
+                                List photo scan
+                              </span>
+                            ) : (
+                              <>&ldquo;{log.userMessage}&rdquo;</>
+                            )}
+                          </p>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => copyToClipboard(formatLogForCopy(log), i)}
+                              className="text-[10px] text-stone-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+                            >
+                              {copied === i ? "Copied!" : "Copy"}
+                            </button>
+                            <span className={classNames(
+                              "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                              log.success
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                            )}>
+                              {log.durationMs}ms
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-stone-400 dark:text-stone-500 mb-2">
+                          <span>{timeStr}</span>
+                          <span>{log.provider}/{log.model}</span>
+                          {isScan ? (
+                            <>
+                              {log.itemCount !== undefined && <span>{log.itemCount} items found</span>}
+                              {log.photoSizeKB !== undefined && <span>{log.photoSizeKB}KB photo</span>}
+                            </>
+                          ) : (
+                            <>
+                              {log.tier && <span className="uppercase">{log.tier}</span>}
+                              {log.streaming && <span>stream</span>}
+                              <span>{log.recipeCount ?? 0} recipes</span>
+                              {(log.systemPromptLength ?? 0) > 0 && <span>{Math.round((log.systemPromptLength ?? 0) / 4)}tok est.</span>}
+                            </>
+                          )}
+                        </div>
+                        {t && !isScan && (
+                          <div className="space-y-1">
+                            {t.configMs > 0 && <TimingBar label="config" ms={t.configMs} maxMs={maxMs} />}
+                            {t.indexMs > 0 && <TimingBar label="index" ms={t.indexMs} maxMs={maxMs} />}
+                            {t.vectorizeMs > 0 && <TimingBar label="vector" ms={t.vectorizeMs} maxMs={maxMs} />}
+                            {t.nytMs > 0 && <TimingBar label="nyt" ms={t.nytMs} maxMs={maxMs} />}
+                            <TimingBar label="fetch" ms={t.fetchMs} maxMs={maxMs} />
+                            {t.llmMs !== undefined && <TimingBar label="llm" ms={t.llmMs} maxMs={maxMs} />}
+                            <TimingBar label="total" ms={log.durationMs} maxMs={maxMs} />
+                          </div>
+                        )}
+                        {t && isScan && (
+                          <div className="space-y-1">
+                            {t.configMs > 0 && <TimingBar label="config" ms={t.configMs} maxMs={maxMs} />}
+                            {(t.uploadProcessMs ?? 0) > 0 && <TimingBar label="upload" ms={t.uploadProcessMs!} maxMs={maxMs} />}
+                            {(t.visionMs ?? 0) > 0 && <TimingBar label="vision" ms={t.visionMs!} maxMs={maxMs} />}
+                            <TimingBar label="total" ms={log.durationMs} maxMs={maxMs} />
+                          </div>
+                        )}
+                        {!t && (
+                          <p className="text-[10px] text-stone-400 italic">No timing breakdown (older log format)</p>
+                        )}
+                        {log.error && (
+                          <p className="text-[10px] text-red-500 mt-1 truncate">{log.error}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </Card>
+      )}
+    </section>
   );
 }
 
