@@ -14,7 +14,7 @@ import { FirstRunGuide } from "./FirstRunGuide";
 import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass, ClipboardList } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
-type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked";
+type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked" | "simple";
 
 
 interface RecipeListProps {
@@ -269,7 +269,7 @@ export function RecipeList({
                 }
               }}
               className="p-1.5 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 transition-colors"
-              title={`Sort: ${({ category: "Category", recent: "Recent", alpha: "A-Z", cookTime: "Cook time", mostCooked: "Most cooked", lastViewed: "Last viewed" } as Record<SortOption, string>)[sort]}`}
+              title={`Sort: ${({ category: "Category", recent: "Recent", alpha: "A-Z", cookTime: "Cook time", mostCooked: "Most cooked", lastViewed: "Last viewed", simple: "Simple first" } as Record<SortOption, string>)[sort]}`}
             >
               <ArrowUpDown className="w-4.5 h-4.5" />
             </button>
@@ -389,6 +389,7 @@ export function RecipeList({
             ["category", "Category"],
             ["recent", "Recent"],
             ["alpha", "A-Z"],
+            ["simple", "Simple first"],
             ["cookTime", "Cook time"],
             ["mostCooked", "Most cooked"],
           ];

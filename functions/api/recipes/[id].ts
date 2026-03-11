@@ -19,6 +19,17 @@ interface RecipeIndexEntry {
   lastCookedAt?: string;
   avgRating?: number;
   ratingCount?: number;
+  ingredientCount?: number;
+  stepCount?: number;
+  complexity?: "simple" | "moderate" | "elaborate";
+}
+
+function computeComplexity(totalMinutes: number, ingredientCount: number, stepCount: number): "simple" | "moderate" | "elaborate" {
+  const t = totalMinutes <= 0 ? 1 : totalMinutes <= 35 ? 0 : totalMinutes <= 60 ? 1 : 2;
+  const i = ingredientCount <= 7 ? 0 : ingredientCount <= 12 ? 1 : 2;
+  const s = stepCount <= 5 ? 0 : stepCount <= 10 ? 1 : 2;
+  const score = t + i + s;
+  return score <= 2 ? "simple" : score <= 4 ? "moderate" : "elaborate";
 }
 
 function computeAvgRating(ratings: Record<string, number> | undefined): number | undefined {
@@ -111,28 +122,33 @@ export const onRequestPut: PagesFunction<Env> = async ({
   const index =
     ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
 
-  const newIndex = index.map((entry) =>
-    entry.id === id
-      ? {
-          ...entry,
-          title: (updated.title as string) ?? entry.title,
-          tags: (updated.tags as string[]) ?? entry.tags,
-          cuisine: updated.cuisine as string | undefined,
-          favorite: (updated.favorite as boolean) ?? entry.favorite,
-          favoritedBy: (updated.favoritedBy as string[]) ?? entry.favoritedBy,
-          updatedAt: now,
-          thumbnailUrl: updated.thumbnailUrl as string | undefined,
-          prepTime: updated.prepTime as number | undefined,
-          cookTime: updated.cookTime as number | undefined,
-          servings: updated.servings as number | undefined,
-          description: updated.description as string | undefined,
-          cookedCount: updated.cookedCount as number | undefined,
-          lastCookedAt: updated.lastCookedAt as string | undefined,
-          avgRating: computeAvgRating(updated.ratings as Record<string, number> | undefined),
-          ratingCount: Object.keys((updated.ratings as Record<string, number>) ?? {}).length || undefined,
-        }
-      : entry
-  );
+  const newIndex = index.map((entry) => {
+    if (entry.id !== id) return entry;
+    const ingCount = Array.isArray(updated.ingredients) ? (updated.ingredients as unknown[]).length : entry.ingredientCount ?? 0;
+    const stpCount = Array.isArray(updated.steps) ? (updated.steps as unknown[]).length : entry.stepCount ?? 0;
+    const totalMin = ((updated.prepTime as number) ?? 0) + ((updated.cookTime as number) ?? 0);
+    return {
+      ...entry,
+      title: (updated.title as string) ?? entry.title,
+      tags: (updated.tags as string[]) ?? entry.tags,
+      cuisine: updated.cuisine as string | undefined,
+      favorite: (updated.favorite as boolean) ?? entry.favorite,
+      favoritedBy: (updated.favoritedBy as string[]) ?? entry.favoritedBy,
+      updatedAt: now,
+      thumbnailUrl: updated.thumbnailUrl as string | undefined,
+      prepTime: updated.prepTime as number | undefined,
+      cookTime: updated.cookTime as number | undefined,
+      servings: updated.servings as number | undefined,
+      description: updated.description as string | undefined,
+      cookedCount: updated.cookedCount as number | undefined,
+      lastCookedAt: updated.lastCookedAt as string | undefined,
+      avgRating: computeAvgRating(updated.ratings as Record<string, number> | undefined),
+      ratingCount: Object.keys((updated.ratings as Record<string, number>) ?? {}).length || undefined,
+      ingredientCount: ingCount,
+      stepCount: stpCount,
+      complexity: computeComplexity(totalMin, ingCount, stpCount),
+    };
+  });
 
   await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
 

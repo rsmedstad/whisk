@@ -20,6 +20,14 @@ const recipeKeys = listData.result
 
 console.log(`Found ${recipeKeys.length} recipes, rebuilding index...`);
 
+function computeComplexity(totalMinutes: number, ingredientCount: number, stepCount: number): "simple" | "moderate" | "elaborate" {
+  const t = totalMinutes <= 0 ? 1 : totalMinutes <= 35 ? 0 : totalMinutes <= 60 ? 1 : 2;
+  const i = ingredientCount <= 7 ? 0 : ingredientCount <= 12 ? 1 : 2;
+  const s = stepCount <= 5 ? 0 : stepCount <= 10 ? 1 : 2;
+  const score = t + i + s;
+  return score <= 2 ? "simple" : score <= 4 ? "moderate" : "elaborate";
+}
+
 interface IndexEntry {
   id: string;
   title: string;
@@ -38,6 +46,9 @@ interface IndexEntry {
   avgRating?: number;
   ratingCount?: number;
   spirits?: string[];
+  ingredientCount?: number;
+  stepCount?: number;
+  complexity?: "simple" | "moderate" | "elaborate";
 }
 
 const index: IndexEntry[] = [];
@@ -48,6 +59,9 @@ for (const key of recipeKeys) {
   try {
     const d = JSON.parse(text);
     const id = key.replace("recipe:", "");
+    const ingCount = Array.isArray(d.ingredients) ? d.ingredients.length : 0;
+    const stpCount = Array.isArray(d.steps) ? d.steps.length : 0;
+    const totalMin = (d.prepTime ?? 0) + (d.cookTime ?? 0);
     index.push({
       id,
       title: d.title ?? "Untitled",
@@ -66,6 +80,9 @@ for (const key of recipeKeys) {
       avgRating: d.ratings ? Math.round((Object.values(d.ratings as Record<string, number>).reduce((a: number, b: number) => a + b, 0) / Object.values(d.ratings as Record<string, number>).length) * 10) / 10 : undefined,
       ratingCount: d.ratings ? Object.keys(d.ratings as Record<string, number>).length : undefined,
       spirits: d.spirits,
+      ingredientCount: ingCount,
+      stepCount: stpCount,
+      complexity: computeComplexity(totalMin, ingCount, stpCount),
     });
   } catch (e) {
     console.log(`  SKIP ${key}: parse error`);

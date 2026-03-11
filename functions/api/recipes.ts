@@ -15,6 +15,17 @@ interface RecipeIndexEntry {
   cookTime?: number;
   servings?: number;
   description?: string;
+  ingredientCount?: number;
+  stepCount?: number;
+  complexity?: "simple" | "moderate" | "elaborate";
+}
+
+function computeComplexity(totalMinutes: number, ingredientCount: number, stepCount: number): "simple" | "moderate" | "elaborate" {
+  const t = totalMinutes <= 0 ? 1 : totalMinutes <= 35 ? 0 : totalMinutes <= 60 ? 1 : 2;
+  const i = ingredientCount <= 7 ? 0 : ingredientCount <= 12 ? 1 : 2;
+  const s = stepCount <= 5 ? 0 : stepCount <= 10 ? 1 : 2;
+  const score = t + i + s;
+  return score <= 2 ? "simple" : score <= 4 ? "moderate" : "elaborate";
 }
 
 // GET /api/recipes - List all recipes (returns index with per-user favorites)
@@ -65,6 +76,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data }) 
       ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ??
       [];
 
+    const ingredientCount = Array.isArray(recipe.ingredients) ? (recipe.ingredients as unknown[]).length : 0;
+    const stepCount = Array.isArray(recipe.steps) ? (recipe.steps as unknown[]).length : 0;
+    const totalMinutes = ((recipe.prepTime as number) ?? 0) + ((recipe.cookTime as number) ?? 0);
+
     const entry: RecipeIndexEntry = {
       id,
       title: recipe.title as string,
@@ -78,6 +93,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data }) 
       cookTime: recipe.cookTime as number | undefined,
       servings: recipe.servings as number | undefined,
       description: recipe.description as string | undefined,
+      ingredientCount,
+      stepCount,
+      complexity: computeComplexity(totalMinutes, ingredientCount, stepCount),
     };
 
     index.unshift(entry);
