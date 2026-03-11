@@ -168,7 +168,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   const [pickCategory, setPickCategory] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("whisk_daily_pick") ?? "{}") as { cat?: string };
-      return saved.cat ?? "dinner";
+      const cat = saved.cat ?? "dinner";
+      return cat === "any" ? "dinner" : cat;
     } catch { return "dinner"; }
   });
   const [seasonFilter, setSeasonFilter] = useState<string>("");
