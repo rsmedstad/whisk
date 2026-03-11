@@ -28,6 +28,8 @@ import {
   Sun,
   MagnifyingGlass,
   Tag,
+  EllipsisVertical,
+  Trash,
 } from "../ui/Icon";
 import { useTags } from "../../hooks/useTags";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
@@ -347,6 +349,7 @@ export function Discover({
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [newTag, setNewTag] = useState("");
+  const [showOverflow, setShowOverflow] = useState(false);
   const wakeLock = useWakeLock();
 
   // ── Feed loading ──
@@ -569,9 +572,36 @@ export function Discover({
     setPhotoIndex(0);
     setGroupedSteps(null);
     setShowTagEditor(false);
+    setShowOverflow(false);
     setNewTag("");
     if (wakeLock.isActive) wakeLock.release();
   };
+
+  /** Remove a discover feed item from the local feed and go back to browse */
+  const handleRemoveFeedItem = useCallback(() => {
+    if (!selectedFeedItem) return;
+    setFeed((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, categories: { ...prev.categories } };
+      for (const cat of Object.keys(updated.categories) as DiscoverCategory[]) {
+        const items = updated.categories[cat];
+        if (!items) continue;
+        const filtered = items.filter((i) => i.url !== selectedFeedItem.url);
+        if (filtered.length !== items.length) {
+          updated.categories[cat] = filtered.length > 0 ? filtered : undefined!;
+          if (filtered.length === 0) {
+            delete updated.categories[cat];
+          }
+          break;
+        }
+      }
+      setLocal(FEED_CACHE_KEY, updated);
+      return updated;
+    });
+    // Also persist removal server-side so it doesn't come back
+    api.delete(`/discover/feed?url=${encodeURIComponent(selectedFeedItem.url)}`).catch(() => {/* best-effort */});
+    handleFeedBack();
+  }, [selectedFeedItem, handleFeedBack]);
 
   // Toggle a tag on the imported recipe (local-only, pre-save)
   const handleToggleDiscoverTag = useCallback((tag: string) => {
@@ -851,6 +881,34 @@ export function Discover({
                 <Check className="w-5 h-5" />
               </button>
             )}
+            <div className="relative">
+              <button
+                onClick={() => setShowOverflow(!showOverflow)}
+                className="text-stone-500 dark:text-stone-400 p-2"
+              >
+                <EllipsisVertical className="w-5 h-5" />
+              </button>
+              {showOverflow && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowOverflow(false)}
+                  />
+                  <div className="wk-dropdown absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800">
+                    <button
+                      onClick={() => {
+                        handleRemoveFeedItem();
+                        setShowOverflow(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-stone-700"
+                    >
+                      <Trash className="w-4 h-4" />
+                      Remove from Feed
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
