@@ -304,6 +304,56 @@ function sseDone(): Uint8Array {
   return encoder.encode("data: [DONE]\n\n");
 }
 
+/**
+ * Pipe an upstream SSE response into our normalized SSE format.
+ * `extractText` receives each SSE data payload and returns the text to emit, or undefined to skip.
+ * Returns "[DONE]" string as payload when the upstream signals completion.
+ */
+function pipeSSEStream(
+  res: Response,
+  extractText: (payload: string) => string | undefined
+): ReadableStream<Uint8Array> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let closed = false;
+
+  return new ReadableStream({
+    async pull(controller) {
+      if (closed) return;
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.enqueue(sseDone());
+          controller.close();
+          closed = true;
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          const payload = trimmed.slice(6);
+          const text = extractText(payload);
+          if (text) {
+            controller.enqueue(sseChunk(text));
+          }
+        }
+      } catch {
+        controller.enqueue(sseDone());
+        controller.close();
+        closed = true;
+      }
+    },
+    cancel() {
+      reader.cancel().catch(() => {});
+      closed = true;
+    },
+  });
+}
+
 async function streamOpenAI(
   baseUrl: string,
   apiKey: string,
@@ -333,39 +383,12 @@ async function streamOpenAI(
     throw new Error(`${model} API error ${res.status}: ${text}`);
   }
 
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-
-  return new ReadableStream({
-    async pull(controller) {
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.enqueue(sseDone());
-          controller.close();
-          return;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
-          const payload = trimmed.slice(6);
-          if (payload === "[DONE]") {
-            controller.enqueue(sseDone());
-            controller.close();
-            return;
-          }
-          try {
-            const parsed = JSON.parse(payload) as { choices?: { delta?: { content?: string } }[] };
-            const text = parsed.choices?.[0]?.delta?.content;
-            if (text) controller.enqueue(sseChunk(text));
-          } catch { /* skip malformed JSON */ }
-        }
-      }
-    },
+  return pipeSSEStream(res, (payload) => {
+    if (payload === "[DONE]") return undefined;
+    try {
+      const parsed = JSON.parse(payload) as { choices?: { delta?: { content?: string } }[] };
+      return parsed.choices?.[0]?.delta?.content ?? undefined;
+    } catch { return undefined; }
   });
 }
 
@@ -406,40 +429,14 @@ async function streamAnthropic(
     throw new Error(`Anthropic API error ${res.status}: ${text}`);
   }
 
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-
-  return new ReadableStream({
-    async pull(controller) {
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.enqueue(sseDone());
-          controller.close();
-          return;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("data: ")) {
-            try {
-              const parsed = JSON.parse(trimmed.slice(6)) as { type?: string; delta?: { type?: string; text?: string } };
-              if (parsed.type === "content_block_delta" && parsed.delta?.text) {
-                controller.enqueue(sseChunk(parsed.delta.text));
-              }
-              if (parsed.type === "message_stop") {
-                controller.enqueue(sseDone());
-                controller.close();
-                return;
-              }
-            } catch { /* skip */ }
-          }
-        }
+  return pipeSSEStream(res, (payload) => {
+    try {
+      const parsed = JSON.parse(payload) as { type?: string; delta?: { type?: string; text?: string } };
+      if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+        return parsed.delta.text;
       }
-    },
+    } catch { /* skip */ }
+    return undefined;
   });
 }
 
@@ -482,35 +479,13 @@ async function streamGemini(
     throw new Error(`Gemini API error ${res.status}: ${text}`);
   }
 
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-
-  return new ReadableStream({
-    async pull(controller) {
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.enqueue(sseDone());
-          controller.close();
-          return;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data: ")) continue;
-          try {
-            const parsed = JSON.parse(trimmed.slice(6)) as {
-              candidates?: { content?: { parts?: { text?: string }[] } }[];
-            };
-            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) controller.enqueue(sseChunk(text));
-          } catch { /* skip */ }
-        }
-      }
-    },
+  return pipeSSEStream(res, (payload) => {
+    try {
+      const parsed = JSON.parse(payload) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      return parsed.candidates?.[0]?.content?.parts?.[0]?.text ?? undefined;
+    } catch { return undefined; }
   });
 }
 

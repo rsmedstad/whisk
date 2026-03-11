@@ -64,7 +64,34 @@ function scoreRecipe(
 }
 
 // POST /api/ai/chat - Conversational recipe assistant
+interface AILogEntry {
+  timestamp: string;
+  provider: string;
+  model: string;
+  userMessage: string;
+  systemPromptLength: number;
+  recipeCount: number;
+  vectorizeHits: number;
+  streaming: boolean;
+  success: boolean;
+  durationMs: number;
+  responseLength?: number;
+  error?: string;
+}
+
+/** Store AI interaction log in KV (keep last 50 entries, 7-day TTL) */
+async function logAIInteraction(kv: KVNamespace, entry: AILogEntry): Promise<void> {
+  try {
+    const existing = await kv.get("ai_logs", "json") as AILogEntry[] | null;
+    const logs = existing ?? [];
+    logs.unshift(entry);
+    // Keep last 50 entries
+    await kv.put("ai_logs", JSON.stringify(logs.slice(0, 50)), { expirationTtl: 604800 });
+  } catch { /* best-effort logging */ }
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const startTime = Date.now();
   const body = (await request.json()) as ChatBody;
   const { messages: rawMessages } = body;
   // Sanitize seasonalContext — limit length and strip control chars
@@ -221,6 +248,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     "Consider the meal slot context (breakfast foods for breakfast, etc.)."
   );
 
+  let vectorizeHitCount = 0;
+
   if (recipeIndex.length > 0) {
     // Semantic search via Vectorize (if available), falling back to keyword scoring
     let vectorizeIds: Set<string> | undefined;
@@ -228,8 +257,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       try {
         const matches = await queryRecipes(env.AI, env.VECTORIZE, lastMessage, 15);
         vectorizeIds = new Set(matches.map((m) => m.id));
-      } catch {
-        // Vectorize unavailable — fall back to keyword scoring
+        vectorizeHitCount = vectorizeIds.size;
+      } catch (vecErr) {
+        console.error("[Whisk] Vectorize query failed:", vecErr);
+        // Fall back to keyword scoring only
       }
     }
 
@@ -281,10 +312,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
+  const systemPrompt = systemParts.join("\n");
   const allMessages = [
-    { role: "system", content: systemParts.join("\n") },
+    { role: "system", content: systemPrompt },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
+
+  // Common log fields
+  const baseLog: Omit<AILogEntry, "success" | "durationMs" | "responseLength" | "error" | "streaming"> = {
+    timestamp: new Date().toISOString(),
+    provider: fnConfig.provider,
+    model: fnConfig.model,
+    userMessage: lastMessage.slice(0, 200),
+    systemPromptLength: systemPrompt.length,
+    recipeCount: recipeIndex.length,
+    vectorizeHits: vectorizeHitCount,
+  };
 
   // Check if client requested streaming
   const wantsStream = body.stream === true;
@@ -295,19 +338,43 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         maxTokens: 2048,
         temperature: 0.7,
       });
+      // Log success (we don't know response length for streams, log 0)
+      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: true, durationMs: Date.now() - startTime }).catch(() => {});
       return new Response(stream, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
         },
       });
-    } catch {
-      return new Response(
-        JSON.stringify({
-          content: "I'm having trouble connecting to the AI service right now. Please try again in a moment.",
-        }),
-        { headers: { "Content-Type": "application/json" } }
-      );
+    } catch (streamErr) {
+      // Log stream error, then fall back to non-streaming
+      const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+      console.error("[Whisk] Stream error, falling back to non-streaming:", errMsg);
+      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: false, durationMs: Date.now() - startTime, error: `stream: ${errMsg.slice(0, 500)}` }).catch(() => {});
+      try {
+        const content = await callTextAI(fnConfig, env, allMessages, {
+          maxTokens: 2048,
+          temperature: 0.7,
+        });
+        const cleaned = content
+          .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+        logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length, error: "stream failed, non-stream fallback succeeded" }).catch(() => {});
+        return new Response(
+          JSON.stringify({ content: cleaned || "I wasn't able to generate a response. Please try again." }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (fallbackErr) {
+        const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: `both failed — stream: ${errMsg.slice(0, 250)}, fallback: ${fbMsg.slice(0, 250)}` }).catch(() => {});
+        return new Response(
+          JSON.stringify({
+            content: "I'm having trouble connecting to the AI service right now. Please try again in a moment.",
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
     }
   }
 
@@ -324,6 +391,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .trim();
 
     if (!cleaned) {
+      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: "empty response from provider" }).catch(() => {});
       return new Response(
         JSON.stringify({
           content: "I wasn't able to generate a response. This can happen when the AI service is busy — please try again.",
@@ -332,11 +400,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
+    logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length }).catch(() => {});
     return new Response(
       JSON.stringify({ content: cleaned }),
       { headers: { "Content-Type": "application/json" } }
     );
-  } catch {
+  } catch (textErr) {
+    const errMsg = textErr instanceof Error ? textErr.message : String(textErr);
+    logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: errMsg.slice(0, 500) }).catch(() => {});
     return new Response(
       JSON.stringify({
         content: "I'm having trouble connecting to the AI service right now. Please try again in a moment.",
