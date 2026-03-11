@@ -1493,7 +1493,8 @@ function isPersonImage(url: string): boolean {
  */
 function sanitizeImageUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
-  if (!url.startsWith("http")) return undefined;
+  // Allow local R2 photo paths (from imported recipes) and http URLs
+  if (!url.startsWith("http") && !url.startsWith("/photos/")) return undefined;
   if (isPersonImage(url)) return undefined;
   // Skip tracking pixels
   if (url.includes("1x1") || url.includes("pixel")) return undefined;

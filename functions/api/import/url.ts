@@ -792,6 +792,8 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
     n = n.replace(/\/thmb\/[^/]+\/[^/]*\d+x\d+[^/]*\/(?:filters:[^/]*\/)?/i, "/thmb/");
     // Strip generic CDN size/crop segments like /750x422/, /4x3/, /1500x0/
     n = n.replace(/\/\d+x\d+\//g, "/");
+    // NYT images: strip size/crop suffixes like -articleLarge, -mediumThreeByTwo252, -master675
+    n = n.replace(/-(?:article\w+|medium\w+|master\d+|thumb\w+|square\w+|blog\w+|popup|jumbo|super[Jj]umbo|wide\w+|video\w+)\.(jpg|jpeg|png|webp)/i, ".$1");
     return n.toLowerCase();
   };
 
