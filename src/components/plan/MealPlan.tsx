@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { getSeasonalContext } from "../../lib/seasonal";
-import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, MessageCircle } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 const PANTRY_STAPLES = new Set([
@@ -634,43 +634,25 @@ export function MealPlan({
         {/* Plan / Quick fill action bar */}
         <div className="flex gap-2 px-4 pt-3 pb-3">
           <button
-            onClick={() => navigate("/ask?q=" + encodeURIComponent(
-              weekMeals.length > 0
-                ? "Suggest more meal ideas for my week. I already have some planned — fill in the gaps or offer alternatives."
-                : "Plan my dinners for this week using my recipes. Consider variety and what's in season."
-            ))}
+            onClick={() => {
+              if (recipeIndex.length > 0) {
+                handleAutoFillEmptySlots();
+              } else {
+                navigate("/ask?q=" + encodeURIComponent("Plan my dinners for this week. Consider variety and what's in season."));
+              }
+            }}
             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
           >
-            <MessageCircle className="w-3.5 h-3.5 text-orange-500" />
-            {weekMeals.length > 0 ? "Get suggestions" : "Plan my week"}
+            <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+            {weekMeals.length > 0 ? "Fill gaps" : "Plan my week"}
           </button>
-          {(() => {
-            // Check if there are empty slots
-            const hasGaps = weekDates.some((date) => {
-              const meals = getMealsForDate(date);
-              return mealSlots.some(({ slot }) => !meals.some((m) => m.slot === slot));
-            });
-            if (hasGaps && recipeIndex.length > 0) {
-              return (
-                <button
-                  onClick={handleAutoFillEmptySlots}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-                  Quick fill gaps
-                </button>
-              );
-            }
-            return (
-              <button
-                onClick={() => navigate("/list")}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-              >
-                <ShoppingCart className="w-3.5 h-3.5 text-orange-500" />
-                View shopping list
-              </button>
-            );
-          })()}
+          <button
+            onClick={() => navigate("/list")}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+          >
+            <ShoppingCart className="w-3.5 h-3.5 text-orange-500" />
+            Shopping list
+          </button>
         </div>
 
         {/* Divider between actions and week plan */}
