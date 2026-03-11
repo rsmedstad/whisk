@@ -93,8 +93,8 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     format: "openai",
     baseUrl: "https://api.cerebras.ai/v1",
     textModels: [
-      { id: "llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout" },
-      { id: "llama3.3-70b", name: "Llama 3.3 70B" },
+      { id: "gpt-oss-120b", name: "GPT OSS 120B" },
+      { id: "llama3.1-8b", name: "Llama 3.1 8B (Fast)" },
     ],
     visionModels: [],
   },
