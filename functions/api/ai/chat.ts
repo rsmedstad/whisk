@@ -452,8 +452,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     vectorizeHits: vectorizeHitCount,
   };
 
-  // Check if client requested streaming
-  const wantsStream = body.stream === true;
+  // Skip streaming for general/followup/unclassified queries — short responses don't
+  // benefit from progressive rendering, and non-streaming avoids SSE overhead + the
+  // empty-stream fallback issue on fast responses
+  const wantsStream = body.stream === true && needsRecipeContext;
 
   if (wantsStream) {
     try {

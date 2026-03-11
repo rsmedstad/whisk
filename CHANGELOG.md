@@ -11,6 +11,10 @@
 - **Contraction normalization**: "what's", "how's", etc. now correctly match query classification patterns
 - **Expanded general patterns**: `temp`, `tips`, `freeze`/`thaw`/`reheat`, `why did...`, `pairs with`, `best...for`, `vs`/`better than`, `substitute`/`replace`/`alternative`/`instead of`, `in season`/`seasonal`
 - **Faster follow-ups**: Asking "what temp for that?" or "can I freeze the leftovers?" after getting recipe cards no longer re-fetches the entire recipe index and Vectorize embeddings
+- **Non-streaming for simple queries**: General/follow-up questions use direct JSON responses instead of SSE streaming — eliminates empty-stream fallback retry that was doubling latency
+- **SSE buffer flush fix**: Fixed `pipeSSEStream` dropping the last data chunk when upstream didn't end with a newline
+- **Seasonal/calendar questions**: "When does spring end?", "When is Easter?", holiday/season names now classified as general (fast path) and allowed by scope restriction
+- **No markdown tables**: System prompt tells the LLM to use bullet lists (tables don't render in chat)
 
 ---
 

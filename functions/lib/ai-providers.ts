@@ -324,6 +324,16 @@ function pipeSSEStream(
       try {
         const { done, value } = await reader.read();
         if (done) {
+          // Flush any remaining data left in the buffer (e.g., if upstream
+          // didn't end with a newline, the last SSE line stays in buffer)
+          if (buffer.trim()) {
+            const trimmed = buffer.trim();
+            if (trimmed.startsWith("data: ")) {
+              const payload = trimmed.slice(6);
+              const text = extractText(payload);
+              if (text) controller.enqueue(sseChunk(text));
+            }
+          }
           controller.enqueue(sseDone());
           controller.close();
           closed = true;
