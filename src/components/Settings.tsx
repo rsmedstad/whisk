@@ -1604,10 +1604,29 @@ function TimingBar({ label, ms, maxMs }: { label: string; ms: number; maxMs: num
   );
 }
 
+function formatLogForCopy(log: AILogEntry): string {
+  const t = log.timing;
+  const time = new Date(log.timestamp);
+  const lines = [
+    `[${time.toLocaleString()}] "${log.userMessage}"`,
+    `  provider: ${log.provider}/${log.model} | tier: ${log.tier ?? "?"} | ${log.streaming ? "stream" : "non-stream"} | ${log.success ? "ok" : "FAIL"}`,
+    `  recipes: ${log.recipeCount} | vectorize hits: ${log.vectorizeHits} | prompt: ${log.systemPromptLength}chars (~${Math.round(log.systemPromptLength / 4)}tok)`,
+  ];
+  if (t) {
+    lines.push(`  timing: config=${t.configMs}ms index=${t.indexMs}ms vectorize=${t.vectorizeMs}ms nyt=${t.nytMs}ms fetch(total)=${t.fetchMs}ms${t.llmMs !== undefined ? ` llm=${t.llmMs}ms` : ""} total=${log.durationMs}ms`);
+  } else {
+    lines.push(`  total: ${log.durationMs}ms`);
+  }
+  if (log.responseLength) lines.push(`  response: ${log.responseLength}chars`);
+  if (log.error) lines.push(`  error: ${log.error}`);
+  return lines.join("\n");
+}
+
 function AIPerformanceLogs() {
   const [logs, setLogs] = useState<AILogEntry[] | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [copied, setCopied] = useState<number | "all" | null>(null);
 
   const loadLogs = async () => {
     setIsLoading(true);
@@ -1625,6 +1644,13 @@ function AIPerformanceLogs() {
     const next = !isOpen;
     setIsOpen(next);
     if (next && !logs) loadLogs();
+  };
+
+  const copyToClipboard = (text: string, id: number | "all") => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    }).catch(() => {});
   };
 
   return (
@@ -1647,9 +1673,20 @@ function AIPerformanceLogs() {
               <>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-stone-400 dark:text-stone-500">Last {logs.length} requests</p>
-                  <button onClick={loadLogs} className="text-xs text-orange-600 dark:text-orange-400 hover:underline">
-                    Refresh
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        const text = logs.slice(0, 10).map(formatLogForCopy).join("\n\n");
+                        copyToClipboard(text, "all");
+                      }}
+                      className="text-xs text-orange-600 dark:text-orange-400 hover:underline"
+                    >
+                      {copied === "all" ? "Copied!" : "Copy All"}
+                    </button>
+                    <button onClick={loadLogs} className="text-xs text-orange-600 dark:text-orange-400 hover:underline">
+                      Refresh
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-4">
                   {logs.slice(0, 10).map((log, i) => {
@@ -1663,7 +1700,13 @@ function AIPerformanceLogs() {
                           <p className="text-xs text-stone-600 dark:text-stone-300 font-medium truncate max-w-[70%]">
                             &ldquo;{log.userMessage}&rdquo;
                           </p>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => copyToClipboard(formatLogForCopy(log), i)}
+                              className="text-[10px] text-stone-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+                            >
+                              {copied === i ? "Copied!" : "Copy"}
+                            </button>
                             <span className={classNames(
                               "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
                               log.success
