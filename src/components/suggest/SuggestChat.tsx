@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent, type
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles, MessageCircle, ChevronDown, Check, MagnifyingGlass, XMark } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, BookOpen, Sparkles, MessageCircle, ChevronDown, Check, MagnifyingGlass, XMark } from "../ui/Icon";
 import type { IconProps } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
@@ -777,15 +777,6 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   icon={CalendarDays}
                   label="Plan my meals this week"
                   onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
-                />
-                <QuickAction
-                  icon={ShoppingCart}
-                  label={mealPlan.length > 0 ? "Make me a shopping list" : "What should I buy this week?"}
-                  onClick={() => sendMessage(
-                    mealPlan.length > 0
-                      ? "Generate a shopping list from my meal plan for this week. Group items by category and skip anything already on my shopping list."
-                      : "What groceries should I buy this week? Suggest a balanced shopping list."
-                  )}
                 />
                 <QuickAction
                   icon={Sparkles}
