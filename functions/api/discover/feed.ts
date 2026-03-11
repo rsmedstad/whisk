@@ -1074,13 +1074,7 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
     const slug = titleFromSlug(item.url);
     const title = isPromoText(item.title) ? (slug ?? item.title) : item.title;
 
-    // Only keep /thmb/ images (recipe thumbnails) — filter out chef
-    // profile photos, social avatars, and promotional graphics
-    const imageUrl = item.imageUrl && item.imageUrl.includes("/thmb/")
-      ? item.imageUrl
-      : undefined;
-
-    return { ...item, title, imageUrl };
+    return { ...item, title, imageUrl: sanitizeImageUrl(item.imageUrl) };
   });
 }
 
@@ -1218,10 +1212,9 @@ async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
     }
   }
 
-  // Dedup by title, then only keep /thmb/ images (recipe thumbnails, not profiles/ads)
   return deduplicateByTitle(allItems).slice(0, 30).map((item) => ({
     ...item,
-    imageUrl: item.imageUrl && item.imageUrl.includes("/thmb/") ? item.imageUrl : undefined,
+    imageUrl: sanitizeImageUrl(item.imageUrl),
   }));
 }
 
