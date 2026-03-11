@@ -202,7 +202,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // Log classification tier for debugging
   const queryTier = isGeneralQuestion ? "general" : isFollowUp ? "followup" : needsRecipeContext ? (needsSemanticSearch ? "semantic" : "collection") : "unclassified";
-  console.log(`[Whisk] Chat tier=${queryTier} msg="${lastMessage.slice(0, 80)}"`);
+  const classifyMs = Date.now() - startTime;
 
   // Fetch only what we need in parallel — skip heavy lookups for general questions
   const configPromise = loadAIConfig(env.WHISK_KV);
@@ -222,6 +222,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const [config, indexData, externalRecipes, vectorizeMatches] = await Promise.all([
     configPromise, indexPromise, externalPromise, vectorizePromise,
   ]);
+  const fetchMs = Date.now() - startTime;
 
   const fnConfig = resolveConfig(config, "chat", env);
 
@@ -460,12 +461,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         maxTokens: 2048,
         temperature: 0.7,
       });
+      const streamMs = Date.now() - startTime;
+      console.log(`[Whisk] Chat tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms stream=${streamMs}ms msg="${lastMessage.slice(0, 60)}"`);
       // Log success (we don't know response length for streams, log 0)
-      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: true, durationMs: Date.now() - startTime }).catch(() => {});
+      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: true, durationMs: streamMs }).catch(() => {});
       return new Response(stream, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
+          "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms stream=${streamMs}ms`,
         },
       });
     } catch (streamErr) {

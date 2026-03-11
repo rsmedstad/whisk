@@ -308,6 +308,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
     } catch { /* ignore malformed preferences */ }
 
     try {
+      const fetchStart = performance.now();
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: {
@@ -330,6 +331,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           stream: true,
         }),
       });
+      const serverTiming = res.headers.get("X-Whisk-Timing") ?? "";
+      console.log(`[Whisk] Response in ${Math.round(performance.now() - fetchStart)}ms | server: ${serverTiming}`);
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => "");
