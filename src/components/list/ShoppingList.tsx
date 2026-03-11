@@ -588,6 +588,21 @@ export function ShoppingList({
                         {opt.label}
                       </button>
                     ))}
+                    <div className="border-t border-stone-200 dark:border-stone-700" />
+                    {checkedCount > 0 && (
+                      <button
+                        onClick={() => { onClearChecked(); setShowSortMenu(false); }}
+                        className="w-full px-3 py-2 text-left text-xs dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-1.5"
+                      >
+                        <Check className="w-3 h-3" /> Clear checked ({checkedCount})
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { if (confirm("Clear entire shopping list?")) { onClearAll(); setShowSortMenu(false); } }}
+                      className="w-full px-3 py-2 text-left text-xs text-red-500 dark:text-red-400 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-1.5"
+                    >
+                      <Trash className="w-3 h-3" /> Clear all
+                    </button>
                   </div>
                 </>
               )}
@@ -618,14 +633,6 @@ export function ShoppingList({
             >
               A-Z
             </button>
-            {checkedCount > 0 && (
-              <button
-                onClick={onClearChecked}
-                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors"
-              >
-                <Check className="w-3 h-3" /> Clear checked ({checkedCount})
-              </button>
-            )}
             {needsClassificationCount > 0 && chatEnabled && (
               <button
                 onClick={handleClassify}
@@ -635,12 +642,6 @@ export function ShoppingList({
                 <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "Classifying..." : "Review & Classify"}
               </button>
             )}
-            <button
-              onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
-              className="ml-auto inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
-            >
-              <Trash className="w-3 h-3" /> Clear all
-            </button>
           </div>
         )}
       </div>
