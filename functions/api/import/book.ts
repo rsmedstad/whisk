@@ -16,6 +16,7 @@ interface RecipeIndexEntry {
   cookTime?: number;
   servings?: number;
   description?: string;
+  sourceUrl?: string;
 }
 
 interface ImportedRecipe {
@@ -177,6 +178,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       cookTime: newRecipe.cookTime,
       servings: newRecipe.servings,
       description: newRecipe.description,
+      sourceUrl: (newRecipe.source as { url?: string } | undefined)?.url,
     });
 
     await env.WHISK_KV.put("recipes:index", JSON.stringify(index));

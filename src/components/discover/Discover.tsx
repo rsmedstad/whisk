@@ -36,6 +36,7 @@ import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import type {
   Recipe,
+  RecipeIndexEntry,
   Ingredient,
   Step,
   DiscoverFeed,
@@ -52,7 +53,7 @@ interface DiscoverProps {
   ) => Promise<Recipe>;
   onUpdateRecipe?: (id: string, updates: Partial<Recipe>) => Promise<Recipe>;
   chatEnabled?: boolean;
-  recipes?: Recipe[];
+  recipes?: RecipeIndexEntry[];
 }
 
 // ── Constants ───────────────────────────────────────────
@@ -430,8 +431,8 @@ export function Discover({
     // Build a map from source URL → thumbnailUrl for saved recipes that have both
     const urlToThumb = new Map<string, string>();
     for (const r of savedRecipes) {
-      if (r.source?.url && r.thumbnailUrl) {
-        urlToThumb.set(r.source.url.replace(/\/$/, "").replace(/^http:/, "https:"), r.thumbnailUrl);
+      if (r.sourceUrl && r.thumbnailUrl) {
+        urlToThumb.set(r.sourceUrl.replace(/\/$/, "").replace(/^http:/, "https:"), r.thumbnailUrl);
       }
     }
     if (urlToThumb.size === 0) return;
