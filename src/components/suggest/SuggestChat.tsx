@@ -504,7 +504,12 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
     // Exclude recipes already in this week's meal plan
     const plannedIds = new Set(mealPlan.map((m) => m.recipeId).filter(Boolean));
     const available = pool.filter((r) => !plannedIds.has(r.id));
-    const source = available.length >= count ? available : pool;
+
+    // Prefer easy/medium recipes — fall back to all if not enough
+    const easyMedium = available.filter((r) => r.difficulty !== "hard");
+    const source = easyMedium.length >= count ? easyMedium
+      : available.length >= count ? available
+      : pool;
 
     if (source.length === 0) {
       setMessages((prev) => [...prev, { role: "assistant", content: "You don't have enough recipes in your collection yet. Try adding some recipes first!" }]);
@@ -1101,7 +1106,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                             <div className="py-1.5 pr-1 min-w-0">
                               <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">{recipe.title}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                {totalTime > 0 && <span className="text-xs text-stone-400">{totalTime} min</span>}
+                                {totalTime > 0 && <span className="text-xs text-stone-400">{totalTime >= 60 ? `${Math.floor(totalTime / 60)}h${totalTime % 60 > 0 ? ` ${totalTime % 60}m` : ""}` : `${totalTime} min`}</span>}
                                 {recipe.servings && <span className="text-xs text-stone-400">Serves {recipe.servings}</span>}
                               </div>
                             </div>
