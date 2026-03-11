@@ -9,16 +9,13 @@ const VALID_CATEGORIES = new Set<ShoppingCategory>([
   "produce", "dairy", "meat", "pantry", "snacks", "frozen", "bakery", "beverages", "other",
 ]);
 
-/** Clean ingredient name: strip junk, amounts, annotations */
+/** Clean ingredient name: strip trailing junk and annotations, keep amounts for display */
 function cleanIngredientName(name: string): string {
   let cleaned = name;
   // Strip "(optional)", "(to taste)", "(divided)", etc.
   cleaned = cleaned.replace(/\(\s*(?:optional|to taste|divided|or more|adjusted?)\s*\)/gi, "");
   // Strip parenthetical amounts: "(15 oz)", "(about 2 cups)" — require at least one digit
   cleaned = cleaned.replace(/\(\s*(?:about\s+)?[\d\s.\/]+\s*(?:oz|lb|g|kg|ml|l|cups?|cans?|pts?|qts?|gal)?\.?\s*\)/gi, "");
-  // Strip leading amounts/units embedded in name: "2 carrots" → "carrots", "1 can chickpeas" → "chickpeas"
-  cleaned = cleaned.replace(/^[\d\/.\s]+(oz|lb|cups?|tbsp|tsp|g|kg|ml|l|pt|qt|gal|bunch|head|cans?|pkg|bag|box|jar|bottle|ct|count|sticks?|cloves?|sprigs?|slices?|pieces?|each)s?\b\s*/i, "");
-  cleaned = cleaned.replace(/^[\d\/.\s]+/, "");
   // Strip trailing junk: ", and", trailing commas, semicolons
   cleaned = cleaned.replace(/[,;]\s*(and\s*)?$/i, "");
   cleaned = cleaned.replace(/\s+and\s*$/i, "");
