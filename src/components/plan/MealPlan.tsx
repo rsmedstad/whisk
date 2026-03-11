@@ -758,11 +758,11 @@ export function MealPlan({
                         setAddingSlot({ date, slot: nextEmpty?.slot ?? mealSlots[0]?.slot ?? "dinner" });
                       }}
                       className={classNames(
-                        "text-[10px] text-orange-500 font-medium",
-                        filledMeals.length > 0 && "mt-1"
+                        "flex items-center justify-center w-full min-h-[36px] rounded-lg border border-dashed border-stone-300 dark:border-stone-700 text-xs text-orange-500 font-medium hover:border-orange-400 dark:hover:border-orange-600 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors",
+                        filledMeals.length > 0 && "mt-1.5"
                       )}
                     >
-                      + add
+                      + add meal
                     </button>
                   )}
                 </div>
@@ -935,19 +935,19 @@ export function MealPlan({
                             )}
                           </div>
                         ) : (
-                          <div className="flex-1 flex items-center justify-between">
+                          <button
+                            onClick={() =>
+                              setAddingSlot({ date, slot })
+                            }
+                            className="flex-1 flex items-center justify-between min-h-[36px] -my-0.5 rounded-md hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors"
+                          >
                             <span className="text-xs text-stone-400 dark:text-stone-500">
                               {label}
                             </span>
-                            <button
-                              onClick={() =>
-                                setAddingSlot({ date, slot })
-                              }
-                              className="text-xs text-orange-500 font-medium"
-                            >
+                            <span className="text-xs text-orange-500 font-medium">
                               + add
-                            </button>
-                          </div>
+                            </span>
+                          </button>
                         )}
                       </div>
                     );
