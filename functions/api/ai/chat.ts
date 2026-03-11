@@ -299,8 +299,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }));
     scored.sort((a, b) => b._score - a._score);
 
-    // Top relevant recipes get full detail (including ingredients)
-    const relevant = scored.filter((r) => r._score > 0).slice(0, 20);
+    // Top relevant recipes get moderate detail (tags + time, skip ingredients to save tokens)
+    const relevant = scored.filter((r) => r._score > 0).slice(0, 7);
     const rest = scored.filter((r) => !relevant.includes(r));
 
     if (relevant.length > 0) {
@@ -311,11 +311,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           if (r.cuisine) parts.push(`(${r.cuisine})`);
           const totalTime = (r.prepTime ?? 0) + (r.cookTime ?? 0);
           if (totalTime > 0) parts.push(`${totalTime}min`);
-          if (r.servings) parts.push(`serves ${r.servings}`);
           if (r.difficulty) parts.push(`[${r.difficulty}]`);
-          if (r.cookedCount) parts.push(`cooked ${r.cookedCount}x`);
-          if (r.description) parts.push(`— ${r.description}`);
-          if (r.ingredientNames?.length) parts.push(`| ingredients: ${r.ingredientNames.join(", ")}`);
           return parts.join(" ");
         })
         .join("\n");
@@ -347,9 +343,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const systemTokens = Math.ceil(systemPrompt.length / 4);
   const totalEstimate = systemTokens + userTokens + 2048;
 
-  // If estimated total exceeds a reasonable threshold, trim the recipe collection section
-  // This handles models with small context windows or strict TPM limits
-  if (totalEstimate > 6000) {
+  // If estimated total exceeds threshold, trim the recipe collection section.
+  // Keep this low (4000) to stay within free-tier TPM limits on providers like Cerebras.
+  if (totalEstimate > 4000) {
     // Progressively reduce: first try keeping only recipe titles (no tags/cuisine)
     const collectionIdx = systemPrompt.indexOf("--- Full Recipe Collection");
     if (collectionIdx > -1) {
@@ -365,7 +361,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // If still too large, truncate the collection to top 40 recipes
     const reEstimate = Math.ceil(systemPrompt.length / 4) + userTokens + 2048;
-    if (reEstimate > 6000) {
+    if (reEstimate > 4000) {
       const collectionIdx2 = systemPrompt.indexOf("--- Full Recipe Collection");
       if (collectionIdx2 > -1) {
         const beforeCollection2 = systemPrompt.slice(0, collectionIdx2);
@@ -414,10 +410,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         },
       });
     } catch (streamErr) {
-      // Log stream error, then fall back to non-streaming
+      // Log stream error
       const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
       console.error("[Whisk] Stream error, falling back to non-streaming:", errMsg);
       logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: false, durationMs: Date.now() - startTime, error: `stream: ${errMsg.slice(0, 500)}` }).catch(() => {});
+
+      // Don't retry on rate limits — a second call will just hit the same limit
+      const lowerErr = errMsg.toLowerCase();
+      if (lowerErr.includes("rate_limit") || lowerErr.includes("429") || lowerErr.includes("too many requests")) {
+        return new Response(
+          JSON.stringify({ content: formatAIError(errMsg, fnConfig.provider, fnConfig.model) }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
       try {
         const content = await callTextAI(fnConfig, env, allMessages, {
           maxTokens: 2048,
