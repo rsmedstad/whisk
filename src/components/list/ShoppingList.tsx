@@ -632,7 +632,7 @@ export function ShoppingList({
                 disabled={isClassifying}
                 className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
               >
-                <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "Classifying..." : `Classify (${needsClassificationCount})`}
+                <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "Classifying..." : "Review & Classify"}
               </button>
             )}
             <button
