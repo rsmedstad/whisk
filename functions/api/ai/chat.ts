@@ -211,24 +211,38 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const classifyMs = Date.now() - startTime;
 
   // Fetch only what we need in parallel — skip heavy lookups for general questions
-  const configPromise = loadAIConfig(env.WHISK_KV);
-  const indexPromise = needsRecipeContext
+  // Wrap each promise with individual timing
+  const timed = <T>(label: string, p: Promise<T>): Promise<{ result: T; label: string; ms: number }> => {
+    const t0 = Date.now();
+    return p.then((result) => ({ result, label, ms: Date.now() - t0 }));
+  };
+
+  const configTimed = timed("config", loadAIConfig(env.WHISK_KV));
+  const indexTimed = timed("index", needsRecipeContext
     ? env.WHISK_KV.get("recipes:index", "text")
-    : Promise.resolve(null);
-  const externalPromise = needsExternalSearch
+    : Promise.resolve(null));
+  const externalTimed = timed("nyt", needsExternalSearch
     ? searchExternalRecipes(lastMessage, messages)
-    : Promise.resolve([]);
-  const vectorizePromise = needsSemanticSearch && env.AI && env.VECTORIZE
+    : Promise.resolve([]));
+  const vectorizeTimed = timed("vectorize", needsSemanticSearch && env.AI && env.VECTORIZE
     ? queryRecipes(env.AI, env.VECTORIZE, lastMessage, 15).catch((err) => {
         console.error("[Whisk] Vectorize query failed:", err);
         return [] as { id: string; score: number }[];
       })
-    : Promise.resolve([]);
+    : Promise.resolve([]));
 
-  const [config, indexData, externalRecipes, vectorizeMatches] = await Promise.all([
-    configPromise, indexPromise, externalPromise, vectorizePromise,
+  const [configResult, indexResult, externalResult, vectorizeResult] = await Promise.all([
+    configTimed, indexTimed, externalTimed, vectorizeTimed,
   ]);
+  const config = configResult.result;
+  const indexData = indexResult.result;
+  const externalRecipes = externalResult.result;
+  const vectorizeMatches = vectorizeResult.result;
   const fetchMs = Date.now() - startTime;
+  const fetchBreakdown = [configResult, indexResult, externalResult, vectorizeResult]
+    .filter((t) => t.ms > 0)
+    .map((t) => `${t.label}=${t.ms}ms`)
+    .join(" ");
 
   const fnConfig = resolveConfig(config, "chat", env);
 
@@ -470,14 +484,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         temperature: 0.7,
       });
       const streamMs = Date.now() - startTime;
-      console.log(`[Whisk] Chat tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms stream=${streamMs}ms msg="${lastMessage.slice(0, 60)}"`);
+      const promptChars = systemPrompt.length;
+      console.log(`[Whisk] Chat tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm-connect=${streamMs}ms prompt=${promptChars}chars recipes=${recipeIndex.length} msg="${lastMessage.slice(0, 60)}"`);
       // Log success (we don't know response length for streams, log 0)
       logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: true, durationMs: streamMs }).catch(() => {});
       return new Response(stream, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
-          "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms stream=${streamMs}ms`,
+          "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm-connect=${streamMs}ms prompt=${promptChars}chars`,
         },
       });
     } catch (streamErr) {
@@ -525,10 +540,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   try {
+    const llmStart = Date.now();
     const content = await callTextAI(fnConfig, env, allMessages, {
       maxTokens: 2048,
       temperature: 0.7,
     });
+    const llmMs = Date.now() - llmStart;
+    const totalMs = Date.now() - startTime;
+    const promptChars = systemPrompt.length;
+    console.log(`[Whisk] Chat tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm=${llmMs}ms total=${totalMs}ms prompt=${promptChars}chars recipes=${recipeIndex.length} msg="${lastMessage.slice(0, 60)}"`);
 
     // Strip incomplete action markers (truncated responses missing closing bracket)
     const cleaned = content
@@ -537,19 +557,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .trim();
 
     if (!cleaned) {
-      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: "empty response from provider" }).catch(() => {});
+      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: totalMs, error: "empty response from provider" }).catch(() => {});
       return new Response(
         JSON.stringify({
           content: "I wasn't able to generate a response. This can happen when the AI service is busy — please try again.",
         }),
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { "Content-Type": "application/json", "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm=${llmMs}ms total=${totalMs}ms prompt=${promptChars}chars` } }
       );
     }
 
-    logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length }).catch(() => {});
+    logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: true, durationMs: totalMs, responseLength: cleaned.length }).catch(() => {});
     return new Response(
       JSON.stringify({ content: cleaned }),
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { "Content-Type": "application/json", "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm=${llmMs}ms total=${totalMs}ms prompt=${promptChars}chars` } }
     );
   } catch (textErr) {
     const errMsg = textErr instanceof Error ? textErr.message : String(textErr);
