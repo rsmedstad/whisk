@@ -372,7 +372,7 @@ async function streamOpenAI(
     body: JSON.stringify({
       model,
       messages,
-      max_tokens: maxTokens,
+      ...(isCerebras(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
       temperature,
       stream: true,
     }),
@@ -521,7 +521,10 @@ export async function callVisionAI(
 
 const AI_TIMEOUT_MS = 30000;
 
-// ── OpenAI-Compatible Format (Groq, OpenAI, xAI) ──────────
+// ── OpenAI-Compatible Format (Groq, OpenAI, xAI, Cerebras) ──
+
+/** Cerebras uses max_completion_tokens instead of max_tokens */
+const isCerebras = (baseUrl: string) => baseUrl.includes("cerebras.ai");
 
 async function callOpenAIText(
   baseUrl: string,
@@ -535,8 +538,8 @@ async function callOpenAIText(
   const body: Record<string, unknown> = {
     model,
     messages,
-    max_tokens: maxTokens,
     temperature,
+    ...(isCerebras(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
   };
   if (jsonMode) {
     body.response_format = { type: "json_object" };
@@ -594,7 +597,7 @@ async function callOpenAIVision(
           ],
         },
       ],
-      max_tokens: maxTokens,
+      ...(isCerebras(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
       temperature,
     }),
   });
