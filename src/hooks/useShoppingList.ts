@@ -144,9 +144,10 @@ export function useShoppingList() {
         .filter((ing) => !existingNames.has(cleanIngredientName(ing.name).toLowerCase()))
         .map((ing) => {
           const name = cleanIngredientName(ing.name);
-          // Only use recipe's category if it's a valid ShoppingCategory, otherwise re-categorize
+          // Use recipe's category if it's a valid, meaningful ShoppingCategory;
+          // "other" means uncategorized, so always re-categorize those
           const recipeCategory = ing.category?.toLowerCase() as ShoppingCategory | undefined;
-          const category = (recipeCategory && VALID_CATEGORIES.has(recipeCategory))
+          const category = (recipeCategory && recipeCategory !== "other" && VALID_CATEGORIES.has(recipeCategory))
             ? recipeCategory
             : categorizeIngredient(name);
           return {
@@ -233,6 +234,10 @@ export function useShoppingList() {
     );
     if (needsClassification.length === 0) return;
 
+    // Build a map from item ID to its index in the needsClassification array
+    const idToIndex = new Map<string, number>();
+    needsClassification.forEach((item, idx) => idToIndex.set(item.id, idx));
+
     try {
       const result = await api.post<{ items: { name: string; category: string; subcategory?: string }[] }>(
         "/shopping/classify",
@@ -240,17 +245,12 @@ export function useShoppingList() {
       );
 
       if (result?.items) {
-        const classifyMap = new Map<string, { category: string; subcategory?: string }>();
-        for (const item of result.items) {
-          classifyMap.set(item.name.toLowerCase(), {
-            category: item.category,
-            subcategory: item.subcategory,
-          });
-        }
-
         const updatedItems = list.items.map((item) => {
-          const classified = classifyMap.get(item.name.toLowerCase());
+          const idx = idToIndex.get(item.id);
+          if (idx === undefined) return item;
+          const classified = result.items[idx];
           if (!classified) return item;
+
           const updates: Partial<ShoppingItem> = {};
           // Only update category if it was "other"
           if (item.category === "other" && classified.category !== "other") {
@@ -259,6 +259,11 @@ export function useShoppingList() {
           // Always update subcategory if we got one
           if (classified.subcategory && !item.subcategory) {
             updates.subcategory = classified.subcategory;
+          }
+          // Clean up stale names (trailing ", and", extra spaces, etc.)
+          const cleanedName = cleanIngredientName(item.name);
+          if (cleanedName !== item.name) {
+            updates.name = cleanedName;
           }
           return Object.keys(updates).length > 0 ? { ...item, ...updates } : item;
         });
