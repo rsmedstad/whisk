@@ -88,7 +88,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     "- Only use tags from the list above. Do not invent new tags.",
     "- Select tags that accurately describe the recipe's meal type, cuisine, dietary properties, cooking method, and/or season.",
     "- Do NOT include speed-related tags (under 30 min, quick, weeknight, meal prep) — those are computed separately.",
-    '- Return a JSON object: { "tags": ["tag1", "tag2"] }',
+    '- Also estimate the recipe difficulty as "easy", "medium", or "hard" based on technique complexity, number of ingredients, and skill required.',
+    '- Return a JSON object: { "tags": ["tag1", "tag2"], "difficulty": "easy" | "medium" | "hard" }',
   ].join("\n");
 
   const userPrompt = `Title: ${title}${description ? `\nDescription: ${description}` : ""}${ingredientList}`;
@@ -104,10 +105,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       { maxTokens: 256, temperature: 0.3, jsonMode: true }
     );
 
-    const parsed = JSON.parse(content) as { tags?: string[] };
+    const parsed = JSON.parse(content) as { tags?: string[]; difficulty?: string };
     const tags = (parsed.tags ?? []).filter((t: string) => validTags.has(t));
+    const validDifficulties = new Set(["easy", "medium", "hard"]);
+    const difficulty = parsed.difficulty && validDifficulties.has(parsed.difficulty)
+      ? parsed.difficulty
+      : undefined;
 
-    return new Response(JSON.stringify({ tags }), {
+    return new Response(JSON.stringify({ tags, difficulty }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch {

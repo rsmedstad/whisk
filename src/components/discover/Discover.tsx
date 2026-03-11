@@ -50,6 +50,8 @@ interface DiscoverProps {
   onSaveRecipe?: (
     recipe: Omit<Recipe, "id" | "createdAt" | "updatedAt">
   ) => Promise<Recipe>;
+  onUpdateRecipe?: (id: string, updates: Partial<Recipe>) => Promise<Recipe>;
+  chatEnabled?: boolean;
 }
 
 // ── Constants ───────────────────────────────────────────
@@ -293,6 +295,8 @@ function timeAgo(dateStr: string): string {
 
 export function Discover({
   onSaveRecipe,
+  onUpdateRecipe,
+  chatEnabled,
 }: DiscoverProps) {
   const navigate = useNavigate();
   const tags = useTags();
@@ -516,12 +520,49 @@ export function Discover({
         source: importedRecipe.source as Recipe["source"],
       });
       setSavedFeedRecipeId(recipe.id);
+      // Auto-tag in background if AI is available and tags are sparse
+      if (chatEnabled && onUpdateRecipe) {
+        const SPEED_TAGS = new Set(["quick", "under 30 min", "under 15 min"]);
+        const hasMeaningfulTags = mergedTags.some((t) => !SPEED_TAGS.has(t));
+        if (!hasMeaningfulTags || !recipe.difficulty) {
+          (async () => {
+            try {
+              const res = await fetch("/api/ai/auto-tag", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+                },
+                body: JSON.stringify({
+                  title: importedRecipe.title,
+                  description: importedRecipe.description ?? "",
+                  ingredients: importedRecipe.ingredients.filter((i) => i.name.trim()).map((i) => i.name),
+                }),
+              });
+              if (!res.ok) return;
+              const data = (await res.json()) as { tags?: string[]; difficulty?: Recipe["difficulty"] };
+              const updates: Partial<Recipe> = {};
+              if (Array.isArray(data.tags) && data.tags.length > 0 && !hasMeaningfulTags) {
+                updates.tags = [...new Set([...mergedTags, ...data.tags])];
+              }
+              if (data.difficulty && !recipe.difficulty) {
+                updates.difficulty = data.difficulty;
+              }
+              if (Object.keys(updates).length > 0) {
+                await onUpdateRecipe(recipe.id, updates);
+              }
+            } catch {
+              // Silent fail
+            }
+          })();
+        }
+      }
     } catch {
       // Save failed — button stays enabled
     } finally {
       setIsSavingFeed(false);
     }
-  }, [importedRecipe, onSaveRecipe]);
+  }, [importedRecipe, onSaveRecipe, onUpdateRecipe, chatEnabled]);
 
   // Quick-save a feed item directly from the card (imports + saves in one step)
   const handleQuickSave = useCallback(async (item: DiscoverFeedItem) => {

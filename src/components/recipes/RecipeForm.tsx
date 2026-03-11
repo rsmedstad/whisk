@@ -80,9 +80,12 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         }),
       });
       if (!res.ok) return;
-      const data = (await res.json()) as { tags?: string[] };
+      const data = (await res.json()) as { tags?: string[]; difficulty?: Recipe["difficulty"] };
       if (Array.isArray(data.tags)) {
         setTags((prev) => [...new Set([...prev, ...data.tags!])]);
+      }
+      if (data.difficulty && !difficulty) {
+        setDifficulty(data.difficulty);
       }
     } catch {
       // Silent fail
@@ -90,12 +93,12 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   };
 
   // Fire-and-forget: auto-tag a newly created recipe in the background
-  const autoTagAfterSave = (recipeId: string, existingTags: string[], t: string, desc: string, ings: Ingredient[]) => {
+  const autoTagAfterSave = (recipeId: string, existingTags: string[], existingDifficulty: Recipe["difficulty"], t: string, desc: string, ings: Ingredient[]) => {
     if (!chatEnabled) return;
     // Only auto-tag if no non-speed tags exist
     const SPEED_TAGS = ["quick", "under 30 min", "under 15 min"];
     const hasMeaningfulTags = existingTags.some((tag) => !SPEED_TAGS.includes(tag));
-    if (hasMeaningfulTags) return;
+    if (hasMeaningfulTags && existingDifficulty) return;
     (async () => {
       try {
         const res = await fetch("/api/ai/auto-tag", {
@@ -111,10 +114,16 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           }),
         });
         if (!res.ok) return;
-        const data = (await res.json()) as { tags?: string[] };
-        if (Array.isArray(data.tags) && data.tags.length > 0) {
-          const mergedTags = [...new Set([...existingTags, ...data.tags])];
-          await updateRecipe(recipeId, { tags: mergedTags });
+        const data = (await res.json()) as { tags?: string[]; difficulty?: Recipe["difficulty"] };
+        const updates: Partial<Recipe> = {};
+        if (Array.isArray(data.tags) && data.tags.length > 0 && !hasMeaningfulTags) {
+          updates.tags = [...new Set([...existingTags, ...data.tags])];
+        }
+        if (data.difficulty && !existingDifficulty) {
+          updates.difficulty = data.difficulty;
+        }
+        if (Object.keys(updates).length > 0) {
+          await updateRecipe(recipeId, updates);
         }
       } catch {
         // Silent fail — recipe was saved, tags are just a bonus
@@ -179,10 +188,11 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         if (Array.isArray(data.photos) && data.photos.length) {
           setPhotos(data.photos as RecipePhoto[]);
         }
-        // Auto-tag from imported data
-        const importedPrep = data.prepTime ? Number(data.prepTime) : undefined;
-        const importedCook = data.cookTime ? Number(data.cookTime) : undefined;
-        // Speed tags are no longer auto-derived; filtering is time-based now
+        // Apply server-side tags from JSON-LD extraction
+        if (Array.isArray(data.tags) && data.tags.length) {
+          setTags((prev) => [...new Set([...prev, ...(data.tags as string[])])]);
+        }
+        // Also request AI auto-tags for richer tagging
         if (data.title) {
           fetchAutoTags(
             data.title as string,
@@ -245,7 +255,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         const created = await createRecipe(recipeData);
         // Auto-tag in background after save (non-blocking)
         if (chatEnabled && title.trim()) {
-          autoTagAfterSave(created.id, recipeData.tags ?? [], title.trim(), description.trim(), recipeData.ingredients);
+          autoTagAfterSave(created.id, recipeData.tags ?? [], recipeData.difficulty, title.trim(), description.trim(), recipeData.ingredients);
         }
         navigate(`/recipes/${created.id}`);
       }
@@ -414,10 +424,11 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       if (Array.isArray(data.photos) && data.photos.length) {
         setPhotos(data.photos as RecipePhoto[]);
       }
-      // Auto-tag from imported data
-      const importedPrep = data.prepTime ? Number(data.prepTime) : undefined;
-      const importedCook = data.cookTime ? Number(data.cookTime) : undefined;
-      // Speed tags removed — time-based filtering handles this now
+      // Apply server-side tags from JSON-LD extraction
+      if (Array.isArray(data.tags) && data.tags.length) {
+        setTags((prev) => [...new Set([...prev, ...(data.tags as string[])])]);
+      }
+      // Also request AI auto-tags for richer tagging
       if (data.title) {
         fetchAutoTags(
           data.title as string,

@@ -242,7 +242,7 @@ function AppShell({
           />
 
           {/* Other tabs — lazy loaded */}
-          <Route path="/discover" element={<Discover onSaveRecipe={recipes.createRecipe} />} />
+          <Route path="/discover" element={<Discover onSaveRecipe={recipes.createRecipe} onUpdateRecipe={recipes.updateRecipe} chatEnabled={capabilities.chat} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
           <Route path="/ask" element={
             <AskChat
