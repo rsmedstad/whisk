@@ -94,10 +94,11 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     return localStorage.getItem("whisk_display_name") ?? "";
   });
   const [householdSize, setHouseholdSize] = useState(() => {
-    return parseInt(localStorage.getItem("whisk_household_size") ?? "4", 10);
-  });
-  const [zipCode, setZipCode] = useState(() => {
-    return localStorage.getItem("whisk_zip_code") ?? "";
+    const saved = localStorage.getItem("whisk_household_size");
+    if (saved) return parseInt(saved, 10);
+    // Persist the default so it survives reloads and is available to other components
+    localStorage.setItem("whisk_household_size", "4");
+    return 4;
   });
   const [preferredStores, setPreferredStores] = useState<string[]>(() => {
     try {
@@ -217,15 +218,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const handleNameChange = (name: string) => {
     setDisplayName(name);
     localStorage.setItem("whisk_display_name", name);
-  };
-
-  const handleZipChange = (zip: string) => {
-    setZipCode(zip);
-    if (zip.trim()) {
-      localStorage.setItem("whisk_zip_code", zip.trim());
-    } else {
-      localStorage.removeItem("whisk_zip_code");
-    }
   };
 
   const handleHouseholdChange = (size: number) => {
@@ -758,19 +750,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="Ryan"
                   />
-                  <div>
-                    <Input
-                      label="Zip Code"
-                      value={zipCode}
-                      onChange={(e) => handleZipChange(e.target.value)}
-                      placeholder="e.g. 90210"
-                      maxLength={10}
-                      inputMode="numeric"
-                    />
-                    <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
-                      Used for seasonal suggestions. Not shared.
-                    </p>
-                  </div>
                   <div>
                     <label className="text-sm font-medium dark:text-stone-200 block mb-2">
                       Household Size

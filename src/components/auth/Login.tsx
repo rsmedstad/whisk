@@ -249,52 +249,8 @@ function OnboardingScreen({
 }) {
   const [units, setUnits] = useState<OnboardingPrefs["units"]>("imperial");
   const [showGrams, setShowGrams] = useState(false);
-  const [zipCode, setZipCode] = useState("");
-  const [detectingLocation, setDetectingLocation] = useState(false);
-  const [locationStatus, setLocationStatus] = useState<string | null>(null);
-
   const handleThemeChange = (t: AppSettings["theme"]) => {
     onSetTheme?.(t);
-  };
-
-  const handleDetectLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus("Geolocation not supported");
-      return;
-    }
-    setDetectingLocation(true);
-    setLocationStatus(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude, longitude } = pos.coords;
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&zoom=10`,
-            { headers: { "User-Agent": "Whisk/1.0" } }
-          );
-          if (res.ok) {
-            const data = await res.json() as { address?: { postcode?: string } };
-            const code = data.address?.postcode;
-            if (code) {
-              setZipCode(code);
-              setLocationStatus("Location detected");
-            } else {
-              setLocationStatus("Could not determine zip code");
-            }
-          } else {
-            setLocationStatus("Location lookup failed");
-          }
-        } catch {
-          setLocationStatus("Location lookup failed");
-        }
-        setDetectingLocation(false);
-      },
-      () => {
-        setLocationStatus("Location access denied");
-        setDetectingLocation(false);
-      },
-      { timeout: 10000 }
-    );
   };
 
   return (
@@ -386,50 +342,13 @@ function OnboardingScreen({
               </button>
             </div>
 
-            {/* Location */}
-            <div>
-              <label className="text-sm font-medium text-stone-700 dark:text-stone-200 block mb-2">
-                Location (optional)
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Zip code"
-                  value={zipCode}
-                  onChange={(e) => { setZipCode(e.target.value); setLocationStatus(null); }}
-                  maxLength={10}
-                  inputMode="numeric"
-                  className="flex-1"
-                />
-                <button
-                  type="button"
-                  onClick={handleDetectLocation}
-                  disabled={detectingLocation}
-                  className="shrink-0 px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-600 text-sm font-medium text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50 transition-colors"
-                >
-                  {detectingLocation ? (
-                    <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
-                {locationStatus ?? "For seasonal suggestions. Stored locally only."}
-              </p>
-            </div>
           </div>
         </Card>
 
         <div className="mt-6">
           <Button
             fullWidth
-            onClick={() => onComplete({ units, showGrams, zipCode: zipCode.trim() })}
+            onClick={() => onComplete({ units, showGrams })}
           >
             Get Started
           </Button>

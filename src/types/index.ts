@@ -236,7 +236,6 @@ export interface AppSettings {
 export interface OnboardingPrefs {
   units: "imperial" | "metric";
   showGrams: boolean;
-  zipCode: string;
 }
 
 // ── AI Configuration ───────────────────────────────────────

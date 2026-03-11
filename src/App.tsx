@@ -77,11 +77,6 @@ export function App() {
     // Apply grams preference
     localStorage.setItem("whisk_show_grams", String(prefs.showGrams));
 
-    // Store zip code if provided
-    if (prefs.zipCode) {
-      localStorage.setItem("whisk_zip_code", prefs.zipCode);
-    }
-
     // Mark onboarding complete
     localStorage.setItem("whisk_onboarded", "true");
     setNeedsOnboarding(false);
