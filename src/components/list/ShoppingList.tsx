@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList, RefreshCw } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList, RefreshCw, ChevronDown } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -58,6 +58,7 @@ export function ShoppingList({
   const [uncheckedFirst, setUncheckedFirst] = useState(false);
   const [isClassifying, setIsClassifying] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showClearMenu, setShowClearMenu] = useState(false);
   // List scan
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
@@ -550,13 +551,13 @@ export function ShoppingList({
           </div>
         )}
 
-        {/* Filter bar — sort, clear checked, clear all, auto-classify */}
+        {/* Filter bar — sort, toggles, classify, clear */}
         {totalCount > 0 && (
-          <div className={classNames("flex items-center gap-1.5 px-4 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
+          <div className={classNames("flex items-center gap-1.5 px-4 pb-2 pt-1", (showSortMenu || showClearMenu) ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
             {/* Group mode dropdown */}
             <div className="relative">
               <button
-                onClick={() => setShowSortMenu(!showSortMenu)}
+                onClick={() => { setShowSortMenu(!showSortMenu); setShowClearMenu(false); }}
                 className={classNames(
                   "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
                   groupMode === "by-recipe"
@@ -588,21 +589,6 @@ export function ShoppingList({
                         {opt.label}
                       </button>
                     ))}
-                    <div className="border-t border-stone-200 dark:border-stone-700" />
-                    {checkedCount > 0 && (
-                      <button
-                        onClick={() => { onClearChecked(); setShowSortMenu(false); }}
-                        className="w-full px-3 py-2 text-left text-xs dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-1.5"
-                      >
-                        <Check className="w-3 h-3" /> Clear checked ({checkedCount})
-                      </button>
-                    )}
-                    <button
-                      onClick={() => { if (confirm("Clear entire shopping list?")) { onClearAll(); setShowSortMenu(false); } }}
-                      className="w-full px-3 py-2 text-left text-xs text-red-500 dark:text-red-400 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-1.5"
-                    >
-                      <Trash className="w-3 h-3" /> Clear all
-                    </button>
                   </div>
                 </>
               )}
@@ -642,6 +628,36 @@ export function ShoppingList({
                 <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "Classifying..." : "Review & Classify"}
               </button>
             )}
+            {/* Clear dropdown — pushed right */}
+            <div className="relative ml-auto">
+              <button
+                onClick={() => { setShowClearMenu(!showClearMenu); setShowSortMenu(false); }}
+                className="inline-flex items-center gap-0.5 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-stone-400 transition-colors"
+              >
+                Clear <ChevronDown className="w-3 h-3" />
+              </button>
+              {showClearMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowClearMenu(false)} />
+                  <div className="absolute right-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
+                    {checkedCount > 0 && (
+                      <button
+                        onClick={() => { onClearChecked(); setShowClearMenu(false); }}
+                        className="w-full px-3 py-2 text-left text-xs dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-1.5"
+                      >
+                        <Check className="w-3 h-3" /> Clear checked ({checkedCount})
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { if (confirm("Clear entire shopping list?")) { onClearAll(); setShowClearMenu(false); } }}
+                      className="w-full px-3 py-2 text-left text-xs text-red-500 dark:text-red-400 hover:bg-stone-50 dark:hover:bg-stone-700 flex items-center gap-1.5"
+                    >
+                      <Trash className="w-3 h-3" /> Clear all
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
