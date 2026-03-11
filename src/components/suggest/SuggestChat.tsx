@@ -775,23 +775,26 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               <div className="flex flex-wrap gap-1.5">
                 <QuickAction
                   icon={CalendarDays}
-                  label="Plan my meals this week"
-                  onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
+                  label="What should I make this week?"
+                  onClick={() => sendMessage("Suggest 2-3 dinner ideas from my recipes for this week. Keep it brief — just the recipe names and a short reason each one fits.")}
                 />
                 <QuickAction
                   icon={Sparkles}
                   label={
-                    seasonal.upcomingHolidays.length > 0
-                      ? `What should I make for ${seasonal.upcomingHolidays[0]!.name}?`
+                    seasonal.upcomingHolidays.some((h) => h.daysAway <= 7)
+                      ? `What should I make for ${seasonal.upcomingHolidays.find((h) => h.daysAway <= 7)!.name}?`
                       : "What's a quick dinner tonight?"
                   }
-                  onClick={() => sendMessage(
-                    seasonal.upcomingHolidays.length > 0
-                      ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
-                      : recipeCount > 0
-                        ? "Suggest a quick dinner from my recipes for tonight."
-                        : "Suggest some easy dinner recipes I should try."
-                  )}
+                  onClick={() => {
+                    const soonHoliday = seasonal.upcomingHolidays.find((h) => h.daysAway <= 7);
+                    sendMessage(
+                      soonHoliday
+                        ? `Suggest one recipe from my collection and maybe one new idea for ${soonHoliday.name}. Keep it brief.`
+                        : recipeCount > 0
+                          ? "Suggest a quick dinner from my recipes for tonight."
+                          : "Suggest some easy dinner recipes I should try."
+                    );
+                  }}
                 />
               </div>
             </Card>
