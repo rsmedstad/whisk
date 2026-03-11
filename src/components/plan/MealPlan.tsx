@@ -752,7 +752,11 @@ export function MealPlan({
                     </div>
                   ) : (
                     <button
-                      onClick={() => setAddingSlot({ date, slot: mealSlots[0]?.slot ?? "dinner" })}
+                      onClick={() => {
+                        const usedSlots = new Set(filledMeals.map((m) => m.slot));
+                        const nextEmpty = mealSlots.find((s) => !usedSlots.has(s.slot));
+                        setAddingSlot({ date, slot: nextEmpty?.slot ?? mealSlots[0]?.slot ?? "dinner" });
+                      }}
                       className={classNames(
                         "text-[10px] text-orange-500 font-medium",
                         filledMeals.length > 0 && "mt-1"
@@ -816,7 +820,7 @@ export function MealPlan({
 
                 <div className="space-y-1.5">
                   {mealSlots.map(({ slot, label }) => {
-                    const meal = meals.find((m) => m.slot === slot);
+                    const slotMeals = meals.filter((m) => m.slot === slot);
                     const isAdding =
                       addingSlot?.date.getTime() === date.getTime() &&
                       addingSlot?.slot === slot;
@@ -824,38 +828,42 @@ export function MealPlan({
                     return (
                       <div
                         key={slot}
-                        className="flex items-center gap-2 rounded-lg bg-stone-50 dark:bg-stone-900 dark:border dark:border-stone-800 px-3 py-2"
+                        className="flex items-start gap-2 rounded-lg bg-stone-50 dark:bg-stone-900 dark:border dark:border-stone-800 px-3 py-2"
                       >
                         {mealSlots.length > 1 && (
-                          <span className="flex-shrink-0 text-[10px] font-semibold text-stone-400 dark:text-stone-500 uppercase w-4">
+                          <span className="flex-shrink-0 text-[10px] font-semibold text-stone-400 dark:text-stone-500 uppercase w-4 mt-0.5">
                             {label.charAt(0)}
                           </span>
                         )}
 
-                        {meal ? (
-                          <div className="flex-1 flex items-center justify-between min-w-0">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <button
-                                onClick={() => {
-                                  if (meal.recipeId)
-                                    navigate(`/recipes/${meal.recipeId}`);
-                                }}
-                                className={classNames(
-                                  "text-sm truncate",
-                                  meal.recipeId
-                                    ? "text-orange-600 dark:text-orange-400 font-medium"
-                                    : "text-stone-700 dark:text-stone-300"
-                                )}
-                              >
-                                {meal.title}
-                              </button>
-                            </div>
-                            <button
-                              onClick={() => onRemoveMeal(meal.id)}
-                              className="text-stone-400 hover:text-red-500 ml-2 flex-shrink-0"
-                            >
-                              <XMark className="w-4 h-4" />
-                            </button>
+                        {slotMeals.length > 0 ? (
+                          <div className="flex-1 min-w-0 space-y-1">
+                            {slotMeals.map((meal) => (
+                              <div key={meal.id} className="flex items-center justify-between min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <button
+                                    onClick={() => {
+                                      if (meal.recipeId)
+                                        navigate(`/recipes/${meal.recipeId}`);
+                                    }}
+                                    className={classNames(
+                                      "text-sm truncate",
+                                      meal.recipeId
+                                        ? "text-orange-600 dark:text-orange-400 font-medium"
+                                        : "text-stone-700 dark:text-stone-300"
+                                    )}
+                                  >
+                                    {meal.title}
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => onRemoveMeal(meal.id)}
+                                  className="text-stone-400 hover:text-red-500 ml-2 flex-shrink-0"
+                                >
+                                  <XMark className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
                           </div>
                         ) : isAdding ? (
                           <div className="flex-1 relative">

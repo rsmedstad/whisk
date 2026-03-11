@@ -372,6 +372,13 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               });
             }}
           />
+          <button onClick={handleFavorite} className="p-2">
+            {recipe.favorite ? (
+              <HeartFilled className="w-5 h-5 text-red-500" />
+            ) : (
+              <Heart className="w-5 h-5 text-stone-400" />
+            )}
+          </button>
           <button
             onClick={() => {
               if (!recipe) return;
@@ -382,13 +389,6 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             title={recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
           >
             <CalendarDays className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-500" : "text-stone-400")} />
-          </button>
-          <button onClick={handleFavorite} className="p-2">
-            {recipe.favorite ? (
-              <HeartFilled className="w-5 h-5 text-red-500" />
-            ) : (
-              <Heart className="w-5 h-5 text-stone-400" />
-            )}
           </button>
           <div className="relative">
             <button
