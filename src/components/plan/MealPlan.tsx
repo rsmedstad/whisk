@@ -5,7 +5,6 @@ import { getWeekDates, formatDateShort, toDateString, classNames } from "../../l
 import { getSeasonalContext } from "../../lib/seasonal";
 import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, MessageCircle } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
-import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 
 const PANTRY_STAPLES = new Set([
   "salt", "pepper", "black pepper", "kosher salt", "sea salt", "table salt",
@@ -1013,10 +1012,6 @@ export function MealPlan({
           <p className="mx-4 mt-1 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
         )}
 
-        {/* What's in Season */}
-        <div className="px-4 py-3">
-          <SeasonalProduceCard compact />
-        </div>
       </div>
     </div>
   );

@@ -2,14 +2,15 @@ import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent, type
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles, MessageCircle, ChevronDown, Check, MagnifyingGlass } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles, MessageCircle, ChevronDown, Check, MagnifyingGlass, XMark } from "../ui/Icon";
 import type { IconProps } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
+import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
-import type { RecipeIndexEntry, PlannedMeal, ShoppingItem, UserPreferences, MealSlot } from "../../types";
-import { toDateString } from "../../lib/utils";
+import type { RecipeIndexEntry, PlannedMeal, ShoppingItem, UserPreferences, MealSlot, DiscoverFeedItem } from "../../types";
+import { toDateString, normalizeSearch } from "../../lib/utils";
 
 
 interface Message {
@@ -133,6 +134,17 @@ function stripActionMarkers(text: string): string {
 export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], shoppingList = [], preferences, onAddMeal, onAddToList }: SuggestChatProps) {
   const recipeCount = recipes.length;
   const navigate = useNavigate();
+
+  // Load discover items from localStorage cache for combined search
+  const discoverItems = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("discover_feed");
+      if (!raw) return [] as DiscoverFeedItem[];
+      const feed = JSON.parse(raw) as { categories?: Record<string, DiscoverFeedItem[]> };
+      if (!feed.categories) return [] as DiscoverFeedItem[];
+      return Object.values(feed.categories).flat();
+    } catch { return [] as DiscoverFeedItem[]; }
+  }, []);
   const [searchParams, setSearchParams] = useSearchParams();
   const { isKeyboardOpen } = useKeyboard();
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -158,6 +170,9 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   const [diceAnimating, setDiceAnimating] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<"season" | "category" | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number }>({ top: 0, left: 0 });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const autoSentRef = useRef(false);
@@ -185,6 +200,24 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
     }
     return options;
   }, [seasonal]);
+
+  // Combined search across recipes + discover
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return { recipes: [] as RecipeIndexEntry[], discover: [] as DiscoverFeedItem[] };
+    const q = normalizeSearch(searchQuery);
+    const matchedRecipes = recipes.filter((r) =>
+      r.title.toLowerCase().includes(q) ||
+      r.tags.some((t) => t.toLowerCase().includes(q)) ||
+      r.cuisine?.toLowerCase().includes(q) ||
+      r.description?.toLowerCase().includes(q)
+    ).slice(0, 8);
+    const matchedDiscover = discoverItems.filter((d) =>
+      d.title.toLowerCase().includes(q) ||
+      (d.tags ?? []).some((t) => t.toLowerCase().includes(q)) ||
+      d.description?.toLowerCase().includes(q)
+    ).slice(0, 8);
+    return { recipes: matchedRecipes, discover: matchedDiscover };
+  }, [searchQuery, recipes, discoverItems]);
 
 
   useEffect(() => {
@@ -378,41 +411,126 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             )}
             <button
               onClick={() => {
-                setInput("Find recipes for ");
-                chatInputRef.current?.focus();
-              }}
-              className="p-1 text-stone-400 dark:text-stone-500 hover:text-orange-500 transition-colors"
-              title="Search recipes"
-            >
-              <MagnifyingGlass className="w-4.5 h-4.5" />
-            </button>
-            <button
-              onClick={() => {
-                if (messages.length > 0) {
-                  // Already in chat, focus the input
-                  chatInputRef.current?.focus();
-                } else {
-                  // Focus input to start chatting
-                  chatInputRef.current?.focus();
-                }
+                setSearchOpen((prev) => {
+                  if (!prev) setTimeout(() => searchInputRef.current?.focus(), 50);
+                  else setSearchQuery("");
+                  return !prev;
+                });
               }}
               className={classNames(
                 "p-1 transition-colors",
-                chatEnabled
-                  ? "text-green-500 dark:text-green-400"
+                searchOpen
+                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700 rounded-md"
                   : "text-stone-400 dark:text-stone-500 hover:text-orange-500"
               )}
+              title="Search recipes"
+            >
+              {searchOpen ? <XMark className="w-4.5 h-4.5" /> : <MagnifyingGlass className="w-4.5 h-4.5" />}
+            </button>
+            <button
+              onClick={() => chatInputRef.current?.focus()}
+              className="p-1 text-stone-400 dark:text-stone-500 hover:text-orange-500 transition-colors"
               title={chatEnabled ? "AI connected — start chatting" : "Configure AI in Settings"}
             >
               <Sparkles className="w-4.5 h-4.5" />
             </button>
           </div>
         </div>
+        {/* Search input bar */}
+        {searchOpen && (
+          <div className="px-4 py-2 border-b border-stone-100 dark:border-stone-800">
+            <div className="relative">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (document.activeElement as HTMLElement | null)?.blur()}
+                placeholder="Search recipes & discover..."
+                className="w-full rounded-lg border border-stone-300 bg-white pl-9 pr-8 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">
+                  <XMark className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Search results overlay */}
+      {searchOpen && searchQuery.trim() && (
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {searchResults.recipes.length === 0 && searchResults.discover.length === 0 ? (
+            <p className="text-sm text-stone-400 dark:text-stone-500 text-center py-8">No results for &ldquo;{searchQuery}&rdquo;</p>
+          ) : (
+            <>
+              {searchResults.recipes.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2">My Recipes</p>
+                  <div className="space-y-1.5">
+                    {searchResults.recipes.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => { setSearchOpen(false); setSearchQuery(""); navigate(`/recipes/${r.id}`); }}
+                        className="flex gap-3 w-full rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+                      >
+                        {r.thumbnailUrl ? (
+                          <img src={r.thumbnailUrl} alt="" className="w-14 h-14 object-cover shrink-0" />
+                        ) : (
+                          <div className="w-14 h-14 bg-stone-100 dark:bg-stone-800 shrink-0" />
+                        )}
+                        <div className="py-1.5 pr-3 min-w-0 flex flex-col justify-center">
+                          <p className="text-sm font-medium text-stone-900 dark:text-stone-100 line-clamp-1">{r.title}</p>
+                          {r.tags.length > 0 && (
+                            <p className="text-xs text-stone-500 dark:text-stone-400 truncate">{r.tags.slice(0, 3).join(" · ")}</p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {searchResults.discover.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2">Discover</p>
+                  <div className="space-y-1.5">
+                    {searchResults.discover.map((d, i) => (
+                      <button
+                        key={`${d.url}-${i}`}
+                        onClick={() => { setSearchOpen(false); setSearchQuery(""); navigate(`/recipes/new?url=${encodeURIComponent(d.url)}`); }}
+                        className="flex gap-3 w-full rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden text-left hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+                      >
+                        {d.imageUrl ? (
+                          <img src={d.imageUrl} alt="" className="w-14 h-14 object-cover shrink-0" />
+                        ) : (
+                          <div className="w-14 h-14 bg-stone-100 dark:bg-stone-800 shrink-0" />
+                        )}
+                        <div className="py-1.5 pr-3 min-w-0 flex flex-col justify-center">
+                          <p className="text-sm font-medium text-stone-900 dark:text-stone-100 line-clamp-1">{d.title}</p>
+                          {d.source && (
+                            <p className="text-xs text-stone-500 dark:text-stone-400 truncate">{d.source === "nyt" ? "NYT Cooking" : d.source === "allrecipes" ? "AllRecipes" : "Serious Eats"}</p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div
         ref={scrollRef}
-        className={classNames("flex-1 overflow-y-auto px-4 py-4 space-y-4", isKeyboardOpen ? "pb-16" : "pb-24")}
+        className={classNames(
+          "flex-1 overflow-y-auto px-4 py-4 space-y-4",
+          isKeyboardOpen ? "pb-16" : "pb-24",
+          searchOpen && searchQuery.trim() ? "hidden" : ""
+        )}
       >
         {/* AI status banner */}
         {!chatEnabled && messages.length === 0 && (
@@ -433,7 +551,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             {recipeCount > 0 && (
               <Card>
                 <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 mb-2">
-                  Wondering what to make?
+                  Open to a suggestion?
                 </p>
                 <div className="flex items-center gap-1.5 mb-3">
                   <button
@@ -496,9 +614,9 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   </button>
                   <button
                     onClick={() => handleRandomPick()}
-                    className="ml-auto flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                    className="ml-auto flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
-                    <Dice className={classNames("w-3.5 h-3.5", diceAnimating && "animate-dice")} />
+                    <Dice className={classNames("w-5 h-5", diceAnimating && "animate-dice")} />
                     Roll
                   </button>
                 </div>
@@ -641,21 +759,24 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               </Card>
             )}
 
-            {/* Quick ask — visually connected to the chat input below */}
-            <div className="mt-auto pt-4 pb-2 px-1">
-              <div className="flex items-center gap-2 mb-2">
-                <MessageCircle className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
-                <span className="text-xs font-medium text-stone-500 dark:text-stone-400">Try asking</span>
+            {/* What's in Season */}
+            <SeasonalProduceCard compact />
+
+            {/* Try asking — question pills */}
+            <Card>
+              <div className="flex items-center gap-2 mb-3">
+                <MessageCircle className="w-4 h-4 text-stone-400 dark:text-stone-500" />
+                <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">Or try asking</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <QuickAction
                   icon={CalendarDays}
-                  label="Plan meals"
+                  label="Plan my meals this week"
                   onClick={() => sendMessage("Plan my dinners for this week using my recipes. Consider variety and what's in season.")}
                 />
                 <QuickAction
                   icon={ShoppingCart}
-                  label="Shopping list"
+                  label={mealPlan.length > 0 ? "Make me a shopping list" : "What should I buy this week?"}
                   onClick={() => sendMessage(
                     mealPlan.length > 0
                       ? "Generate a shopping list from my meal plan for this week. Group items by category and skip anything already on my shopping list."
@@ -663,21 +784,22 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   )}
                 />
                 <QuickAction
-                  icon={BookOpen}
-                  label={recipeCount > 0 ? "Find recipes" : "Get ideas"}
-                  onClick={() => sendMessage(recipeCount > 0 ? "Suggest a quick dinner from my recipes for tonight." : "Suggest some easy dinner recipes I should try.")}
-                />
-                <QuickAction
                   icon={Sparkles}
-                  label={`${seasonal.season} ideas`}
+                  label={
+                    seasonal.upcomingHolidays.length > 0
+                      ? `What should I make for ${seasonal.upcomingHolidays[0]!.name}?`
+                      : "What's a quick dinner tonight?"
+                  }
                   onClick={() => sendMessage(
                     seasonal.upcomingHolidays.length > 0
                       ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
-                      : `What ${seasonal.season} recipes should I try?`
+                      : recipeCount > 0
+                        ? "Suggest a quick dinner from my recipes for tonight."
+                        : "Suggest some easy dinner recipes I should try."
                   )}
                 />
               </div>
-            </div>
+            </Card>
           </>
         )}
 

@@ -197,6 +197,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       temperature: 0.7,
     });
 
+    if (!content) {
+      return new Response(
+        JSON.stringify({
+          content: "I wasn't able to generate a response. This can happen when the AI service is busy — please try again.",
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ content }),
       { headers: { "Content-Type": "application/json" } }
