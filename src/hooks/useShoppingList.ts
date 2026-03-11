@@ -113,16 +113,15 @@ export function useShoppingList() {
       // Use ref to get latest list state (avoids stale closure when called in a loop)
       const currentList = listRef.current;
 
-      // Check if any items from this recipe are already on the list
-      const existingFromRecipe = new Set(
-        currentList.items
-          .filter((i) => i.sourceRecipeId === recipeId)
-          .map((i) => i.name.toLowerCase())
+      // Check against ALL existing items on the list (not just same recipe)
+      // to avoid duplicating manually-added items or items from other recipes
+      const existingNames = new Set(
+        currentList.items.map((i) => i.name.toLowerCase().trim())
       );
 
       const userName = localStorage.getItem("whisk_display_name") ?? undefined;
       const newItems: ShoppingItem[] = ingredients
-        .filter((ing) => !existingFromRecipe.has(ing.name.toLowerCase()))
+        .filter((ing) => !existingNames.has(ing.name.toLowerCase().trim()))
         .map((ing) => ({
           id: nanoid(10),
           name: ing.name,

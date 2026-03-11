@@ -1,11 +1,11 @@
 import { useState, useMemo, useCallback, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry } from "../../types";
+import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Ingredient } from "../../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categories";
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, Filter, SquareCheck } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -27,6 +27,8 @@ interface ShoppingListProps {
   recipeIndex?: RecipeIndexEntry[];
   visionEnabled?: boolean;
   chatEnabled?: boolean;
+  plannedRecipeIds?: string[];
+  onAddFromPlan?: (ingredients: Ingredient[], recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
 }
 
 export function ShoppingList({
@@ -43,6 +45,8 @@ export function ShoppingList({
   recipeIndex = [],
   visionEnabled = false,
   chatEnabled = false,
+  plannedRecipeIds = [],
+  onAddFromPlan,
 }: ShoppingListProps) {
   const navigate = useNavigate();
   const { isKeyboardOpen } = useKeyboard();
@@ -61,6 +65,68 @@ export function ShoppingList({
   const [scanSortAZ, setScanSortAZ] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
+  // Add from plan
+  const [planAddStatus, setPlanAddStatus] = useState<string | null>(null);
+  const [isPlanAdding, setIsPlanAdding] = useState(false);
+
+  const PANTRY_STAPLES = useMemo(() => new Set([
+    "salt", "pepper", "black pepper", "kosher salt", "sea salt", "table salt",
+    "salt & pepper", "salt and pepper", "freshly ground black pepper", "ground pepper",
+    "olive oil", "vegetable oil", "canola oil", "extra virgin olive oil", "extra-virgin olive oil",
+    "cooking spray", "nonstick spray", "oil", "ice",
+  ]), []);
+
+  const isPantryStaple = useCallback((name: string): boolean => {
+    const lower = name.toLowerCase().trim();
+    if (PANTRY_STAPLES.has(lower)) return true;
+    if (/^water$/.test(lower) || /^\d+.*\btap water\b/.test(lower) || /^\d+[\s-]*(tbsp|tsp|cup|ml|oz)?\s*water$/i.test(lower)) return true;
+    if (lower.includes("&") || lower.includes(" and ") || lower.includes(",")) {
+      const parts = lower.split(/[&,]|\band\b/).map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0 && parts.every((p) => PANTRY_STAPLES.has(p))) return true;
+    }
+    return false;
+  }, [PANTRY_STAPLES]);
+
+  const handleAddFromPlan = useCallback(async (includeStaples: boolean) => {
+    if (!onAddFromPlan || plannedRecipeIds.length === 0) return;
+    setIsPlanAdding(true);
+    setPlanAddStatus(null);
+    let totalAdded = 0;
+    let totalSkipped = 0;
+
+    try {
+      for (const recipeId of plannedRecipeIds) {
+        const res = await fetch(`/api/recipes/${recipeId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("whisk_token")}` },
+        });
+        if (!res.ok) continue;
+        const fullRecipe = (await res.json()) as { ingredients: Ingredient[] };
+        if (!fullRecipe.ingredients?.length) continue;
+
+        const ings = includeStaples
+          ? fullRecipe.ingredients
+          : fullRecipe.ingredients.filter((i) => !isPantryStaple(i.name));
+
+        const result = await onAddFromPlan(ings, recipeId);
+        totalAdded += result.added;
+        totalSkipped += result.skippedDuplicates;
+      }
+
+      if (totalAdded > 0) {
+        setPlanAddStatus(`Added ${totalAdded} item${totalAdded !== 1 ? "s" : ""}${totalSkipped > 0 ? ` (${totalSkipped} already on list)` : ""}`);
+      } else if (totalSkipped > 0) {
+        setPlanAddStatus("All ingredients already on your list");
+      } else {
+        setPlanAddStatus("No ingredients to add");
+      }
+      setTimeout(() => setPlanAddStatus(null), 4000);
+    } catch {
+      setPlanAddStatus("Failed to add ingredients");
+      setTimeout(() => setPlanAddStatus(null), 3000);
+    } finally {
+      setIsPlanAdding(false);
+    }
+  }, [onAddFromPlan, plannedRecipeIds, isPantryStaple]);
 
   // Get unique store names from items
   const storeNames = useMemo(() => {
@@ -731,6 +797,31 @@ export function ShoppingList({
             </div>
           )}
 
+          {/* Add from Plan bar — shown when there are planned meals with linked recipes */}
+          {totalCount > 0 && plannedRecipeIds.length > 0 && onAddFromPlan && (
+            <div className="mx-4 mt-2 flex items-center justify-between rounded-lg bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 px-3 py-2">
+              <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span>{plannedRecipeIds.length} planned recipe{plannedRecipeIds.length !== 1 ? "s" : ""}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {planAddStatus ? (
+                  <span className="text-xs text-stone-500 dark:text-stone-400">{planAddStatus}</span>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleAddFromPlan(false)}
+                      disabled={isPlanAdding}
+                      className="text-xs font-medium text-orange-600 dark:text-orange-400 active:opacity-70 disabled:opacity-50"
+                    >
+                      {isPlanAdding ? "Adding..." : "Add Essentials"}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* List */}
           <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
             {totalCount === 0 ? (
@@ -738,6 +829,28 @@ export function ShoppingList({
                 icon={<ShoppingCart className="w-12 h-12" />}
                 title={storeFilter ? `No items for ${storeFilter}` : "List is empty"}
                 description={storeFilter ? "Clear the filter to see all items" : "Add items below or from a recipe"}
+                action={!storeFilter && plannedRecipeIds.length > 0 && onAddFromPlan ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      onClick={() => handleAddFromPlan(false)}
+                      disabled={isPlanAdding}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium active:scale-95 transition-transform disabled:opacity-50"
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      {isPlanAdding ? "Adding..." : `Add Essentials from Plan`}
+                    </button>
+                    <button
+                      onClick={() => handleAddFromPlan(true)}
+                      disabled={isPlanAdding}
+                      className="text-xs text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors"
+                    >
+                      Include pantry staples
+                    </button>
+                    {planAddStatus && (
+                      <p className="text-xs text-stone-500 dark:text-stone-400">{planAddStatus}</p>
+                    )}
+                  </div>
+                ) : undefined}
               />
             ) : sortMode === "by-store" && storeGrouped ? (
               <div className="space-y-4">

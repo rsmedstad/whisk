@@ -151,6 +151,11 @@ function AppShell({
   const tags = useTags();
   const capabilities = useCapabilities();
 
+  // Unique recipe IDs linked to this week's meal plan
+  const plannedRecipeIds = useMemo(() => {
+    return [...new Set(mealPlan.plan.meals.filter((m) => m.recipeId).map((m) => m.recipeId!))];
+  }, [mealPlan.plan.meals]);
+
   const userPreferences = useMemo((): UserPreferences | undefined => {
     try {
       const raw = localStorage.getItem("whisk_preferences");
@@ -273,6 +278,8 @@ function AppShell({
                 recipeIndex={recipes.recipes}
                 visionEnabled={capabilities.vision}
                 chatEnabled={capabilities.chat}
+                plannedRecipeIds={plannedRecipeIds}
+                onAddFromPlan={shoppingList.addFromRecipe}
               />
             }
           />
