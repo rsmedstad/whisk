@@ -44,7 +44,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     );
   }
 
-  const prompt = `Classify these grocery/shopping items into store departments and subcategories.
+  // Process in batches of 20 to avoid token limits
+  const BATCH_SIZE = 20;
+  const allResults: ClassifiedItem[] = [];
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    const batchPrompt = `Classify these grocery/shopping items into store departments and subcategories.
 
 Valid categories: ${VALID_CATEGORIES.join(", ")}
 
@@ -57,40 +63,44 @@ For each item, also assign a short subcategory label that groups similar items w
 Use short, consistent labels. Reuse the same subcategory name for similar items.
 
 Items to classify:
-${items.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+${batch.map((item, j) => `${j + 1}. ${item}`).join("\n")}
 
-Respond with ONLY a JSON array of objects with "name", "category", and "subcategory" fields. Example:
-[{"name": "cilantro", "category": "produce", "subcategory": "Fresh Herbs"}, {"name": "chickpeas", "category": "pantry", "subcategory": "Canned Goods"}]`;
+Respond with ONLY a JSON array. No explanation, no markdown. Example:
+[{"name": "cilantro", "category": "produce", "subcategory": "Fresh Herbs"}]`;
 
-  try {
-    const content = await callTextAI(fnConfig, context.env, [
-      { role: "system", content: "You are a grocery store expert. Classify items into the correct store department and subcategory. Respond with only valid JSON." },
-      { role: "user", content: prompt },
-    ], { maxTokens: 1024, temperature: 0.1, jsonMode: true });
+    try {
+      // Don't use jsonMode — some models (Groq) fail JSON validation with it
+      const content = await callTextAI(fnConfig, context.env, [
+        { role: "system", content: "You are a grocery store expert. Classify items into the correct store department and subcategory. Respond with ONLY a valid JSON array, no other text." },
+        { role: "user", content: batchPrompt },
+      ], { maxTokens: 1024, temperature: 0.1 });
 
-    // Parse the JSON response, extracting from markdown code blocks if needed
-    let jsonStr = content.trim();
-    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch?.[1]) {
-      jsonStr = codeBlockMatch[1].trim();
+      // Extract JSON from response — handle markdown code blocks, leading text, etc.
+      let jsonStr = content.trim();
+      const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch?.[1]) {
+        jsonStr = codeBlockMatch[1].trim();
+      }
+      // Find the JSON array even if there's surrounding text
+      const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
+      if (arrayMatch?.[0]) {
+        jsonStr = arrayMatch[0];
+      }
+
+      const parsed = JSON.parse(jsonStr) as ClassifiedItem[];
+      const validated = parsed.map((item) => ({
+        name: item.name,
+        category: VALID_CATEGORIES.includes(item.category) ? item.category : "other",
+        subcategory: typeof item.subcategory === "string" ? item.subcategory.trim() : undefined,
+      }));
+      allResults.push(...validated);
+    } catch {
+      // Fallback for this batch — use "other" with no subcategory
+      allResults.push(...batch.map((name) => ({ name, category: "other" })));
     }
-
-    const parsed = JSON.parse(jsonStr) as ClassifiedItem[];
-    // Validate categories
-    const validated = parsed.map((item) => ({
-      name: item.name,
-      category: VALID_CATEGORIES.includes(item.category) ? item.category : "other",
-      subcategory: typeof item.subcategory === "string" ? item.subcategory.trim() : undefined,
-    }));
-
-    return new Response(JSON.stringify({ items: validated }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch {
-    // Fallback to "other" if AI fails
-    return new Response(
-      JSON.stringify({ items: items.map((name) => ({ name, category: "other" })) }),
-      { headers: { "Content-Type": "application/json" } }
-    );
   }
+
+  return new Response(JSON.stringify({ items: allResults }), {
+    headers: { "Content-Type": "application/json" },
+  });
 };
