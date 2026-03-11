@@ -781,17 +781,20 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 <QuickAction
                   icon={Sparkles}
                   label={
-                    seasonal.upcomingHolidays.length > 0
-                      ? `What should I make for ${seasonal.upcomingHolidays[0]!.name}?`
+                    seasonal.upcomingHolidays.some((h) => h.daysAway <= 7)
+                      ? `What should I make for ${seasonal.upcomingHolidays.find((h) => h.daysAway <= 7)!.name}?`
                       : "What's a quick dinner tonight?"
                   }
-                  onClick={() => sendMessage(
-                    seasonal.upcomingHolidays.length > 0
-                      ? `Suggest recipes for ${seasonal.upcomingHolidays[0]!.name} from my collection or new ideas.`
-                      : recipeCount > 0
-                        ? "Suggest a quick dinner from my recipes for tonight."
-                        : "Suggest some easy dinner recipes I should try."
-                  )}
+                  onClick={() => {
+                    const soonHoliday = seasonal.upcomingHolidays.find((h) => h.daysAway <= 7);
+                    sendMessage(
+                      soonHoliday
+                        ? `Suggest one recipe from my collection and maybe one new idea for ${soonHoliday.name}. Keep it brief.`
+                        : recipeCount > 0
+                          ? "Suggest a quick dinner from my recipes for tonight."
+                          : "Suggest some easy dinner recipes I should try."
+                    );
+                  }}
                 />
               </div>
             </Card>
