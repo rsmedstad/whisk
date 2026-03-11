@@ -150,13 +150,34 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const lastMessage = messages[messages.length - 1]?.content ?? "";
 
-  // Classify query complexity to skip unnecessary work for simple questions
-  const lowerMsg = lastMessage.toLowerCase();
-  const needsRecipeContext = /\b(recipe|suggest|recommend|make|cook|plan|meal|dinner|breakfast|lunch|what should|from my|in my collection|shopping list|ingredients?)\b/i.test(lastMessage)
-    || messages.length > 2; // Multi-turn conversations likely reference recipes
+  // Classify query complexity into tiers to skip unnecessary work:
+  //  - general: cooking technique, nutrition, substitutions — no recipe data needed
+  //  - collection: references user's recipes, meal plan, shopping list — needs KV index
+  //  - semantic: vague/broad suggestion requests — needs Vectorize for relevance scoring
+  const lower = lastMessage.toLowerCase();
+
+  // General cooking questions that don't need any collection data
+  const isGeneralQuestion = /\b(how (do|to|long|much|many)|what (is|are|does)|can (i|you)|should i|temperature|substitute|convert|difference between|tip|technique|safe|storage|shelf life|calories|nutrition|serving size)\b/i.test(lastMessage)
+    && !/\b(my recipe|my collection|from my|in my|suggest|recommend|plan|what should i (make|cook)|meal plan|shopping list)\b/i.test(lastMessage);
+
+  // References the user's personal data (recipes, plan, list)
+  const referencesCollection = /\b(my recipe|my collection|from my|in my|suggest|recommend|what should i (make|cook)|meal plan|plan my|shopping list|what do i have|from the collection)\b/i.test(lastMessage);
+
+  // Needs recipe context if: explicitly references collection, or is a multi-turn chat
+  // that previously referenced recipes (check if prior assistant messages had RECIPE_CARD markers)
+  const priorHadRecipes = messages.length > 2 && messages.some(
+    (m) => m.role === "assistant" && /\[RECIPE_CARD:/.test(m.content)
+  );
+  const needsRecipeContext = !isGeneralQuestion && (referencesCollection || priorHadRecipes);
+
+  // Semantic search only when the query is broad enough to benefit from embeddings
+  // (not for specific recipe lookups or simple questions about a named dish)
+  const needsSemanticSearch = needsRecipeContext
+    && !/\b(how|what is|what are|can i|should i|temperature|substitute)\b/i.test(lastMessage);
+
   const needsExternalSearch = needsRecipeContext && /\b(new|outside|ideas?|different|something else|never tried)\b/i.test(lastMessage);
 
-  // Fetch everything we need in parallel
+  // Fetch only what we need in parallel — skip heavy lookups for general questions
   const configPromise = loadAIConfig(env.WHISK_KV);
   const indexPromise = needsRecipeContext
     ? env.WHISK_KV.get("recipes:index", "text")
@@ -164,7 +185,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const externalPromise = needsExternalSearch
     ? searchExternalRecipes(lastMessage, messages)
     : Promise.resolve([]);
-  const vectorizePromise = needsRecipeContext && env.AI && env.VECTORIZE
+  const vectorizePromise = needsSemanticSearch && env.AI && env.VECTORIZE
     ? queryRecipes(env.AI, env.VECTORIZE, lastMessage, 15).catch((err) => {
         console.error("[Whisk] Vectorize query failed:", err);
         return [] as { id: string; score: number }[];
