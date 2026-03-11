@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type FormEvent, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../ui/Card";
-import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles, MessageCircle } from "../ui/Icon";
+import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, ShoppingCart, BookOpen, Sparkles, MessageCircle, ChevronDown, Check, MagnifyingGlass } from "../ui/Icon";
 import type { IconProps } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { classNames } from "../../lib/utils";
@@ -155,6 +156,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   const [seasonFilter, setSeasonFilter] = useState<string>("");
   const [pickedRecipe, setPickedRecipe] = useState<RecipeIndexEntry | null>(null);
   const [diceAnimating, setDiceAnimating] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<"season" | "category" | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; right?: number }>({ top: 0, left: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const autoSentRef = useRef(false);
@@ -363,8 +366,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Ask</h1>
           </button>
-          <div className="flex items-center gap-2">
-            {messages.length > 0 ? (
+          <div className="flex items-center gap-3">
+            {messages.length > 0 && (
               <button
                 onClick={handleNewChat}
                 className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
@@ -372,20 +375,34 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 <RefreshCw className="w-3.5 h-3.5" />
                 New chat
               </button>
-            ) : (
-              <button
-                onClick={() => navigate("/settings")}
-                className={classNames(
-                  "flex items-center gap-1 text-xs font-medium transition-colors",
-                  chatEnabled
-                    ? "text-green-500 dark:text-green-400"
-                    : "text-stone-400 dark:text-stone-500 hover:text-orange-500"
-                )}
-                title={chatEnabled ? "AI connected" : "Configure AI"}
-              >
-                <Sparkles className="w-4 h-4" />
-              </button>
             )}
+            <button
+              onClick={() => navigate("/")}
+              className="p-1 text-stone-400 dark:text-stone-500 hover:text-orange-500 transition-colors"
+              title="Search recipes"
+            >
+              <MagnifyingGlass className="w-4.5 h-4.5" />
+            </button>
+            <button
+              onClick={() => {
+                if (messages.length > 0) {
+                  // Already in chat, focus the input
+                  chatInputRef.current?.focus();
+                } else {
+                  // Focus input to start chatting
+                  chatInputRef.current?.focus();
+                }
+              }}
+              className={classNames(
+                "p-1 transition-colors",
+                chatEnabled
+                  ? "text-green-500 dark:text-green-400"
+                  : "text-stone-400 dark:text-stone-500 hover:text-orange-500"
+              )}
+              title={chatEnabled ? "AI connected — start chatting" : "Configure AI in Settings"}
+            >
+              <Sparkles className="w-4.5 h-4.5" />
+            </button>
           </div>
         </div>
       </div>
@@ -416,60 +433,64 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                   Wondering what to make?
                 </p>
                 <div className="flex items-center gap-1.5 mb-3">
-                  <select
-                    value={seasonFilter}
-                    onChange={(e) => {
-                      const newSeason = e.target.value;
-                      setSeasonFilter(newSeason);
-                      setPickedRecipe(null);
-                      setTimeout(() => {
-                        const pool = filterByCategory(recipes, pickCategory, newSeason);
-                        if (pool.length === 0) return;
-                        const idx = Math.floor(Math.random() * pool.length);
-                        const pick = pool[idx] ?? null;
-                        setPickedRecipe(pick);
-                        animateDice();
-                        if (pick) {
-                          localStorage.setItem("whisk_daily_pick", JSON.stringify({
-                            id: pick.id, cat: pickCategory, ts: Date.now(),
-                          }));
+                  <button
+                    onClick={(e) => {
+                      if (openDropdown === "season") {
+                        setOpenDropdown(null);
+                      } else {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const minDropdownWidth = 140;
+                        const wouldOverflow = rect.left + minDropdownWidth > window.innerWidth;
+                        if (wouldOverflow) {
+                          const right = Math.max(8, window.innerWidth - rect.right);
+                          setDropdownPos({ top: rect.bottom + 4, left: 0, right });
+                        } else {
+                          setDropdownPos({ top: rect.bottom + 4, left: rect.left });
                         }
-                      }, 0);
+                        setOpenDropdown("season");
+                      }
                     }}
                     className={classNames(
-                      "rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 dark:scheme-dark px-2 py-1 text-xs font-medium focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500",
-                      seasonFilter ? "text-stone-600 dark:text-stone-300" : "text-stone-400 dark:text-stone-500"
+                      "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      seasonFilter
+                        ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                        : openDropdown === "season"
+                          ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                          : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
                     )}
                   >
-                    {seasonOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={pickCategory}
-                    onChange={(e) => {
-                      setPickCategory(e.target.value);
-                      setPickedRecipe(null);
-                      setTimeout(() => {
-                        const pool = filterByCategory(recipes, e.target.value, seasonFilter);
-                        if (pool.length === 0) return;
-                        const idx = Math.floor(Math.random() * pool.length);
-                        const pick = pool[idx] ?? null;
-                        setPickedRecipe(pick);
-                        animateDice();
-                        if (pick) {
-                          localStorage.setItem("whisk_daily_pick", JSON.stringify({
-                            id: pick.id, cat: e.target.value, ts: Date.now(),
-                          }));
+                    {seasonFilter ? seasonOptions.find((o) => o.value === seasonFilter)?.label ?? "Season" : "Season"}
+                    <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "season" && "rotate-180")} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      if (openDropdown === "category") {
+                        setOpenDropdown(null);
+                      } else {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const minDropdownWidth = 140;
+                        const wouldOverflow = rect.left + minDropdownWidth > window.innerWidth;
+                        if (wouldOverflow) {
+                          const right = Math.max(8, window.innerWidth - rect.right);
+                          setDropdownPos({ top: rect.bottom + 4, left: 0, right });
+                        } else {
+                          setDropdownPos({ top: rect.bottom + 4, left: rect.left });
                         }
-                      }, 0);
+                        setOpenDropdown("category");
+                      }
                     }}
-                    className="rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 dark:scheme-dark px-2 py-1 text-xs font-medium text-stone-600 dark:text-stone-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    className={classNames(
+                      "wk-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      pickCategory !== "dinner"
+                        ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                        : openDropdown === "category"
+                          ? "border-stone-400 text-stone-700 dark:border-stone-500 dark:text-stone-200"
+                          : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                    )}
                   >
-                    {PICK_CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
+                    {PICK_CATEGORIES.find((c) => c.value === pickCategory)?.label ?? "Dinner"}
+                    <ChevronDown className={classNames("w-3 h-3 transition-transform", openDropdown === "category" && "rotate-180")} />
+                  </button>
                   <button
                     onClick={() => handleRandomPick()}
                     className="ml-auto flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
@@ -478,6 +499,96 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                     Roll
                   </button>
                 </div>
+
+                {/* Filter dropdown portal */}
+                {openDropdown && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpenDropdown(null)} />
+                    <div
+                      className="wk-dropdown fixed z-50 min-w-35 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 py-1"
+                      style={{
+                        top: dropdownPos.top,
+                        ...(dropdownPos.right != null
+                          ? { right: dropdownPos.right }
+                          : { left: dropdownPos.left }),
+                      }}
+                    >
+                      {openDropdown === "season"
+                        ? seasonOptions.map((opt) => {
+                            const isActive = seasonFilter === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                onClick={() => {
+                                  const newSeason = isActive ? "" : opt.value;
+                                  setSeasonFilter(newSeason);
+                                  setOpenDropdown(null);
+                                  setPickedRecipe(null);
+                                  setTimeout(() => {
+                                    const pool = filterByCategory(recipes, pickCategory, newSeason);
+                                    if (pool.length === 0) return;
+                                    const idx = Math.floor(Math.random() * pool.length);
+                                    const pick = pool[idx] ?? null;
+                                    setPickedRecipe(pick);
+                                    animateDice();
+                                    if (pick) {
+                                      localStorage.setItem("whisk_daily_pick", JSON.stringify({
+                                        id: pick.id, cat: pickCategory, ts: Date.now(),
+                                      }));
+                                    }
+                                  }, 0);
+                                }}
+                                className={classNames(
+                                  "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                                  isActive
+                                    ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                                    : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                                )}
+                              >
+                                {opt.label}
+                                {isActive && <Check className="w-4 h-4 text-orange-500" />}
+                              </button>
+                            );
+                          })
+                        : PICK_CATEGORIES.map((cat) => {
+                            const isActive = pickCategory === cat.value;
+                            return (
+                              <button
+                                key={cat.value}
+                                onClick={() => {
+                                  setPickCategory(cat.value);
+                                  setOpenDropdown(null);
+                                  setPickedRecipe(null);
+                                  setTimeout(() => {
+                                    const pool = filterByCategory(recipes, cat.value, seasonFilter);
+                                    if (pool.length === 0) return;
+                                    const idx = Math.floor(Math.random() * pool.length);
+                                    const pick = pool[idx] ?? null;
+                                    setPickedRecipe(pick);
+                                    animateDice();
+                                    if (pick) {
+                                      localStorage.setItem("whisk_daily_pick", JSON.stringify({
+                                        id: pick.id, cat: cat.value, ts: Date.now(),
+                                      }));
+                                    }
+                                  }, 0);
+                                }}
+                                className={classNames(
+                                  "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors",
+                                  isActive
+                                    ? "bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300"
+                                    : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                                )}
+                              >
+                                {cat.label}
+                                {isActive && <Check className="w-4 h-4 text-orange-500" />}
+                              </button>
+                            );
+                          })}
+                    </div>
+                  </>,
+                  document.body
+                )}
 
                 {pickedRecipe ? (
                   <button
@@ -528,8 +639,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             )}
 
             {/* Quick ask — chat prompt suggestions */}
-            <div className="mt-2">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="mt-2 rounded-xl border border-orange-200/60 dark:border-orange-800/30 bg-orange-50/30 dark:bg-orange-950/10 p-3">
+              <div className="flex items-center gap-2 mb-2.5">
                 <MessageCircle className="w-3.5 h-3.5 text-orange-400" />
                 <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Quick ask</span>
               </div>
