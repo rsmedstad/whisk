@@ -363,7 +363,7 @@ async function streamOpenAI(
   temperature: number
 ): Promise<ReadableStream<Uint8Array>> {
   const res = await fetch(`${baseUrl}/chat/completions`, {
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -102,13 +102,13 @@ function formatAIError(errMsg: string, provider: string, model: string): string 
     return `The ${displayName} API key appears to be invalid or expired. Check Settings > AI to update it.`;
   }
   if (lower.includes("rate_limit") || lower.includes("429") || lower.includes("too many requests")) {
-    return `${displayName} rate limit reached for ${model}. This usually resolves in a minute — try again shortly, or switch to a different model in Settings > AI.`;
+    return `${displayName} rate limit reached for ${model}. This usually resolves in a minute — try again shortly.`;
   }
   if (lower.includes("request too large") || lower.includes("tokens per minute") || lower.includes("context_length") || lower.includes("maximum context")) {
     return `The request was too large for ${model} (your recipe collection may exceed its token limit). Try a model with a larger context window, or try again with a shorter conversation. You can change models in Settings > AI.`;
   }
-  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("aborted")) {
-    return `The ${displayName} service timed out. This can happen when the service is under heavy load — try again in a moment.`;
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("aborted") || lower.includes("signal")) {
+    return `${displayName} timed out (${model}). The service may be under heavy load — try again in a moment.`;
   }
   if (lower.includes("500") || lower.includes("502") || lower.includes("503") || lower.includes("internal server error") || lower.includes("service unavailable")) {
     return `The ${displayName} service is having issues right now (${model}). Try again in a moment, or switch to a different provider in Settings > AI.`;
@@ -418,9 +418,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       console.error(`[Whisk] Stream error (${fnConfig.provider}/${fnConfig.model}):`, errMsg);
       logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: false, durationMs: Date.now() - startTime, error: `stream: ${errMsg.slice(0, 500)}` }).catch(() => {});
 
-      // Don't retry on rate limits — a second call will just hit the same limit
+      // Don't retry on rate limits or timeouts — retrying just wastes time
       const lowerErr = errMsg.toLowerCase();
-      if (lowerErr.includes("rate_limit") || lowerErr.includes("429") || lowerErr.includes("too many requests")) {
+      const isRateLimit = lowerErr.includes("rate_limit") || lowerErr.includes("429") || lowerErr.includes("too many requests");
+      const isTimeout = lowerErr.includes("timeout") || lowerErr.includes("timed out") || lowerErr.includes("aborted") || lowerErr.includes("signal");
+      if (isRateLimit || isTimeout) {
         return new Response(
           JSON.stringify({ content: formatAIError(errMsg, fnConfig.provider, fnConfig.model) }),
           { headers: { "Content-Type": "application/json" } }
@@ -446,7 +448,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: `both failed — stream: ${errMsg.slice(0, 250)}, fallback: ${fbMsg.slice(0, 250)}` }).catch(() => {});
         return new Response(
           JSON.stringify({
-            content: formatAIError(errMsg, fnConfig.provider, fnConfig.model),
+            content: formatAIError(fbMsg, fnConfig.provider, fnConfig.model),
           }),
           { headers: { "Content-Type": "application/json" } }
         );
