@@ -354,6 +354,7 @@ export function ShoppingList({
       setIsListScanning(true);
       setListScanResult(null);
       try {
+        const scanStart = performance.now();
         // Normalize orientation via canvas (createImageBitmap respects EXIF)
         // and downscale to max 1600px so we don't send huge photos to the AI
         const bitmap = await createImageBitmap(file);
@@ -366,16 +367,23 @@ export function ShoppingList({
         ctx.drawImage(bitmap, 0, 0, w, h);
         bitmap.close();
         const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+        const compressMs = Math.round(performance.now() - scanStart);
         const normalizedFile = new File([blob], "scan.jpg", { type: "image/jpeg" });
 
         const formData = new FormData();
         formData.append("photo", normalizedFile);
         const token = localStorage.getItem("whisk_token");
+        const uploadStart = performance.now();
         const res = await fetch("/api/shopping/scan", {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
         });
+        const roundtripMs = Math.round(performance.now() - uploadStart);
+        const serverTiming = res.headers.get("X-Whisk-Timing") ?? "";
+        const totalMs = Math.round(performance.now() - scanStart);
+        console.log(`[Whisk] Scan compress=${compressMs}ms roundtrip=${roundtripMs}ms total=${totalMs}ms photo=${Math.round(blob.size / 1024)}KB | server: ${serverTiming}`);
+
         const data = (await res.json()) as { items?: { name: string }[]; message?: string; error?: string };
         if (!res.ok) {
           setListScanResult({ count: 0, message: data.error ?? data.message ?? `Scan failed (${res.status})` });

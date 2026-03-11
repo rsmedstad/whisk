@@ -1577,17 +1577,26 @@ interface AILogEntry {
   timestamp: string;
   provider: string;
   model: string;
-  userMessage: string;
-  systemPromptLength: number;
-  recipeCount: number;
-  vectorizeHits: number;
-  streaming: boolean;
   success: boolean;
   durationMs: number;
-  responseLength?: number;
   error?: string;
+  feature?: string;
+  // Chat-specific fields
+  userMessage?: string;
+  systemPromptLength?: number;
+  recipeCount?: number;
+  vectorizeHits?: number;
+  streaming?: boolean;
+  responseLength?: number;
   tier?: string;
-  timing?: AILogTiming;
+  // Scan-specific fields
+  itemCount?: number;
+  photoSizeKB?: number;
+  // Timing — shape varies by feature
+  timing?: AILogTiming & {
+    uploadProcessMs?: number;
+    visionMs?: number;
+  };
 }
 
 function TimingBar({ label, ms, maxMs }: { label: string; ms: number; maxMs: number }) {
@@ -1605,12 +1614,29 @@ function TimingBar({ label, ms, maxMs }: { label: string; ms: number; maxMs: num
 }
 
 function formatLogForCopy(log: AILogEntry): string {
-  const t = log.timing;
   const time = new Date(log.timestamp);
+  const isScan = log.feature === "scan";
+
+  if (isScan) {
+    const st = log.timing;
+    const lines = [
+      `[${time.toLocaleString()}] LIST SCAN`,
+      `  provider: ${log.provider}/${log.model} | ${log.success ? "ok" : "FAIL"} | ${log.itemCount ?? 0} items | ${log.photoSizeKB ?? "?"}KB photo`,
+    ];
+    if (st) {
+      lines.push(`  timing: config=${st.configMs}ms upload=${st.uploadProcessMs ?? 0}ms vision=${st.visionMs ?? 0}ms total=${log.durationMs}ms`);
+    } else {
+      lines.push(`  total: ${log.durationMs}ms`);
+    }
+    if (log.error) lines.push(`  error: ${log.error}`);
+    return lines.join("\n");
+  }
+
+  const t = log.timing;
   const lines = [
-    `[${time.toLocaleString()}] "${log.userMessage}"`,
+    `[${time.toLocaleString()}] "${log.userMessage ?? ""}"`,
     `  provider: ${log.provider}/${log.model} | tier: ${log.tier ?? "?"} | ${log.streaming ? "stream" : "non-stream"} | ${log.success ? "ok" : "FAIL"}`,
-    `  recipes: ${log.recipeCount} | vectorize hits: ${log.vectorizeHits} | prompt: ${log.systemPromptLength}chars (~${Math.round(log.systemPromptLength / 4)}tok)`,
+    `  recipes: ${log.recipeCount ?? 0} | vectorize hits: ${log.vectorizeHits ?? 0} | prompt: ${log.systemPromptLength ?? 0}chars (~${Math.round((log.systemPromptLength ?? 0) / 4)}tok)`,
   ];
   if (t) {
     lines.push(`  timing: config=${t.configMs}ms index=${t.indexMs}ms vectorize=${t.vectorizeMs}ms nyt=${t.nytMs}ms fetch(total)=${t.fetchMs}ms${t.llmMs !== undefined ? ` llm=${t.llmMs}ms` : ""} total=${log.durationMs}ms`);
@@ -1691,14 +1717,22 @@ function AIPerformanceLogs() {
                 <div className="space-y-4">
                   {logs.slice(0, 10).map((log, i) => {
                     const t = log.timing;
-                    const maxMs = Math.max(log.durationMs, t?.fetchMs ?? 0, t?.llmMs ?? 0, 500);
+                    const isScan = log.feature === "scan";
+                    const maxMs = Math.max(log.durationMs, t?.fetchMs ?? 0, t?.llmMs ?? 0, t?.visionMs ?? 0, 500);
                     const time = new Date(log.timestamp);
                     const timeStr = time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
                     return (
                       <div key={i} className="border-b border-stone-100 dark:border-stone-800 pb-3 last:border-0 last:pb-0">
                         <div className="flex items-start justify-between mb-1.5">
                           <p className="text-xs text-stone-600 dark:text-stone-300 font-medium truncate max-w-[70%]">
-                            &ldquo;{log.userMessage}&rdquo;
+                            {isScan ? (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">SCAN</span>
+                                List photo scan
+                              </span>
+                            ) : (
+                              <>&ldquo;{log.userMessage}&rdquo;</>
+                            )}
                           </p>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
@@ -1720,12 +1754,21 @@ function AIPerformanceLogs() {
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-stone-400 dark:text-stone-500 mb-2">
                           <span>{timeStr}</span>
                           <span>{log.provider}/{log.model}</span>
-                          {log.tier && <span className="uppercase">{log.tier}</span>}
-                          {log.streaming && <span>stream</span>}
-                          <span>{log.recipeCount} recipes</span>
-                          {log.systemPromptLength > 0 && <span>{Math.round(log.systemPromptLength / 4)}tok est.</span>}
+                          {isScan ? (
+                            <>
+                              {log.itemCount !== undefined && <span>{log.itemCount} items found</span>}
+                              {log.photoSizeKB !== undefined && <span>{log.photoSizeKB}KB photo</span>}
+                            </>
+                          ) : (
+                            <>
+                              {log.tier && <span className="uppercase">{log.tier}</span>}
+                              {log.streaming && <span>stream</span>}
+                              <span>{log.recipeCount ?? 0} recipes</span>
+                              {(log.systemPromptLength ?? 0) > 0 && <span>{Math.round((log.systemPromptLength ?? 0) / 4)}tok est.</span>}
+                            </>
+                          )}
                         </div>
-                        {t && (
+                        {t && !isScan && (
                           <div className="space-y-1">
                             {t.configMs > 0 && <TimingBar label="config" ms={t.configMs} maxMs={maxMs} />}
                             {t.indexMs > 0 && <TimingBar label="index" ms={t.indexMs} maxMs={maxMs} />}
@@ -1733,6 +1776,14 @@ function AIPerformanceLogs() {
                             {t.nytMs > 0 && <TimingBar label="nyt" ms={t.nytMs} maxMs={maxMs} />}
                             <TimingBar label="fetch" ms={t.fetchMs} maxMs={maxMs} />
                             {t.llmMs !== undefined && <TimingBar label="llm" ms={t.llmMs} maxMs={maxMs} />}
+                            <TimingBar label="total" ms={log.durationMs} maxMs={maxMs} />
+                          </div>
+                        )}
+                        {t && isScan && (
+                          <div className="space-y-1">
+                            {t.configMs > 0 && <TimingBar label="config" ms={t.configMs} maxMs={maxMs} />}
+                            {(t.uploadProcessMs ?? 0) > 0 && <TimingBar label="upload" ms={t.uploadProcessMs!} maxMs={maxMs} />}
+                            {(t.visionMs ?? 0) > 0 && <TimingBar label="vision" ms={t.visionMs!} maxMs={maxMs} />}
                             <TimingBar label="total" ms={log.durationMs} maxMs={maxMs} />
                           </div>
                         )}
