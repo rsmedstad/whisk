@@ -188,7 +188,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   messagesRef.current = messages;
 
   const householdSize = useMemo(() => {
-    return parseInt(localStorage.getItem("whisk_household_size") ?? "4", 10);
+    return parseInt(localStorage.getItem("whisk_household_size") ?? "2", 10);
   }, []);
 
   const seasonal = useMemo(

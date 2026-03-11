@@ -32,7 +32,7 @@ interface SettingsProps {
 type SettingsTab = "general" | "account" | "ai" | "data" | "about";
 
 const TABS: { id: SettingsTab; label: string }[] = [
-  { id: "general", label: "Display & Feeds" },
+  { id: "general", label: "Display" },
   { id: "account", label: "Preferences" },
   { id: "ai", label: "AI" },
   { id: "data", label: "Data" },
@@ -95,16 +95,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   });
   const [householdSize, setHouseholdSize] = useState(() => {
     const saved = localStorage.getItem("whisk_household_size");
-    if (saved) return parseInt(saved, 10);
-    // Persist the default so it survives reloads and is available to other components
-    localStorage.setItem("whisk_household_size", "4");
-    return 4;
-  });
-  const [preferredStores, setPreferredStores] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem("whisk_preferred_stores");
-      return raw ? (JSON.parse(raw) as string[]) : [];
-    } catch { return []; }
+    return saved ? parseInt(saved, 10) : 2;
   });
 
   const [showAccentPicker, setShowAccentPicker] = useState(false);
@@ -811,13 +802,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     </div>
                   </div>
 
-                  <PreferredStoresDropdown
-                    stores={preferredStores}
-                    onChange={(updated) => {
-                      setPreferredStores(updated);
-                      localStorage.setItem("whisk_preferred_stores", JSON.stringify(updated));
-                    }}
-                  />
+
                 </div>
               </Card>
             </section>
@@ -1806,81 +1791,3 @@ function AIPerformanceLogs() {
   );
 }
 
-const STORE_OPTIONS = ["Jewel-Osco", "Trader Joe's", "Walmart", "Whole Foods", "Costco", "Aldi", "Target", "Meijer", "Kroger", "Mariano's"];
-
-function PreferredStoresDropdown({
-  stores,
-  onChange,
-}: {
-  stores: string[];
-  onChange: (stores: string[]) => void;
-}) {
-  const [search, setSearch] = useState("");
-
-  const toggle = (store: string) => {
-    const updated = stores.includes(store)
-      ? stores.filter((s) => s !== store)
-      : [...stores, store];
-    onChange(updated);
-  };
-
-  const allOptions = [...new Set([...STORE_OPTIONS, ...stores])];
-
-  const filtered = search.trim()
-    ? allOptions.filter((s) => s.toLowerCase().includes(search.toLowerCase()))
-    : allOptions;
-
-  const selected = filtered.filter((s) => stores.includes(s));
-  const unselected = filtered.filter((s) => !stores.includes(s));
-
-  return (
-    <div>
-      <label className="text-sm font-medium dark:text-stone-200 block mb-1">
-        Preferred Stores
-      </label>
-      <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-        Tap to select your grocery stores
-      </p>
-
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search stores..."
-        className="w-full rounded-[var(--wk-radius-input)] border border-stone-300 bg-white px-3 py-1.5 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 mb-2"
-      />
-
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {selected.map((store) => (
-            <button
-              key={store}
-              onClick={() => toggle(store)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500 text-white transition-colors hover:bg-orange-600"
-            >
-              {store}
-              <XMark className="w-3 h-3 ml-0.5" />
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-1.5">
-        {unselected.map((store) => (
-          <button
-            key={store}
-            onClick={() => toggle(store)}
-            className="px-2.5 py-1 rounded-full text-xs font-medium border border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400 transition-colors hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400"
-          >
-            {store}
-          </button>
-        ))}
-        {search.trim() && filtered.length === 0 && (
-          <span className="text-xs text-stone-400 dark:text-stone-500 px-1 py-1">
-            No matching stores found
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
