@@ -77,6 +77,16 @@ interface AILogEntry {
   durationMs: number;
   responseLength?: number;
   error?: string;
+  tier?: string;
+  timing?: {
+    classifyMs: number;
+    fetchMs: number;
+    configMs: number;
+    indexMs: number;
+    nytMs: number;
+    vectorizeMs: number;
+    llmMs?: number;
+  };
 }
 
 /** Store AI interaction log in KV (keep last 50 entries, 7-day TTL) */
@@ -470,6 +480,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     systemPromptLength: systemPrompt.length,
     recipeCount: recipeIndex.length,
     vectorizeHits: vectorizeHitCount,
+    tier: queryTier,
+    timing: {
+      classifyMs,
+      fetchMs,
+      configMs: configResult.ms,
+      indexMs: indexResult.ms,
+      nytMs: externalResult.ms,
+      vectorizeMs: vectorizeResult.ms,
+    },
   };
 
   // Skip streaming for general/followup/unclassified queries — short responses don't
@@ -556,8 +575,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
+    const logWithLlm = { ...baseLog, timing: { ...baseLog.timing!, llmMs } };
+
     if (!cleaned) {
-      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: totalMs, error: "empty response from provider" }).catch(() => {});
+      logAIInteraction(env.WHISK_KV, { ...logWithLlm, streaming: false, success: false, durationMs: totalMs, error: "empty response from provider" }).catch(() => {});
       return new Response(
         JSON.stringify({
           content: "I wasn't able to generate a response. This can happen when the AI service is busy — please try again.",
@@ -566,7 +587,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: true, durationMs: totalMs, responseLength: cleaned.length }).catch(() => {});
+    logAIInteraction(env.WHISK_KV, { ...logWithLlm, streaming: false, success: true, durationMs: totalMs, responseLength: cleaned.length }).catch(() => {});
     return new Response(
       JSON.stringify({ content: cleaned }),
       { headers: { "Content-Type": "application/json", "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm=${llmMs}ms total=${totalMs}ms prompt=${promptChars}chars` } }

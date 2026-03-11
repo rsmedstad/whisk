@@ -1087,6 +1087,8 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </Card>
             </section>
+
+            <AIPerformanceLogs />
           </>
         )}
 
@@ -1556,6 +1558,157 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
         </div>
       )}
     </div>
+  );
+}
+
+// ── AI Performance Logs ─────────────────────────────────────
+
+interface AILogTiming {
+  classifyMs: number;
+  fetchMs: number;
+  configMs: number;
+  indexMs: number;
+  nytMs: number;
+  vectorizeMs: number;
+  llmMs?: number;
+}
+
+interface AILogEntry {
+  timestamp: string;
+  provider: string;
+  model: string;
+  userMessage: string;
+  systemPromptLength: number;
+  recipeCount: number;
+  vectorizeHits: number;
+  streaming: boolean;
+  success: boolean;
+  durationMs: number;
+  responseLength?: number;
+  error?: string;
+  tier?: string;
+  timing?: AILogTiming;
+}
+
+function TimingBar({ label, ms, maxMs }: { label: string; ms: number; maxMs: number }) {
+  const pct = maxMs > 0 ? Math.min((ms / maxMs) * 100, 100) : 0;
+  const color = ms > 500 ? "bg-red-500" : ms > 200 ? "bg-amber-500" : "bg-green-500";
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-16 text-right text-stone-500 dark:text-stone-400 shrink-0">{label}</span>
+      <div className="flex-1 h-3 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-14 text-right font-mono text-stone-600 dark:text-stone-300 shrink-0">{ms}ms</span>
+    </div>
+  );
+}
+
+function AIPerformanceLogs() {
+  const [logs, setLogs] = useState<AILogEntry[] | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadLogs = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.get<AILogEntry[]>("/api/ai/logs");
+      setLogs(data);
+    } catch {
+      setLogs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggle = () => {
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next && !logs) loadLogs();
+  };
+
+  return (
+    <section>
+      <button
+        onClick={handleToggle}
+        className="flex items-center gap-1.5 text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3"
+      >
+        <ChevronDown className={classNames("w-3.5 h-3.5 transition-transform", isOpen ? "" : "-rotate-90")} />
+        AI Performance
+      </button>
+      {isOpen && (
+        <Card>
+          <div className="space-y-3">
+            {isLoading && <p className="text-xs text-stone-400">Loading logs...</p>}
+            {logs && logs.length === 0 && (
+              <p className="text-xs text-stone-400">No AI logs yet. Send a message in the Ask tab to generate data.</p>
+            )}
+            {logs && logs.length > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-stone-400 dark:text-stone-500">Last {logs.length} requests</p>
+                  <button onClick={loadLogs} className="text-xs text-orange-600 dark:text-orange-400 hover:underline">
+                    Refresh
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {logs.slice(0, 10).map((log, i) => {
+                    const t = log.timing;
+                    const maxMs = Math.max(log.durationMs, t?.fetchMs ?? 0, t?.llmMs ?? 0, 500);
+                    const time = new Date(log.timestamp);
+                    const timeStr = time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                    return (
+                      <div key={i} className="border-b border-stone-100 dark:border-stone-800 pb-3 last:border-0 last:pb-0">
+                        <div className="flex items-start justify-between mb-1.5">
+                          <p className="text-xs text-stone-600 dark:text-stone-300 font-medium truncate max-w-[70%]">
+                            &ldquo;{log.userMessage}&rdquo;
+                          </p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={classNames(
+                              "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                              log.success
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                            )}>
+                              {log.durationMs}ms
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-stone-400 dark:text-stone-500 mb-2">
+                          <span>{timeStr}</span>
+                          <span>{log.provider}/{log.model}</span>
+                          {log.tier && <span className="uppercase">{log.tier}</span>}
+                          {log.streaming && <span>stream</span>}
+                          <span>{log.recipeCount} recipes</span>
+                          {log.systemPromptLength > 0 && <span>{Math.round(log.systemPromptLength / 4)}tok est.</span>}
+                        </div>
+                        {t && (
+                          <div className="space-y-1">
+                            {t.configMs > 0 && <TimingBar label="config" ms={t.configMs} maxMs={maxMs} />}
+                            {t.indexMs > 0 && <TimingBar label="index" ms={t.indexMs} maxMs={maxMs} />}
+                            {t.vectorizeMs > 0 && <TimingBar label="vector" ms={t.vectorizeMs} maxMs={maxMs} />}
+                            {t.nytMs > 0 && <TimingBar label="nyt" ms={t.nytMs} maxMs={maxMs} />}
+                            <TimingBar label="fetch" ms={t.fetchMs} maxMs={maxMs} />
+                            {t.llmMs !== undefined && <TimingBar label="llm" ms={t.llmMs} maxMs={maxMs} />}
+                            <TimingBar label="total" ms={log.durationMs} maxMs={maxMs} />
+                          </div>
+                        )}
+                        {!t && (
+                          <p className="text-[10px] text-stone-400 italic">No timing breakdown (older log format)</p>
+                        )}
+                        {log.error && (
+                          <p className="text-[10px] text-red-500 mt-1 truncate">{log.error}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </Card>
+      )}
+    </section>
   );
 }
 
