@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, Filter } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, Filter, SquareCheck } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -486,19 +486,19 @@ export function ShoppingList({
         {/* Filter bar — sort, clear checked, clear all, auto-classify */}
         {totalCount > 0 && (
           <div className={classNames("flex items-center gap-1.5 px-4 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
-            {/* Sort dropdown */}
+            {/* Sort: group mode dropdown + quick toggle pills */}
             <div className="relative">
               <button
                 onClick={() => setShowSortMenu(!showSortMenu)}
                 className={classNames(
-                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors",
-                  sortMode !== "department"
+                  "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
+                  sortMode === "by-store" || sortMode === "by-recipe"
                     ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
-                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
+                    : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
                 )}
+                title="Sort by group"
               >
-                <ArrowUpDown className="w-3 h-3" />
-                {sortMode === "department" ? "Sort" : sortMode === "by-store" ? "By store" : sortMode === "by-recipe" ? "By recipe" : sortMode === "alphabetical" ? "A-Z" : "Unchecked"}
+                <ArrowUpDown className="w-3.5 h-3.5" />
               </button>
               {showSortMenu && (
                 <>
@@ -508,15 +508,13 @@ export function ShoppingList({
                       { value: "department" as SortMode, label: "By department" },
                       { value: "by-store" as SortMode, label: "By store" },
                       { value: "by-recipe" as SortMode, label: "By recipe" },
-                      { value: "alphabetical" as SortMode, label: "A-Z" },
-                      { value: "unchecked-first" as SortMode, label: "Unchecked first" },
                     ]).map((opt) => (
                       <button
                         key={opt.value}
                         onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
                         className={classNames(
                           "w-full px-3 py-2 text-left text-xs",
-                          sortMode === opt.value
+                          (sortMode === opt.value || (opt.value === "department" && (sortMode === "department" || sortMode === "unchecked-first")))
                             ? "text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/30"
                             : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
                         )}
@@ -528,10 +526,34 @@ export function ShoppingList({
                 </>
               )}
             </div>
+            <button
+              onClick={() => setSortMode(sortMode === "unchecked-first" ? "department" : "unchecked-first")}
+              className={classNames(
+                "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
+                sortMode === "unchecked-first"
+                  ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
+                  : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+              )}
+              title="Unchecked first"
+            >
+              <SquareCheck className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setSortMode(sortMode === "alphabetical" ? "department" : "alphabetical")}
+              className={classNames(
+                "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors",
+                sortMode === "alphabetical"
+                  ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
+                  : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+              )}
+              title="Sort A-Z"
+            >
+              A-Z
+            </button>
             {checkedCount > 0 && (
               <button
                 onClick={onClearChecked}
-                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors"
+                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors"
               >
                 <Check className="w-3 h-3" /> Clear checked ({checkedCount})
               </button>
@@ -540,14 +562,14 @@ export function ShoppingList({
               <button
                 onClick={handleClassify}
                 disabled={isClassifying}
-                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
               >
                 <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "..." : `Classify (${uncategorizedCount})`}
               </button>
             )}
             <button
               onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
-              className="ml-auto inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
+              className="ml-auto inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
             >
               <Trash className="w-3 h-3" /> Clear all
             </button>
