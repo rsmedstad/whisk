@@ -11,7 +11,7 @@ import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
 
 import { FirstRunGuide } from "./FirstRunGuide";
-import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass, ClipboardList } from "../ui/Icon";
+import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass, CalendarDays } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked" | "simple";
@@ -675,7 +675,7 @@ function RecipeCard({
           className="absolute top-1.5 left-1.5 p-1.5 rounded-full bg-black/30 backdrop-blur-sm"
           title={recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
         >
-          <ClipboardList className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-400" : "text-white/80")} />
+          <CalendarDays className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-400" : "text-white/80")} />
         </button>
         <button
           onClick={(e) => {
