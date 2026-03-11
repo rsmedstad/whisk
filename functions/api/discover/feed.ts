@@ -1412,36 +1412,44 @@ function extractRecipeLinks(
     const title = linkTextMatch?.[1]?.trim() ?? headingText ?? dataTitle ?? genericHeading ?? slugTitle;
     if (!title || title.length < 3) continue;
 
-    // Find image from context — prefer /thmb/ images (Dotdash Meredith recipe thumbnails)
-    const allCtxImages: string[] = [];
-    // img src/data-src
-    const ctxImgRegex = /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/gi;
-    let ctxImgM;
-    while ((ctxImgM = ctxImgRegex.exec(ctx)) !== null) {
-      if (ctxImgM[1]) allCtxImages.push(ctxImgM[1]);
-    }
-    // srcset
-    const srcsetMatch = ctx.match(
-      /srcset="(https?:\/\/[^"\s]+\.(?:jpg|jpeg|png|webp)[^"\s]*)[\s,]/i
-    );
-    if (srcsetMatch?.[1]) allCtxImages.push(srcsetMatch[1]);
-    // <source> in <picture> elements (Dotdash Meredith uses these)
-    const sourceRegex = /<source[^>]+srcset="(https?:\/\/[^"\s]+\/thmb\/[^"\s]*)/gi;
-    let sourceM;
-    while ((sourceM = sourceRegex.exec(ctx)) !== null) {
-      if (sourceM[1]) allCtxImages.push(sourceM[1]);
-    }
-    // CSS background-image
-    const bgImgMatch = ctx.match(
-      /background-image:\s*url\(["']?(https?:\/\/[^"')]+\.(?:jpg|jpeg|png|webp)[^"')]*)/i
-    );
-    if (bgImgMatch?.[1]) allCtxImages.push(bgImgMatch[1]);
-    // data-src (lazy loading)
-    const dataSrcMatch = ctx.match(
-      /data-src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i
-    );
-    if (dataSrcMatch?.[1]) allCtxImages.push(dataSrcMatch[1]);
-    // From alt-text image map
+    // Find image from context — search tight context first (500 chars), then wide (1500 chars)
+    // Tight context prevents picking up images from neighboring cards (e.g. state/travel hero images)
+    const findImages = (searchCtx: string): string[] => {
+      const imgs: string[] = [];
+      // img src/data-src
+      const ctxImgRegex = /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/gi;
+      let ctxImgM;
+      while ((ctxImgM = ctxImgRegex.exec(searchCtx)) !== null) {
+        if (ctxImgM[1]) imgs.push(ctxImgM[1]);
+      }
+      // srcset
+      const srcsetMatch = searchCtx.match(
+        /srcset="(https?:\/\/[^"\s]+\.(?:jpg|jpeg|png|webp)[^"\s]*)[\s,]/i
+      );
+      if (srcsetMatch?.[1]) imgs.push(srcsetMatch[1]);
+      // <source> in <picture> elements (Dotdash Meredith uses these)
+      const sourceRegex = /<source[^>]+srcset="(https?:\/\/[^"\s]+\/thmb\/[^"\s]*)/gi;
+      let sourceM;
+      while ((sourceM = sourceRegex.exec(searchCtx)) !== null) {
+        if (sourceM[1]) imgs.push(sourceM[1]);
+      }
+      // CSS background-image
+      const bgImgMatch = searchCtx.match(
+        /background-image:\s*url\(["']?(https?:\/\/[^"')]+\.(?:jpg|jpeg|png|webp)[^"')]*)/i
+      );
+      if (bgImgMatch?.[1]) imgs.push(bgImgMatch[1]);
+      // data-src (lazy loading)
+      const dataSrcMatch = searchCtx.match(
+        /data-src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i
+      );
+      if (dataSrcMatch?.[1]) imgs.push(dataSrcMatch[1]);
+      return imgs;
+    };
+
+    // Search tight context first, fall back to wide context
+    let allCtxImages = findImages(tightCtx);
+    if (allCtxImages.length === 0) allCtxImages = findImages(ctx);
+    // From alt-text image map (last resort)
     const mapImg = imgMap.get(title.toLowerCase());
     if (mapImg) allCtxImages.push(mapImg);
 
