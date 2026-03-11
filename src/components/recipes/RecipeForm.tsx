@@ -477,7 +477,13 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
             {isSaving ? "Saving..." : "Save"}
           </Button>
         ) : (
-          <div className="w-14" />
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            aria-label="Close"
+          >
+            <XMark className="w-5 h-5" />
+          </button>
         )}
       </div>
 
