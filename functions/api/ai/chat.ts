@@ -266,22 +266,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    // Action markers — keep concise so smaller models follow them
+    // Action markers — keep minimal so models follow them reliably
     systemParts.push(
       "\n--- Output Format ---",
-      "When mentioning a recipe from the collection, ALWAYS output this marker on its own line:",
-      "[RECIPE_CARD: recipeId, Recipe Title]",
+      "When mentioning a recipe from the collection, ALWAYS output on its own line: [RECIPE_CARD: recipeId, Recipe Title]",
       "For external recipes: [SAVE_RECIPE: url, Recipe Title]",
-      "For meal plan: [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId]",
       "For shopping: [ADD_TO_LIST: item, amount, unit, category]",
-      "Example: Here's a great option:\n[RECIPE_CARD: r_abc123, Chicken Tikka Masala]"
+      "Example:\n[RECIPE_CARD: r_abc123, Chicken Tikka Masala]"
     );
 
     // Planning workflow — only when planning
     if (/\b(plan|week|suggest|meal|ideas?|fill|gap)\b/i.test(lastMessage)) {
       systemParts.push(
-        "\n--- Planning ---",
-        "Suggest 2-3 recipes. Use [RECIPE_CARD] + [ADD_TO_PLAN] for each. Keep explanations minimal."
+        "Suggest 2-3 recipes using [RECIPE_CARD] for each. Keep explanations minimal."
       );
     }
   }
