@@ -619,7 +619,7 @@ export function MealPlan({
                   onClick={handleAutoFillEmptySlots}
                   className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
-                  <CalendarDays className="w-3.5 h-3.5 text-orange-500" />
+                  <Sparkles className="w-3.5 h-3.5 text-orange-500" />
                   Quick fill gaps
                 </button>
               );
