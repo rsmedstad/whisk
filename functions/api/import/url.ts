@@ -1773,15 +1773,17 @@ async function tryNytCookingApi(
       ? stripHtml(raw.topnote.content)
       : "";
 
-    // Extract image URLs from crops — prefer articleLarge, fall back to first
+    // Extract best image from crops — all crops are the same photo at different sizes,
+    // so just pick the highest-quality one (articleLarge preferred, then largest by width)
     const allImageUrls: string[] = [];
     const crops = raw.image?.crops ?? [];
     const articleLarge = crops.find((c) => c.name === "articleLarge");
-    if (articleLarge?.url) allImageUrls.push(articleLarge.url);
-    for (const crop of crops) {
-      if (crop.url && !allImageUrls.includes(crop.url)) {
-        allImageUrls.push(crop.url);
-      }
+    if (articleLarge?.url) {
+      allImageUrls.push(articleLarge.url);
+    } else {
+      // Fall back to the largest crop by width
+      const sorted = [...crops].filter((c) => c.url).sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
+      if (sorted[0]?.url) allImageUrls.push(sorted[0].url);
     }
 
     let thumbnailUrl = allImageUrls[0];

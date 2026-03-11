@@ -20,6 +20,7 @@ interface RecipeFormProps {
 
 const EMPTY_INGREDIENT: Ingredient = { name: "", amount: "", unit: "" };
 const EMPTY_STEP: Step = { text: "" };
+const CUISINE_TAGS = new Set(["italian", "mexican", "chinese", "thai", "indian", "japanese", "korean", "mediterranean", "american", "french"]);
 
 export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) {
   const { id } = useParams<{ id: string }>();
@@ -226,7 +227,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         photos,
         thumbnailUrl: photos.find((p) => p.isPrimary)?.url ?? photos[0]?.url,
         tags,
-        cuisine: cuisine.trim() || undefined,
+        cuisine: cuisine.trim() || tags.find((t) => CUISINE_TAGS.has(t)) || undefined,
         prepTime: prepTime ? parseInt(prepTime) : undefined,
         cookTime: cookTime ? parseInt(cookTime) : undefined,
         servings: servings ? parseInt(servings) : undefined,
@@ -878,14 +879,6 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
             </Button>
           </div>
         </section>
-
-        {/* Cuisine */}
-        <Input
-          label="Cuisine"
-          value={cuisine}
-          onChange={(e) => setCuisine(e.target.value)}
-          placeholder="Italian, Mexican, etc."
-        />
 
         {/* Notes */}
         <TextArea

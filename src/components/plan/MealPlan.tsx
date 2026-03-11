@@ -115,6 +115,7 @@ interface MealPlanProps {
   getWeekHistory?: (count: number) => { id: string; dateRange: string; mealCount: number; completionRate: number }[];
   weekId?: string;
   onToggleWantToMake?: (id: string) => void;
+  onClearWeek?: () => void;
 }
 
 export function MealPlan({
@@ -134,6 +135,7 @@ export function MealPlan({
   getWeekHistory,
   weekId,
   onToggleWantToMake,
+  onClearWeek,
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
@@ -418,6 +420,19 @@ export function MealPlan({
                         className="w-full px-4 py-2.5 text-left text-sm dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
                       >
                         Paste to this week
+                      </button>
+                    )}
+                    {onClearWeek && weekMeals.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (confirm("Clear all meals from this week?")) {
+                            onClearWeek();
+                          }
+                          setShowOverflowMenu(false);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      >
+                        Clear week
                       </button>
                     )}
                   </div>

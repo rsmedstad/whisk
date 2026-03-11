@@ -78,7 +78,7 @@ export function SeasonalProduceCard({ compact = false }: SeasonalProduceCardProp
 
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3">
+      <div className={`flex items-center gap-2 ${compact ? "mb-1.5" : "mb-3"}`}>
         <SeasonIcon className={`w-4.5 h-4.5 ${iconColor}`} />
         <h2 className={`font-semibold dark:text-stone-100 ${compact ? "text-sm" : "text-base"}`}>
           What&apos;s in Season
@@ -92,7 +92,7 @@ export function SeasonalProduceCard({ compact = false }: SeasonalProduceCardProp
           </span>
         )}
       </div>
-      <div className="space-y-2.5">
+      <div className={compact ? "space-y-1" : "space-y-2.5"}>
         {displayCategories.map((cat) => (
           <div key={cat.label} className="flex items-start gap-2">
             <CategoryIcon category={cat.label} className="w-4 h-4 text-stone-400 dark:text-stone-500 mt-0.5 shrink-0" />

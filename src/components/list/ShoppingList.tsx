@@ -671,7 +671,7 @@ export function ShoppingList({
               )}
               <button
                 onClick={() => { if (confirm("Clear entire shopping list?")) onClearAll(); }}
-                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
+                className="ml-auto inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-1 text-xs font-medium text-red-500 dark:text-red-400 whitespace-nowrap hover:border-red-300 transition-colors"
               >
                 <Trash className="w-3 h-3" /> Clear all
               </button>

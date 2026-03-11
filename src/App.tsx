@@ -296,6 +296,7 @@ function AppShell({
                 getWeekHistory={mealPlan.getWeekHistory}
                 weekId={mealPlan.plan.id}
                 onToggleWantToMake={recipes.toggleWantToMake}
+                onClearWeek={mealPlan.clearWeek}
               />
             }
           />

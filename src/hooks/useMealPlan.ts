@@ -79,6 +79,13 @@ export function useMealPlan() {
     [plan, savePlan]
   );
 
+  const clearWeek = useCallback(
+    async () => {
+      await savePlan({ ...plan, meals: [] });
+    },
+    [plan, savePlan]
+  );
+
   const updateMeal = useCallback(
     async (mealId: string, changes: Partial<PlannedMeal>) => {
       await savePlan({
@@ -218,6 +225,7 @@ export function useMealPlan() {
     isLoading,
     addMeal,
     removeMeal,
+    clearWeek,
     updateMeal,
     goToNextWeek,
     goToPrevWeek,

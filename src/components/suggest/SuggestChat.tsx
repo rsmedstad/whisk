@@ -94,7 +94,7 @@ function QuickAction({ icon: Icon, label, onClick }: {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 dark:bg-orange-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 dark:hover:bg-orange-500 active:scale-95 transition-all"
+      className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 dark:bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 dark:hover:bg-orange-500 active:scale-95 transition-all"
     >
       <Icon className="w-3.5 h-3.5" />
       {label}
@@ -138,10 +138,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   // Load discover items from localStorage cache for combined search
   const discoverItems = useMemo(() => {
     try {
-      const raw = localStorage.getItem("discover_feed");
+      const raw = localStorage.getItem("whisk_cache_discover_feed");
       if (!raw) return [] as DiscoverFeedItem[];
-      const feed = JSON.parse(raw) as { categories?: Record<string, DiscoverFeedItem[]> };
-      if (!feed.categories) return [] as DiscoverFeedItem[];
+      const cached = JSON.parse(raw) as { data?: { categories?: Record<string, DiscoverFeedItem[]> } };
+      const feed = cached.data;
+      if (!feed?.categories) return [] as DiscoverFeedItem[];
       return Object.values(feed.categories).flat();
     } catch { return [] as DiscoverFeedItem[]; }
   }, []);
@@ -764,11 +765,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
 
             {/* Try asking — question pills */}
             <Card>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-1.5">
                 <MessageCircle className="w-4 h-4 text-stone-400 dark:text-stone-500" />
                 <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">Or try asking</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 <QuickAction
                   icon={CalendarDays}
                   label="Plan my meals this week"
