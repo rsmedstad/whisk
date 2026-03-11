@@ -729,7 +729,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   );
                 })}
               </div>
-              <span className="text-xs text-stone-400 dark:text-stone-500 shrink-0">
+              <span className="text-xs text-stone-500 dark:text-stone-400 shrink-0">
                 {servings} servings
               </span>
             </div>
@@ -838,7 +838,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         {/* Notes */}
         <section className="border-t border-stone-200 dark:border-stone-700 pt-4">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               Notes
             </h2>
             <button
@@ -888,7 +888,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           <div className="grid md:grid-cols-2 gap-4">
             {/* Log & Planning */}
             <div className="space-y-2.5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                 Log & Planning
               </h3>
               <div className="flex gap-2">
@@ -973,7 +973,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 </div>
               )}
               {(recipe.cookedCount || recipe.lastCookedAt) && (
-                <div className="flex items-center justify-center gap-2 text-xs text-stone-400 dark:text-stone-500">
+                <div className="flex items-center justify-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                   {recipe.cookedCount ? (
                     <span className="inline-flex items-center gap-1.5">
                       <button
@@ -1016,7 +1016,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
             {/* Shopping */}
             <div className="space-y-2.5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                 Shopping List
               </h3>
               <div className="flex gap-2">
@@ -1035,7 +1035,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   Add All
                 </Button>
               </div>
-              <p className="text-[11px] text-stone-400 dark:text-stone-500">
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
                 {isDrink
                   ? "Essentials skips garnishes, bitters & modifiers"
                   : "Essentials skips salt, pepper, oil & common pantry staples"}

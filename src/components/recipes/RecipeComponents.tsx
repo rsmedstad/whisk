@@ -92,7 +92,7 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
           {[...groups.entries()].map(([group, ings]) => (
             <div key={group}>
               {group && (
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
                   {group}
                 </h3>
               )}
@@ -143,7 +143,7 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
         const ings = grouped.get(cat)!;
         return (
           <div key={cat}>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
               {categoryLabels[cat as keyof typeof categoryLabels]}
             </h3>
             <ul className="space-y-2">

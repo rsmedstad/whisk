@@ -315,44 +315,46 @@ export function ShoppingList({
         key={item.id}
         className="flex items-center gap-2 py-1.5 group"
       >
-        {/* Checkbox */}
+        {/* Tappable row: checkbox + label — full row toggles checked state */}
         <button
           onClick={handleToggle}
-          className={classNames(
-            "h-5 w-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
-            item.checked
-              ? "bg-orange-500 border-orange-500 text-white"
-              : "border-stone-300 dark:border-stone-600"
-          )}
+          className="flex items-center gap-2 flex-1 min-w-0 py-0.5 text-left"
         >
-          {item.checked && <Check className="w-3 h-3" />}
+          <span
+            className={classNames(
+              "h-5 w-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
+              item.checked
+                ? "bg-orange-500 border-orange-500 text-white"
+                : "border-stone-300 dark:border-stone-600"
+            )}
+          >
+            {item.checked && <Check className="w-3 h-3" />}
+          </span>
+          <span
+            className={classNames(
+              "flex-1 text-sm line-clamp-1",
+              item.checked
+                ? "line-through text-stone-400 dark:text-stone-500"
+                : "dark:text-stone-200"
+            )}
+            title={[item.amount, item.unit, item.name].filter(Boolean).join(" ")}
+          >
+            {fullLabel}
+            {item._mergedSources && item._mergedSources.length > 1 ? (
+              <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">
+                ({item._mergedSources.map((id) => recipeNames.get(id) ?? "?").filter((v, i, a) => a.indexOf(v) === i).join(", ")})
+              </span>
+            ) : (item.sourceRecipeId || item.addedByUser) && (
+              <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">
+                {item.sourceRecipeId && recipeNames.get(item.sourceRecipeId)
+                  ? `(${recipeNames.get(item.sourceRecipeId)})`
+                  : item.addedByUser
+                    ? `(${item.addedByUser})`
+                    : null}
+              </span>
+            )}
+          </span>
         </button>
-
-        {/* Item text */}
-        <span
-          className={classNames(
-            "flex-1 text-sm line-clamp-1",
-            item.checked
-              ? "line-through text-stone-400 dark:text-stone-500"
-              : "dark:text-stone-200"
-          )}
-          title={[item.amount, item.unit, item.name].filter(Boolean).join(" ")}
-        >
-          {fullLabel}
-          {item._mergedSources && item._mergedSources.length > 1 ? (
-            <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">
-              ({item._mergedSources.map((id) => recipeNames.get(id) ?? "?").filter((v, i, a) => a.indexOf(v) === i).join(", ")})
-            </span>
-          ) : (item.sourceRecipeId || item.addedByUser) && (
-            <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">
-              {item.sourceRecipeId && recipeNames.get(item.sourceRecipeId)
-                ? `(${recipeNames.get(item.sourceRecipeId)})`
-                : item.addedByUser
-                  ? `(${item.addedByUser})`
-                  : null}
-            </span>
-          )}
-        </span>
 
         {/* Store tag */}
         {editingStoreId === item.id ? (

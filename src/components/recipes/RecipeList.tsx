@@ -703,7 +703,7 @@ function RecipeCard({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-400 dark:text-stone-500">
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-500 dark:text-stone-400">
           {isDrinks && recipe.spirits && recipe.spirits.length > 0 ? (
             <span className="truncate">{recipe.spirits.join(", ")}</span>
           ) : totalTime ? (

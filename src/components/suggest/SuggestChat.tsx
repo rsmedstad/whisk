@@ -93,7 +93,7 @@ function QuickAction({ icon: Icon, label, onClick }: {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-950/20 px-3 py-1.5 text-xs font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/40 hover:border-orange-300 dark:hover:border-orange-700 transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 dark:bg-orange-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 dark:hover:bg-orange-500 active:scale-95 transition-all"
     >
       <Icon className="w-3.5 h-3.5" />
       {label}
@@ -377,7 +377,10 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               </button>
             )}
             <button
-              onClick={() => navigate("/")}
+              onClick={() => {
+                setInput("Find recipes for ");
+                chatInputRef.current?.focus();
+              }}
               className="p-1 text-stone-400 dark:text-stone-500 hover:text-orange-500 transition-colors"
               title="Search recipes"
             >
@@ -619,12 +622,12 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                           const h = Math.floor(totalMin / 60);
                           const m = totalMin % 60;
                           const label = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m} min`;
-                          return <span className="text-xs text-stone-400 dark:text-stone-500 shrink-0">{label}</span>;
+                          return <span className="text-xs text-stone-600 dark:text-stone-400 shrink-0">{label}</span>;
                         })()}
-                        {pickedRecipe.servings && <span className="text-xs text-stone-400 dark:text-stone-500">Serves {pickedRecipe.servings}</span>}
+                        {pickedRecipe.servings && <span className="text-xs text-stone-600 dark:text-stone-400">Serves {pickedRecipe.servings}</span>}
                       </div>
                       {pickedRecipe.tags.length > 0 && (
-                        <p className="text-xs text-stone-400 dark:text-stone-500 truncate mt-0.5">
+                        <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
                           {pickedRecipe.tags.slice(0, 3).join(" · ")}
                         </p>
                       )}
@@ -638,11 +641,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
               </Card>
             )}
 
-            {/* Quick ask — chat prompt suggestions */}
-            <div className="mt-2 rounded-xl border border-orange-200/60 dark:border-orange-800/30 bg-orange-50/30 dark:bg-orange-950/10 p-3">
-              <div className="flex items-center gap-2 mb-2.5">
-                <MessageCircle className="w-3.5 h-3.5 text-orange-400" />
-                <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Quick ask</span>
+            {/* Quick ask — visually connected to the chat input below */}
+            <div className="mt-auto pt-4 pb-2 px-1">
+              <div className="flex items-center gap-2 mb-2">
+                <MessageCircle className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
+                <span className="text-xs font-medium text-stone-500 dark:text-stone-400">Try asking</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 <QuickAction
@@ -880,7 +883,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                         return (
                           <button
                             key={ai}
-                            onClick={() => navigate(`/?q=${encodeURIComponent(action.params)}`)}
+                            onClick={() => sendMessage(`Search my recipes for "${action.params}"`)}
                             className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900 transition-colors"
                           >
                             Search &ldquo;{action.params}&rdquo;
