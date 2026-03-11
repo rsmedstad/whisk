@@ -352,8 +352,38 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         }
 
         if (!fullContent) {
-          console.warn("[Whisk] Stream returned empty content");
-          throw new Error("Empty response");
+          console.warn("[Whisk] Stream returned empty content, retrying without streaming");
+          // Remove the empty placeholder assistant message before retry
+          setMessages((prev) => prev.slice(0, -1));
+          // Retry as non-streaming request
+          const retryRes = await fetch("/api/ai/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
+            },
+            body: JSON.stringify({
+              messages: currentMessages,
+              seasonalContext: buildSeasonalSystemContext(new Date(), householdSize),
+              mealPlan: mealPlan.length > 0 ? mealPlan.slice(0, 30) : undefined,
+              shoppingList: shoppingList.length > 0 ? shoppingList.map((i) => ({ name: i.name, checked: i.checked, category: i.category })).slice(0, 50) : undefined,
+              preferences: freshPreferences ?? preferences ?? undefined,
+              enabledSlots: (() => {
+                try {
+                  const raw = localStorage.getItem("whisk_meal_slots");
+                  if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed) && parsed.length > 0) return parsed; }
+                } catch { /* ignore */ }
+                return ["dinner"];
+              })(),
+              stream: false,
+            }),
+          });
+          if (!retryRes.ok) throw new Error(`API error ${retryRes.status}`);
+          const retryData = (await retryRes.json()) as { content: string };
+          if (!retryData.content) throw new Error("Empty response");
+          setMessages((prev) => [...prev, { role: "assistant", content: retryData.content }]);
+          setIsLoading(false);
+          return;
         }
 
         // Final update with cleaned content (strip incomplete action markers)
