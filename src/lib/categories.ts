@@ -80,7 +80,8 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
     "teriyaki", "tomato paste", "tomato sauce", "tortilla chip",
     "turmeric", "vanilla", "vegetable oil", "vinegar", "walnut",
     "wasabi", "white rice", "wild rice", "worcestershire", "yeast",
-    "bean", "canned", "dried", "seed",
+    "kidney bean", "pinto bean", "navy bean", "cannellini", "white bean",
+    "refried bean", "lima bean", "canned", "dried", "seed",
   ],
   snacks: [
     "chip", "corn chip", "crouton", "dip", "fruit snack",
@@ -111,10 +112,11 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
     "beer", "bourbon", "brandy", "champagne", "cider", "club soda",
     "cocktail", "coconut water", "coffee", "cola", "cranberry juice",
     "energy drink", "espresso", "gatorade", "gin", "ginger ale",
-    "ginger beer", "grape juice", "iced tea", "juice", "kombucha",
+    "ginger beer", "grape juice", "iced tea", "kombucha",
     "lemonade", "liqueur", "mineral water", "orange juice", "prosecco",
     "rum", "sake", "seltzer", "soda", "sparkling water", "sprite",
     "tea", "tequila", "tonic", "vodka", "water", "whiskey", "wine",
+    "apple juice", "pineapple juice", "grapefruit juice", "tomato juice",
   ],
   other: [],
 };
@@ -138,6 +140,17 @@ function normalizeForMatch(name: string): string {
   // Strip trailing/leading underscores (parsing artifacts)
   lower = lower.replace(/[_]+/g, " ").trim();
   return lower;
+}
+
+/**
+ * Check if `text` contains `word` as a whole word (not as a substring of another word).
+ * e.g. "fresh ginger" contains word "ginger" but NOT "gin"
+ *      "lemonade" does NOT contain word "lemon"
+ */
+function containsWholeWord(text: string, word: string): boolean {
+  if (text === word) return true;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`).test(text);
 }
 
 /**
@@ -174,6 +187,31 @@ export function categorizeIngredient(name: string): ShoppingCategory {
   const normalized = normalizeForMatch(name);
   const variants = getStemVariants(normalized);
 
+  // Priority rule: cooking action words (juiced, zested, grated) indicate fresh produce
+  // "1 orange, juiced and zested" → produce, not beverages
+  if (/\b(juiced|zested|grated|peeled)\b/.test(normalized)) {
+    const baseIngredient = normalized.split(/[,]/)[0]?.trim();
+    if (baseIngredient) {
+      const baseVariants = getStemVariants(baseIngredient);
+      const produceKeywords = CATEGORY_KEYWORDS.produce;
+      if (produceKeywords) {
+        for (const keyword of produceKeywords) {
+          for (const bv of baseVariants) {
+            if (bv.includes(keyword) || keyword === bv) {
+              return "produce";
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Priority rule: "fresh or frozen X" / "fresh/frozen X" → produce
+  // The ingredient is about the fresh item, "frozen" is just an option
+  if (/\bfresh\s+(or\s+|\/\s*)frozen\b/.test(normalized)) {
+    return "produce";
+  }
+
   // Priority rule: if the name has a pantry prefix (dried, ground, canned, etc.)
   // and the base word is ambiguous, force pantry
   if (PANTRY_PREFIXES.test(normalized)) {
@@ -199,14 +237,17 @@ export function categorizeIngredient(name: string): ShoppingCategory {
     const keywords = CATEGORY_KEYWORDS[category];
     if (!keywords) continue;
     for (const keyword of keywords) {
+      // Check if any variant contains the keyword as a whole word
+      // Prevents "ginger" matching "gin", "lemonade" matching "lemon", etc.
       for (const variant of variants) {
-        if (variant.includes(keyword) || keyword.includes(variant)) {
+        if (containsWholeWord(variant, keyword)) {
           return category;
         }
       }
+      // Also check stemmed keyword variants against the normalized name
       const keywordVariants = getStemVariants(keyword);
       for (const kv of keywordVariants) {
-        if (normalized.includes(kv)) {
+        if (containsWholeWord(normalized, kv)) {
           return category;
         }
       }
@@ -325,13 +366,13 @@ export function categorizeIngredientForDrink(name: string): DrinkCategory {
     if (category === "other") continue;
     for (const keyword of keywords) {
       for (const variant of variants) {
-        if (variant.includes(keyword) || keyword.includes(variant)) {
+        if (containsWholeWord(variant, keyword)) {
           return category as DrinkCategory;
         }
       }
       const keywordVariants = getStemVariants(keyword);
       for (const kv of keywordVariants) {
-        if (normalized.includes(kv)) {
+        if (containsWholeWord(normalized, kv)) {
           return category as DrinkCategory;
         }
       }
