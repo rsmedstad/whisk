@@ -12,8 +12,9 @@ Deployed at: `whisk-15t.pages.dev` | Repo: `rsmedstad/whisk` | Open-source (self
 - **Build**: Vite 7 + TypeScript 5.9 (strict mode, `noUncheckedIndexedAccess: true`)
 - **Styling**: Tailwind CSS 4 (Vite plugin, `@theme` CSS custom properties)
 - **Backend**: Cloudflare Pages Functions (file-based routing in `functions/api/`)
-- **Storage**: Cloudflare KV (data) + R2 (photos)
+- **Storage**: Cloudflare KV (data) + R2 (photos) + Vectorize (recipe embeddings)
 - **AI Providers**: Groq, OpenAI, Anthropic, Google Gemini, xAI Grok (all optional)
+- **AI Infrastructure**: Workers AI (embeddings via bge-base-en-v1.5) + Vectorize (semantic recipe search)
 
 ## Commands
 
@@ -43,6 +44,7 @@ src/
     compress.ts        # Client-side image compression
     tags.ts            # Preset tag definitions
     units.ts           # Unit conversion
+    markdown.tsx       # Lightweight markdown renderer for AI chat (bold, italic, lists)
     utils.ts           # classNames() helper
   hooks/               # Custom React hooks (data + UI)
     useRecipes.ts      # Recipe CRUD + optimistic updates
@@ -88,6 +90,10 @@ functions/api/         # Cloudflare Pages Functions (serverless API)
   import/parse.ts      # POST /api/import/parse — AI-powered text parsing for bulk import
   share/               # Public share link creation + access
   shopping/scan.ts     # POST /api/shopping/scan — OCR handwritten list
+
+functions/lib/         # Shared backend utilities
+  ai-providers.ts      # Multi-provider AI caller (non-streaming + SSE streaming)
+  embeddings.ts        # Vectorize + Workers AI: generate/upsert/query recipe embeddings
 
 public/
   manifest.json        # PWA manifest (standalone, orange theme)

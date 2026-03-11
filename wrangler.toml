@@ -12,5 +12,14 @@ id = "9961b213d1114876af09f83f3884aeb9" # Fill in after running: npx wrangler kv
 binding = "WHISK_R2"
 bucket_name = "whisk-photos"
 
+# Workers AI binding (for generating embeddings)
+[ai]
+binding = "AI"
+
+# Vectorize index - create with: npx wrangler vectorize create whisk-recipes --dimensions=768 --metric=cosine
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "whisk-recipes"
+
 [vars]
 ENVIRONMENT = "production"

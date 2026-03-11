@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.5.0] - 2026-03-11
+
+### AI Chat — Vectorize RAG & Streaming
+
+- **Semantic search**: Cloudflare Vectorize index (`whisk-recipes`) with Workers AI embeddings (bge-base-en-v1.5)
+  - Recipes auto-embed on create/update via `waitUntil()` fire-and-forget
+  - Smart context selection: Vectorize semantic search + keyword scoring → top 20 detailed recipes + compact list for the rest
+  - Backfill script (`scripts/backfill-vectorize.ts`) for existing recipes
+- **SSE streaming**: Real-time token-by-token AI responses instead of waiting for full completion
+  - Multi-provider streaming: OpenAI, Anthropic, and Gemini stream formats
+  - Progressive UI updates as text arrives
+  - Graceful fallback to non-streaming JSON responses
+- **Markdown rendering**: AI chat messages now render bold, italic, inline code, and bullet/numbered lists
+  - New lightweight JSX renderer (`src/lib/markdown.tsx`)
+  - `.prose-chat` CSS for compact spacing
+
+### Bug Fixes
+
+- Fixed Plan "Get Suggestions" suggesting meals for disabled slots (breakfast/lunch when only dinner enabled)
+  - `enabledSlots` now sent from client based on `whisk_meal_slots` localStorage
+- Fixed `**bold**` text showing as literal asterisks in AI responses
+- Fixed broken action markers like `[RECIPE_CARD: r_id, Title` leaking into display text
+  - Increased maxTokens from 1024 to 2048 to prevent mid-marker truncation
+  - Added incomplete marker stripping on both server and client
+- Added `ingredientNames` to recipe index for richer AI context without fetching full recipes
+
+### Infrastructure
+
+- Cloudflare Vectorize index: `whisk-recipes` (768 dimensions, cosine similarity)
+- Workers AI binding for embedding generation
+- `wrangler.toml` updated with `[ai]` and `[[vectorize]]` bindings
+
+---
+
 ## [0.4.1] - 2026-03-10
 
 ### Shopping List UX

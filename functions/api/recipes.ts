@@ -1,5 +1,9 @@
+import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../lib/embeddings";
+
 interface Env {
   WHISK_KV: KVNamespace;
+  AI?: Ai;
+  VECTORIZE?: VectorizeIndex;
 }
 
 interface RecipeIndexEntry {
@@ -18,6 +22,7 @@ interface RecipeIndexEntry {
   ingredientCount?: number;
   stepCount?: number;
   difficulty?: "easy" | "medium" | "hard";
+  ingredientNames?: string[];
 }
 
 function computeDifficulty(totalMinutes: number, ingredientCount: number, stepCount: number): "easy" | "medium" | "hard" {
@@ -49,7 +54,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, data }) => {
 };
 
 // POST /api/recipes - Create a new recipe
-export const onRequestPost: PagesFunction<Env> = async ({ request, env, data }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, waitUntil }) => {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const id = `r_${crypto.randomUUID().split("-")[0]}`;
@@ -96,10 +101,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data }) 
       ingredientCount,
       stepCount,
       difficulty: computeDifficulty(totalMinutes, ingredientCount, stepCount),
+      ingredientNames: Array.isArray(recipe.ingredients)
+        ? (recipe.ingredients as { name?: string }[]).map((i) => i.name).filter((n): n is string => !!n).slice(0, 30)
+        : undefined,
     };
 
     index.unshift(entry);
     await env.WHISK_KV.put("recipes:index", JSON.stringify(index));
+
+    // Upsert embedding into Vectorize (fire-and-forget)
+    if (env.AI && env.VECTORIZE) {
+      waitUntil(upsertRecipeEmbedding(env.AI, env.VECTORIZE, recipeToEmbeddingInput(recipe)).catch(() => {}));
+    }
 
     return new Response(JSON.stringify(recipe), {
       status: 201,

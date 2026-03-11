@@ -2,11 +2,15 @@ import {
   loadAIConfig,
   resolveConfig,
   callTextAI,
+  callStreamAI,
   type ProviderEnv,
 } from "../../lib/ai-providers";
+import { queryRecipes } from "../../lib/embeddings";
 
 interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
+  AI?: Ai;
+  VECTORIZE?: VectorizeIndex;
 }
 
 interface ChatBody {
@@ -15,6 +19,48 @@ interface ChatBody {
   mealPlan?: { date: string; slot: string; title: string; recipeId?: string; completed?: boolean }[];
   shoppingList?: { name: string; checked: boolean; category: string }[];
   preferences?: { dietaryRestrictions?: string[]; favoriteCuisines?: string[]; budgetPreference?: string; dislikedIngredients?: string[] };
+  enabledSlots?: string[];
+  stream?: boolean;
+}
+
+/** Extract food-related keywords from a message for recipe matching */
+function extractKeywords(message: string): string[] {
+  const lower = message.toLowerCase();
+  // Remove common filler words
+  const cleaned = lower
+    .replace(/\b(?:can|you|i|we|me|my|the|a|an|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|shall|may|might|must|need|want|like|just|some|any|all|more|most|very|really|quite|pretty|also|too|so|then|than|that|this|these|those|what|which|who|whom|whose|where|when|how|why|please|thanks|thank|suggest|recommend|make|cook|recipe|recipes|something|anything|ideas?|for|with|about|from|into)\b/g, " ")
+    .replace(/[?!.,;:'"()\[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.split(" ").filter((w) => w.length >= 3);
+}
+
+/** Score a recipe against keywords (higher = more relevant) */
+function scoreRecipe(
+  recipe: { title: string; tags: string[]; cuisine?: string; ingredientNames?: string[]; description?: string },
+  keywords: string[]
+): number {
+  if (keywords.length === 0) return 0;
+  let score = 0;
+  const titleLower = recipe.title.toLowerCase();
+  const tagsLower = recipe.tags.map((t) => t.toLowerCase());
+  const cuisineLower = (recipe.cuisine ?? "").toLowerCase();
+  const ingredientsLower = (recipe.ingredientNames ?? []).map((n) => n.toLowerCase());
+  const descLower = (recipe.description ?? "").toLowerCase();
+
+  for (const kw of keywords) {
+    // Title match (highest weight)
+    if (titleLower.includes(kw)) score += 10;
+    // Tag match
+    if (tagsLower.some((t) => t.includes(kw))) score += 5;
+    // Cuisine match
+    if (cuisineLower.includes(kw)) score += 5;
+    // Ingredient match (high weight)
+    if (ingredientsLower.some((ing) => ing.includes(kw))) score += 8;
+    // Description match (low weight)
+    if (descLower.includes(kw)) score += 2;
+  }
+  return score;
 }
 
 // POST /api/ai/chat - Conversational recipe assistant
@@ -30,6 +76,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const mealPlanCtx = Array.isArray(body.mealPlan) ? body.mealPlan.slice(0, 30) : [];
   const shoppingListCtx = Array.isArray(body.shoppingList) ? body.shoppingList.slice(0, 50) : [];
   const prefsCtx = body.preferences && typeof body.preferences === "object" ? body.preferences : null;
+  const enabledSlots = Array.isArray(body.enabledSlots) ? body.enabledSlots.slice(0, 5).filter((s): s is string => typeof s === "string") : [];
 
   // Input validation: enforce role, limit history, truncate content
   const messages = (Array.isArray(rawMessages) ? rawMessages : [])
@@ -66,7 +113,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // Fetch recipe index and external recipe suggestions in parallel
   const externalSearchPromise = searchExternalRecipes(lastMessage, messages);
   const indexData = await env.WHISK_KV.get("recipes:index", "text");
-  const recipeIndex: { id: string; title: string; tags: string[]; cuisine?: string; prepTime?: number; cookTime?: number; servings?: number; description?: string; cookedCount?: number; difficulty?: string }[] = indexData ? JSON.parse(indexData) : [];
+  const recipeIndex: { id: string; title: string; tags: string[]; cuisine?: string; prepTime?: number; cookTime?: number; servings?: number; description?: string; cookedCount?: number; difficulty?: string; ingredientNames?: string[] }[] = indexData ? JSON.parse(indexData) : [];
   const externalRecipes = await externalSearchPromise;
 
   // Build system prompt
@@ -106,6 +153,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     systemParts.push(
       `\n--- Shopping List (${unchecked.length} remaining, ${checked.length} checked off) ---\n${listSummary}`,
       "Reference this when suggesting what to buy or when the user asks about their list."
+    );
+  }
+
+  // Enabled meal slots
+  if (enabledSlots.length > 0) {
+    systemParts.push(
+      `\n--- Enabled Meal Slots ---\nThe user only plans these meal slots: ${enabledSlots.join(", ")}.`,
+      "IMPORTANT: Only suggest meals for these enabled slots. Do not suggest breakfast, lunch, or other slots unless the user explicitly asks."
     );
   }
 
@@ -167,22 +222,61 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   );
 
   if (recipeIndex.length > 0) {
-    const recipeSummary = recipeIndex
+    // Semantic search via Vectorize (if available), falling back to keyword scoring
+    let vectorizeIds: Set<string> | undefined;
+    if (env.AI && env.VECTORIZE) {
+      try {
+        const matches = await queryRecipes(env.AI, env.VECTORIZE, lastMessage, 15);
+        vectorizeIds = new Set(matches.map((m) => m.id));
+      } catch {
+        // Vectorize unavailable — fall back to keyword scoring
+      }
+    }
+
+    const keywords = extractKeywords(lastMessage);
+    const scored = recipeIndex.map((r) => ({
+      ...r,
+      _score: scoreRecipe(r, keywords) + (vectorizeIds?.has(r.id) ? 15 : 0),
+    }));
+    scored.sort((a, b) => b._score - a._score);
+
+    // Top relevant recipes get full detail (including ingredients)
+    const relevant = scored.filter((r) => r._score > 0).slice(0, 20);
+    const rest = scored.filter((r) => !relevant.includes(r));
+
+    if (relevant.length > 0) {
+      const detailedSummary = relevant
+        .map((r) => {
+          const parts = [`- ${r.title} (id:${r.id})`];
+          if (r.tags.length > 0) parts.push(`[${r.tags.join(", ")}]`);
+          if (r.cuisine) parts.push(`(${r.cuisine})`);
+          const totalTime = (r.prepTime ?? 0) + (r.cookTime ?? 0);
+          if (totalTime > 0) parts.push(`${totalTime}min`);
+          if (r.servings) parts.push(`serves ${r.servings}`);
+          if (r.difficulty) parts.push(`[${r.difficulty}]`);
+          if (r.cookedCount) parts.push(`cooked ${r.cookedCount}x`);
+          if (r.description) parts.push(`— ${r.description}`);
+          if (r.ingredientNames?.length) parts.push(`| ingredients: ${r.ingredientNames.join(", ")}`);
+          return parts.join(" ");
+        })
+        .join("\n");
+      systemParts.push(
+        `\n--- Most Relevant Recipes (${relevant.length} matches) ---\n${detailedSummary}`
+      );
+    }
+
+    // Rest of collection as compact list
+    const compactSummary = rest
       .map((r) => {
         const parts = [`- ${r.title} (id:${r.id})`];
         if (r.tags.length > 0) parts.push(`[${r.tags.join(", ")}]`);
         if (r.cuisine) parts.push(`(${r.cuisine})`);
-        const totalTime = (r.prepTime ?? 0) + (r.cookTime ?? 0);
-        if (totalTime > 0) parts.push(`${totalTime}min`);
-        if (r.servings) parts.push(`serves ${r.servings}`);
-        if (r.difficulty) parts.push(`[${r.difficulty}]`);
-        if (r.cookedCount) parts.push(`cooked ${r.cookedCount}x`);
-        if (r.description) parts.push(`— ${r.description}`);
+        if (r.ingredientNames?.length) parts.push(`| ingredients: ${r.ingredientNames.join(", ")}`);
         return parts.join(" ");
       })
       .join("\n");
     systemParts.push(
-      `\n--- User's Recipe Collection (${recipeIndex.length} recipes) ---\n${recipeSummary}`,
+      `\n--- Full Recipe Collection (${recipeIndex.length} total) ---\n${compactSummary}`,
       "\nThese are the ONLY recipes the user has. Do not reference any recipes not in this list unless the user asks for new ideas."
     );
   }
@@ -192,13 +286,44 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
+  // Check if client requested streaming
+  const wantsStream = body.stream === true;
+
+  if (wantsStream) {
+    try {
+      const stream = await callStreamAI(fnConfig, env as ProviderEnv, allMessages, {
+        maxTokens: 2048,
+        temperature: 0.7,
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
+      });
+    } catch {
+      return new Response(
+        JSON.stringify({
+          content: "I'm having trouble connecting to the AI service right now. Please try again in a moment.",
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+
   try {
     const content = await callTextAI(fnConfig, env, allMessages, {
-      maxTokens: 1024,
+      maxTokens: 2048,
       temperature: 0.7,
     });
 
-    if (!content) {
+    // Strip incomplete action markers (truncated responses missing closing bracket)
+    const cleaned = content
+      .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    if (!cleaned) {
       return new Response(
         JSON.stringify({
           content: "I wasn't able to generate a response. This can happen when the AI service is busy — please try again.",
@@ -208,7 +333,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     return new Response(
-      JSON.stringify({ content }),
+      JSON.stringify({ content: cleaned }),
       { headers: { "Content-Type": "application/json" } }
     );
   } catch {

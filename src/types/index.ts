@@ -91,6 +91,7 @@ export interface RecipeIndexEntry {
   ingredientCount?: number; // number of ingredients (for difficulty)
   stepCount?: number; // number of steps (for difficulty)
   difficulty?: "easy" | "medium" | "hard"; // computed from time + ingredients + steps
+  ingredientNames?: string[]; // compact ingredient list for AI context
 }
 
 // ── Tags ────────────────────────────────────────────────

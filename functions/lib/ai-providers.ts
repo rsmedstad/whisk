@@ -258,6 +258,262 @@ export async function callTextAI(
   }
 }
 
+// ── Streaming Text Completion ────────────────────────────────
+
+export interface StreamCallOptions {
+  maxTokens?: number;
+  temperature?: number;
+}
+
+/**
+ * Stream text completion from any supported provider.
+ * Returns a ReadableStream of SSE-formatted chunks: `data: {"text":"..."}\n\n`
+ * Final event: `data: [DONE]\n\n`
+ */
+export async function callStreamAI(
+  fnConfig: AIFunctionConfig,
+  env: ProviderEnv,
+  messages: Message[],
+  options: StreamCallOptions = {}
+): Promise<ReadableStream<Uint8Array>> {
+  const provider = PROVIDERS[fnConfig.provider];
+  if (!provider) throw new Error(`Unknown provider: ${fnConfig.provider}`);
+
+  const apiKey = getApiKey(env, fnConfig.provider);
+  if (!apiKey) throw new Error(`No API key for ${provider.name}`);
+
+  const { maxTokens = 2048, temperature = 0.7 } = options;
+
+  switch (provider.format) {
+    case "openai":
+      return streamOpenAI(provider.baseUrl, apiKey, fnConfig.model, messages, maxTokens, temperature);
+    case "anthropic":
+      return streamAnthropic(apiKey, fnConfig.model, messages, maxTokens, temperature);
+    case "gemini":
+      return streamGemini(provider.baseUrl, apiKey, fnConfig.model, messages, maxTokens, temperature);
+  }
+}
+
+const encoder = new TextEncoder();
+
+function sseChunk(text: string): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ text })}\n\n`);
+}
+
+function sseDone(): Uint8Array {
+  return encoder.encode("data: [DONE]\n\n");
+}
+
+async function streamOpenAI(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: Message[],
+  maxTokens: number,
+  temperature: number
+): Promise<ReadableStream<Uint8Array>> {
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    signal: AbortSignal.timeout(60000),
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: maxTokens,
+      temperature,
+      stream: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${model} API error ${res.status}: ${text}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async pull(controller) {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.enqueue(sseDone());
+          controller.close();
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const payload = trimmed.slice(6);
+          if (payload === "[DONE]") {
+            controller.enqueue(sseDone());
+            controller.close();
+            return;
+          }
+          try {
+            const parsed = JSON.parse(payload) as { choices?: { delta?: { content?: string } }[] };
+            const text = parsed.choices?.[0]?.delta?.content;
+            if (text) controller.enqueue(sseChunk(text));
+          } catch { /* skip malformed JSON */ }
+        }
+      }
+    },
+  });
+}
+
+async function streamAnthropic(
+  apiKey: string,
+  model: string,
+  messages: Message[],
+  maxTokens: number,
+  temperature: number
+): Promise<ReadableStream<Uint8Array>> {
+  const systemMsgs = messages.filter((m) => m.role === "system");
+  const otherMsgs = messages.filter((m) => m.role !== "system");
+
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    stream: true,
+    messages: otherMsgs.map((m) => ({ role: m.role, content: m.content })),
+  };
+  if (systemMsgs.length > 0) {
+    body.system = systemMsgs.map((m) => m.content).join("\n\n");
+  }
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    signal: AbortSignal.timeout(60000),
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Anthropic API error ${res.status}: ${text}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async pull(controller) {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.enqueue(sseDone());
+          controller.close();
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(trimmed.slice(6)) as { type?: string; delta?: { type?: string; text?: string } };
+              if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+                controller.enqueue(sseChunk(parsed.delta.text));
+              }
+              if (parsed.type === "message_stop") {
+                controller.enqueue(sseDone());
+                controller.close();
+                return;
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
+    },
+  });
+}
+
+async function streamGemini(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: Message[],
+  maxTokens: number,
+  temperature: number
+): Promise<ReadableStream<Uint8Array>> {
+  const systemMsgs = messages.filter((m) => m.role === "system");
+  const otherMsgs = messages.filter((m) => m.role !== "system");
+
+  const contents = otherMsgs.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const body: Record<string, unknown> = {
+    contents,
+    generationConfig: { maxOutputTokens: maxTokens, temperature },
+  };
+  if (systemMsgs.length > 0) {
+    body.systemInstruction = { parts: [{ text: systemMsgs.map((m) => m.content).join("\n\n") }] };
+  }
+
+  const res = await fetch(
+    `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+    {
+      signal: AbortSignal.timeout(60000),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gemini API error ${res.status}: ${text}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async pull(controller) {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.enqueue(sseDone());
+          controller.close();
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          try {
+            const parsed = JSON.parse(trimmed.slice(6)) as {
+              candidates?: { content?: { parts?: { text?: string }[] } }[];
+            };
+            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) controller.enqueue(sseChunk(text));
+          } catch { /* skip */ }
+        }
+      }
+    },
+  });
+}
+
 // ── Vision Completion ───────────────────────────────────────
 
 export async function callVisionAI(

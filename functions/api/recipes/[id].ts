@@ -1,5 +1,9 @@
+import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../../lib/embeddings";
+
 interface Env {
   WHISK_KV: KVNamespace;
+  AI?: Ai;
+  VECTORIZE?: VectorizeIndex;
 }
 
 interface RecipeIndexEntry {
@@ -22,6 +26,7 @@ interface RecipeIndexEntry {
   ingredientCount?: number;
   stepCount?: number;
   difficulty?: "easy" | "medium" | "hard";
+  ingredientNames?: string[];
 }
 
 function computeDifficulty(totalMinutes: number, ingredientCount: number, stepCount: number): "easy" | "medium" | "hard" {
@@ -73,6 +78,7 @@ export const onRequestPut: PagesFunction<Env> = async ({
   request,
   env,
   data,
+  waitUntil,
 }) => {
   const id = params.id as string;
   const existing = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<string, unknown> | null;
@@ -147,10 +153,18 @@ export const onRequestPut: PagesFunction<Env> = async ({
       ingredientCount: ingCount,
       stepCount: stpCount,
       difficulty: computeDifficulty(totalMin, ingCount, stpCount),
+      ingredientNames: Array.isArray(updated.ingredients)
+        ? (updated.ingredients as { name?: string }[]).map((i) => i.name).filter((n): n is string => !!n).slice(0, 30)
+        : entry.ingredientNames,
     };
   });
 
   await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+
+  // Re-embed in Vectorize if title, tags, ingredients, or description changed
+  if (env.AI && env.VECTORIZE && ("title" in updates || "tags" in updates || "ingredients" in updates || "description" in updates || "cuisine" in updates)) {
+    waitUntil(upsertRecipeEmbedding(env.AI, env.VECTORIZE, recipeToEmbeddingInput(updated)).catch(() => {}));
+  }
 
   // Resolve favorite for the requesting user in the response
   if (userId) {
@@ -164,7 +178,7 @@ export const onRequestPut: PagesFunction<Env> = async ({
 };
 
 // DELETE /api/recipes/:id
-export const onRequestDelete: PagesFunction<Env> = async ({ params, env }) => {
+export const onRequestDelete: PagesFunction<Env> = async ({ params, env, waitUntil }) => {
   const id = params.id as string;
   await env.WHISK_KV.delete(`recipe:${id}`);
 
@@ -173,6 +187,11 @@ export const onRequestDelete: PagesFunction<Env> = async ({ params, env }) => {
     ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
   const newIndex = index.filter((entry) => entry.id !== id);
   await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+
+  // Remove from Vectorize
+  if (env.VECTORIZE) {
+    waitUntil(env.VECTORIZE.deleteByIds([id]).catch(() => {}));
+  }
 
   return new Response(null, { status: 204 });
 };

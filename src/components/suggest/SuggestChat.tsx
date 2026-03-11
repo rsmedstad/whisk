@@ -9,6 +9,7 @@ import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 import { classNames } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
+import { renderMarkdown } from "../../lib/markdown";
 import type { RecipeIndexEntry, PlannedMeal, ShoppingItem, UserPreferences, MealSlot, DiscoverFeedItem } from "../../types";
 import { toDateString, normalizeSearch } from "../../lib/utils";
 
@@ -128,7 +129,11 @@ function parseActions(text: string): ParsedAction[] {
 }
 
 function stripActionMarkers(text: string): string {
-  return text.replace(ACTION_REGEX, "").replace(/\n{3,}/g, "\n\n").trim();
+  return text
+    .replace(ACTION_REGEX, "")
+    .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], shoppingList = [], preferences, onAddMeal, onAddToList }: SuggestChatProps) {
@@ -292,7 +297,15 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           seasonalContext: buildSeasonalSystemContext(new Date(), householdSize),
           mealPlan: mealPlan.length > 0 ? mealPlan.slice(0, 30) : undefined,
           shoppingList: shoppingList.length > 0 ? shoppingList.map((i) => ({ name: i.name, checked: i.checked, category: i.category })).slice(0, 50) : undefined,
-          preferences: preferences ?? undefined,
+          preferences: freshPreferences ?? preferences ?? undefined,
+          enabledSlots: (() => {
+            try {
+              const raw = localStorage.getItem("whisk_meal_slots");
+              if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed) && parsed.length > 0) return parsed; }
+            } catch { /* ignore */ }
+            return ["dinner"];
+          })(),
+          stream: true,
         }),
       });
 
@@ -301,15 +314,71 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         console.error(`[Whisk] Chat API error ${res.status}:`, errorText);
         throw new Error(`API error ${res.status}`);
       }
-      const data = (await res.json()) as { content: string };
-      if (!data.content) {
-        console.warn("[Whisk] Chat API returned empty content");
-        throw new Error("Empty response");
+
+      const contentType = res.headers.get("Content-Type") ?? "";
+
+      if (contentType.includes("text/event-stream") && res.body) {
+        // Streaming response
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = "";
+
+        // Add placeholder assistant message
+        setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data: ") || trimmed === "data: [DONE]") continue;
+            try {
+              const data = JSON.parse(trimmed.slice(6)) as { text?: string };
+              if (data.text) {
+                fullContent += data.text;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last) updated[updated.length - 1] = { ...last, content: fullContent };
+                  return updated;
+                });
+              }
+            } catch { /* skip malformed chunk */ }
+          }
+        }
+
+        if (!fullContent) {
+          console.warn("[Whisk] Stream returned empty content");
+          throw new Error("Empty response");
+        }
+
+        // Final update with cleaned content (strip incomplete action markers)
+        const cleaned = fullContent
+          .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last) updated[updated.length - 1] = { ...last, content: cleaned };
+          return updated;
+        });
+      } else {
+        // Non-streaming fallback (JSON response)
+        const data = (await res.json()) as { content: string };
+        if (!data.content) {
+          console.warn("[Whisk] Chat API returned empty content");
+          throw new Error("Empty response");
+        }
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.content },
+        ]);
       }
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.content },
-      ]);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Unknown error";
       console.error("[Whisk] Chat send failed:", errMsg);
@@ -846,7 +915,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                       : "bg-stone-100 dark:bg-stone-800 dark:text-stone-200"
                 )}
               >
-                <p className="whitespace-pre-wrap">{displayContent}</p>
+                <div className="prose-chat">{renderMarkdown(displayContent)}</div>
                 {isError && (
                   <div className="mt-2 flex items-center gap-2 border-t border-red-200 dark:border-red-800 pt-2">
                     <p className="text-xs text-red-600 dark:text-red-400 flex-1">

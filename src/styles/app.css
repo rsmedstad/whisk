@@ -9,6 +9,12 @@ input[type="search"]::-webkit-search-decoration {
   appearance: none;
 }
 
+/* Chat markdown styles */
+.prose-chat p { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+.prose-chat p:first-child { margin-top: 0; }
+.prose-chat p:last-child { margin-bottom: 0; }
+.prose-chat ul, .prose-chat ol { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+
 @theme {
   /* Default accent — fresh green (overridden by data-accent for seasonal/holiday themes) */
   --color-orange-50: #f0fdf4;
