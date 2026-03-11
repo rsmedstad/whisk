@@ -156,8 +156,28 @@ export function useShoppingList() {
     [list, saveList]
   );
 
+  /** Remove recipe-sourced items whose sourceRecipeId is not in the current plan */
+  const removeStaleRecipeItems = useCallback(
+    async (currentPlanRecipeIds: string[]): Promise<{ removed: number; recipesAffected: number }> => {
+      const planSet = new Set(currentPlanRecipeIds);
+      const staleItems = list.items.filter(
+        (item) => item.addedBy === "recipe" && item.sourceRecipeId && !planSet.has(item.sourceRecipeId)
+      );
+      if (staleItems.length === 0) return { removed: 0, recipesAffected: 0 };
+
+      const staleIds = new Set(staleItems.map((i) => i.id));
+      const recipesAffected = new Set(staleItems.map((i) => i.sourceRecipeId!)).size;
+      await saveList({
+        ...list,
+        items: list.items.filter((item) => !staleIds.has(item.id)),
+      });
+      return { removed: staleItems.length, recipesAffected };
+    },
+    [list, saveList]
+  );
+
   const updateItem = useCallback(
-    async (itemId: string, updates: Partial<Pick<ShoppingItem, "store" | "category" | "name">>) => {
+    async (itemId: string, updates: Partial<Pick<ShoppingItem, "category" | "name">>) => {
       await saveList({
         ...list,
         items: list.items.map((item) =>
@@ -179,28 +199,40 @@ export function useShoppingList() {
   );
 
   const classifyUncategorized = useCallback(async () => {
-    const uncategorized = list.items.filter((i) => i.category === "other");
-    if (uncategorized.length === 0) return;
+    // Send items that need classification: "other" category OR missing subcategory
+    const needsClassification = list.items.filter(
+      (i) => i.category === "other" || !i.subcategory
+    );
+    if (needsClassification.length === 0) return;
 
     try {
-      const result = await api.post<{ items: { name: string; category: string }[] }>(
+      const result = await api.post<{ items: { name: string; category: string; subcategory?: string }[] }>(
         "/shopping/classify",
-        { items: uncategorized.map((i) => i.name) }
+        { items: needsClassification.map((i) => i.name) }
       );
 
       if (result?.items) {
-        const categoryMap = new Map<string, string>();
+        const classifyMap = new Map<string, { category: string; subcategory?: string }>();
         for (const item of result.items) {
-          categoryMap.set(item.name.toLowerCase(), item.category);
+          classifyMap.set(item.name.toLowerCase(), {
+            category: item.category,
+            subcategory: item.subcategory,
+          });
         }
 
         const updatedItems = list.items.map((item) => {
-          if (item.category !== "other") return item;
-          const newCat = categoryMap.get(item.name.toLowerCase());
-          if (newCat && newCat !== "other") {
-            return { ...item, category: newCat as ShoppingCategory };
+          const classified = classifyMap.get(item.name.toLowerCase());
+          if (!classified) return item;
+          const updates: Partial<ShoppingItem> = {};
+          // Only update category if it was "other"
+          if (item.category === "other" && classified.category !== "other") {
+            updates.category = classified.category as ShoppingCategory;
           }
-          return item;
+          // Always update subcategory if we got one
+          if (classified.subcategory && !item.subcategory) {
+            updates.subcategory = classified.subcategory;
+          }
+          return Object.keys(updates).length > 0 ? { ...item, ...updates } : item;
         });
 
         await saveList({ ...list, items: updatedItems });
@@ -220,6 +252,7 @@ export function useShoppingList() {
     clearAll,
     addFromRecipe,
     removeFromRecipe,
+    removeStaleRecipeItems,
     updateItem,
     clearCategory,
     classifyUncategorized,

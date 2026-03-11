@@ -5,13 +5,13 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList, RefreshCw } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
 
 
-type SortMode = "department" | "alphabetical" | "unchecked-first" | "by-store" | "by-recipe";
+type GroupMode = "department" | "by-recipe";
 
 interface ShoppingListProps {
   list: ShoppingListType;
@@ -21,7 +21,7 @@ interface ShoppingListProps {
   onRemoveItem: (id: string) => void;
   onClearChecked: () => void;
   onClearAll: () => void;
-  onUpdateItem: (id: string, updates: Partial<Pick<ShoppingItem, "store" | "category" | "name">>) => void;
+  onUpdateItem: (id: string, updates: Partial<Pick<ShoppingItem, "category" | "name">>) => void;
   onClearCategory: (category: ShoppingCategory) => void;
   onClassifyUncategorized: () => Promise<void>;
   recipeIndex?: RecipeIndexEntry[];
@@ -29,6 +29,7 @@ interface ShoppingListProps {
   chatEnabled?: boolean;
   plannedRecipeIds?: string[];
   onAddFromPlan?: (ingredients: Ingredient[], recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
+  onSyncWithPlan?: (currentPlanRecipeIds: string[]) => Promise<{ removed: number; recipesAffected: number }>;
 }
 
 export function ShoppingList({
@@ -47,14 +48,14 @@ export function ShoppingList({
   chatEnabled = false,
   plannedRecipeIds = [],
   onAddFromPlan,
+  onSyncWithPlan,
 }: ShoppingListProps) {
   const navigate = useNavigate();
   const { isKeyboardOpen } = useKeyboard();
   const [newItem, setNewItem] = useState("");
-  const [sortMode, setSortMode] = useState<SortMode>("department");
-  const [storeFilter, setStoreFilter] = useState<string | null>(null);
-  const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
-  const [storeInput, setStoreInput] = useState("");
+  const [groupMode, setGroupMode] = useState<GroupMode>("department");
+  const [sortAZ, setSortAZ] = useState(false);
+  const [uncheckedFirst, setUncheckedFirst] = useState(false);
   const [isClassifying, setIsClassifying] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   // List scan
@@ -65,21 +66,49 @@ export function ShoppingList({
   const [scanSortAZ, setScanSortAZ] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
-  // Add from plan
+  // Add from plan / sync with plan
   const [planAddStatus, setPlanAddStatus] = useState<string | null>(null);
   const [isPlanAdding, setIsPlanAdding] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   const PANTRY_STAPLES = useMemo(() => new Set([
+    // Salt & pepper
     "salt", "pepper", "black pepper", "kosher salt", "sea salt", "table salt",
     "salt & pepper", "salt and pepper", "freshly ground black pepper", "ground pepper",
+    "freshly ground pepper", "coarse salt", "flaky salt", "finishing salt",
+    // Oils & sprays
     "olive oil", "vegetable oil", "canola oil", "extra virgin olive oil", "extra-virgin olive oil",
-    "cooking spray", "nonstick spray", "oil", "ice",
+    "cooking spray", "nonstick spray", "oil", "sesame oil", "avocado oil", "coconut oil",
+    // Dried herbs & spices (common pantry items most kitchens have)
+    "oregano", "dried oregano", "basil", "dried basil", "thyme", "dried thyme",
+    "rosemary", "dried rosemary", "bay leaf", "bay leaves", "paprika", "smoked paprika",
+    "cumin", "ground cumin", "chili powder", "cayenne", "cayenne pepper",
+    "cinnamon", "ground cinnamon", "nutmeg", "ground nutmeg",
+    "garlic powder", "onion powder", "turmeric", "ground turmeric",
+    "red pepper flakes", "crushed red pepper", "red pepper flake",
+    "italian seasoning", "dried parsley", "coriander", "ground coriander",
+    "ginger", "ground ginger", "allspice", "cloves", "ground cloves",
+    "curry powder", "garam masala", "taco seasoning",
+    // Basics
+    "sugar", "granulated sugar", "brown sugar", "flour", "all-purpose flour",
+    "baking powder", "baking soda", "vanilla", "vanilla extract",
+    "cornstarch", "ice", "water",
+    // Vinegars & sauces most kitchens have
+    "soy sauce", "vinegar", "white vinegar", "apple cider vinegar",
   ]), []);
 
   const isPantryStaple = useCallback((name: string): boolean => {
-    const lower = name.toLowerCase().trim();
+    // Strip leading amounts/units for matching: "1/4 tsp red pepper" → "red pepper"
+    let lower = name.toLowerCase().trim();
+    lower = lower.replace(/^[\d\/.\s]+(oz|lb|cup|tbsp|tsp|g|kg|ml|l|can|bunch|clove|sprig|pinch|dash)s?\b\s*/i, "");
+    lower = lower.replace(/^[\d\/.\s]+/, "").trim();
+    // Strip trailing commas, "and", parenthetical junk
+    lower = lower.replace(/[,;]\s*(and\s*)?$/, "").replace(/\s+and\s*$/, "").trim();
+
     if (PANTRY_STAPLES.has(lower)) return true;
-    if (/^water$/.test(lower) || /^\d+.*\btap water\b/.test(lower) || /^\d+[\s-]*(tbsp|tsp|cup|ml|oz)?\s*water$/i.test(lower)) return true;
+    if (/^water$/.test(lower) || /\btap water\b/.test(lower)) return true;
+    // Try splitting compound items: "dried oregano, salt & pepper"
     if (lower.includes("&") || lower.includes(" and ") || lower.includes(",")) {
       const parts = lower.split(/[&,]|\band\b/).map((s) => s.trim()).filter(Boolean);
       if (parts.length > 0 && parts.every((p) => PANTRY_STAPLES.has(p))) return true;
@@ -128,14 +157,55 @@ export function ShoppingList({
     }
   }, [onAddFromPlan, plannedRecipeIds, isPantryStaple]);
 
-  // Get unique store names from items
-  const storeNames = useMemo(() => {
-    const s = new Set<string>();
-    for (const item of list.items) {
-      if (item.store) s.add(item.store);
+  // Count stale recipe items (from recipes no longer in the plan)
+  const staleRecipeItemCount = useMemo(() => {
+    if (plannedRecipeIds.length === 0) {
+      // If no plan, all recipe-sourced items are stale
+      return list.items.filter((i) => i.addedBy === "recipe" && i.sourceRecipeId).length;
     }
-    return Array.from(s).sort();
-  }, [list.items]);
+    const planSet = new Set(plannedRecipeIds);
+    return list.items.filter(
+      (i) => i.addedBy === "recipe" && i.sourceRecipeId && !planSet.has(i.sourceRecipeId)
+    ).length;
+  }, [list.items, plannedRecipeIds]);
+
+  const handleSyncWithPlan = useCallback(async () => {
+    if (!onSyncWithPlan) return;
+    setIsSyncing(true);
+    setSyncStatus(null);
+    try {
+      const result = await onSyncWithPlan(plannedRecipeIds);
+      if (result.removed > 0) {
+        setSyncStatus(`Removed ${result.removed} item${result.removed !== 1 ? "s" : ""} from ${result.recipesAffected} old recipe${result.recipesAffected !== 1 ? "s" : ""}`);
+      } else {
+        setSyncStatus("List is already in sync with plan");
+      }
+      // Then add essentials from any new recipes
+      if (onAddFromPlan && plannedRecipeIds.length > 0) {
+        let totalAdded = 0;
+        for (const recipeId of plannedRecipeIds) {
+          const res = await fetch(`/api/recipes/${recipeId}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem("whisk_token")}` },
+          });
+          if (!res.ok) continue;
+          const fullRecipe = (await res.json()) as { ingredients: Ingredient[] };
+          if (!fullRecipe.ingredients?.length) continue;
+          const ings = fullRecipe.ingredients.filter((i) => !isPantryStaple(i.name));
+          const addResult = await onAddFromPlan(ings, recipeId);
+          totalAdded += addResult.added;
+        }
+        if (totalAdded > 0) {
+          setSyncStatus((prev) => `${prev ?? "Synced"} · Added ${totalAdded} new item${totalAdded !== 1 ? "s" : ""}`);
+        }
+      }
+      setTimeout(() => setSyncStatus(null), 4000);
+    } catch {
+      setSyncStatus("Sync failed");
+      setTimeout(() => setSyncStatus(null), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [onSyncWithPlan, onAddFromPlan, plannedRecipeIds, isPantryStaple]);
 
   // Combine duplicate items by normalized name + unit
   const combinedItems = useMemo(() => {
@@ -189,16 +259,12 @@ export function ShoppingList({
     return result;
   }, [list.items]);
 
-  // Filter items by store and text query
+  // Filter items by text query
   const filteredItems = useMemo(() => {
-    let items = combinedItems;
-    if (storeFilter) items = items.filter((i) => i.store === storeFilter);
-    if (filterQuery.trim()) {
-      const q = filterQuery.toLowerCase().trim();
-      items = items.filter((i) => i.name.toLowerCase().includes(q));
-    }
-    return items;
-  }, [combinedItems, storeFilter, filterQuery]);
+    if (!filterQuery.trim()) return combinedItems;
+    const q = filterQuery.toLowerCase().trim();
+    return combinedItems.filter((i) => i.name.toLowerCase().includes(q));
+  }, [combinedItems, filterQuery]);
 
   // Group by category
   const grouped = useMemo(() => {
@@ -215,36 +281,18 @@ export function ShoppingList({
     return groups;
   }, [filteredItems]);
 
-  // Flat sorted list for alphabetical mode
+  // Flat sorted list for A-Z mode (no category grouping)
   const sortedFlat = useMemo(() => {
-    if (sortMode !== "alphabetical") return null;
+    if (!sortAZ) return null;
     return [...filteredItems].sort((a, b) => {
-      if (a.checked !== b.checked) return a.checked ? 1 : -1;
+      if (uncheckedFirst && a.checked !== b.checked) return a.checked ? 1 : -1;
       return a.name.localeCompare(b.name);
     });
-  }, [filteredItems, sortMode]);
-
-  // Store-grouped list
-  const storeGrouped = useMemo(() => {
-    if (sortMode !== "by-store") return null;
-    const groups = new Map<string, ShoppingItem[]>();
-    for (const item of filteredItems) {
-      const store = item.store ?? "Unassigned";
-      const arr = groups.get(store) ?? [];
-      arr.push(item);
-      groups.set(store, arr);
-    }
-    const sorted = [...groups.entries()].sort(([a], [b]) => {
-      if (a === "Unassigned") return 1;
-      if (b === "Unassigned") return -1;
-      return a.localeCompare(b);
-    });
-    return sorted;
-  }, [filteredItems, sortMode]);
+  }, [filteredItems, sortAZ, uncheckedFirst]);
 
   // Recipe-grouped list
   const recipeGrouped = useMemo(() => {
-    if (sortMode !== "by-recipe") return null;
+    if (groupMode !== "by-recipe" || sortAZ) return null;
     const groups = new Map<string, ShoppingItem[]>();
     for (const item of filteredItems) {
       const key = item.sourceRecipeId ?? "__manual__";
@@ -258,7 +306,7 @@ export function ShoppingList({
       return a.localeCompare(b);
     });
     return sorted;
-  }, [filteredItems, sortMode]);
+  }, [filteredItems, groupMode, sortAZ]);
 
   const recipeNames = useMemo(() => {
     const map = new Map<string, string>();
@@ -270,7 +318,7 @@ export function ShoppingList({
 
   const checkedCount = filteredItems.filter((i) => i.checked).length;
   const totalCount = filteredItems.length;
-  const uncategorizedCount = list.items.filter((i) => i.category === "other").length;
+  const needsClassificationCount = list.items.filter((i) => i.category === "other" || !i.subcategory).length;
 
   const handleAdd = (e: FormEvent) => {
     e.preventDefault();
@@ -289,13 +337,6 @@ export function ShoppingList({
       setIsClassifying(false);
     }
   }, [onClassifyUncategorized]);
-
-  const handleSetStore = (itemId: string) => {
-    const trimmed = storeInput.trim();
-    onUpdateItem(itemId, { store: trimmed || undefined });
-    setEditingStoreId(null);
-    setStoreInput("");
-  };
 
   const handleListScan = () => {
     const input = document.createElement("input");
@@ -429,41 +470,6 @@ export function ShoppingList({
           </span>
         </button>
 
-        {/* Store tag */}
-        {editingStoreId === item.id ? (
-          <form
-            onSubmit={(e) => { e.preventDefault(); handleSetStore(item.id); }}
-            className="flex items-center gap-1"
-          >
-            <input
-              autoFocus
-              type="text"
-              value={storeInput}
-              onChange={(e) => setStoreInput(e.target.value)}
-              onBlur={() => handleSetStore(item.id)}
-              placeholder="Store"
-              list="store-suggestions"
-              className="w-20 px-1.5 py-0.5 text-xs rounded border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 dark:text-stone-200 focus:border-orange-500 focus:outline-none"
-            />
-          </form>
-        ) : item.store ? (
-          <button
-            onClick={() => { setEditingStoreId(item.id); setStoreInput(item.store ?? ""); }}
-            className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 whitespace-nowrap"
-            title={`Store: ${item.store}`}
-          >
-            {item.store}
-          </button>
-        ) : (
-          <button
-            onClick={() => { setEditingStoreId(item.id); setStoreInput(""); }}
-            className="opacity-0 group-hover:opacity-100 text-[10px] text-stone-400 dark:text-stone-500 px-1 transition-opacity"
-            title="Add store"
-          >
-            <Tag className="w-3 h-3" />
-          </button>
-        )}
-
         {/* Delete */}
         <button
           onClick={handleRemove}
@@ -477,13 +483,6 @@ export function ShoppingList({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Store suggestions datalist (shared) */}
-      <datalist id="store-suggestions">
-        {storeNames.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
-
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm dark:bg-stone-950/95 border-b border-stone-200 dark:border-stone-800 px-4 pt-[var(--sat)] wk-header-decor relative">
         <div className="flex items-center justify-between py-3">
@@ -552,17 +551,17 @@ export function ShoppingList({
         {/* Filter bar — sort, clear checked, clear all, auto-classify */}
         {totalCount > 0 && (
           <div className={classNames("flex items-center gap-1.5 px-4 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
-            {/* Sort: group mode dropdown + quick toggle pills */}
+            {/* Group mode dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowSortMenu(!showSortMenu)}
                 className={classNames(
                   "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
-                  sortMode === "by-store" || sortMode === "by-recipe"
+                  groupMode === "by-recipe"
                     ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
                     : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
                 )}
-                title="Sort by group"
+                title="Group by"
               >
                 <ArrowUpDown className="w-3.5 h-3.5" />
               </button>
@@ -571,16 +570,15 @@ export function ShoppingList({
                   <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
                   <div className="absolute left-0 top-8 z-50 w-44 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800 overflow-hidden">
                     {([
-                      { value: "department" as SortMode, label: "By department" },
-                      { value: "by-store" as SortMode, label: "By store" },
-                      { value: "by-recipe" as SortMode, label: "By recipe" },
+                      { value: "department" as GroupMode, label: "By department" },
+                      { value: "by-recipe" as GroupMode, label: "By recipe" },
                     ]).map((opt) => (
                       <button
                         key={opt.value}
-                        onClick={() => { setSortMode(opt.value); setShowSortMenu(false); }}
+                        onClick={() => { setGroupMode(opt.value); setShowSortMenu(false); }}
                         className={classNames(
                           "w-full px-3 py-2 text-left text-xs",
-                          (sortMode === opt.value || (opt.value === "department" && (sortMode === "department" || sortMode === "unchecked-first")))
+                          groupMode === opt.value
                             ? "text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/30"
                             : "dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700"
                         )}
@@ -592,11 +590,12 @@ export function ShoppingList({
                 </>
               )}
             </div>
+            {/* Unchecked first toggle */}
             <button
-              onClick={() => setSortMode(sortMode === "unchecked-first" ? "department" : "unchecked-first")}
+              onClick={() => setUncheckedFirst(!uncheckedFirst)}
               className={classNames(
                 "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
-                sortMode === "unchecked-first"
+                uncheckedFirst
                   ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
                   : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
               )}
@@ -604,15 +603,16 @@ export function ShoppingList({
             >
               <SquareCheck className="w-3.5 h-3.5" />
             </button>
+            {/* A-Z toggle (flat alphabetical, no category groups) */}
             <button
-              onClick={() => setSortMode(sortMode === "alphabetical" ? "department" : "alphabetical")}
+              onClick={() => setSortAZ(!sortAZ)}
               className={classNames(
                 "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors",
-                sortMode === "alphabetical"
+                sortAZ
                   ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
                   : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
               )}
-              title="Sort A-Z"
+              title="Sort A-Z (flat list, no groups)"
             >
               A-Z
             </button>
@@ -624,13 +624,13 @@ export function ShoppingList({
                 <Check className="w-3 h-3" /> Clear checked ({checkedCount})
               </button>
             )}
-            {uncategorizedCount > 0 && chatEnabled && (
+            {needsClassificationCount > 0 && chatEnabled && (
               <button
                 onClick={handleClassify}
                 disabled={isClassifying}
                 className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
               >
-                <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "..." : `Classify (${uncategorizedCount})`}
+                <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "Classifying..." : `Classify (${needsClassificationCount})`}
               </button>
             )}
             <button
@@ -766,56 +766,37 @@ export function ShoppingList({
             </div>
           )}
 
-          {/* Store filter pills — near the list */}
-          {storeNames.length > 0 && (
-            <div className="flex gap-1.5 px-4 pt-2 pb-1 overflow-x-auto no-scrollbar">
-              <button
-                onClick={() => setStoreFilter(null)}
-                className={classNames(
-                  "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                  !storeFilter
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                )}
-              >
-                All
-              </button>
-              {storeNames.map((store) => (
-                <button
-                  key={store}
-                  onClick={() => setStoreFilter(storeFilter === store ? null : store)}
-                  className={classNames(
-                    "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors",
-                    storeFilter === store
-                      ? "bg-orange-500 text-white border-orange-500"
-                      : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
-                  )}
-                >
-                  {store}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Add from Plan bar — shown when there are planned meals with linked recipes */}
-          {totalCount > 0 && plannedRecipeIds.length > 0 && onAddFromPlan && (
+          {/* Plan bar — add essentials + sync with plan */}
+          {totalCount > 0 && (plannedRecipeIds.length > 0 || staleRecipeItemCount > 0) && onAddFromPlan && (
             <div className="mx-4 mt-2 flex items-center justify-between rounded-lg bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 px-3 py-2">
               <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                 <ClipboardList className="w-3.5 h-3.5" />
                 <span>{plannedRecipeIds.length} planned recipe{plannedRecipeIds.length !== 1 ? "s" : ""}</span>
               </div>
               <div className="flex items-center gap-3">
-                {planAddStatus ? (
-                  <span className="text-xs text-stone-500 dark:text-stone-400">{planAddStatus}</span>
+                {planAddStatus || syncStatus ? (
+                  <span className="text-xs text-stone-500 dark:text-stone-400">{planAddStatus ?? syncStatus}</span>
                 ) : (
                   <>
-                    <button
-                      onClick={() => handleAddFromPlan(false)}
-                      disabled={isPlanAdding}
-                      className="text-xs font-medium text-orange-600 dark:text-orange-400 active:opacity-70 disabled:opacity-50"
-                    >
-                      {isPlanAdding ? "Adding..." : "Add Essentials from Plan"}
-                    </button>
+                    {staleRecipeItemCount > 0 && onSyncWithPlan && (
+                      <button
+                        onClick={handleSyncWithPlan}
+                        disabled={isSyncing}
+                        className="flex items-center gap-1 text-xs font-medium text-orange-600 dark:text-orange-400 active:opacity-70 disabled:opacity-50"
+                      >
+                        <RefreshCw className={classNames("w-3 h-3", isSyncing && "animate-spin")} />
+                        {isSyncing ? "Syncing..." : `Sync with Plan (${staleRecipeItemCount})`}
+                      </button>
+                    )}
+                    {plannedRecipeIds.length > 0 && (
+                      <button
+                        onClick={() => handleAddFromPlan(false)}
+                        disabled={isPlanAdding}
+                        className="text-xs font-medium text-orange-600 dark:text-orange-400 active:opacity-70 disabled:opacity-50"
+                      >
+                        {isPlanAdding ? "Adding..." : "Add Essentials"}
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -827,9 +808,9 @@ export function ShoppingList({
             {totalCount === 0 ? (
               <EmptyState
                 icon={<ShoppingCart className="w-12 h-12" />}
-                title={storeFilter ? `No items for ${storeFilter}` : "List is empty"}
-                description={storeFilter ? "Clear the filter to see all items" : "Add items below or from a recipe"}
-                action={!storeFilter && plannedRecipeIds.length > 0 && onAddFromPlan ? (
+                title="List is empty"
+                description="Add items below or from a recipe"
+                action={plannedRecipeIds.length > 0 && onAddFromPlan ? (
                   <div className="flex flex-col items-center gap-2">
                     <button
                       onClick={() => handleAddFromPlan(false)}
@@ -852,45 +833,42 @@ export function ShoppingList({
                   </div>
                 ) : undefined}
               />
-            ) : sortMode === "by-store" && storeGrouped ? (
-              <div className="space-y-4">
-                {storeGrouped.map(([store, items]) => {
-                  const sorted = [...items].sort((a, b) => {
-                    if (a.checked !== b.checked) return a.checked ? 1 : -1;
-                    return a.name.localeCompare(b.name);
-                  });
-                  const storeChecked = items.filter((i) => i.checked).length;
-                  return (
-                    <section key={store}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-orange-300/50 flex items-center gap-1.5">
-                          {store}
-                          <span className="font-normal text-stone-300 dark:text-stone-600">
-                            ({items.length})
-                          </span>
-                        </h3>
-                        {storeChecked > 0 && storeChecked < items.length && (
-                          <span className="text-[10px] text-stone-400 dark:text-stone-500">
-                            {storeChecked}/{items.length}
-                          </span>
-                        )}
-                      </div>
+            ) : sortAZ && sortedFlat ? (
+              /* A-Z flat list — optionally split into unchecked/checked sections */
+              <div>
+                {uncheckedFirst ? (
+                  <>
+                    {sortedFlat.some((i) => !i.checked) && (
                       <ul className="space-y-1">
-                        {sorted.map(renderItem)}
+                        {sortedFlat.filter((i) => !i.checked).map(renderItem)}
                       </ul>
-                    </section>
-                  );
-                })}
-                <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
+                    )}
+                    {sortedFlat.some((i) => i.checked) && (
+                      <>
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mt-4 mb-1.5">
+                          Checked ({checkedCount})
+                        </h3>
+                        <ul className="space-y-1">
+                          {sortedFlat.filter((i) => i.checked).map(renderItem)}
+                        </ul>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <ul className="space-y-1">
+                    {sortedFlat.map(renderItem)}
+                  </ul>
+                )}
+                <div className="border-t border-stone-200 dark:border-stone-800 pt-3 mt-4 text-sm text-stone-400 dark:text-stone-500 text-center">
                   {totalCount} item{totalCount !== 1 ? "s" : ""}
-                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
+                  {checkedCount > 0 && ` · ${checkedCount} checked`}
                 </div>
               </div>
-            ) : sortMode === "by-recipe" && recipeGrouped ? (
+            ) : groupMode === "by-recipe" && recipeGrouped ? (
               <div className="space-y-4">
                 {recipeGrouped.map(([recipeId, items]) => {
                   const sorted = [...items].sort((a, b) => {
-                    if (a.checked !== b.checked) return a.checked ? 1 : -1;
+                    if (uncheckedFirst && a.checked !== b.checked) return a.checked ? 1 : -1;
                     return a.name.localeCompare(b.name);
                   });
                   const groupChecked = items.filter((i) => i.checked).length;
@@ -920,32 +898,37 @@ export function ShoppingList({
                 })}
                 <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
                   {totalCount} item{totalCount !== 1 ? "s" : ""}
-                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
-                </div>
-              </div>
-            ) : sortMode === "alphabetical" && sortedFlat ? (
-              <div>
-                <ul className="space-y-1">
-                  {sortedFlat.map(renderItem)}
-                </ul>
-                <div className="border-t border-stone-200 dark:border-stone-800 pt-3 mt-4 text-sm text-stone-400 dark:text-stone-500 text-center">
-                  {totalCount} item{totalCount !== 1 ? "s" : ""}
-                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
+                  {checkedCount > 0 && ` · ${checkedCount} checked`}
                 </div>
               </div>
             ) : (
+              /* Default: grouped by department, with subcategory sub-headers */
               <div className="space-y-4">
                 {CATEGORY_ORDER.map((cat) => {
                   const items = grouped.get(cat) ?? [];
                   if (items.length === 0) return null;
 
-                  const sorted = [...items].sort((a, b) => {
-                    if (a.checked !== b.checked) return a.checked ? 1 : -1;
-                    if (sortMode === "unchecked-first") return 0;
-                    return a.name.localeCompare(b.name);
-                  });
-
                   const catChecked = items.filter((i) => i.checked).length;
+
+                  // Group by subcategory if any items have one
+                  const hasSubcategories = items.some((i) => i.subcategory);
+                  let subcategoryGroups: [string, typeof items][] | null = null;
+
+                  if (hasSubcategories) {
+                    const subMap = new Map<string, typeof items>();
+                    for (const item of items) {
+                      const sub = item.subcategory ?? "Other";
+                      const arr = subMap.get(sub) ?? [];
+                      arr.push(item);
+                      subMap.set(sub, arr);
+                    }
+                    // Sort subcategories alphabetically, "Other" last
+                    subcategoryGroups = [...subMap.entries()].sort(([a], [b]) => {
+                      if (a === "Other") return 1;
+                      if (b === "Other") return -1;
+                      return a.localeCompare(b);
+                    });
+                  }
 
                   return (
                     <section key={cat}>
@@ -972,17 +955,40 @@ export function ShoppingList({
                           </button>
                         </div>
                       </div>
-                      <ul className="space-y-1">
-                        {sorted.map(renderItem)}
-                      </ul>
+                      {subcategoryGroups ? (
+                        <div className="space-y-2">
+                          {subcategoryGroups.map(([sub, subItems]) => {
+                            const sorted = [...subItems].sort((a, b) => {
+                              if (uncheckedFirst && a.checked !== b.checked) return a.checked ? 1 : -1;
+                              return a.name.localeCompare(b.name);
+                            });
+                            return (
+                              <div key={sub}>
+                                <p className="text-[10px] font-medium text-stone-400/70 dark:text-stone-500/70 uppercase tracking-wider ml-0.5 mb-0.5">
+                                  {sub}
+                                </p>
+                                <ul className="space-y-1">
+                                  {sorted.map(renderItem)}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <ul className="space-y-1">
+                          {[...items].sort((a, b) => {
+                            if (uncheckedFirst && a.checked !== b.checked) return a.checked ? 1 : -1;
+                            return a.name.localeCompare(b.name);
+                          }).map(renderItem)}
+                        </ul>
+                      )}
                     </section>
                   );
                 })}
 
                 <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
                   {totalCount} item{totalCount !== 1 ? "s" : ""}
-                  {checkedCount > 0 && ` \u00B7 ${checkedCount} checked`}
-                  {storeFilter && ` \u00B7 filtered by ${storeFilter}`}
+                  {checkedCount > 0 && ` · ${checkedCount} checked`}
                 </div>
               </div>
             )}

@@ -16,6 +16,7 @@ interface ClassifyRequest {
 interface ClassifiedItem {
   name: string;
   category: string;
+  subcategory?: string;
 }
 
 const VALID_CATEGORIES = [
@@ -43,19 +44,29 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     );
   }
 
-  const prompt = `Classify these grocery/shopping items into store departments. Valid categories: ${VALID_CATEGORIES.join(", ")}.
+  const prompt = `Classify these grocery/shopping items into store departments and subcategories.
+
+Valid categories: ${VALID_CATEGORIES.join(", ")}
+
+For each item, also assign a short subcategory label that groups similar items within the department. Examples:
+- Produce subcategories: "Fresh Vegetables", "Fresh Fruits", "Fresh Herbs", "Roots & Alliums"
+- Pantry subcategories: "Canned Goods", "Dried Spices", "Oils & Vinegars", "Grains & Pasta", "Baking", "Sauces & Condiments", "Nuts & Seeds"
+- Dairy subcategories: "Cheese", "Milk & Cream", "Eggs", "Yogurt"
+- Meat subcategories: "Poultry", "Beef", "Pork", "Seafood", "Deli"
+
+Use short, consistent labels. Reuse the same subcategory name for similar items.
 
 Items to classify:
 ${items.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
-Respond with ONLY a JSON array of objects with "name" and "category" fields. Example:
-[{"name": "almonds", "category": "pantry"}, {"name": "banana", "category": "produce"}]`;
+Respond with ONLY a JSON array of objects with "name", "category", and "subcategory" fields. Example:
+[{"name": "cilantro", "category": "produce", "subcategory": "Fresh Herbs"}, {"name": "chickpeas", "category": "pantry", "subcategory": "Canned Goods"}]`;
 
   try {
     const content = await callTextAI(fnConfig, context.env, [
-      { role: "system", content: "You are a grocery store expert. Classify items into the correct store department. Respond with only valid JSON." },
+      { role: "system", content: "You are a grocery store expert. Classify items into the correct store department and subcategory. Respond with only valid JSON." },
       { role: "user", content: prompt },
-    ], { maxTokens: 512, temperature: 0.1, jsonMode: true });
+    ], { maxTokens: 1024, temperature: 0.1, jsonMode: true });
 
     // Parse the JSON response, extracting from markdown code blocks if needed
     let jsonStr = content.trim();
@@ -69,6 +80,7 @@ Respond with ONLY a JSON array of objects with "name" and "category" fields. Exa
     const validated = parsed.map((item) => ({
       name: item.name,
       category: VALID_CATEGORIES.includes(item.category) ? item.category : "other",
+      subcategory: typeof item.subcategory === "string" ? item.subcategory.trim() : undefined,
     }));
 
     return new Response(JSON.stringify({ items: validated }), {

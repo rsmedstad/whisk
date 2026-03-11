@@ -122,14 +122,21 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
 /**
  * Normalize an ingredient name for category matching:
  * - lowercase
- * - strip trailing 's' / 'es' for basic plural handling
- * - strip leading amounts/numbers
+ * - strip leading amounts/numbers and units
+ * - strip parenthetical amounts like "(15 oz)"
+ * - strip trailing punctuation, "and", commas
  */
 function normalizeForMatch(name: string): string {
   let lower = name.toLowerCase().trim();
-  // Strip leading numbers & units like "2 cups", "1/2 lb"
+  // Strip leading numbers & units like "2 cups", "1/2 lb", "1 can"
   lower = lower.replace(/^[\d\/.\s]+(oz|lb|cup|tbsp|tsp|g|kg|ml|l|pt|qt|gal|bunch|head|can|pkg|bag|box|jar|bottle|ct|count|stick|clove|sprig|slice|piece|each)s?\b\s*/i, "");
   lower = lower.replace(/^[\d\/.\s]+/, "").trim();
+  // Strip parenthetical amounts: "(15 oz)", "(15 oz_", "(about 2 cups)"
+  lower = lower.replace(/\([\d\s.\/oz_lbgkgmlcup]*\)?/gi, "").trim();
+  // Strip trailing junk: ", and", trailing commas, semicolons
+  lower = lower.replace(/[,;]\s*(and\s*)?$/i, "").replace(/\s+and\s*$/i, "").trim();
+  // Strip trailing/leading underscores (parsing artifacts)
+  lower = lower.replace(/[_]+/g, " ").trim();
   return lower;
 }
 
@@ -153,24 +160,54 @@ function getStemVariants(word: string): string[] {
   return variants;
 }
 
+/** Prefixes that indicate a pantry/spice item even if the base word matches produce */
+const PANTRY_PREFIXES = /^(dried|ground|crushed|powdered|smoked|canned|jarred|pickled|roasted)\s+/;
+
+/** Words that are ambiguous — could be produce (fresh) or pantry (dried/ground) */
+const AMBIGUOUS_PRODUCE = new Set([
+  "oregano", "basil", "thyme", "rosemary", "dill", "sage", "mint",
+  "parsley", "cilantro", "chive", "ginger", "pepper", "chili",
+  "coriander", "bay leaf", "bay leaves", "tarragon",
+]);
+
 export function categorizeIngredient(name: string): ShoppingCategory {
   const normalized = normalizeForMatch(name);
   const variants = getStemVariants(normalized);
 
-  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    if (category === "other") continue;
+  // Priority rule: if the name has a pantry prefix (dried, ground, canned, etc.)
+  // and the base word is ambiguous, force pantry
+  if (PANTRY_PREFIXES.test(normalized)) {
+    const base = normalized.replace(PANTRY_PREFIXES, "").trim();
+    const baseVariants = getStemVariants(base);
+    if (baseVariants.some((v) => AMBIGUOUS_PRODUCE.has(v))) {
+      return "pantry";
+    }
+  }
+
+  // Priority rule: "canned X" or "X, canned" → pantry
+  if (/\bcanned\b/.test(normalized) || /\bcan\b/.test(normalized)) {
+    return "pantry";
+  }
+
+  // Check categories in a priority order that puts pantry before produce
+  // so "chickpea" (in both) hits pantry first
+  const priorityOrder: ShoppingCategory[] = [
+    "meat", "dairy", "pantry", "frozen", "bakery", "beverages", "snacks", "produce",
+  ];
+
+  for (const category of priorityOrder) {
+    const keywords = CATEGORY_KEYWORDS[category];
+    if (!keywords) continue;
     for (const keyword of keywords) {
-      // Check if normalized name or any stem variant contains keyword
       for (const variant of variants) {
         if (variant.includes(keyword) || keyword.includes(variant)) {
-          return category as ShoppingCategory;
+          return category;
         }
       }
-      // Also check keyword stems against the name
       const keywordVariants = getStemVariants(keyword);
       for (const kv of keywordVariants) {
         if (normalized.includes(kv)) {
-          return category as ShoppingCategory;
+          return category;
         }
       }
     }

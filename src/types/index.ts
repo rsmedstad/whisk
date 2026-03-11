@@ -125,11 +125,12 @@ export interface ShoppingItem {
   amount?: string;
   unit?: string;
   category: ShoppingCategory;
+  subcategory?: string; // AI-assigned subcategory within department (e.g. "Fresh Herbs", "Canned Goods")
   checked: boolean;
   sourceRecipeId?: string;
   addedBy?: "manual" | "recipe" | "ai" | "scan";
   addedByUser?: string; // user name who added this item
-  store?: string; // optional store tag for grouping (e.g. "Costco", "Trader Joe's")
+  store?: string; // legacy field, no longer used in UI
 }
 
 export type ShoppingCategory =

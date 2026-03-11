@@ -280,6 +280,7 @@ function AppShell({
                 chatEnabled={capabilities.chat}
                 plannedRecipeIds={plannedRecipeIds}
                 onAddFromPlan={shoppingList.addFromRecipe}
+                onSyncWithPlan={shoppingList.removeStaleRecipeItems}
               />
             }
           />
