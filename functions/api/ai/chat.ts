@@ -90,6 +90,30 @@ async function logAIInteraction(kv: KVNamespace, entry: AILogEntry): Promise<voi
   } catch { /* best-effort logging */ }
 }
 
+/** Format a user-friendly error message from an AI provider failure */
+function formatAIError(errMsg: string, provider: string, model: string): string {
+  const lower = errMsg.toLowerCase();
+  if (lower.includes("no api key")) {
+    return `The ${provider} API key is missing or not configured. Check Settings > AI to make sure it's set up correctly.`;
+  }
+  if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid api key") || lower.includes("invalid_api_key")) {
+    return `The ${provider} API key appears to be invalid or expired. Check Settings > AI to update it.`;
+  }
+  if (lower.includes("rate_limit") || lower.includes("429") || lower.includes("too many requests")) {
+    return `${provider} rate limit reached for ${model}. This usually resolves in a minute — try again shortly, or switch to a different model in Settings > AI.`;
+  }
+  if (lower.includes("request too large") || lower.includes("tokens per minute") || lower.includes("context_length") || lower.includes("maximum context")) {
+    return `The request was too large for ${model} (your recipe collection may exceed its token limit). Try a model with a larger context window, or try again with a shorter conversation. You can change models in Settings > AI.`;
+  }
+  if (lower.includes("timeout") || lower.includes("timed out")) {
+    return `The ${provider} service timed out. This can happen when the service is under heavy load — try again in a moment.`;
+  }
+  if (lower.includes("500") || lower.includes("502") || lower.includes("503") || lower.includes("internal server error") || lower.includes("service unavailable")) {
+    return `The ${provider} service is having issues right now (${model}). Try again in a moment, or switch to a different provider in Settings > AI.`;
+  }
+  return `I'm having trouble connecting to ${provider} (${model}). Error: ${errMsg.slice(0, 200)}. Check Settings > AI or try again.`;
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const startTime = Date.now();
   const body = (await request.json()) as ChatBody;
@@ -296,13 +320,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    // Rest of collection as compact list
+    // Rest of collection as compact list (title + tags only, no ingredients to save tokens)
     const compactSummary = rest
       .map((r) => {
         const parts = [`- ${r.title} (id:${r.id})`];
         if (r.tags.length > 0) parts.push(`[${r.tags.join(", ")}]`);
         if (r.cuisine) parts.push(`(${r.cuisine})`);
-        if (r.ingredientNames?.length) parts.push(`| ingredients: ${r.ingredientNames.join(", ")}`);
         return parts.join(" ");
       })
       .join("\n");
@@ -312,7 +335,47 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
-  const systemPrompt = systemParts.join("\n");
+  let systemPrompt = systemParts.join("\n");
+
+  // Estimate token usage and truncate if needed.
+  // Rough estimate: 1 token ≈ 4 chars. Reserve 2048 for response + buffer.
+  const userTokens = messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+  const systemTokens = Math.ceil(systemPrompt.length / 4);
+  const totalEstimate = systemTokens + userTokens + 2048;
+
+  // If estimated total exceeds a reasonable threshold, trim the recipe collection section
+  // This handles models with small context windows or strict TPM limits
+  if (totalEstimate > 6000) {
+    // Progressively reduce: first try keeping only recipe titles (no tags/cuisine)
+    const collectionIdx = systemPrompt.indexOf("--- Full Recipe Collection");
+    if (collectionIdx > -1) {
+      const beforeCollection = systemPrompt.slice(0, collectionIdx);
+      // Ultra-compact: just titles and IDs
+      const ultraCompact = recipeIndex
+        .map((r) => `- ${r.title} (id:${r.id})`)
+        .join("\n");
+      systemPrompt = beforeCollection +
+        `--- Full Recipe Collection (${recipeIndex.length} total) ---\n${ultraCompact}\n` +
+        "These are the ONLY recipes the user has. Do not reference any recipes not in this list unless the user asks for new ideas.";
+    }
+
+    // If still too large, truncate the collection to top 40 recipes
+    const reEstimate = Math.ceil(systemPrompt.length / 4) + userTokens + 2048;
+    if (reEstimate > 6000) {
+      const collectionIdx2 = systemPrompt.indexOf("--- Full Recipe Collection");
+      if (collectionIdx2 > -1) {
+        const beforeCollection2 = systemPrompt.slice(0, collectionIdx2);
+        const truncated = recipeIndex
+          .slice(0, 40)
+          .map((r) => `- ${r.title} (id:${r.id})`)
+          .join("\n");
+        systemPrompt = beforeCollection2 +
+          `--- Recipe Collection (showing 40 of ${recipeIndex.length}) ---\n${truncated}\n` +
+          "These are some of the user's recipes. There may be more not listed here.";
+      }
+    }
+  }
+
   const allMessages = [
     { role: "system", content: systemPrompt },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
@@ -370,7 +433,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: `both failed — stream: ${errMsg.slice(0, 250)}, fallback: ${fbMsg.slice(0, 250)}` }).catch(() => {});
         return new Response(
           JSON.stringify({
-            content: "I'm having trouble connecting to the AI service right now. Please try again in a moment.",
+            content: formatAIError(errMsg, fnConfig.provider, fnConfig.model),
           }),
           { headers: { "Content-Type": "application/json" } }
         );
@@ -410,7 +473,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: errMsg.slice(0, 500) }).catch(() => {});
     return new Response(
       JSON.stringify({
-        content: "I'm having trouble connecting to the AI service right now. Please try again in a moment.",
+        content: formatAIError(errMsg, fnConfig.provider, fnConfig.model),
       }),
       { headers: { "Content-Type": "application/json" } }
     );
