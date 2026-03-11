@@ -804,8 +804,8 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
                       Which meals to show in your weekly plan
                     </p>
-                    <div className="flex gap-2">
-                      {(["breakfast", "lunch", "dinner"] as const).map((slot) => {
+                    <div className="flex flex-wrap gap-2">
+                      {(["breakfast", "lunch", "dinner", "snack", "dessert"] as const).map((slot) => {
                         const enabled = mealSlots.includes(slot);
                         return (
                           <label

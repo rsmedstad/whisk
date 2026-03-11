@@ -34,6 +34,7 @@ const SLOT_TAGS: Record<MealSlot, string[]> = {
   lunch: ["lunch", "salad", "sandwich", "soup", "wrap", "light"],
   dinner: ["dinner", "main", "entree", "entrée", "supper"],
   snack: ["snack", "appetizer", "dip", "finger food", "side"],
+  dessert: ["dessert", "desserts", "baking", "cake", "cookie", "sweet"],
 };
 
 /** Score a recipe for quick-add ranking. Higher = better suggestion. */
@@ -82,6 +83,8 @@ const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
   { slot: "lunch", label: "Lunch" },
   { slot: "dinner", label: "Dinner" },
+  { slot: "snack", label: "Snack" },
+  { slot: "dessert", label: "Dessert" },
 ];
 
 function getEnabledSlots(): MealSlot[] {
@@ -569,6 +572,7 @@ export function MealPlan({
                     <option value="lunch">Lunch</option>
                     <option value="dinner">Dinner</option>
                     <option value="snack">Snack</option>
+                    <option value="dessert">Dessert</option>
                   </select>
                   <button
                     onClick={handleWtmAddToPlan}
