@@ -540,10 +540,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 // ── PATCH: update a feed item (e.g. fix image after import) ──
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
-  const { url, imageUrl, totalTime } = (await request.json()) as {
+  const { url, imageUrl, totalTime, tags, category } = (await request.json()) as {
     url: string;
     imageUrl?: string;
     totalTime?: number;
+    tags?: string[];
+    category?: DiscoverCategory;
   };
   if (!url) {
     return new Response(JSON.stringify({ error: "url required" }), {
@@ -563,6 +565,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
     if (normalizeUrl(item.url) === normalizeUrl(url)) {
       if (imageUrl) item.imageUrl = sanitizeImageUrl(imageUrl);
       if (totalTime) item.totalTime = totalTime;
+      if (tags) item.tags = tags;
+      if (category) item.category = category;
       updated = true;
       break;
     }

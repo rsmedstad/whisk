@@ -644,17 +644,58 @@ export function Discover({
     handleFeedBack();
   }, [selectedFeedItem, handleFeedBack]);
 
-  // Toggle a tag on the imported recipe (local-only, pre-save)
+  // Toggle a tag on the imported recipe and persist to the discover feed
   const handleToggleDiscoverTag = useCallback((tag: string) => {
+    let updatedTags: string[] | undefined;
     setImportedRecipe((prev) => {
       if (!prev) return prev;
       const current = prev.tags ?? [];
       const newTags = current.includes(tag)
         ? current.filter((t) => t !== tag)
         : [...current, tag];
+      updatedTags = newTags;
       return { ...prev, tags: newTags };
     });
-  }, []);
+
+    // Persist tag change to the discover feed cache + API
+    if (!selectedFeedItem) return;
+    const itemUrl = selectedFeedItem.url;
+
+    // Determine if category should change (tag matches a category name)
+    const CATEGORIES: Set<string> = new Set(CATEGORY_ORDER);
+    const newCategory = updatedTags?.find((t) => CATEGORIES.has(t)) as DiscoverCategory | undefined;
+
+    setFeed((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, categories: { ...prev.categories } };
+      for (const cat of Object.keys(updated.categories) as DiscoverCategory[]) {
+        const items = updated.categories[cat];
+        if (!items) continue;
+        const idx = items.findIndex((i) => i.url === itemUrl);
+        if (idx !== -1) {
+          const item = { ...items[idx]!, tags: updatedTags };
+          if (newCategory && newCategory !== cat) {
+            // Move item to new category
+            updated.categories[cat] = items.filter((_, j) => j !== idx);
+            const dest = updated.categories[newCategory] ?? [];
+            updated.categories[newCategory] = [...dest, { ...item, category: newCategory }];
+          } else {
+            updated.categories[cat] = items.map((i, j) => j === idx ? item : i);
+          }
+          break;
+        }
+      }
+      setLocal(FEED_CACHE_KEY, updated);
+      return updated;
+    });
+
+    // Persist to server
+    api.patch("/discover/feed", {
+      url: itemUrl,
+      tags: updatedTags,
+      ...(newCategory ? { category: newCategory } : {}),
+    }).catch(() => {/* best-effort */});
+  }, [selectedFeedItem]);
 
   const handleAddNewDiscoverTag = useCallback(async () => {
     const name = newTag.trim().toLowerCase();
