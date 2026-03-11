@@ -372,7 +372,7 @@ async function streamOpenAI(
     body: JSON.stringify({
       model,
       messages,
-      ...(isCerebras(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
+      ...(usesMaxCompletionTokens(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
       temperature,
       stream: true,
     }),
@@ -523,8 +523,9 @@ const AI_TIMEOUT_MS = 30000;
 
 // ── OpenAI-Compatible Format (Groq, OpenAI, xAI, Cerebras) ──
 
-/** Cerebras uses max_completion_tokens instead of max_tokens */
-const isCerebras = (baseUrl: string) => baseUrl.includes("cerebras.ai");
+/** Groq and Cerebras have deprecated max_tokens in favor of max_completion_tokens */
+const usesMaxCompletionTokens = (baseUrl: string) =>
+  baseUrl.includes("cerebras.ai") || baseUrl.includes("groq.com");
 
 async function callOpenAIText(
   baseUrl: string,
@@ -539,7 +540,7 @@ async function callOpenAIText(
     model,
     messages,
     temperature,
-    ...(isCerebras(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
+    ...(usesMaxCompletionTokens(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
   };
   if (jsonMode) {
     body.response_format = { type: "json_object" };
@@ -597,7 +598,7 @@ async function callOpenAIVision(
           ],
         },
       ],
-      ...(isCerebras(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
+      ...(usesMaxCompletionTokens(baseUrl) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
       temperature,
     }),
   });
