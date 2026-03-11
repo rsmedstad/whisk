@@ -5,7 +5,6 @@ import { getWeekDates, formatDateShort, toDateString, classNames } from "../../l
 import { getSeasonalContext } from "../../lib/seasonal";
 import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, MessageCircle } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
-import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
 
 const PANTRY_STAPLES = new Set([
   "salt", "pepper", "black pepper", "kosher salt", "sea salt", "table salt",
@@ -35,6 +34,7 @@ const SLOT_TAGS: Record<MealSlot, string[]> = {
   lunch: ["lunch", "salad", "sandwich", "soup", "wrap", "light"],
   dinner: ["dinner", "main", "entree", "entrée", "supper"],
   snack: ["snack", "appetizer", "dip", "finger food", "side"],
+  dessert: ["dessert", "desserts", "baking", "cake", "cookie", "sweet"],
 };
 
 /** Score a recipe for quick-add ranking. Higher = better suggestion. */
@@ -83,6 +83,8 @@ const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
   { slot: "lunch", label: "Lunch" },
   { slot: "dinner", label: "Dinner" },
+  { slot: "snack", label: "Snack" },
+  { slot: "dessert", label: "Dessert" },
 ];
 
 function getEnabledSlots(): MealSlot[] {
@@ -570,6 +572,7 @@ export function MealPlan({
                     <option value="lunch">Lunch</option>
                     <option value="dinner">Dinner</option>
                     <option value="snack">Snack</option>
+                    <option value="dessert">Dessert</option>
                   </select>
                   <button
                     onClick={handleWtmAddToPlan}
@@ -1013,10 +1016,6 @@ export function MealPlan({
           <p className="mx-4 mt-1 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
         )}
 
-        {/* What's in Season */}
-        <div className="px-4 py-3">
-          <SeasonalProduceCard compact />
-        </div>
       </div>
     </div>
   );

@@ -573,6 +573,30 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
   return Response.json({ ok: true, updated });
 };
 
+/** DELETE /api/discover/feed?url=... — remove a single item from the feed */
+export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
+  const reqUrl = new URL(request.url);
+  const itemUrl = reqUrl.searchParams.get("url");
+  if (!itemUrl) {
+    return new Response(JSON.stringify({ error: "url required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+  if (!archive) {
+    return Response.json({ ok: true, removed: false });
+  }
+  const before = archive.items.length;
+  archive.items = archive.items.filter(
+    (i) => normalizeUrl(i.url) !== normalizeUrl(itemUrl)
+  );
+  if (archive.items.length < before) {
+    await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(archive));
+  }
+  return Response.json({ ok: true, removed: archive.items.length < before });
+};
+
 /** Convert archive to category-grouped feed for the UI, sanitizing images.
  *  Re-classifies items on every serve so improvements to the regex
  *  automatically fix previously mis-categorised recipes (e.g. items that

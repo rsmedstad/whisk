@@ -143,7 +143,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     "- To show a recipe from the user's collection as an interactive card: [RECIPE_CARD: recipeId, Recipe Title]",
     "- To suggest saving an external recipe: [SAVE_RECIPE: url, Recipe Title]",
     "- To add a meal to the plan: [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId]",
-    "  Slots: breakfast, lunch, dinner, snack",
+    "  Slots: breakfast, lunch, dinner, snack, dessert",
     "- To add an item to shopping list: [ADD_TO_LIST: item name, amount, unit, category]",
     "- To search user's recipes: [SEARCH_RECIPES: search query]",
     "When mentioning recipes from the user's collection, ALWAYS use [RECIPE_CARD] to render them as tappable cards.",
@@ -196,6 +196,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       maxTokens: 1024,
       temperature: 0.7,
     });
+
+    if (!content) {
+      return new Response(
+        JSON.stringify({
+          content: "I wasn't able to generate a response. This can happen when the AI service is busy — please try again.",
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ content }),

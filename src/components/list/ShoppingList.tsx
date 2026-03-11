@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Tag, Sparkles, Trash, Camera, Filter } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -59,6 +59,8 @@ export function ShoppingList({
   const [listScanPreview, setListScanPreview] = useState<string | null>(null);
   const [scanPendingItems, setScanPendingItems] = useState<{ name: string; selected: boolean }[]>([]);
   const [scanSortAZ, setScanSortAZ] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
 
   // Get unique store names from items
   const storeNames = useMemo(() => {
@@ -121,11 +123,16 @@ export function ShoppingList({
     return result;
   }, [list.items]);
 
-  // Filter items by store
+  // Filter items by store and text query
   const filteredItems = useMemo(() => {
-    if (!storeFilter) return combinedItems;
-    return combinedItems.filter((i) => i.store === storeFilter);
-  }, [combinedItems, storeFilter]);
+    let items = combinedItems;
+    if (storeFilter) items = items.filter((i) => i.store === storeFilter);
+    if (filterQuery.trim()) {
+      const q = filterQuery.toLowerCase().trim();
+      items = items.filter((i) => i.name.toLowerCase().includes(q));
+    }
+    return items;
+  }, [combinedItems, storeFilter, filterQuery]);
 
   // Group by category
   const grouped = useMemo(() => {
@@ -421,6 +428,23 @@ export function ShoppingList({
             <h1 className="text-lg font-bold dark:text-stone-100">List</h1>
           </button>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setFilterOpen((prev) => {
+                  if (prev) setFilterQuery("");
+                  return !prev;
+                });
+              }}
+              className={classNames(
+                "p-2 transition-colors",
+                filterOpen
+                  ? "text-orange-500"
+                  : "text-stone-500 dark:text-stone-400 hover:text-orange-500"
+              )}
+              title="Filter list"
+            >
+              <Filter className="w-5 h-5" />
+            </button>
             {visionEnabled && (
               <button
                 onClick={handleListScan}
@@ -437,6 +461,27 @@ export function ShoppingList({
             )}
           </div>
         </div>
+        {/* Filter input */}
+        {filterOpen && (
+          <div className="px-4 py-2 border-t border-stone-100 dark:border-stone-800">
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                type="text"
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+                placeholder="Filter items..."
+                autoFocus
+                className="w-full rounded-lg border border-stone-300 bg-white pl-9 pr-8 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+              />
+              {filterQuery && (
+                <button onClick={() => setFilterQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">
+                  <XMark className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ═══ LIST CONTENT ═══ */}
