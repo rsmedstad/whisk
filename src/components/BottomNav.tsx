@@ -19,7 +19,7 @@ export function BottomNav() {
       isKeyboardOpen && "translate-y-full"
     )}>
       <div className="max-w-6xl mx-auto border-t border-stone-200 bg-white/95 backdrop-blur-sm dark:border-orange-500/10 dark:bg-stone-950/95 pb-[var(--sab)]">
-        <div className="flex items-center justify-around">
+        <div className="flex items-center">
           {tabs.map((tab) => {
             const isCenter = "center" in tab && tab.center;
             return (
@@ -27,10 +27,11 @@ export function BottomNav() {
                 key={tab.to}
                 to={tab.to}
                 end={tab.to === "/"}
+                className="flex-1 min-w-0"
               >
                 {({ isActive }) => (
                   <div className={classNames(
-                    "flex flex-1 flex-col items-center text-xs font-medium transition-colors",
+                    "flex flex-col items-center text-xs font-medium transition-colors",
                     isCenter ? "gap-0 py-1" : "gap-0.5 py-2",
                     isActive
                       ? "text-orange-500"
