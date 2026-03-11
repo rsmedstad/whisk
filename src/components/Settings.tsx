@@ -32,8 +32,8 @@ interface SettingsProps {
 type SettingsTab = "general" | "account" | "ai" | "data" | "about";
 
 const TABS: { id: SettingsTab; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "account", label: "Account" },
+  { id: "general", label: "Display & Feeds" },
+  { id: "account", label: "Preferences" },
   { id: "ai", label: "AI" },
   { id: "data", label: "Data" },
   { id: "about", label: "About" },
