@@ -400,11 +400,11 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             <span className="text-stone-400 dark:text-stone-500">|</span>
             <h1 className="text-lg font-bold dark:text-stone-100">Ask</h1>
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
             {messages.length > 0 && (
               <button
                 onClick={handleNewChat}
-                className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-orange-500 transition-colors mr-1"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 New chat
@@ -419,21 +419,21 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 });
               }}
               className={classNames(
-                "p-1 transition-colors",
+                "p-2 rounded-lg transition-all",
                 searchOpen
-                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700 rounded-md"
-                  : "text-stone-400 dark:text-stone-500 hover:text-orange-500"
+                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
+                  : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
               )}
               title="Search recipes"
             >
-              {searchOpen ? <XMark className="w-4.5 h-4.5" /> : <MagnifyingGlass className="w-4.5 h-4.5" />}
+              {searchOpen ? <XMark className="w-5 h-5" /> : <MagnifyingGlass className="w-5 h-5" />}
             </button>
             <button
               onClick={() => chatInputRef.current?.focus()}
-              className="p-1 text-stone-400 dark:text-stone-500 hover:text-orange-500 transition-colors"
+              className="p-2 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-all"
               title={chatEnabled ? "AI connected — start chatting" : "Configure AI in Settings"}
             >
-              <Sparkles className="w-4.5 h-4.5" />
+              <Sparkles className="w-5 h-5" />
             </button>
           </div>
         </div>
