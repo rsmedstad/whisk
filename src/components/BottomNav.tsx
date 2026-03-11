@@ -27,24 +27,30 @@ export function BottomNav() {
                 key={tab.to}
                 to={tab.to}
                 end={tab.to === "/"}
-                className={({ isActive }) =>
-                  classNames(
+              >
+                {({ isActive }) => (
+                  <div className={classNames(
                     "flex flex-1 flex-col items-center text-xs font-medium transition-colors",
                     isCenter ? "gap-0 py-1" : "gap-0.5 py-2",
                     isActive
                       ? "text-orange-500"
                       : "text-stone-500 dark:text-stone-400"
-                  )
-                }
-              >
-                {isCenter ? (
-                  <span className="flex items-center justify-center w-10 h-10 -mt-3 rounded-full bg-orange-500 text-white shadow-md shadow-orange-500/20">
-                    <tab.icon className="w-5 h-5" />
-                  </span>
-                ) : (
-                  <tab.icon className="w-6 h-6" />
+                  )}>
+                    {isCenter ? (
+                      <span className={classNames(
+                        "flex items-center justify-center w-10 h-10 -mt-3 rounded-full shadow-md transition-colors",
+                        isActive
+                          ? "bg-orange-500 text-white shadow-orange-500/20"
+                          : "bg-stone-200 text-stone-500 shadow-stone-200/20 dark:bg-stone-700 dark:text-stone-400 dark:shadow-stone-700/20"
+                      )}>
+                        <tab.icon className="w-5 h-5" />
+                      </span>
+                    ) : (
+                      <tab.icon className="w-6 h-6" />
+                    )}
+                    <span>{tab.label}</span>
+                  </div>
                 )}
-                <span>{tab.label}</span>
               </NavLink>
             );
           })}
