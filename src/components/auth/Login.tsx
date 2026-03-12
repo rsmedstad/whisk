@@ -82,7 +82,7 @@ export function Login({
         <div className="w-full max-w-sm">
           <div className="text-center mb-10">
             <h1 className="text-4xl font-bold text-orange-500 mb-2">Whisk</h1>
-            <p className="text-stone-500 dark:text-stone-400">
+            <p className="text-stone-600 dark:text-stone-400">
               Your personal recipe book
             </p>
           </div>
@@ -108,7 +108,7 @@ export function Login({
         <div className="w-full max-w-sm">
           <button
             onClick={() => setScreen("welcome")}
-            className="flex items-center gap-1 text-stone-500 dark:text-stone-400 text-sm mb-6"
+            className="flex items-center gap-1 text-stone-600 dark:text-stone-400 text-sm mb-6 min-h-11 -ml-2 px-2"
           >
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
@@ -116,7 +116,7 @@ export function Login({
           <h1 className="text-2xl font-bold dark:text-stone-100 mb-2">
             Set Up Your Book
           </h1>
-          <p className="text-sm text-stone-500 dark:text-stone-400 mb-6">
+          <p className="text-sm text-stone-600 dark:text-stone-400 mb-6">
             Deploy your own Whisk instance to get started.
           </p>
 
@@ -127,21 +127,21 @@ export function Login({
                   <span className="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 text-xs font-bold flex items-center justify-center shrink-0">1</span>
                   <div>
                     <p className="text-sm font-medium dark:text-stone-200">Fork & deploy</p>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">Fork the Whisk repo and deploy to Cloudflare Pages</p>
+                    <p className="text-xs text-stone-600 dark:text-stone-400">Fork the Whisk repo and deploy to Cloudflare Pages</p>
                   </div>
                 </div>
                 <div className="flex gap-3 items-start">
                   <span className="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 text-xs font-bold flex items-center justify-center shrink-0">2</span>
                   <div>
                     <p className="text-sm font-medium dark:text-stone-200">Set your password</p>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">Add APP_SECRET as an environment variable</p>
+                    <p className="text-xs text-stone-600 dark:text-stone-400">Add APP_SECRET as an environment variable</p>
                   </div>
                 </div>
                 <div className="flex gap-3 items-start">
                   <span className="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 text-xs font-bold flex items-center justify-center shrink-0">3</span>
                   <div>
                     <p className="text-sm font-medium dark:text-stone-200">Add AI keys (optional)</p>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">Add keys for any AI provider — features enable automatically. Supports Groq, OpenAI, Anthropic, Google Gemini, xAI, and more</p>
+                    <p className="text-xs text-stone-600 dark:text-stone-400">Add keys for any AI provider — features enable automatically. Supports Groq, OpenAI, Anthropic, Google Gemini, xAI, and more</p>
                   </div>
                 </div>
               </div>
@@ -152,7 +152,7 @@ export function Login({
             <Button fullWidth onClick={() => setScreen("join")}>
               I've deployed — sign in
             </Button>
-            <p className="text-xs text-center text-stone-400 dark:text-stone-500">
+            <p className="text-xs text-center text-stone-600 dark:text-stone-400">
               After setup, use the Share button in Settings to share your book URL and password with household members so they can join
             </p>
           </div>
@@ -176,7 +176,7 @@ export function Login({
           <h1 className="text-2xl font-bold dark:text-stone-100 mb-2">
             Join a Book
           </h1>
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-stone-600 dark:text-stone-400">
             Enter your name and the password shared by your book owner
           </p>
         </div>
@@ -204,7 +204,7 @@ export function Login({
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-[2.05rem] text-stone-400 dark:text-stone-500"
+              className="absolute right-0.5 top-[1.3rem] p-2.5 text-stone-500 dark:text-stone-400"
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
@@ -222,7 +222,7 @@ export function Login({
           </div>
 
           {error && (
-            <p className="text-sm text-red-500 text-center">{error}</p>
+            <p className="text-sm text-red-500 text-center" role="alert">{error}</p>
           )}
 
           <Button type="submit" fullWidth disabled={isLoading || !password.trim() || !name.trim()}>
@@ -260,7 +260,7 @@ function OnboardingScreen({
           <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100 mb-1">
             Welcome, {userName}!
           </h1>
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-stone-600 dark:text-stone-400">
             Let's personalize your experience
           </p>
         </div>
@@ -277,7 +277,8 @@ function OnboardingScreen({
                   <button
                     key={t}
                     onClick={() => handleThemeChange(t)}
-                    className={`py-2 rounded-lg text-sm font-medium border capitalize ${
+                    aria-pressed={currentTheme === t}
+                    className={`py-2.5 rounded-lg text-sm font-medium border capitalize ${
                       currentTheme === t ? activeClass : inactiveClass
                     }`}
                   >
@@ -290,7 +291,7 @@ function OnboardingScreen({
                 const symbol = ACCENT_SYMBOLS[accent] ?? "";
                 const name = ACCENT_LABELS[accent] ?? "Auto";
                 return (
-                  <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+                  <p className="mt-2 text-xs text-stone-600 dark:text-stone-400">
                     {symbol} Currently: {name} — changes automatically
                   </p>
                 );
@@ -307,7 +308,8 @@ function OnboardingScreen({
                   <button
                     key={u}
                     onClick={() => setUnits(u)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border capitalize ${
+                    aria-pressed={units === u}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-medium border capitalize ${
                       units === u ? activeClass : inactiveClass
                     }`}
                   >
@@ -323,19 +325,22 @@ function OnboardingScreen({
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-200">
                   Show gram weights
                 </span>
-                <p className="text-xs text-stone-400 dark:text-stone-500">
+                <p className="text-xs text-stone-600 dark:text-stone-400">
                   Display grams alongside volume
                 </p>
               </div>
               <button
                 type="button"
+                role="switch"
+                aria-checked={showGrams}
+                aria-label="Show gram weights"
                 onClick={() => setShowGrams(!showGrams)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
+                className={`relative w-12 h-7 rounded-full transition-colors ${
                   showGrams ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${
                     showGrams ? "translate-x-5" : ""
                   }`}
                 />
