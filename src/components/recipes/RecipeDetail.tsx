@@ -469,7 +469,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 <img
                   src={photo.url}
                   alt={photo.caption ?? `${recipe.title} photo ${i + 1}`}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                   loading={i === 0 ? "eager" : "lazy"}
                 />
               </div>

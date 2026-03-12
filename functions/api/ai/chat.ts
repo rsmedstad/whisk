@@ -18,7 +18,7 @@ interface ChatBody {
   seasonalContext?: string;
   mealPlan?: { date: string; slot: string; title: string; recipeId?: string; completed?: boolean }[];
   shoppingList?: { name: string; checked: boolean; category: string }[];
-  preferences?: { dietaryRestrictions?: string[]; favoriteCuisines?: string[]; budgetPreference?: string; dislikedIngredients?: string[] };
+  preferences?: { dietaryRestrictions?: string[]; favoriteCuisines?: string[]; dislikedIngredients?: string[] };
   enabledSlots?: string[];
   stream?: boolean;
 }
@@ -28,7 +28,7 @@ function extractKeywords(message: string): string[] {
   const lower = message.toLowerCase();
   // Remove common filler words
   const cleaned = lower
-    .replace(/\b(?:can|you|i|we|me|my|the|a|an|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|shall|may|might|must|need|want|like|just|some|any|all|more|most|very|really|quite|pretty|also|too|so|then|than|that|this|these|those|what|which|who|whom|whose|where|when|how|why|please|thanks|thank|suggest|recommend|make|cook|recipe|recipes|something|anything|ideas?|for|with|about|from|into)\b/g, " ")
+    .replace(/\b(?:can|you|i|we|me|my|the|a|an|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|shall|may|might|must|need|want|like|just|some|any|all|more|most|very|really|quite|pretty|also|too|so|then|than|that|this|these|those|what|which|who|whom|whose|where|when|how|why|please|thanks|thank|suggest|recommend|make|cook|recipe|recipes|something|anything|ideas?|for|with|about|from|into|good|great|best|nice|check|look)\b/g, " ")
     .replace(/[?!.,;:'"()\[\]{}]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -181,11 +181,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // General cooking questions that don't need any collection data
   const isGeneralQuestion = /\b(how (do|to|long|much|many|is)|what (is|are|does)|when (does|do|is|will|did)|can (i|you)|should i|why (did|does|do|is|are|won't|will not|isn't)|temperature|temp\b|substitut\w*|replace\w*|alternativ\w*|instead of|convert|difference between|tips?|technique|safe|storage|freeze|freezer|thaw|reheat|shelf life|calories|nutrition|protein|carbs?|fat|fiber|sodium|serving size|in season|seasonal|season\b|spring|summer|fall|autumn|winter|holiday|holidays|easter|thanksgiving|christmas|hanukkah|valentine|st\.? patrick|fourth of july|4th of july|memorial day|labor day|new year|what.{0,10}season|pairs? with|goes well with|side dish|best .{0,15} for|vs\b|better than|compared to|how .{0,10} (cook|bake|roast|grill|fry|saut[eé]|steam|boil|braise|smoke|poach|blanch)|internal temp|done.?ness|resting time|marinate|brine|proof|knead|ferment|food safe|cross.?contaminat|expir|spoil)\b/i.test(normalized)
-    && !/\b(my recipe|my collection|from my|in my|suggest|recommend|plan (my|a|the|this)|what should i (make|cook)|meal plan|shopping list|i am craving|craving\b|something (with|easy|healthy)|give me)\b/i.test(normalized);
+    && !/\b(my recipe|my collection|from my|in my|do i have|have i got|check my|look at my|search my|look through my|any.{0,10}recipe|suggest|recommend|plan (my|a|the|this)|what should i (make|cook)|meal plan|shopping list|i am craving|craving\b|something (with|easy|healthy)|give me)\b/i.test(normalized);
 
   // References the user's personal data (recipes, plan, list), or implicitly asks for
   // recipe suggestions (cravings, bare meal requests, ingredient-based queries)
-  const referencesCollection = /\b(my recipe|my collection|from my|in my|suggest|recommend|what should i (make|cook)|meal plan|plan my|plan a\b|shopping list|what do i have|from the collection|i am craving|craving\b|something (with|easy|healthy|quick|light|hearty|warm|cold|spicy|simple|fancy|special|vegetarian|vegan)|quick (dinner|lunch|breakfast|meal|recipe)|easy (dinner|lunch|breakfast|meal|recipe)|dinner (for|tonight|idea|this)|lunch (for|today|idea)|breakfast (for|today|idea)|weeknight (meal|dinner|recipe)|what (can|could) i (make|cook|do) with|recipe for\b|give me .{0,15}(recipe|meal|dinner|idea)|i (want|need) .{0,15}(recipe|dinner|lunch|meal|to (cook|make|eat)))\b/i.test(normalized);
+  const referencesCollection = /\b(my recipe|my collection|from my|in my|do i have|have i got|check my|look at my|search my|look through my|suggest|recommend|what should i (make|cook)|meal plan|plan my|plan a\b|shopping list|what do i have|from the collection|i am craving|craving\b|something (with|easy|healthy|quick|light|hearty|warm|cold|spicy|simple|fancy|special|vegetarian|vegan)|quick (dinner|lunch|breakfast|meal|recipe)|easy (dinner|lunch|breakfast|meal|recipe)|dinner (for|tonight|idea|this)|lunch (for|today|idea)|breakfast (for|today|idea)|weeknight (meal|dinner|recipe)|what (can|could) i (make|cook|do) with|recipe for\b|give me .{0,15}(recipe|meal|dinner|idea)|i (want|need) .{0,15}(recipe|dinner|lunch|meal|to (cook|make|eat)))\b/i.test(normalized);
 
   // Needs recipe context if: explicitly references collection, or is a multi-turn chat
   // that previously referenced recipes (check if prior assistant messages had RECIPE_CARD markers)
@@ -302,6 +302,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       `\n--- Calendar & Seasonal Context ---\n${seasonalContext}`,
       "Use this for seasonally appropriate suggestions when relevant."
     );
+    // When the user asks about seasonal recipes from their collection, guide the LLM
+    if (needsRecipeContext && /\b(season|spring|summer|fall|autumn|winter|in season|seasonal)\b/i.test(normalized)) {
+      systemParts.push(
+        "The user is asking about seasonal recipes. Look through their ENTIRE collection and suggest recipes that would work well for the current season — consider ingredients, cooking methods, and flavor profiles that suit the time of year. A soup is great for winter, a salad for summer, etc."
+      );
+    }
   }
 
   // Only include heavy context sections when the query needs them
@@ -339,7 +345,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       const prefParts: string[] = [];
       if (prefsCtx.dietaryRestrictions?.length) prefParts.push(`Dietary: ${prefsCtx.dietaryRestrictions.join(", ")}`);
       if (prefsCtx.favoriteCuisines?.length) prefParts.push(`Favorite cuisines: ${prefsCtx.favoriteCuisines.join(", ")}`);
-      if (prefsCtx.budgetPreference && prefsCtx.budgetPreference !== "no-preference") prefParts.push(`Budget: ${prefsCtx.budgetPreference}`);
       if (prefsCtx.dislikedIngredients?.length) prefParts.push(`Dislikes: ${prefsCtx.dislikedIngredients.join(", ")}`);
       if (prefParts.length > 0) {
         systemParts.push(`\n--- User Preferences ---\n${prefParts.join("\n")}`);

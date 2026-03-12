@@ -131,18 +131,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     } catch {}
     return [];
   });
-  const [budgetPreference, setBudgetPreference] = useState<"budget" | "moderate" | "no-preference">(() => {
-    try {
-      const raw = localStorage.getItem("whisk_preferences");
-      if (raw) {
-        const prefs = JSON.parse(raw) as Record<string, unknown>;
-        if (prefs.budgetPreference === "budget" || prefs.budgetPreference === "moderate" || prefs.budgetPreference === "no-preference") {
-          return prefs.budgetPreference;
-        }
-      }
-    } catch {}
-    return "no-preference";
-  });
   const [dislikedIngredients, setDislikedIngredients] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem("whisk_preferences");
@@ -874,32 +862,6 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                      Budget Preference
-                    </label>
-                    <div className="flex gap-2">
-                      {([
-                        { value: "budget", label: "Budget-Friendly" },
-                        { value: "moderate", label: "Moderate" },
-                        { value: "no-preference", label: "No Preference" },
-                      ] as const).map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => {
-                            setBudgetPreference(opt.value);
-                            savePreferences({ budgetPreference: opt.value });
-                          }}
-                          className={classNames(
-                            "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
-                            budgetPreference === opt.value ? activeClass : inactiveClass
-                          )}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
 
                   <div>
                     <label className="text-sm font-medium text-stone-700 dark:text-stone-300">
@@ -1642,7 +1604,7 @@ function AIPerformanceLogs() {
   const loadLogs = async () => {
     setIsLoading(true);
     try {
-      const data = await api.get<AILogEntry[]>("/api/ai/logs");
+      const data = await api.get<AILogEntry[]>("/ai/logs");
       setLogs(data);
     } catch {
       setLogs([]);

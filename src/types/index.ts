@@ -172,7 +172,6 @@ export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack" | "dessert";
 export interface UserPreferences {
   dietaryRestrictions?: string[];
   favoriteCuisines?: string[];
-  budgetPreference?: "budget" | "moderate" | "no-preference";
   dislikedIngredients?: string[];
 }
 

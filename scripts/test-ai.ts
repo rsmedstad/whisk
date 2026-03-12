@@ -80,7 +80,6 @@ const MOCK_SHOPPING_LIST = [
 const MOCK_PREFERENCES = {
   dietaryRestrictions: ["no nuts"],
   favoriteCuisines: ["italian", "mexican"],
-  budgetPreference: "moderate",
   dislikedIngredients: [] as string[],
 };
 
