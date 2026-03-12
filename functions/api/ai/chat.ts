@@ -293,7 +293,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "If they want to explore more recipes from their collection, let them know they can ask you to suggest more.",
       "\n--- Output Format ---",
       "When mentioning a recipe from the collection, ALWAYS output on its own line: [RECIPE_CARD: recipeId, Recipe Title]",
-      "For shopping (ONLY when the user explicitly asks to add items to their list): [ADD_TO_LIST: item, amount, unit, category]",
+      "To offer adding all ingredients from a recipe to the shopping list: [ADD_RECIPE_INGREDIENTS: recipeId, Recipe Title] — use this when the user asks about ingredients or wants to add them to their list. Prefer this over individual ADD_TO_LIST markers for recipe ingredients.",
+      "For shopping (ONLY when the user explicitly asks to add individual items): [ADD_TO_LIST: item, amount, unit, category]",
     );
   }
 
@@ -367,7 +368,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "\n--- Output Format ---",
       "When mentioning a recipe from the collection, ALWAYS output on its own line: [RECIPE_CARD: recipeId, Recipe Title]",
       "For external recipes: [SAVE_RECIPE: url, Recipe Title]",
-      "For shopping (ONLY when the user explicitly asks to add items to their list): [ADD_TO_LIST: item, amount, unit, category]",
+      "To offer adding all ingredients from a recipe to the shopping list: [ADD_RECIPE_INGREDIENTS: recipeId, Recipe Title] — use this when the user asks about ingredients or wants to add them to their list. Prefer this over individual ADD_TO_LIST markers for recipe ingredients.",
+      "For shopping (ONLY when the user explicitly asks to add individual items): [ADD_TO_LIST: item, amount, unit, category]",
       "Example:\n[RECIPE_CARD: r_abc123, Chicken Tikka Masala]"
     );
 
@@ -546,7 +548,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           temperature: 0.7,
         });
         const cleaned = content
-          .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+          .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
           .replace(/\n{3,}/g, "\n\n")
           .trim();
         logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length, error: "stream failed, non-stream fallback succeeded" }).catch(() => {});
@@ -580,7 +582,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // Strip incomplete action markers (truncated responses missing closing bracket)
     const cleaned = content
-      .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+      .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 

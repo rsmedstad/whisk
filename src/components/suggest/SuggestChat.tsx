@@ -72,6 +72,7 @@ interface SuggestChatProps {
   preferences?: UserPreferences;
   onAddMeal?: (date: Date, slot: MealSlot, title: string, recipeId?: string) => Promise<void>;
   onAddToList?: (name: string) => void;
+  onAddRecipeIngredients?: (recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
 }
 
 const URL_REGEX = /https?:\/\/[^\s,)}\]"']+/g;
@@ -103,10 +104,60 @@ function QuickAction({ icon: Icon, label, onClick }: {
   );
 }
 
-// Parse action markers from AI responses
-const ACTION_REGEX = /\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):\s*([^\]]+)\]/g;
+// Button to add all ingredients from a recipe to the shopping list
+function AddIngredientsButton({ recipeId, title, onAdd }: {
+  recipeId: string;
+  title: string;
+  onAdd: (recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [result, setResult] = useState("");
 
-type ActionType = "ADD_TO_PLAN" | "ADD_TO_LIST" | "SEARCH_RECIPES" | "RECIPE_CARD" | "SAVE_RECIPE";
+  const handleClick = async () => {
+    if (state === "loading" || state === "done") return;
+    setState("loading");
+    try {
+      const { added, skippedDuplicates } = await onAdd(recipeId);
+      const msg = skippedDuplicates > 0
+        ? `Added ${added} item${added !== 1 ? "s" : ""} (${skippedDuplicates} already on list)`
+        : `Added ${added} item${added !== 1 ? "s" : ""}`;
+      setResult(msg);
+      setState("done");
+    } catch {
+      setResult("Recipe not found");
+      setState("error");
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={state === "loading" || state === "done"}
+      className={classNames(
+        "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+        state === "done"
+          ? "bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200"
+          : state === "error"
+            ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+            : "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900"
+      )}
+    >
+      {state === "loading" ? (
+        <RefreshCw className="w-3 h-3 animate-spin" />
+      ) : state === "done" ? (
+        <Check className="w-3 h-3" />
+      ) : (
+        <Plus className="w-3 h-3" />
+      )}
+      {state === "done" || state === "error" ? result : `Add ingredients for \u201c${title}\u201d`}
+    </button>
+  );
+}
+
+// Parse action markers from AI responses
+const ACTION_REGEX = /\[(ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):\s*([^\]]+)\]/g;
+
+type ActionType = "ADD_TO_PLAN" | "ADD_TO_LIST" | "ADD_RECIPE_INGREDIENTS" | "SEARCH_RECIPES" | "RECIPE_CARD" | "SAVE_RECIPE";
 
 interface ParsedAction {
   type: ActionType;
@@ -131,12 +182,12 @@ function parseActions(text: string): ParsedAction[] {
 function stripActionMarkers(text: string): string {
   return text
     .replace(ACTION_REGEX, "")
-    .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+    .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], shoppingList = [], preferences, onAddMeal, onAddToList }: SuggestChatProps) {
+export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], shoppingList = [], preferences, onAddMeal, onAddToList, onAddRecipeIngredients }: SuggestChatProps) {
   const recipeCount = recipes.length;
   const navigate = useNavigate();
 
@@ -457,7 +508,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
 
         // Final update with cleaned content (strip incomplete action markers)
         const cleaned = fullContent
-          .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
+          .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
           .replace(/\n{3,}/g, "\n\n")
           .trim();
         setMessages((prev) => {
@@ -1074,7 +1125,8 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           const recipeCards = actions.filter((a) => a.type === "RECIPE_CARD");
           const saveRecipes = actions.filter((a) => a.type === "SAVE_RECIPE");
           const planActions = actions.filter((a) => a.type === "ADD_TO_PLAN");
-          const otherActions = actions.filter((a) => a.type !== "RECIPE_CARD" && a.type !== "SAVE_RECIPE" && a.type !== "ADD_TO_PLAN");
+          const ingredientActions = actions.filter((a) => a.type === "ADD_RECIPE_INGREDIENTS");
+          const otherActions = actions.filter((a) => a.type !== "RECIPE_CARD" && a.type !== "SAVE_RECIPE" && a.type !== "ADD_TO_PLAN" && a.type !== "ADD_RECIPE_INGREDIENTS");
 
           // Match plan actions to recipe cards by recipeId
           const planByRecipeId = new Map<string, { dateStr: string; slot: MealSlot; title: string; recipeId?: string }>();
@@ -1294,6 +1346,25 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                         );
                       }
                       return null;
+                    })}
+                  </div>
+                )}
+
+                {/* Add recipe ingredients buttons */}
+                {ingredientActions.length > 0 && onAddRecipeIngredients && (
+                  <div className={classNames("flex flex-wrap gap-2", (recipeCards.length > 0 || saveRecipes.length > 0 || planActions.length > 0 || otherActions.length > 0) ? "mt-1" : "mt-2 border-t border-stone-200 dark:border-stone-700 pt-2")}>
+                    {ingredientActions.map((action, ai) => {
+                      const parts = action.params.split(",").map((s) => s.trim());
+                      const recipeId = parts[0] ?? "";
+                      const title = parts.slice(1).join(", ").trim() || "recipe";
+                      return (
+                        <AddIngredientsButton
+                          key={ai}
+                          recipeId={recipeId}
+                          title={title}
+                          onAdd={onAddRecipeIngredients}
+                        />
+                      );
                     })}
                   </div>
                 )}
