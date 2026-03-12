@@ -153,7 +153,7 @@ export function Login({
               I've deployed — sign in
             </Button>
             <p className="text-xs text-center text-stone-400 dark:text-stone-500">
-              Share your book URL and password with household members so they can join
+              After setup, use the Share button in Settings to share your book URL and password with household members so they can join
             </p>
           </div>
         </div>
