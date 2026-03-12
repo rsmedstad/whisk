@@ -98,6 +98,22 @@ export function useMealPlan() {
     [plan, savePlan]
   );
 
+  const replaceMealsForDate = useCallback(
+    async (date: Date, newMeals: { slot: MealSlot; title: string; recipeId?: string }[]) => {
+      const dateStr = toDateString(date);
+      const kept = plan.meals.filter((m) => m.date !== dateStr);
+      const added = newMeals.map((m) => ({
+        id: nanoid(10),
+        date: dateStr,
+        slot: m.slot,
+        title: m.title,
+        recipeId: m.recipeId,
+      }));
+      await savePlan({ ...plan, meals: [...kept, ...added] });
+    },
+    [plan, savePlan]
+  );
+
   const goToNextWeek = useCallback(() => {
     setCurrentDate((d) => {
       const next = new Date(d);
@@ -225,6 +241,7 @@ export function useMealPlan() {
     isLoading,
     addMeal,
     removeMeal,
+    replaceMealsForDate,
     clearWeek,
     updateMeal,
     goToNextWeek,
