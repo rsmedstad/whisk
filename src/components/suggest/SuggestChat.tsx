@@ -374,13 +374,14 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         // Add placeholder assistant message
         setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
-        // Abort if no first text chunk arrives within 10 seconds
+        // Abort if no first text chunk arrives within 3 seconds — any provider
+        // that supports streaming well should deliver a first chunk much faster
         const firstChunkTimeout = setTimeout(() => {
           if (!firstChunkTime) {
             streamAborted = true;
             reader.cancel().catch(() => {});
           }
-        }, 10000);
+        }, 3000);
 
         let buffer = "";
         try {
@@ -417,7 +418,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           clearTimeout(firstChunkTimeout);
         }
         const streamEnd = performance.now();
-        console.log(`[Whisk] Stream: first-chunk=${firstChunkTime ? Math.round(firstChunkTime - streamStart) : "n/a"}ms total-stream=${Math.round(streamEnd - streamStart)}ms total-e2e=${Math.round(streamEnd - fetchStart)}ms response=${fullContent.length}chars${streamAborted ? " (aborted: no first chunk in 10s)" : ""}`);
+        console.log(`[Whisk] Stream: first-chunk=${firstChunkTime ? Math.round(firstChunkTime - streamStart) : "n/a"}ms total-stream=${Math.round(streamEnd - streamStart)}ms total-e2e=${Math.round(streamEnd - fetchStart)}ms response=${fullContent.length}chars${streamAborted ? " (aborted: no first chunk in 3s)" : ""}`);
 
         if (!fullContent) {
           console.warn(`[Whisk] Stream returned empty content${streamAborted ? " (aborted after 10s timeout)" : ""}, retrying without streaming`);

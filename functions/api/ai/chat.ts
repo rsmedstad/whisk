@@ -498,8 +498,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // Skip streaming for general/followup/unclassified queries — short responses don't
   // benefit from progressive rendering, and non-streaming avoids SSE overhead + the
-  // empty-stream fallback issue on fast responses
-  const wantsStream = body.stream === true && needsRecipeContext;
+  // empty-stream fallback issue on fast responses.
+  // Also skip streaming for Groq/Cerebras — they're fast enough (<1s) that streaming
+  // adds overhead without benefit, and some hosted models (e.g. gpt-oss-20b) have
+  // unreliable streaming that causes 30s empty-stream hangs.
+  const fastProvider = fnConfig.provider === "groq" || fnConfig.provider === "cerebras";
+  const wantsStream = body.stream === true && needsRecipeContext && !fastProvider;
 
   if (wantsStream) {
     try {
