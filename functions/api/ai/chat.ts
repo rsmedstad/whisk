@@ -337,7 +337,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Enabled meal slots
     if (enabledSlots.length > 0) {
       systemParts.push(
-        `\n--- Enabled Meal Slots ---\nThe user plans these meal slots: ${enabledSlots.join(", ")}. Only suggest meals for these slots.`
+        `\n--- Enabled Meal Slots ---\nThe user ONLY plans these meal slots: ${enabledSlots.join(", ")}. Do NOT suggest meals for any other slots (no breakfast, lunch, or snack unless they are in this list). This is a hard constraint.`
       );
     }
 
@@ -373,10 +373,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "Example:\n[RECIPE_CARD: r_abc123, Chicken Tikka Masala]"
     );
 
-    // Planning workflow — only when planning
-    if (/\b(plan|week|suggest|meal|ideas?|fill|gap)\b/i.test(lastMessage)) {
+    // Planning workflow — only when planning (check current message + recent context)
+    const isPlanningMessage = /\b(plan|week|suggest|meal|ideas?|fill|gap|go ahead|yes|sure|ok)\b/i.test(lastMessage);
+    const recentPlanningContext = messages.slice(-4).some((m) =>
+      /\b(plan|week|meal|suggest|ideas?|fill|gap)\b/i.test(m.content)
+    );
+    if (isPlanningMessage && (recentPlanningContext || /\b(plan|week|meal)\b/i.test(lastMessage))) {
+      const slotNote = enabledSlots.length > 0
+        ? `\nCRITICAL: The user only plans these slots: ${enabledSlots.join(", ")}. Do NOT suggest any other meal slots. If they only plan dinner, suggest ONLY dinners.`
+        : "";
       systemParts.push(
-        "Suggest 3 recipes using [RECIPE_CARD] for each. Include a brief intro sentence, then the recipe cards."
+        `MEAL PLANNING MODE: Suggest recipes from the user's collection using [RECIPE_CARD] markers. Do NOT invent new recipes — only use recipes from the collection listed above. Include [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId] for each so the user can bulk-add them to their plan. Keep it concise — recipe cards with a brief intro, no lengthy descriptions.${slotNote}`
       );
     }
   }
