@@ -736,7 +736,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
 
         {/* Landing state: suggestion + capabilities + seasonal */}
         {messages.length === 0 && (
-          <>
+          <div className="space-y-2.5">
             {/* Suggestion — random recipe picker */}
             {recipeCount > 0 && (
               <Card>
@@ -996,7 +996,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 />
               </div>
             </Card>
-          </>
+          </div>
         )}
 
         {/* Messages */}

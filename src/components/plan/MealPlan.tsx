@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { getSeasonalContext } from "../../lib/seasonal";
-import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, Dice } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 const PANTRY_STAPLES = new Set([
@@ -334,6 +334,7 @@ export function MealPlan({
 
   const handleAutoFillEmptySlots = useCallback(() => {
     const usedRecipeIds = new Set<string>();
+    const todayStr = toDateString(new Date());
     // Gather already-planned recipe IDs for this week
     for (const date of weekDates) {
       const meals = getMealsForDate(date);
@@ -343,6 +344,8 @@ export function MealPlan({
     }
     let filled = 0;
     for (const date of weekDates) {
+      // Only fill today and future days
+      if (toDateString(date) < todayStr) continue;
       const meals = getMealsForDate(date);
       for (const { slot } of mealSlots) {
         const hasMeal = meals.some((m) => m.slot === slot);
@@ -361,6 +364,39 @@ export function MealPlan({
     }
     return filled;
   }, [weekDates, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal]);
+
+  const handleRerollDay = useCallback((date: Date) => {
+    const meals = getMealsForDate(date);
+    // Gather recipe IDs used elsewhere this week (exclude this day)
+    const usedElsewhere = new Set<string>();
+    for (const d of weekDates) {
+      if (toDateString(d) === toDateString(date)) continue;
+      for (const m of getMealsForDate(d)) {
+        if (m.recipeId) usedElsewhere.add(m.recipeId);
+      }
+    }
+    // Also exclude recipes currently on this day so re-roll picks new ones
+    const currentIds = new Set(meals.filter((m) => m.recipeId).map((m) => m.recipeId!));
+
+    // Remove existing meals for this day
+    for (const meal of meals) {
+      onRemoveMeal(meal.id);
+    }
+
+    // Fill each enabled slot with a new pick
+    const usedThisRoll = new Set<string>();
+    for (const { slot } of mealSlots) {
+      const candidates = recipeIndex
+        .filter((r) => !usedElsewhere.has(r.id) && !currentIds.has(r.id) && !usedThisRoll.has(r.id))
+        .map((r) => ({ recipe: r, score: recipeScore(r, slot, seasonalIngredients, seasonalTags) }))
+        .sort((a, b) => b.score - a.score);
+      const pick = weightedRandomPick(candidates);
+      if (pick) {
+        onAddMeal(date, slot, pick.recipe.title, pick.recipe.id);
+        usedThisRoll.add(pick.recipe.id);
+      }
+    }
+  }, [weekDates, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal, onRemoveMeal]);
 
   return (
     <div className="flex flex-col h-full">
@@ -678,12 +714,23 @@ export function MealPlan({
                       : "border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900"
                   )}
                 >
-                  <p className={classNames(
-                    "text-xs font-semibold mb-1.5",
-                    isToday ? "text-orange-500" : "text-stone-500 dark:text-stone-400"
-                  )}>
-                    {isToday ? "Today" : formatDateShort(date)}
-                  </p>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className={classNames(
+                      "text-xs font-semibold",
+                      isToday ? "text-orange-500" : "text-stone-500 dark:text-stone-400"
+                    )}>
+                      {isToday ? "Today" : formatDateShort(date)}
+                    </p>
+                    {recipeIndex.length > 0 && (
+                      <button
+                        onClick={() => handleRerollDay(date)}
+                        title="Re-roll recipes"
+                        className="p-0.5 text-stone-300 hover:text-orange-500 dark:text-stone-600 dark:hover:text-orange-400 transition-colors"
+                      >
+                        <Dice className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                   {filledMeals.length > 0 && (
                     <div className="space-y-1">
                       {filledMeals.map((meal) => (
@@ -809,17 +856,28 @@ export function MealPlan({
 
             return (
               <section key={dateStr}>
-                <h3
-                  className={classNames(
-                    "text-sm font-semibold mb-2",
-                    isToday
-                      ? "text-orange-500"
-                      : "text-stone-500 dark:text-orange-300/40"
+                <div className="flex items-center justify-between mb-2">
+                  <h3
+                    className={classNames(
+                      "text-sm font-semibold",
+                      isToday
+                        ? "text-orange-500"
+                        : "text-stone-500 dark:text-orange-300/40"
+                    )}
+                  >
+                    {isToday && "Today \u00B7 "}
+                    {formatDateShort(date)}
+                  </h3>
+                  {recipeIndex.length > 0 && (
+                    <button
+                      onClick={() => handleRerollDay(date)}
+                      title="Re-roll recipes"
+                      className="p-1 text-stone-400 hover:text-orange-500 dark:text-stone-600 dark:hover:text-orange-400 transition-colors"
+                    >
+                      <Dice className="w-4 h-4" />
+                    </button>
                   )}
-                >
-                  {isToday && "Today \u00B7 "}
-                  {formatDateShort(date)}
-                </h3>
+                </div>
 
                 <div className="space-y-1.5">
                   {mealSlots.map(({ slot, label }) => {
