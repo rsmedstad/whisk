@@ -69,7 +69,7 @@ export function Login({
     return (
       <OnboardingScreen
         userName={userName}
-        currentTheme={currentTheme ?? "seasonal"}
+        currentTheme={currentTheme ?? "system"}
         onSetTheme={onSetTheme}
         onComplete={onCompleteOnboarding}
       />
@@ -78,9 +78,9 @@ export function Login({
 
   if (screen === "welcome") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
         <div className="w-full max-w-sm">
-          <div className="text-center mb-8">
+          <div className="text-center mb-10">
             <h1 className="text-4xl font-bold text-orange-500 mb-2">Whisk</h1>
             <p className="text-stone-500 dark:text-stone-400">
               Your personal recipe book
