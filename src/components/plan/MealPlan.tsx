@@ -48,7 +48,16 @@ function recipeScore(
 
   // Slot match bonus — strongest signal
   const slotTags = SLOT_TAGS[slot] ?? [];
-  if (r.tags.some((t) => slotTags.includes(t.toLowerCase()))) score += 50;
+  const tagsLower = r.tags.map((t) => t.toLowerCase());
+  if (tagsLower.some((t) => slotTags.includes(t))) score += 50;
+
+  // Exclude component recipes (sauces, condiments, basics) — they aren't standalone meals
+  const NON_MEAL_TAGS = ["sauce", "condiment", "dressing", "marinade", "spice mix", "seasoning", "base", "stock", "broth", "other"];
+  if (tagsLower.some((t) => NON_MEAL_TAGS.includes(t))) score -= 200;
+
+  // Penalize recipes that don't match ANY meal slot — likely not a standalone meal
+  const allMealTags = Object.values(SLOT_TAGS).flat();
+  if (!tagsLower.some((t) => allMealTags.includes(t))) score -= 40;
 
   // Seasonal tag match — recipe tagged with current season or holiday
   if (seasonalTags.length > 0 && r.tags.some((t) => seasonalTags.includes(t.toLowerCase()))) score += 25;
