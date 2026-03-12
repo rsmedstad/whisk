@@ -975,6 +975,21 @@ export function MealPlan({
                               </button>
                             </div>
 
+                            {/* Quick-fill options for non-cooking */}
+                            {!mealInput && (
+                              <div className="flex gap-1.5 mt-1.5">
+                                {["Skipped", "Ate out", "Leftovers"].map((opt) => (
+                                  <button
+                                    key={opt}
+                                    onClick={() => handleAddMeal(opt)}
+                                    className="text-[11px] px-2 py-0.5 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-500 dark:text-stone-400 hover:bg-stone-300 dark:hover:bg-stone-600 transition-colors"
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
                             {/* Recipe suggestions dropdown */}
                             {showSuggestions && suggestions.length > 0 && (
                               <div

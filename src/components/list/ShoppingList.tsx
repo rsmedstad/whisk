@@ -838,7 +838,7 @@ export function ShoppingList({
                 title="List is empty"
                 description="Add items below or from a recipe"
                 action={plannedRecipeIds.length > 0 && onAddFromPlan ? (
-                  <div className="flex flex-col items-center gap-4">
+                  <div className="flex flex-col items-center gap-6">
                     <button
                       onClick={() => handleAddFromPlan(false)}
                       disabled={isPlanAdding}
@@ -850,9 +850,9 @@ export function ShoppingList({
                     <button
                       onClick={() => handleAddFromPlan(true)}
                       disabled={isPlanAdding}
-                      className="rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-xs font-medium text-stone-500 dark:text-stone-400 hover:border-orange-400 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
+                      className="rounded-full border border-stone-300 dark:border-stone-600 px-3 py-1 text-[11px] font-medium text-stone-400 dark:text-stone-500 hover:border-orange-400 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
                     >
-                      Include pantry staples
+                      Include pantry staples (salt, oil, spices, etc.)
                     </button>
                     {planAddStatus && (
                       <p className="text-xs text-stone-500 dark:text-stone-400">{planAddStatus}</p>
