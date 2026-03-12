@@ -97,7 +97,9 @@ async function logAIInteraction(kv: KVNamespace, entry: AILogEntry): Promise<voi
     logs.unshift(entry);
     // Keep last 50 entries
     await kv.put("ai_logs", JSON.stringify(logs.slice(0, 50)), { expirationTtl: 604800 });
-  } catch { /* best-effort logging */ }
+  } catch (err) {
+    console.error("[Whisk] Failed to write AI log:", err);
+  }
 }
 
 /** Format a user-friendly error message from an AI provider failure */
@@ -127,7 +129,7 @@ function formatAIError(errMsg: string, provider: string, model: string): string 
   return `${displayName} (${model}) error: ${errMsg.slice(0, 300)}. Check Settings > AI or try again.`;
 }
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const startTime = Date.now();
   const body = (await request.json()) as ChatBody;
   const { messages: rawMessages } = body;
@@ -524,7 +526,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       const promptChars = systemPrompt.length;
       console.log(`[Whisk] Chat tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm-connect=${streamMs}ms prompt=${promptChars}chars recipes=${recipeIndex.length} msg="${lastMessage.slice(0, 60)}"`);
       // Log success (we don't know response length for streams, log 0)
-      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: true, durationMs: streamMs }).catch(() => {});
+      waitUntil(logAIInteraction(env.WHISK_KV,{ ...baseLog, streaming: true, success: true, durationMs: streamMs }).catch(() => {}));
       return new Response(stream, {
         headers: {
           "Content-Type": "text/event-stream",
@@ -536,7 +538,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // Log stream error with provider details for debugging
       const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr);
       console.error(`[Whisk] Stream error (${fnConfig.provider}/${fnConfig.model}):`, errMsg);
-      logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: true, success: false, durationMs: Date.now() - startTime, error: `stream: ${errMsg.slice(0, 500)}` }).catch(() => {});
+      waitUntil(logAIInteraction(env.WHISK_KV,{ ...baseLog, streaming: true, success: false, durationMs: Date.now() - startTime, error: `stream: ${errMsg.slice(0, 500)}` }).catch(() => {}));
 
       // Don't retry on rate limits or timeouts — retrying just wastes time
       const lowerErr = errMsg.toLowerCase();
@@ -558,14 +560,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
           .replace(/\n{3,}/g, "\n\n")
           .trim();
-        logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length, error: "stream failed, non-stream fallback succeeded" }).catch(() => {});
+        waitUntil(logAIInteraction(env.WHISK_KV,{ ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length, error: "stream failed, non-stream fallback succeeded" }).catch(() => {}));
         return new Response(
           JSON.stringify({ content: cleaned || "I wasn't able to generate a response. Please try again." }),
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (fallbackErr) {
         const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-        logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: `both failed — stream: ${errMsg.slice(0, 250)}, fallback: ${fbMsg.slice(0, 250)}` }).catch(() => {});
+        waitUntil(logAIInteraction(env.WHISK_KV,{ ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: `both failed — stream: ${errMsg.slice(0, 250)}, fallback: ${fbMsg.slice(0, 250)}` }).catch(() => {}));
         return new Response(
           JSON.stringify({
             content: formatAIError(fbMsg, fnConfig.provider, fnConfig.model),
@@ -596,7 +598,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const logWithLlm = { ...baseLog, timing: { ...baseLog.timing!, llmMs } };
 
     if (!cleaned) {
-      logAIInteraction(env.WHISK_KV, { ...logWithLlm, streaming: false, success: false, durationMs: totalMs, error: "empty response from provider" }).catch(() => {});
+      waitUntil(logAIInteraction(env.WHISK_KV,{ ...logWithLlm, streaming: false, success: false, durationMs: totalMs, error: "empty response from provider" }).catch(() => {}));
       return new Response(
         JSON.stringify({
           content: "I wasn't able to generate a response. This can happen when the AI service is busy — please try again.",
@@ -605,14 +607,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    logAIInteraction(env.WHISK_KV, { ...logWithLlm, streaming: false, success: true, durationMs: totalMs, responseLength: cleaned.length }).catch(() => {});
+    waitUntil(logAIInteraction(env.WHISK_KV,{ ...logWithLlm, streaming: false, success: true, durationMs: totalMs, responseLength: cleaned.length }).catch(() => {}));
     return new Response(
       JSON.stringify({ content: cleaned }),
       { headers: { "Content-Type": "application/json", "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm=${llmMs}ms total=${totalMs}ms prompt=${promptChars}chars` } }
     );
   } catch (textErr) {
     const errMsg = textErr instanceof Error ? textErr.message : String(textErr);
-    logAIInteraction(env.WHISK_KV, { ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: errMsg.slice(0, 500) }).catch(() => {});
+    waitUntil(logAIInteraction(env.WHISK_KV,{ ...baseLog, streaming: false, success: false, durationMs: Date.now() - startTime, error: errMsg.slice(0, 500) }).catch(() => {}));
     return new Response(
       JSON.stringify({
         content: formatAIError(errMsg, fnConfig.provider, fnConfig.model),

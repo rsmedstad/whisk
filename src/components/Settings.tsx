@@ -1642,10 +1642,15 @@ function AIPerformanceLogs() {
             {logs && logs.length === 0 && (
               <p className="text-xs text-stone-400">No AI logs yet. Send a message in the Ask tab to generate data.</p>
             )}
-            {logs && logs.length > 0 && (
+            {logs && logs.length > 0 && (() => {
+              const todayStr = new Date().toLocaleDateString();
+              const todayCount = logs.filter((l) => new Date(l.timestamp).toLocaleDateString() === todayStr).length;
+              return (
               <>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-stone-400 dark:text-stone-500">Last {logs.length} requests</p>
+                  <p className="text-xs text-stone-400 dark:text-stone-500">
+                    {todayCount > 0 ? `${todayCount} today` : "None today"} &middot; {logs.length} total
+                  </p>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => {
@@ -1659,6 +1664,16 @@ function AIPerformanceLogs() {
                     <button onClick={loadLogs} className="text-xs text-orange-600 dark:text-orange-400 hover:underline">
                       Refresh
                     </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("Clear all AI logs?")) return;
+                        await api.delete("/ai/logs");
+                        setLogs([]);
+                      }}
+                      className="text-xs text-red-500 dark:text-red-400 hover:underline"
+                    >
+                      Clear
+                    </button>
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -1667,7 +1682,10 @@ function AIPerformanceLogs() {
                     const isScan = log.feature === "scan";
                     const maxMs = Math.max(log.durationMs, t?.fetchMs ?? 0, t?.llmMs ?? 0, t?.visionMs ?? 0, 500);
                     const time = new Date(log.timestamp);
-                    const timeStr = time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                    const isToday = time.toLocaleDateString() === new Date().toLocaleDateString();
+                    const timeStr = isToday
+                      ? time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                      : `${time.toLocaleDateString([], { month: "short", day: "numeric" })} ${time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
                     return (
                       <div key={i} className="border-b border-stone-100 dark:border-stone-800 pb-3 last:border-0 last:pb-0">
                         <div className="flex items-start justify-between mb-1.5">
@@ -1745,7 +1763,8 @@ function AIPerformanceLogs() {
                   })}
                 </div>
               </>
-            )}
+              );
+            })()}
           </div>
         </Card>
       )}
