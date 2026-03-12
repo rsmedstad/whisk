@@ -43,7 +43,7 @@ export const ACCENT_OPTIONS: { value: "auto" | SeasonalAccent; label: string }[]
 
 export function useTheme() {
   const [preference, setPreference] = useState<Theme>(() => {
-    return (localStorage.getItem("whisk_theme") as Theme) ?? "seasonal";
+    return (localStorage.getItem("whisk_theme") as Theme) ?? "system";
   });
 
   const [accentOverride, setAccentOverrideState] = useState<"auto" | SeasonalAccent>(() => {

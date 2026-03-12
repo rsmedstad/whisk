@@ -18,7 +18,7 @@ function detectPlatform(): Platform {
 /** Inline iOS Safari ellipsis icon (three dots in a circle) */
 function EllipsisIcon() {
   return (
-    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-500 text-white align-middle mx-0.5">
+    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-stone-400 text-white align-middle mx-0.5">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
         <circle cx="6" cy="12" r="1.5" />
         <circle cx="12" cy="12" r="1.5" />
@@ -66,9 +66,6 @@ function VerticalDotsIcon() {
 
 export function InstallPrompt() {
   const [platform, setPlatform] = useState<Platform>("desktop");
-  const [dismissed, setDismissed] = useState(() => {
-    return localStorage.getItem("whisk_install_dismissed") === "true";
-  });
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
 
   useEffect(() => {
@@ -82,12 +79,7 @@ export function InstallPrompt() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  if (platform === "pwa" || platform === "desktop" || dismissed) return null;
-
-  const handleDismiss = () => {
-    setDismissed(true);
-    localStorage.setItem("whisk_install_dismissed", "true");
-  };
+  if (platform === "pwa" || platform === "desktop") return null;
 
   const handleInstall = async () => {
     if (deferredPrompt && "prompt" in deferredPrompt) {
@@ -97,24 +89,16 @@ export function InstallPrompt() {
   };
 
   return (
-    <div className="px-4 pt-3 pb-3">
+    <div className="mb-10">
       <Card>
         <div className="space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold dark:text-stone-100">
-                Install Whisk
-              </p>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                Works offline, launches full-screen, and feels like a native app
-              </p>
-            </div>
-            <button
-              onClick={handleDismiss}
-              className="text-stone-400 hover:text-stone-600 text-lg leading-none shrink-0"
-            >
-              &times;
-            </button>
+          <div>
+            <p className="text-sm font-semibold dark:text-stone-100">
+              Install Whisk
+            </p>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+              Works offline, launches full-screen, and feels like a native app
+            </p>
           </div>
 
           {platform === "ios" && (
