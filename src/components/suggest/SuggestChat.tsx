@@ -369,40 +369,58 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         let fullContent = "";
         let firstChunkTime = 0;
         const streamStart = performance.now();
+        let streamAborted = false;
 
         // Add placeholder assistant message
         setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data: ") || trimmed === "data: [DONE]") continue;
-            try {
-              const data = JSON.parse(trimmed.slice(6)) as { text?: string };
-              if (data.text) {
-                if (!firstChunkTime) firstChunkTime = performance.now();
-                fullContent += data.text;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last) updated[updated.length - 1] = { ...last, content: fullContent };
-                  return updated;
-                });
-              }
-            } catch { /* skip malformed chunk */ }
+        // Abort if no first text chunk arrives within 10 seconds
+        const firstChunkTimeout = setTimeout(() => {
+          if (!firstChunkTime) {
+            streamAborted = true;
+            reader.cancel().catch(() => {});
           }
+        }, 10000);
+
+        let buffer = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("data: ") || trimmed === "data: [DONE]") continue;
+              try {
+                const data = JSON.parse(trimmed.slice(6)) as { text?: string };
+                if (data.text) {
+                  if (!firstChunkTime) {
+                    firstChunkTime = performance.now();
+                    clearTimeout(firstChunkTimeout);
+                  }
+                  fullContent += data.text;
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last) updated[updated.length - 1] = { ...last, content: fullContent };
+                    return updated;
+                  });
+                }
+              } catch { /* skip malformed chunk */ }
+            }
+          }
+        } catch {
+          // Stream cancelled by timeout or network error
+        } finally {
+          clearTimeout(firstChunkTimeout);
         }
         const streamEnd = performance.now();
-        console.log(`[Whisk] Stream: first-chunk=${firstChunkTime ? Math.round(firstChunkTime - streamStart) : "n/a"}ms total-stream=${Math.round(streamEnd - streamStart)}ms total-e2e=${Math.round(streamEnd - fetchStart)}ms response=${fullContent.length}chars`);
+        console.log(`[Whisk] Stream: first-chunk=${firstChunkTime ? Math.round(firstChunkTime - streamStart) : "n/a"}ms total-stream=${Math.round(streamEnd - streamStart)}ms total-e2e=${Math.round(streamEnd - fetchStart)}ms response=${fullContent.length}chars${streamAborted ? " (aborted: no first chunk in 10s)" : ""}`);
 
         if (!fullContent) {
-          console.warn("[Whisk] Stream returned empty content, retrying without streaming");
+          console.warn(`[Whisk] Stream returned empty content${streamAborted ? " (aborted after 10s timeout)" : ""}, retrying without streaming`);
           // Remove the empty placeholder assistant message before retry
           setMessages((prev) => prev.slice(0, -1));
           // Retry as non-streaming request
