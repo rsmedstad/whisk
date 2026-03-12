@@ -6,7 +6,7 @@ import { Plus, RefreshCw, Dice, WhiskLogo, Send, CalendarDays, BookOpen, Sparkle
 import type { IconProps } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { SeasonalProduceCard } from "../ui/SeasonalProduceCard";
-import { classNames } from "../../lib/utils";
+import { classNames, decodeEntities } from "../../lib/utils";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { getSeasonalContext, buildSeasonalSystemContext } from "../../lib/seasonal";
 import { renderMarkdown } from "../../lib/markdown";
@@ -1156,7 +1156,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                               <div className="w-14 h-14 bg-stone-200 dark:bg-stone-700 shrink-0" />
                             )}
                             <div className="py-1.5 pr-1 min-w-0">
-                              <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">{recipe.title}</p>
+                              <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">{decodeEntities(recipe.title)}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 {totalTime > 0 && <span className="text-xs text-stone-400">{totalTime >= 60 ? `${Math.floor(totalTime / 60)}h${totalTime % 60 > 0 ? ` ${totalTime % 60}m` : ""}` : `${totalTime} min`}</span>}
                                 {recipe.servings && <span className="text-xs text-stone-400">Serves {recipe.servings}</span>}
@@ -1200,7 +1200,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                           <Plus className="w-4 h-4 text-orange-500 shrink-0" />
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
-                              {title || displayHost}
+                              {decodeEntities(title) || displayHost}
                             </p>
                             <p className="text-xs text-stone-400 truncate">{url}</p>
                           </div>
@@ -1234,7 +1234,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                             }}
                             className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900 transition-colors"
                           >
-                            <CalendarDays className="w-3 h-3" /> {title}
+                            <CalendarDays className="w-3 h-3" /> {decodeEntities(title)}
                           </button>
                         );
                       })}

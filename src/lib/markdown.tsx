@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { decodeEntities } from "./utils";
 
 /** Lightweight markdown renderer for AI chat messages.
  *  Handles: **bold**, *italic*, `code`, bullet lists, numbered lists. */
@@ -79,7 +80,7 @@ function renderInline(text: string): ReactNode {
     const best = candidates[0];
     if (!best) {
       // No more inline patterns
-      parts.push(remaining);
+      parts.push(decodeEntities(remaining));
       break;
     }
 
@@ -87,12 +88,12 @@ function renderInline(text: string): ReactNode {
     const inner = best.match[2] ?? "";
 
     if (prefix) {
-      parts.push(prefix);
+      parts.push(decodeEntities(prefix));
     }
 
     switch (best.type) {
       case "bold":
-        parts.push(<strong key={key++}>{inner}</strong>);
+        parts.push(<strong key={key++}>{decodeEntities(inner)}</strong>);
         remaining = remaining.slice(prefix.length + inner.length + 4); // 4 = ** + **
         break;
       case "code":
@@ -105,7 +106,7 @@ function renderInline(text: string): ReactNode {
         break;
       case "italic": {
         const marker = best.match[0]?.includes("_") ? "_" : "*";
-        parts.push(<em key={key++}>{inner}</em>);
+        parts.push(<em key={key++}>{decodeEntities(inner)}</em>);
         remaining = remaining.slice(prefix.length + inner.length + (marker.length * 2));
         break;
       }
