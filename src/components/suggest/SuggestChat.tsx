@@ -270,22 +270,41 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
   const sendMessage = async (text: string, isRetry = false) => {
     // Detect simple "suggest from my collection" requests and handle locally
     // Only for fresh messages (not retries) and when user has recipes
-    if (!isRetry && recipes.length > 0 && messages.length === 0) {
+    if (!isRetry && recipes.length > 0) {
       const lower = text.toLowerCase();
-      const isSimpleSuggestion = /\b(suggest|recommend|what should i (make|cook)|give me|pick|ideas? for)\b/.test(lower)
-        && /\b(dinner|breakfast|lunch|meal|week|tonight|dessert|recipe)\b/.test(lower)
-        && !/\b(new|outside|different|never tried|with .{3,}|using .{3,}|without .{3,}|substitute|instead|how|why|leftover|ingredient)\b/.test(lower);
-      if (isSimpleSuggestion) {
-        // Detect category from the message
-        const cat = /\bbreakfast\b/.test(lower) ? "breakfast"
-          : /\bdessert\b/.test(lower) ? "dessert"
-          : /\blunch\b/.test(lower) ? "any"
-          : /\bappetizer\b/.test(lower) ? "appetizer"
-          : /\bsnack\b/.test(lower) ? "snack"
-          : /\bdrink|cocktail\b/.test(lower) ? "drinks"
-          : "dinner";
-        handleLocalSuggestion(text, 3, cat);
-        return;
+
+      if (messages.length === 0) {
+        const isSimpleSuggestion = /\b(suggest|recommend|what should i (make|cook)|give me|pick|ideas? for)\b/.test(lower)
+          && /\b(dinner|breakfast|lunch|meal|week|tonight|dessert|recipe)\b/.test(lower)
+          && !/\b(new|outside|different|never tried|with .{3,}|using .{3,}|without .{3,}|substitute|instead|how|why|leftover|ingredient)\b/.test(lower);
+        if (isSimpleSuggestion) {
+          // Detect category from the message
+          const cat = /\bbreakfast\b/.test(lower) ? "breakfast"
+            : /\bdessert\b/.test(lower) ? "dessert"
+            : /\blunch\b/.test(lower) ? "any"
+            : /\bappetizer\b/.test(lower) ? "appetizer"
+            : /\bsnack\b/.test(lower) ? "snack"
+            : /\bdrink|cocktail\b/.test(lower) ? "drinks"
+            : "dinner";
+          handleLocalSuggestion(text, 3, cat);
+          return;
+        }
+      }
+
+      // Handle "give me more" follow-ups locally when prior messages had recipe cards
+      if (messages.length > 0) {
+        const priorHadRecipeCards = messages.some((m) => m.role === "assistant" && /\[RECIPE_CARD:/.test(m.content));
+        const isMoreRequest = /\b(more|another|other|again|different)\b/i.test(lower)
+          && /\b(options?|ideas?|suggest|recipes?|picks?|ones?|three|3|some)\b/i.test(lower);
+        if (priorHadRecipeCards && isMoreRequest) {
+          // Detect category from prior context or default to dinner
+          const cat = /\bbreakfast\b/.test(lower) ? "breakfast"
+            : /\bdessert\b/.test(lower) ? "dessert"
+            : /\blunch\b/.test(lower) ? "lunch"
+            : "dinner";
+          handleLocalSuggestion(text, 3, cat);
+          return;
+        }
       }
     }
 
@@ -519,9 +538,18 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
       if (themed.length > 0) pool = themed;
     }
 
-    // Exclude recipes already in this week's meal plan
+    // Exclude recipes already in this week's meal plan or already suggested in chat
     const plannedIds = new Set(mealPlan.map((m) => m.recipeId).filter(Boolean));
-    const available = pool.filter((r) => !plannedIds.has(r.id));
+    const alreadySuggested = new Set<string>();
+    for (const m of messagesRef.current) {
+      if (m.role === "assistant") {
+        for (const match of m.content.matchAll(/\[RECIPE_CARD:\s*([^,\]]+)/g)) {
+          const id = match[1]?.trim();
+          if (id) alreadySuggested.add(id);
+        }
+      }
+    }
+    const available = pool.filter((r) => !plannedIds.has(r.id) && !alreadySuggested.has(r.id));
 
     // Prefer easy/medium recipes — fall back to all if not enough
     const easyMedium = available.filter((r) => r.difficulty !== "hard");
