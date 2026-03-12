@@ -31,7 +31,7 @@ function EllipsisIcon() {
 /** Inline iOS share icon (square with arrow up) */
 function ShareIcon() {
   return (
-    <span className="inline-flex items-center justify-center w-5 h-5 align-middle mx-0.5">
+    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-stone-400 text-white align-middle mx-0.5">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15m0-3-3-3m0 0-3 3m3-3v12" />
       </svg>
@@ -42,7 +42,7 @@ function ShareIcon() {
 /** Inline "Add to Home Screen" icon (plus in a square) */
 function AddToHomeIcon() {
   return (
-    <span className="inline-flex items-center justify-center w-5 h-5 align-middle mx-0.5">
+    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-stone-400 text-white align-middle mx-0.5">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.75h10.5a3 3 0 0 1 3 3v10.5a3 3 0 0 1-3 3H6.75a3 3 0 0 1-3-3V6.75a3 3 0 0 1 3-3Z" />
@@ -54,7 +54,7 @@ function AddToHomeIcon() {
 /** Inline Android Chrome three-dot menu icon */
 function VerticalDotsIcon() {
   return (
-    <span className="inline-flex items-center justify-center w-5 h-5 align-middle mx-0.5">
+    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-stone-400 text-white align-middle mx-0.5">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
         <circle cx="12" cy="5" r="1.5" />
         <circle cx="12" cy="12" r="1.5" />
@@ -105,7 +105,7 @@ export function InstallPrompt() {
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
                 <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded shrink-0">1</span>
-                <span>Tap <EllipsisIcon /> in the address bar</span>
+                <span>Tap <EllipsisIcon /> near the address bar</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300">
                 <span className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded shrink-0">2</span>
