@@ -108,7 +108,7 @@ export function Login({
         <div className="w-full max-w-sm">
           <button
             onClick={() => setScreen("welcome")}
-            className="flex items-center gap-1 text-stone-600 dark:text-stone-400 text-sm mb-6"
+            className="flex items-center gap-1 text-stone-600 dark:text-stone-400 text-sm mb-6 min-h-11 -ml-2 px-2"
           >
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
@@ -204,7 +204,7 @@ export function Login({
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-[2.05rem] text-stone-500 dark:text-stone-400"
+              className="absolute right-0.5 top-[1.3rem] p-2.5 text-stone-500 dark:text-stone-400"
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
@@ -278,7 +278,7 @@ function OnboardingScreen({
                     key={t}
                     onClick={() => handleThemeChange(t)}
                     aria-pressed={currentTheme === t}
-                    className={`py-2 rounded-lg text-sm font-medium border capitalize ${
+                    className={`py-2.5 rounded-lg text-sm font-medium border capitalize ${
                       currentTheme === t ? activeClass : inactiveClass
                     }`}
                   >
@@ -309,7 +309,7 @@ function OnboardingScreen({
                     key={u}
                     onClick={() => setUnits(u)}
                     aria-pressed={units === u}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border capitalize ${
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-medium border capitalize ${
                       units === u ? activeClass : inactiveClass
                     }`}
                   >
@@ -335,12 +335,12 @@ function OnboardingScreen({
                 aria-checked={showGrams}
                 aria-label="Show gram weights"
                 onClick={() => setShowGrams(!showGrams)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
+                className={`relative w-12 h-7 rounded-full transition-colors ${
                   showGrams ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${
                     showGrams ? "translate-x-5" : ""
                   }`}
                 />
