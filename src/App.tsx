@@ -300,6 +300,7 @@ function AppShell({
                 weekId={mealPlan.plan.id}
                 onToggleWantToMake={recipes.toggleWantToMake}
                 onClearWeek={mealPlan.clearWeek}
+                onReplaceMealsForDate={mealPlan.replaceMealsForDate}
               />
             }
           />

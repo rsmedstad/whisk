@@ -146,6 +146,7 @@ interface MealPlanProps {
   weekId?: string;
   onToggleWantToMake?: (id: string) => void;
   onClearWeek?: () => void;
+  onReplaceMealsForDate?: (date: Date, newMeals: { slot: MealSlot; title: string; recipeId?: string }[]) => void;
 }
 
 export function MealPlan({
@@ -166,6 +167,7 @@ export function MealPlan({
   weekId,
   onToggleWantToMake,
   onClearWeek,
+  onReplaceMealsForDate,
 }: MealPlanProps) {
   const navigate = useNavigate();
   const weekDates = getWeekDates(currentDate);
@@ -387,13 +389,9 @@ export function MealPlan({
     // Also exclude recipes currently on this day so re-roll picks new ones
     const currentIds = new Set(meals.filter((m) => m.recipeId).map((m) => m.recipeId!));
 
-    // Remove existing meals for this day
-    for (const meal of meals) {
-      onRemoveMeal(meal.id);
-    }
-
-    // Fill each enabled slot with a new pick
+    // Build new meals for each enabled slot
     const usedThisRoll = new Set<string>();
+    const newMeals: { slot: MealSlot; title: string; recipeId?: string }[] = [];
     for (const { slot } of mealSlots) {
       const candidates = recipeIndex
         .filter((r) => !usedElsewhere.has(r.id) && !currentIds.has(r.id) && !usedThisRoll.has(r.id))
@@ -401,11 +399,24 @@ export function MealPlan({
         .sort((a, b) => b.score - a.score);
       const pick = weightedRandomPick(candidates);
       if (pick) {
-        onAddMeal(date, slot, pick.recipe.title, pick.recipe.id);
+        newMeals.push({ slot, title: pick.recipe.title, recipeId: pick.recipe.id });
         usedThisRoll.add(pick.recipe.id);
       }
     }
-  }, [weekDates, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal, onRemoveMeal]);
+
+    // Atomically replace all meals for this day in a single state update
+    if (onReplaceMealsForDate) {
+      onReplaceMealsForDate(date, newMeals);
+    } else {
+      // Fallback: remove then add (may have stale state issues)
+      for (const meal of meals) {
+        onRemoveMeal(meal.id);
+      }
+      for (const m of newMeals) {
+        onAddMeal(date, m.slot, m.title, m.recipeId);
+      }
+    }
+  }, [weekDates, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal, onRemoveMeal, onReplaceMealsForDate]);
 
   return (
     <div className="flex flex-col h-full">
