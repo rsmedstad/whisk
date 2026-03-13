@@ -1356,6 +1356,24 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 {/* Other action buttons (ADD_TO_LIST, SEARCH_RECIPES) */}
                 {otherActions.length > 0 && (
                   <div className={classNames("flex flex-wrap gap-2", (recipeCards.length > 0 || saveRecipes.length > 0 || planActions.length > 0) ? "mt-1" : "mt-2 border-t border-stone-200 dark:border-stone-700 pt-2")}>
+                    {/* Bulk "Add all to list" when 2+ list items */}
+                    {onAddToList && otherActions.filter((a) => a.type === "ADD_TO_LIST").length >= 2 && (
+                      <button
+                        onClick={() => {
+                          for (const action of otherActions) {
+                            if (action.type === "ADD_TO_LIST") {
+                              const parts = action.params.split(",").map((s) => s.trim());
+                              const itemName = parts[0] ?? "Item";
+                              const amount = parts[1];
+                              onAddToList(amount ? `${amount} ${itemName}` : itemName);
+                            }
+                          }
+                        }}
+                        className="w-full rounded-lg bg-green-600 text-white py-2 text-sm font-medium hover:bg-green-700 transition-colors"
+                      >
+                        Add all {otherActions.filter((a) => a.type === "ADD_TO_LIST").length} items to list
+                      </button>
+                    )}
                     {otherActions.map((action, ai) => {
                       if (action.type === "ADD_TO_LIST") {
                         const parts = action.params.split(",").map((s) => s.trim());
