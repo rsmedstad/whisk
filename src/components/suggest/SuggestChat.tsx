@@ -1357,15 +1357,18 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 {otherActions.length > 0 && (() => {
                   const listActions = otherActions.filter((a) => a.type === "ADD_TO_LIST");
                   const searchActions = otherActions.filter((a) => a.type === "SEARCH_RECIPES");
-                  // Parse essential vs staple from 5th param
-                  const essentialItems = listActions.filter((a) => {
-                    const tag = a.params.split(",").map((s) => s.trim())[4]?.toLowerCase();
-                    return tag !== "staple";
-                  });
-                  const stapleItems = listActions.filter((a) => {
-                    const tag = a.params.split(",").map((s) => s.trim())[4]?.toLowerCase();
-                    return tag === "staple";
-                  });
+                  // Parse essential vs staple from 5th param, with fallback detection
+                  const STAPLE_WORDS = /^(salt|pepper|black pepper|white pepper|oil|olive oil|vegetable oil|cooking oil|butter|sugar|flour|garlic powder|onion powder|paprika|cumin|oregano|basil|thyme|chili powder|cayenne|cinnamon|baking soda|baking powder|vanilla|vinegar|soy sauce|cornstarch|water|ice)$/i;
+                  const isStapleItem = (a: { params: string }) => {
+                    const parts = a.params.split(",").map((s) => s.trim());
+                    const tag = parts[4]?.toLowerCase();
+                    if (tag === "staple") return true;
+                    if (tag === "essential") return false;
+                    // Fallback: check item name against common staples
+                    return STAPLE_WORDS.test(parts[0] ?? "");
+                  };
+                  const essentialItems = listActions.filter((a) => !isStapleItem(a));
+                  const stapleItems = listActions.filter((a) => isStapleItem(a));
                   const hasEssentials = essentialItems.length > 0;
                   const hasStaples = stapleItems.length > 0;
                   const hasBoth = hasEssentials && hasStaples;
@@ -1414,7 +1417,7 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                       const parts = action.params.split(",").map((s) => s.trim());
                       const itemName = parts[0] ?? "Item";
                       const amount = parts[1];
-                      const isStaple = parts[4]?.toLowerCase() === "staple";
+                      const isStaple = isStapleItem(action);
                       const displayName = amount ? `${amount} ${itemName}` : itemName;
                       return (
                         <button
