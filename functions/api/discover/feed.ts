@@ -396,13 +396,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   // Client can pass ?lifetime=N to control how many days items stay visible
+  // Client can pass ?sources=nyt,allrecipes to filter by enabled sources
   const { searchParams } = new URL(request.url);
   const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || DEFAULT_ITEM_LIFETIME_DAYS;
+  const sourcesParam = searchParams.get("sources");
+  const enabledSources = sourcesParam
+    ? new Set(sourcesParam.split(",").filter(Boolean) as DiscoverSource[])
+    : null; // null = show all
   const now = Date.now();
 
-  // Filter: only show items that haven't expired yet
-  // Items without expiresAt use addedAt + lifetime as fallback
+  // Filter: only show items that haven't expired yet and match enabled sources
   const visibleItems = archive.items.filter((item) => {
+    if (enabledSources && item.source && !enabledSources.has(item.source)) return false;
     const expiry = item.expiresAt
       ? new Date(item.expiresAt).getTime()
       : new Date(item.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000;
@@ -437,6 +442,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const { searchParams } = new URL(request.url);
   const force = searchParams.get("force") === "true";
   const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || DEFAULT_ITEM_LIFETIME_DAYS;
+  const sourcesParam = searchParams.get("sources");
+  const enabledSources = sourcesParam
+    ? new Set(sourcesParam.split(",").filter(Boolean) as DiscoverSource[])
+    : null; // null = scrape all
   const MIN_FORCE_MS = 60 * 60 * 1000; // 1 hour minimum even on force
 
   // Rate limit: 2 days auto, 1 hour on manual force
@@ -444,15 +453,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const elapsed = Date.now() - new Date(archive.lastRefreshed).getTime();
     const limit = force ? MIN_FORCE_MS : MIN_REFRESH_MS;
     if (elapsed < limit) {
-      return Response.json(archiveToCategoryFeed(archive));
+      // Still filter by enabled sources even when rate-limited
+      const filtered = enabledSources
+        ? { ...archive, items: archive.items.filter((i) => !i.source || enabledSources.has(i.source)) }
+        : archive;
+      return Response.json(archiveToCategoryFeed(filtered));
     }
   }
 
-  // Scrape all three in parallel — each handles its own errors
+  // Scrape enabled sources in parallel — each handles its own errors
+  const scrapeAll = !enabledSources; // null means all enabled
   const [nyt, allrecipes, seriouseats] = await Promise.all([
-    scrapeNYTCooking(env),
-    scrapeAllRecipes(env),
-    scrapeSeriousEats(env),
+    scrapeAll || enabledSources!.has("nyt") ? scrapeNYTCooking(env) : Promise.resolve([]),
+    scrapeAll || enabledSources!.has("allrecipes") ? scrapeAllRecipes(env) : Promise.resolve([]),
+    scrapeAll || enabledSources!.has("seriouseats") ? scrapeSeriousEats(env) : Promise.resolve([]),
   ]);
 
   // Merge new items into archive (dedup by URL + title similarity)

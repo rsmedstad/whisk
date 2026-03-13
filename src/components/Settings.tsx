@@ -163,6 +163,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const [feedItemLifetime, setFeedItemLifetime] = useState(() =>
     localStorage.getItem("whisk_feed_item_lifetime") ?? "7"
   );
+  const [discoverSources, setDiscoverSources] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem("whisk_discover_sources");
+    return saved ? JSON.parse(saved) : { nyt: true, allrecipes: true, seriouseats: true };
+  });
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [isRetagging, setIsRetagging] = useState(false);
   const [retagResult, setRetagResult] = useState<string | null>(null);
@@ -706,6 +710,35 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                         >
                           {opt.label}
                         </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                      Sources
+                    </label>
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                      Choose which recipe sites appear in your Discover feed. Changes take effect on next refresh.
+                    </p>
+                    <div className="space-y-2">
+                      {([
+                        { key: "nyt", label: "NYT Cooking" },
+                        { key: "allrecipes", label: "AllRecipes" },
+                        { key: "seriouseats", label: "Serious Eats" },
+                      ] as const).map((src) => (
+                        <label key={src.key} className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={discoverSources[src.key] !== false}
+                            onChange={(e) => {
+                              const updated = { ...discoverSources, [src.key]: e.target.checked };
+                              setDiscoverSources(updated);
+                              localStorage.setItem("whisk_discover_sources", JSON.stringify(updated));
+                            }}
+                            className="w-4 h-4 rounded border-stone-300 dark:border-stone-600 text-orange-500 focus:ring-orange-500 dark:bg-stone-700"
+                          />
+                          <span className="text-sm dark:text-stone-200">{src.label}</span>
+                        </label>
                       ))}
                     </div>
                   </div>

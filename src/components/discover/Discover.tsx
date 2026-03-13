@@ -369,6 +369,12 @@ export function Discover({
       const lifetime = localStorage.getItem("whisk_feed_item_lifetime") ?? "7";
       const params = new URLSearchParams({ lifetime });
       if (force) params.set("force", "true");
+      const srcPref = localStorage.getItem("whisk_discover_sources");
+      if (srcPref) {
+        const enabled = Object.entries(JSON.parse(srcPref) as Record<string, boolean>)
+          .filter(([, v]) => v !== false).map(([k]) => k);
+        if (enabled.length > 0 && enabled.length < 3) params.set("sources", enabled.join(","));
+      }
       const url = `/discover/feed?${params}`;
       const data = await api.post<DiscoverFeed & { warnings?: string[] }>(url, {});
       if (data) {
@@ -404,7 +410,14 @@ export function Discover({
       // No cache — fetch from KV
       try {
         const lifetime = localStorage.getItem("whisk_feed_item_lifetime") ?? "7";
-        const data = await api.get<DiscoverFeed>(`/discover/feed?lifetime=${lifetime}`);
+        const getParams = new URLSearchParams({ lifetime });
+        const srcPref = localStorage.getItem("whisk_discover_sources");
+        if (srcPref) {
+          const enabled = Object.entries(JSON.parse(srcPref) as Record<string, boolean>)
+            .filter(([, v]) => v !== false).map(([k]) => k);
+          if (enabled.length > 0 && enabled.length < 3) getParams.set("sources", enabled.join(","));
+        }
+        const data = await api.get<DiscoverFeed>(`/discover/feed?${getParams}`);
         if (data?.lastRefreshed) {
           setFeed(data);
           setLocal(FEED_CACHE_KEY, data);
