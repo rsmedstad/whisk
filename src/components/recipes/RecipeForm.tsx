@@ -381,7 +381,6 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.capture = "environment";
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
