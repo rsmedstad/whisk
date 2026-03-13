@@ -15,7 +15,7 @@ import { classNames } from "../lib/utils";
 import {
   ChevronLeft, Trash, Globe, Share, Check, ChevronDown, XMark, Sun, Moon, ComputerDesktop, CalendarDays,
   Pumpkin, ChristmasTree, Snowflake, HeartArrow, Shamrock, EasterEgg, Firework, TurkeyLeg,
-  RefreshCw, Flower, Leaf,
+  RefreshCw, Flower, Leaf, ExternalLink,
 } from "./ui/Icon";
 
 interface SettingsProps {
@@ -1534,12 +1534,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 p-3 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 hover:border-orange-400 dark:hover:border-orange-500 transition-colors group"
                   >
-                    {/* ADA logo — grey circle with registered mark */}
+                    {/* ADA geometric "A" logo */}
                     <svg viewBox="0 0 48 48" className="w-10 h-10 shrink-0" aria-hidden="true">
-                      <circle cx="24" cy="24" r="23" fill="#A1A1AA" className="dark:fill-stone-500" />
-                      <text x="24" y="20" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="7" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.5">AMERICAN</text>
-                      <text x="24" y="28.5" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="7" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.5">DIABETES</text>
-                      <text x="24" y="37" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="6.5" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.5">ASSOC.</text>
+                      {/* Right leg of A — behind */}
+                      <polygon points="24,2 44,44 34,44 24,22.5 19,33 23,33 26,39 14,39" fill="#BE1E2D" />
+                      {/* Left leg of A — in front, overlapping */}
+                      <polygon points="24,2 4,44 14,44 24,22.5 29,33 25,33 22,39 34,39" fill="#A01525" />
+                      {/* Restore right leg visible top portion */}
+                      <polygon points="24,2 31.5,18 28,18 24,9.5 20,18 16.5,18" fill="#BE1E2D" />
                     </svg>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-stone-700 dark:text-stone-300 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
@@ -1549,7 +1551,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                         diabetes.org
                       </p>
                     </div>
-                    <Globe className="w-4 h-4 text-stone-400 dark:text-stone-500 group-hover:text-orange-500 transition-colors shrink-0" />
+                    <ExternalLink className="w-4 h-4 text-stone-400 dark:text-stone-500 group-hover:text-orange-500 transition-colors shrink-0" />
                   </a>
                 </div>
               </Card>
