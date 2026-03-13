@@ -233,7 +233,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   // just include the specific recipes already in the conversation.
   // Exclude discovery-intent messages — if the user wants new/different ideas, they need
   // the full collection + external search, not just previously mentioned recipes.
-  const isDiscoveryIntent = /\b(new|ideas?|discover\w*|different|something else|never tried|interesting|recommend|suggest|inspire|inspiration)\b/i.test(normalized);
+  const isDiscoveryIntent = /\b(new (recipe|idea|dish|meal|suggestion)|ideas?|discover\w*|different|something else|never tried|interesting|recommend|suggest|inspire|inspiration)\b/i.test(normalized);
   const isFollowUp = priorHadRecipes && !referencesCollection && !isGeneralQuestion && !isDiscoveryIntent;
 
   // Full collection context only when explicitly referencing collection or asking for new suggestions
@@ -244,7 +244,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   const needsSemanticSearch = needsRecipeContext
     && !/\b(how|what is|what are|can i|should i|temperature|substitut|replac|alternativ)\b/i.test(normalized);
 
-  const needsExternalSearch = needsRecipeContext && /\b(new|outside|ideas?|different|something else|never tried|discover\w*|interesting|inspire|inspiration|recommend)\b/i.test(normalized);
+  const needsExternalSearch = needsRecipeContext && /\b(new (recipe|idea|dish|meal|suggestion)|outside|ideas?|different|something else|never tried|discover\w*|interesting|inspire|inspiration|recommend)\b/i.test(normalized);
 
   // Log classification tier for debugging
   const queryTier = isGeneralQuestion ? "general" : isFollowUp ? "followup" : needsRecipeContext ? (needsSemanticSearch ? "semantic" : "collection") : "unclassified";
