@@ -268,7 +268,7 @@ function AppShell({
               <ShoppingList
                 list={shoppingList.list}
                 isLoading={shoppingList.isLoading}
-                onAddItem={(name: string) => shoppingList.addItem(name)}
+                onAddItem={(name: string, options?: Parameters<typeof shoppingList.addItem>[1]) => shoppingList.addItem(name, options)}
                 onToggleItem={shoppingList.toggleItem}
                 onRemoveItem={shoppingList.removeItem}
                 onClearChecked={shoppingList.clearChecked}

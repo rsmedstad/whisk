@@ -66,6 +66,8 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const [isPhotoImporting, setIsPhotoImporting] = useState(false);
   const [photoImportStep, setPhotoImportStep] = useState("");
   const [photoWarnings, setPhotoWarnings] = useState<string[]>([]);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [zoomPhoto, setZoomPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAutoTags = async (t: string, desc: string, ings: Ingredient[]) => {
@@ -384,6 +386,9 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
+      // Show preview immediately
+      const previewUrl = URL.createObjectURL(file);
+      setPhotoPreview(previewUrl);
       setIsPhotoImporting(true);
       setPhotoImportStep("Processing image...");
       try {
@@ -601,9 +606,20 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
 
           {/* From Photo */}
           {isPhotoImporting ? (
-            <div className="flex items-center justify-center gap-3 py-4 text-sm text-stone-500 dark:text-stone-400">
-              <LoadingSpinner size="sm" />
-              <span>{photoImportStep || "Processing..."}</span>
+            <div className="space-y-2">
+              {photoPreview && (
+                <div className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+                  <img
+                    src={photoPreview}
+                    alt="Recipe photo"
+                    className="w-full max-h-32 object-cover animate-pulse"
+                  />
+                </div>
+              )}
+              <div className="flex items-center justify-center gap-3 py-2 text-sm text-stone-500 dark:text-stone-400">
+                <LoadingSpinner size="sm" />
+                <span>{photoImportStep || "Processing..."}</span>
+              </div>
             </div>
           ) : (
             <button
@@ -634,6 +650,25 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       {/* ── Manual Form ── */}
       {showManualForm && (
       <form onSubmit={handleSubmit} className="px-4 py-4 space-y-6">
+        {/* Photo preview (persistent until dismissed) */}
+        {photoPreview && (
+          <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+            <img
+              src={photoPreview}
+              alt="Recipe photo"
+              onClick={() => setZoomPhoto(true)}
+              className="w-full max-h-32 object-cover cursor-pointer"
+            />
+            <button
+              type="button"
+              onClick={() => { setPhotoPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; }); }}
+              className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
+              title="Close preview"
+            >
+              <XMark className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {/* Photo import warnings */}
         {photoWarnings.length > 0 && (
           <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
@@ -1033,6 +1068,26 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           </div>
         )}
       </form>
+      )}
+      {/* Photo zoom overlay */}
+      {zoomPhoto && photoPreview && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setZoomPhoto(false)}
+        >
+          <button
+            onClick={() => setZoomPhoto(false)}
+            className="absolute top-4 right-4 rounded-full bg-black/50 text-white p-2 hover:bg-black/70 transition-colors z-10"
+          >
+            <XMark className="w-5 h-5" />
+          </button>
+          <img
+            src={photoPreview}
+            alt="Recipe photo"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );

@@ -16,7 +16,7 @@ type GroupMode = "department" | "by-recipe";
 interface ShoppingListProps {
   list: ShoppingListType;
   isLoading: boolean;
-  onAddItem: (name: string) => void;
+  onAddItem: (name: string, options?: { amount?: string; unit?: string; category?: ShoppingCategory; addedBy?: "manual" | "recipe" | "ai" | "scan" }) => void;
   onToggleItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
   onClearChecked: () => void;
@@ -63,7 +63,7 @@ export function ShoppingList({
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
   const [listScanPreview, setListScanPreview] = useState<string | null>(null);
-  const [scanPendingItems, setScanPendingItems] = useState<{ name: string; selected: boolean; confidence?: "high" | "low" }[]>([]);
+  const [scanPendingItems, setScanPendingItems] = useState<{ name: string; amount?: string | null; unit?: string | null; category?: string | null; selected: boolean; confidence?: "high" | "low" }[]>([]);
   const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [scanSortAZ, setScanSortAZ] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -73,6 +73,8 @@ export function ShoppingList({
   const [isPlanAdding, setIsPlanAdding] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  // Photo zoom overlay
+  const [zoomPhoto, setZoomPhoto] = useState<string | null>(null);
   // Smart list
   const [showSmartList, setShowSmartList] = useState(false);
   const [isSmartLoading, setIsSmartLoading] = useState(false);
@@ -428,13 +430,13 @@ export function ShoppingList({
         const totalMs = Math.round(performance.now() - scanStart);
         console.log(`[Whisk] Scan compress=${compressMs}ms roundtrip=${roundtripMs}ms total=${totalMs}ms photo=${Math.round(blob.size / 1024)}KB | server: ${serverTiming}`);
 
-        const data = (await res.json()) as { items?: { name: string; confidence?: string }[]; warnings?: string[]; message?: string; error?: string };
+        const data = (await res.json()) as { items?: { name: string; amount?: string | null; unit?: string | null; category?: string | null; confidence?: string }[]; warnings?: string[]; message?: string; error?: string };
         if (!res.ok) {
           setListScanResult({ count: 0, message: data.error ?? data.message ?? `Scan failed (${res.status})` });
           return;
         }
         const items = data.items ?? [];
-        const validItems = items.filter((item) => item.name).map((item) => ({ name: item.name, selected: true, confidence: (item.confidence ?? "high") as "high" | "low" }));
+        const validItems = items.filter((item) => item.name).map((item) => ({ name: item.name, amount: item.amount, unit: item.unit, category: item.category, selected: true, confidence: (item.confidence ?? "high") as "high" | "low" }));
         if (validItems.length > 0) {
           setScanPendingItems(validItems);
           setScanWarnings(data.warnings ?? []);
@@ -747,9 +749,10 @@ export function ShoppingList({
                     <img
                       src={listScanPreview}
                       alt="Scanned list"
+                      onClick={() => setZoomPhoto(listScanPreview)}
                       className={classNames(
-                        "w-full max-h-32 object-cover transition-opacity",
-                        !isListScanning && "opacity-60"
+                        "w-full max-h-32 object-cover transition-opacity cursor-pointer",
+                        isListScanning && "animate-pulse"
                       )}
                     />
                     <button
@@ -835,7 +838,10 @@ export function ShoppingList({
                             >
                               {item.selected && <Check className="w-2.5 h-2.5" />}
                             </button>
-                            <span className={classNames("text-sm", !item.selected && "text-stone-400 line-through")}>{item.name}</span>
+                            <span className={classNames("text-sm", !item.selected && "text-stone-400 line-through")}>
+                              {item.name}
+                              {item.amount && <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">{item.amount}{item.unit ? ` ${item.unit}` : ""}</span>}
+                            </span>
                             {item.confidence === "low" && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 font-medium">unclear</span>}
                           </li>
                         );
@@ -845,7 +851,12 @@ export function ShoppingList({
                       <button
                         onClick={() => {
                           const selected = scanPendingItems.filter((i) => i.selected);
-                          for (const item of selected) onAddItem(item.name);
+                          for (const item of selected) onAddItem(item.name, {
+                            amount: item.amount ?? undefined,
+                            unit: item.unit ?? undefined,
+                            category: (item.category as ShoppingCategory) ?? undefined,
+                            addedBy: "scan",
+                          });
                           setListScanResult({ count: selected.length });
                           setScanPendingItems([]);
                           setScanSortAZ(false);
@@ -1212,6 +1223,26 @@ export function ShoppingList({
           </button>
         </form>
       </div>
+      {/* Photo zoom overlay */}
+      {zoomPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setZoomPhoto(null)}
+        >
+          <button
+            onClick={() => setZoomPhoto(null)}
+            className="absolute top-4 right-4 rounded-full bg-black/50 text-white p-2 hover:bg-black/70 transition-colors z-10"
+          >
+            <XMark className="w-5 h-5" />
+          </button>
+          <img
+            src={zoomPhoto}
+            alt="Scanned photo"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
