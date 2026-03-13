@@ -4,6 +4,10 @@ A personal recipe manager that works like a native app on your phone. Manage rec
 
 Whisk is free to host on Cloudflare's free tier. No coding required to set up.
 
+### Self-Hosting
+
+Whisk is fully self-hostable — no code changes needed. Fork the repository, follow the setup guide below, and deploy to your own Cloudflare Pages project. Your app runs at your own URL (e.g. `your-project.pages.dev`), with your own data, completely independent. All API calls use relative paths, so the app works on any domain automatically.
+
 ---
 
 ## What You'll Need
@@ -91,7 +95,7 @@ This tells Cloudflare to build and host your app whenever you update it.
 
 Now configure the build:
 
-8. **Project name**: Leave as `whisk` (or change it — this becomes your URL: `project-name.pages.dev`)
+8. **Project name**: Leave as `whisk` (or change it — this becomes your URL: `project-name.pages.dev`). If you choose a different name, add a **Repository variable** in GitHub: go to your fork's **Settings > Secrets and variables > Actions > Variables** and add `CLOUDFLARE_PROJECT_NAME` with your chosen name. This keeps auto-deploys working.
 9. **Production branch**: `main`
 10. **Framework preset**: Leave as `None`
 11. **Build command**: `bun install && bun run build`
