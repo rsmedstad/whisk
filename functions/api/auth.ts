@@ -81,9 +81,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       ? JSON.stringify({ userId: member.id, name: member.name })
       : "valid";
 
+    const sessionTtl = 60 * 60 * 24 * 30;
     await env.WHISK_KV.put(`session:${token}`, sessionData, {
-      expirationTtl: 60 * 60 * 24 * 30,
+      expirationTtl: sessionTtl,
     });
+
+    // Track active session tokens per user so we can revoke them on member removal
+    if (member) {
+      const sessionsKey = `user_sessions:${member.id}`;
+      const existing = await env.WHISK_KV.get<string[]>(sessionsKey, "json");
+      const tokens = existing ?? [];
+      tokens.push(token);
+      // Keep only last 10 tokens per user (older ones expire naturally via TTL)
+      await env.WHISK_KV.put(sessionsKey, JSON.stringify(tokens.slice(-10)), {
+        expirationTtl: sessionTtl,
+      });
+    }
 
     return new Response(
       JSON.stringify({

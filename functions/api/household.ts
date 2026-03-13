@@ -49,6 +49,22 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, data }) =
       if (first) first.isOwner = true;
     }
 
+    // Detect removed members and invalidate their sessions
+    if (current) {
+      const updatedIds = new Set(updated.members.map((m) => m.id));
+      const removedMembers = current.members.filter((m) => !updatedIds.has(m.id));
+
+      for (const removed of removedMembers) {
+        // Delete all active session tokens for the removed user
+        const sessionsKey = `user_sessions:${removed.id}`;
+        const tokens = await env.WHISK_KV.get<string[]>(sessionsKey, "json");
+        if (tokens) {
+          await Promise.all(tokens.map((t) => env.WHISK_KV.delete(`session:${t}`)));
+          await env.WHISK_KV.delete(sessionsKey);
+        }
+      }
+    }
+
     await env.WHISK_KV.put("household", JSON.stringify(updated));
     return new Response(JSON.stringify(updated), {
       headers: { "Content-Type": "application/json" },
