@@ -34,6 +34,17 @@ interface SmartListResult {
   };
 }
 
+/** Extract inline count from name like "salsa (2)" or "salsa x3" → { cleanName, count } */
+function extractInlineCount(name: string): { cleanName: string; count: number } {
+  // Match patterns: "salsa (2)", "salsa (x2)", "salsa x3", "salsa ×2"
+  const m = name.match(/^(.+?)\s*(?:\((?:x|×)?(\d+)\)|(?:x|×)(\d+))\s*$/i);
+  if (m) {
+    const count = parseInt(m[2] ?? m[3]!);
+    if (count > 0) return { cleanName: m[1]!.trim(), count };
+  }
+  return { cleanName: name, count: 1 };
+}
+
 /** Normalize name for pre-processing: lowercase, trim, strip trailing 's' for basic plural handling */
 function normalizeKey(name: string): string {
   const n = name.toLowerCase().trim().replace(/\s+/g, " ");
@@ -85,7 +96,12 @@ function formatAmount(n: number): string {
 function preProcess(items: InputItem[]): { merged: SmartItem[]; remaining: InputItem[] } {
   const groups = new Map<string, { items: InputItem[]; totalAmount: number | null; hasNumeric: boolean }>();
 
-  for (const item of items) {
+  for (const rawItem of items) {
+    // Extract inline counts like "salsa (2)" → name: "salsa", amount: "2"
+    const { cleanName, count } = extractInlineCount(rawItem.name);
+    const item = count > 1
+      ? { ...rawItem, name: cleanName, amount: rawItem.amount ?? String(count) }
+      : rawItem;
     const key = `${normalizeKey(item.name)}||${(item.unit ?? "").toLowerCase().trim()}`;
     const existing = groups.get(key);
     const parsed = parseAmount(item.amount);
@@ -203,6 +219,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       "- Combine items that are clearly the same ingredient (e.g. 'garlic cloves' + 'cloves of garlic' → 'garlic cloves')",
       "- Sum quantities when units match (e.g. '2 cups milk' + '1 cup milk' → '3 cups milk')",
       "- Convert compatible units when obvious (e.g. '1 lb butter' + '8 oz butter' → '1.5 lb butter')",
+      "- Watch for inline counts in item names like 'salsa (2)' or 'bread x3' — these mean the user needs that quantity (e.g. 'salsa (2)' = 2 salsas, amount should be '2')",
       "- Keep genuinely different items separate (e.g. 'green onions' and 'yellow onions' are different)",
       "- Preserve the most specific/descriptive name when combining",
       "- Items with only one source should still appear in the output",
