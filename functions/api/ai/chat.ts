@@ -210,13 +210,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   // These should never be classified as general and should break out of followup
   const isActionIntent = /\b(add .{0,20}(list|plan|shopping|grocery|meal)|put .{0,15}(list|plan|on the)|yes .{0,10}(do|add|please|go)|go ahead|please do|add (that|those|them|it|the|all|essential)|to (our|my|the) (list|plan)|add .{0,5}to (our|my|the))\b/i.test(normalized);
 
-  // General cooking questions that don't need any collection data
-  const isGeneralQuestion = !isActionIntent && /\b(how (do|to|long|much|many|is)|what (is|are|does)|when (does|do|is|will|did)|can (i|you)|should i|why (did|does|do|is|are|won't|will not|isn't)|temperature|temp\b|substitut\w*|replace\w*|alternativ\w*|instead of|convert|difference between|tips?|technique|safe|storage|freeze|freezer|thaw|reheat|shelf life|calories|nutrition|protein|carbs?|fat|fiber|sodium|serving size|in season|seasonal|season\b|spring|summer|fall|autumn|winter|holiday|holidays|easter|thanksgiving|christmas|hanukkah|valentine|st\.? patrick|fourth of july|4th of july|memorial day|labor day|new year|what.{0,10}season|pairs? with|goes well with|side dish|best .{0,15} for|vs\b|better than|compared to|how .{0,10} (cook|bake|roast|grill|fry|saut[eé]|steam|boil|braise|smoke|poach|blanch)|internal temp|done.?ness|resting time|marinate|brine|proof|knead|ferment|food safe|cross.?contaminat|expir|spoil)\b/i.test(normalized)
-    && !/\b(my recipe|my collection|from my|in my|do i have|have i got|check my|look at my|search my|look through my|any.{0,10}recipe|suggest|recommend|plan (my|a|the|this)|what should i (make|cook)|meal plan|shopping list|i am craving|craving\b|something (with|easy|healthy)|give me)\b/i.test(normalized);
+  // General cooking/food questions that don't need any collection data.
+  // Catches: "how do I...", "what is...", "best X recipes", "worst food", "should I eat...",
+  // food advice, cooking technique questions, nutrition, seasonal, etc.
+  const isGeneralQuestion = !isActionIntent && /\b(how (do|to|long|much|many|is)|what (is|are|does)|what.{0,5}(eat|cook|make|food|recipe|snack|meal)|when (does|do|is|will|did)|can (i|you)|should i|shouldn.?t|why (did|does|do|is|are|won't|will not|isn't)|temperature|temp\b|substitut\w*|replace\w*|alternativ\w*|instead of|convert|difference between|tips?|technique|safe|storage|freeze|freezer|thaw|reheat|shelf life|calories|nutrition|protein|carbs?|fat|fiber|sodium|serving size|in season|seasonal|season\b|spring|summer|fall|autumn|winter|holiday|holidays|easter|thanksgiving|christmas|hanukkah|valentine|st\.? patrick|fourth of july|4th of july|memorial day|labor day|new year|what.{0,10}season|pairs? with|goes well with|side dish|best .{0,15}(for|recipes?)|worst .{0,15}(food|recipes?|meal)|vs\b|better than|compared to|how .{0,10} (cook|bake|roast|grill|fry|saut[eé]|steam|boil|braise|smoke|poach|blanch)|internal temp|done.?ness|resting time|marinate|brine|proof|knead|ferment|food safe|cross.?contaminat|expir|spoil|authentic\w*|traditional)\b/i.test(normalized)
+    && !/\b(my recipe|my collection|from my|in my|our .{0,15}(recipe|list|plan|book)|do i have|have i got|check my|look at my|search my|look through my|any.{0,10}recipe|plan (my|a|the|this)|what should i (make|cook)|meal plan|shopping list|i am craving|craving\b|something (with|easy|healthy)|give me)\b/i.test(normalized)
+    && !/\b(suggest|recommend) .{0,10}(from|in|my|our)\b/i.test(normalized);
 
   // References the user's personal data (recipes, plan, list), or implicitly asks for
   // recipe suggestions (cravings, bare meal requests, ingredient-based queries)
-  const referencesCollection = isActionIntent || /\b(my recipe|my collection|from my|in my|do i have|have i got|check my|look at my|search my|look through my|suggest|recommend|what should i (make|cook)|meal plan|plan my|plan a\b|shopping list|our list|our plan|the list|the plan|grocery list|what do i have|from the collection|i am craving|craving\b|something (with|easy|healthy|quick|light|hearty|warm|cold|spicy|simple|fancy|special|vegetarian|vegan)|quick (dinner|lunch|breakfast|meal|recipe)|easy (dinner|lunch|breakfast|meal|recipe)|dinner (for|tonight|idea|this)|lunch (for|today|idea)|breakfast (for|today|idea)|weeknight (meal|dinner|recipe)|what (can|could) i (make|cook|do) with|recipe for\b|give me .{0,15}(recipe|meal|dinner|idea)|i (want|need) .{0,15}(recipe|dinner|lunch|meal|to (cook|make|eat)))\b/i.test(normalized);
+  const referencesCollection = isActionIntent || /\b(my recipe|my collection|from my|in my|our .{0,15}(recipe|list|plan|book|blt|meal)|do i have|have i got|check my|look at my|search my|look through my|suggest\w*|recommend\w*|what should i (make|cook)|meal plan|plan my|plan a\b|shopping list|our list|our plan|the list|the plan|grocery list|what do i have|from the collection|i am craving|craving\b|something (with|easy|healthy|quick|light|hearty|warm|cold|spicy|simple|fancy|special|vegetarian|vegan)|quick (dinner|lunch|breakfast|meal|recipe)|easy (dinner|lunch|breakfast|meal|recipe)|dinner (for|tonight|idea|this)|lunch (for|today|idea)|breakfast (for|today|idea)|weeknight (meal|dinner|recipe)|what (can|could) i (make|cook|do) with|recipe for\b|give me .{0,15}(recipe|meal|dinner|idea)|i (want|need) .{0,15}(recipe|dinner|lunch|meal|to (cook|make|eat)))\b/i.test(normalized);
 
   // Needs recipe context if: explicitly references collection, or is a multi-turn chat
   // that previously referenced recipes (check if prior assistant messages had RECIPE_CARD markers)
@@ -237,7 +240,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   // just include the specific recipes already in the conversation.
   // Exclude discovery-intent messages — if the user wants new/different ideas, they need
   // the full collection + external search, not just previously mentioned recipes.
-  const isDiscoveryIntent = /\b(new (recipe|idea|dish|meal|suggestion)|ideas?|discover\w*|different|something else|never tried|interesting|recommend|suggest|inspire|inspiration)\b/i.test(normalized);
+  const isDiscoveryIntent = /\b(new (recipe|idea|dish|meal|suggestion)|ideas?|discover\w*|different|something else|never tried|interesting|recommend\w*|suggest\w*|inspire|inspiration)\b/i.test(normalized);
   const isFollowUp = priorHadRecipes && !referencesCollection && !isGeneralQuestion && !isDiscoveryIntent && !isActionIntent;
 
   // Full collection context only when explicitly referencing collection or asking for new suggestions
@@ -533,7 +536,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     provider: fnConfig.provider,
     model: fnConfig.model,
     userMessage: lastMessage.slice(0, 200),
-    systemPromptLength: systemPrompt.length,
+    systemPromptLength: systemPrompt.length + messages.reduce((sum, m) => sum + m.content.length, 0),
     recipeCount: recipeIndex.length,
     vectorizeHits: vectorizeHitCount,
     tier: queryTier,
