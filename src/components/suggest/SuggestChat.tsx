@@ -1354,59 +1354,97 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                 )}
 
                 {/* Other action buttons (ADD_TO_LIST, SEARCH_RECIPES) */}
-                {otherActions.length > 0 && (
+                {otherActions.length > 0 && (() => {
+                  const listActions = otherActions.filter((a) => a.type === "ADD_TO_LIST");
+                  const searchActions = otherActions.filter((a) => a.type === "SEARCH_RECIPES");
+                  // Parse essential vs staple from 5th param
+                  const essentialItems = listActions.filter((a) => {
+                    const tag = a.params.split(",").map((s) => s.trim())[4]?.toLowerCase();
+                    return tag !== "staple";
+                  });
+                  const stapleItems = listActions.filter((a) => {
+                    const tag = a.params.split(",").map((s) => s.trim())[4]?.toLowerCase();
+                    return tag === "staple";
+                  });
+                  const hasEssentials = essentialItems.length > 0;
+                  const hasStaples = stapleItems.length > 0;
+                  const hasBoth = hasEssentials && hasStaples;
+                  return (
                   <div className={classNames("flex flex-wrap gap-2", (recipeCards.length > 0 || saveRecipes.length > 0 || planActions.length > 0) ? "mt-1" : "mt-2 border-t border-stone-200 dark:border-stone-700 pt-2")}>
-                    {/* Bulk "Add all to list" when 2+ list items */}
-                    {onAddToList && otherActions.filter((a) => a.type === "ADD_TO_LIST").length >= 2 && (
-                      <button
-                        onClick={() => {
-                          for (const action of otherActions) {
-                            if (action.type === "ADD_TO_LIST") {
+                    {/* Bulk buttons when 2+ list items */}
+                    {onAddToList && listActions.length >= 2 && (
+                      <div className="w-full flex flex-col gap-1.5">
+                        {/* Primary: Add essentials (or all if no staple distinction) */}
+                        <button
+                          onClick={() => {
+                            const items = hasBoth ? essentialItems : listActions;
+                            for (const action of items) {
                               const parts = action.params.split(",").map((s) => s.trim());
                               const itemName = parts[0] ?? "Item";
                               const amount = parts[1];
                               onAddToList(amount ? `${amount} ${itemName}` : itemName);
                             }
-                          }
-                        }}
-                        className="w-full rounded-lg bg-green-600 text-white py-2 text-sm font-medium hover:bg-green-700 transition-colors"
-                      >
-                        Add all {otherActions.filter((a) => a.type === "ADD_TO_LIST").length} items to list
-                      </button>
-                    )}
-                    {otherActions.map((action, ai) => {
-                      if (action.type === "ADD_TO_LIST") {
-                        const parts = action.params.split(",").map((s) => s.trim());
-                        const itemName = parts[0] ?? "Item";
-                        const amount = parts[1];
-                        const displayName = amount ? `${amount} ${itemName}` : itemName;
-                        return (
+                          }}
+                          className="w-full rounded-lg bg-green-600 text-white py-2 text-sm font-medium hover:bg-green-700 transition-colors"
+                        >
+                          {hasBoth
+                            ? `Add ${essentialItems.length} essential${essentialItems.length !== 1 ? "s" : ""} to list`
+                            : `Add all ${listActions.length} items to list`}
+                        </button>
+                        {/* Secondary: Add all (including staples) */}
+                        {hasBoth && (
                           <button
-                            key={ai}
                             onClick={() => {
-                              if (onAddToList) onAddToList(displayName);
+                              for (const action of listActions) {
+                                const parts = action.params.split(",").map((s) => s.trim());
+                                const itemName = parts[0] ?? "Item";
+                                const amount = parts[1];
+                                onAddToList(amount ? `${amount} ${itemName}` : itemName);
+                              }
                             }}
-                            className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
+                            className="w-full rounded-lg border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 py-1.5 text-xs font-medium hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
                           >
-                            <Plus className="w-3 h-3" /> Add &ldquo;{itemName}&rdquo;
+                            Add all {listActions.length} items including staples
                           </button>
-                        );
-                      }
-                      if (action.type === "SEARCH_RECIPES") {
-                        return (
-                          <button
-                            key={ai}
-                            onClick={() => sendMessage(`Search my recipes for "${action.params}"`)}
-                            className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900 transition-colors"
-                          >
-                            Search &ldquo;{action.params}&rdquo;
-                          </button>
-                        );
-                      }
-                      return null;
+                        )}
+                      </div>
+                    )}
+                    {/* Individual pills */}
+                    {listActions.map((action, ai) => {
+                      const parts = action.params.split(",").map((s) => s.trim());
+                      const itemName = parts[0] ?? "Item";
+                      const amount = parts[1];
+                      const isStaple = parts[4]?.toLowerCase() === "staple";
+                      const displayName = amount ? `${amount} ${itemName}` : itemName;
+                      return (
+                        <button
+                          key={ai}
+                          onClick={() => {
+                            if (onAddToList) onAddToList(displayName);
+                          }}
+                          className={classNames(
+                            "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                            isStaple
+                              ? "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700"
+                              : "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900"
+                          )}
+                        >
+                          <Plus className="w-3 h-3" /> {isStaple && <span className="opacity-60">staple:</span>} {itemName}
+                        </button>
+                      );
                     })}
+                    {searchActions.map((action, ai) => (
+                      <button
+                        key={`search-${ai}`}
+                        onClick={() => sendMessage(`Search my recipes for "${action.params}"`)}
+                        className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900 transition-colors"
+                      >
+                        Search &ldquo;{action.params}&rdquo;
+                      </button>
+                    ))}
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* Add recipe ingredients buttons */}
                 {ingredientActions.length > 0 && onAddRecipeIngredients && (

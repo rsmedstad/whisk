@@ -328,7 +328,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
       "\n--- Output Format ---",
       "When mentioning a recipe from the collection, ALWAYS output on its own line: [RECIPE_CARD: recipeId, Recipe Title]",
       "To offer adding all ingredients from a recipe to the shopping list: [ADD_RECIPE_INGREDIENTS: recipeId, Recipe Title] — use this when the user asks about ingredients or wants to add them to their list. Prefer this over individual ADD_TO_LIST markers for recipe ingredients.",
-      "For shopping (ONLY when the user explicitly asks to add individual items): [ADD_TO_LIST: item, amount, unit, category]",
+      "For shopping: [ADD_TO_LIST: item, amount, unit, category, essential] or [ADD_TO_LIST: item, amount, unit, category, staple]",
+      "The 5th parameter marks whether the item is 'essential' (must buy — e.g. bacon, lettuce, tomato) or 'staple' (common pantry item most people already have — e.g. salt, pepper, butter, oil, sugar, flour, garlic powder, basic spices). When the user asks for 'essentials', ONLY output markers for essential items, not staples. When the user asks to add 'all' or 'everything', include both essential and staple items.",
+      "You MUST output a separate [ADD_TO_LIST] marker for EACH individual item. Do NOT just describe what you added — the markers are what actually adds them. Each marker must be on its own line.",
       "For meal planning: [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId]",
       "IMPORTANT: You MUST use these action markers to actually perform actions. Do NOT just say you added something — output the marker so the app can process it.",
     );
@@ -405,7 +407,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
       "When mentioning a recipe from the collection, ALWAYS output on its own line: [RECIPE_CARD: recipeId, Recipe Title]",
       "For external recipes: [SAVE_RECIPE: url, Recipe Title]",
       "To offer adding all ingredients from a recipe to the shopping list: [ADD_RECIPE_INGREDIENTS: recipeId, Recipe Title] — use this when the user asks about ingredients or wants to add them to their list. Prefer this over individual ADD_TO_LIST markers for recipe ingredients.",
-      "For shopping (ONLY when the user explicitly asks to add individual items): [ADD_TO_LIST: item, amount, unit, category]",
+      "For shopping: [ADD_TO_LIST: item, amount, unit, category, essential] or [ADD_TO_LIST: item, amount, unit, category, staple]",
+      "The 5th parameter marks whether the item is 'essential' (must buy — e.g. bacon, lettuce, tomato, specific cheese) or 'staple' (common pantry item most people already have — e.g. salt, pepper, butter, oil, sugar, flour, garlic powder, basic spices). When the user asks for 'essentials', ONLY output markers for essential items, not staples. When the user asks to add 'all' or 'everything', include both essential and staple items.",
+      "You MUST output a separate [ADD_TO_LIST] marker for EACH individual item. Do NOT just describe what you added — the markers are what actually adds them. Each marker must be on its own line.",
       "For meal planning: [ADD_TO_PLAN: YYYY-MM-DD, slot, Recipe Title, recipeId]",
       "IMPORTANT: You MUST use these action markers to actually perform actions. Do NOT just say you added something — output the marker so the app can process it. Without the marker, nothing happens.",
       "Example:\n[RECIPE_CARD: r_abc123, Chicken Tikka Masala]"
