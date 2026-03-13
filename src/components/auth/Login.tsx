@@ -248,7 +248,7 @@ function OnboardingScreen({
   onComplete: (prefs: OnboardingPrefs) => void;
 }) {
   const [units, setUnits] = useState<OnboardingPrefs["units"]>("imperial");
-  const [showGrams, setShowGrams] = useState(false);
+  const [showGrams, setShowGrams] = useState(true);
   const handleThemeChange = (t: AppSettings["theme"]) => {
     onSetTheme?.(t);
   };

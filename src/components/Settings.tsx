@@ -88,7 +88,8 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     return (localStorage.getItem("whisk_temp_unit") as "F" | "C") ?? "F";
   });
   const [showGrams, setShowGrams] = useState(() => {
-    return localStorage.getItem("whisk_show_grams") === "true";
+    const saved = localStorage.getItem("whisk_show_grams");
+    return saved === null ? true : saved === "true";
   });
   const [displayName, setDisplayName] = useState(() => {
     return localStorage.getItem("whisk_display_name") ?? "";
