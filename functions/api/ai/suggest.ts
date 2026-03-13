@@ -122,6 +122,7 @@ interface TrendingRecipe {
   time: string;
   rating: string;
   url: string;
+  imageUrl?: string;
 }
 
 interface NytTrendingResult {
@@ -131,6 +132,7 @@ interface NytTrendingResult {
   cooking_time?: { display?: string };
   avg_rating?: number;
   num_ratings?: number;
+  thumbnail_url?: string;
 }
 
 interface NytTrendingResponse {
@@ -165,6 +167,7 @@ async function fetchTrendingRecipes(): Promise<TrendingRecipe[]> {
           ? `${r.avg_rating.toFixed(1)}/5 (${r.num_ratings ?? 0} ratings)`
           : "unrated",
         url: `https://cooking.nytimes.com/recipes/${id}-${slug}`,
+        imageUrl: r.thumbnail_url,
       };
     }).filter((r) => r.name !== "Unknown");
   } catch {

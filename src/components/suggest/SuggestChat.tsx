@@ -14,9 +14,17 @@ import type { RecipeIndexEntry, PlannedMeal, ShoppingItem, UserPreferences, Meal
 import { toDateString, normalizeSearch } from "../../lib/utils";
 
 
+interface ExternalRecipeMeta {
+  url: string;
+  name: string;
+  imageUrl?: string;
+  time?: string;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
+  externalRecipes?: ExternalRecipeMeta[];
 }
 
 const PICK_CATEGORIES = [
@@ -499,9 +507,9 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
             }),
           });
           if (!retryRes.ok) throw new Error(`API error ${retryRes.status}`);
-          const retryData = (await retryRes.json()) as { content: string };
+          const retryData = (await retryRes.json()) as { content: string; externalRecipes?: ExternalRecipeMeta[] };
           if (!retryData.content) throw new Error("Empty response");
-          setMessages((prev) => [...prev, { role: "assistant", content: retryData.content }]);
+          setMessages((prev) => [...prev, { role: "assistant", content: retryData.content, externalRecipes: retryData.externalRecipes }]);
           setIsLoading(false);
           return;
         }
@@ -519,14 +527,14 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
         });
       } else {
         // Non-streaming fallback (JSON response)
-        const data = (await res.json()) as { content: string };
+        const data = (await res.json()) as { content: string; externalRecipes?: ExternalRecipeMeta[] };
         if (!data.content) {
           console.warn("[Whisk] Chat API returned empty content");
           throw new Error("Empty response");
         }
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.content },
+          { role: "assistant", content: data.content, externalRecipes: data.externalRecipes },
         ]);
       }
     } catch (err) {
@@ -1102,8 +1110,17 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
           // Skip empty placeholder assistant messages (shown as "Thinking..." below)
           if (msg.role === "assistant" && !msg.content) return null;
           const isError = msg.role === "user" && msg.content.endsWith("[ERROR]");
-          const urls = msg.role === "assistant" ? extractUrls(msg.content) : [];
           const actions = msg.role === "assistant" ? parseActions(msg.content) : [];
+          // Extract URLs but exclude any already handled by SAVE_RECIPE markers to prevent duplicate buttons
+          const saveRecipeUrls = new Set(
+            actions.filter((a) => a.type === "SAVE_RECIPE").map((a) => {
+              const ci = a.params.indexOf(",");
+              return ci >= 0 ? a.params.slice(0, ci).trim() : a.params.trim();
+            })
+          );
+          const urls = msg.role === "assistant"
+            ? extractUrls(msg.content).filter((u) => !saveRecipeUrls.has(u))
+            : [];
           let displayContent = actions.length > 0 ? stripActionMarkers(msg.content) : msg.content;
 
           // For error messages, extract the original user text and error reason
@@ -1262,20 +1279,43 @@ export function SuggestChat({ chatEnabled = false, recipes = [], mealPlan = [], 
                       const title = commaIdx >= 0 ? action.params.slice(commaIdx + 1).trim() : "";
                       let displayHost = "";
                       try { displayHost = new URL(url).hostname; } catch { displayHost = url; }
+                      const displayTitle = decodeEntities(title) || displayHost;
+                      // Look up image from external recipe metadata (passed alongside response)
+                      const meta = msg.externalRecipes?.find((r) => r.url === url);
+                      const imageUrl = meta?.imageUrl;
                       return (
-                        <button
-                          key={ai}
-                          onClick={() => navigate(`/recipes/new?url=${encodeURIComponent(url)}`)}
-                          className="flex items-center gap-2 w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20 p-2.5 text-left hover:border-orange-400 transition-colors"
-                        >
-                          <Plus className="w-4 h-4 text-orange-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
-                              {decodeEntities(title) || displayHost}
-                            </p>
-                            <p className="text-xs text-stone-400 truncate">{url}</p>
-                          </div>
-                        </button>
+                        <div key={ai} className="flex items-stretch gap-0 rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20 overflow-hidden hover:border-orange-400 transition-colors">
+                          <button
+                            onClick={() => navigate(`/recipes/new?url=${encodeURIComponent(url)}`)}
+                            className="flex gap-2 flex-1 min-w-0 text-left"
+                          >
+                            {imageUrl ? (
+                              <img src={imageUrl} alt="" className="w-14 h-14 object-cover shrink-0" />
+                            ) : (
+                              <div className="flex items-center justify-center w-14 h-14 bg-orange-100 dark:bg-orange-900/30 shrink-0">
+                                <Plus className="w-4 h-4 text-orange-500" />
+                              </div>
+                            )}
+                            <div className="py-1.5 pr-1 min-w-0">
+                              <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
+                                {displayTitle}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-stone-400 truncate">{displayHost}</span>
+                                {meta?.time && meta.time !== "N/A" && <span className="text-xs text-stone-400">{meta.time}</span>}
+                              </div>
+                            </div>
+                          </button>
+                          {onAddMeal && (
+                            <button
+                              onClick={() => onAddMeal(new Date(), "dinner" as MealSlot, displayTitle)}
+                              className="flex items-center justify-center w-11 shrink-0 border-l border-orange-200 dark:border-orange-800 text-orange-500 hover:bg-orange-100 dark:hover:bg-orange-950/50 active:bg-orange-200 dark:active:bg-orange-950/70 transition-colors"
+                              title="Add to plan"
+                            >
+                              <CalendarDays className="w-4.5 h-4.5" />
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

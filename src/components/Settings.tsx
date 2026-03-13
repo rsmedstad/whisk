@@ -1536,6 +1536,12 @@ interface AILogEntry {
   streaming?: boolean;
   responseLength?: number;
   tier?: string;
+  // Action marker counts
+  recipeCardsEmitted?: number;
+  saveRecipesEmitted?: number;
+  planActionsEmitted?: number;
+  externalRecipesFetched?: number;
+  responsePreview?: string;
   // Scan-specific fields
   itemCount?: number;
   photoSizeKB?: number;
@@ -1585,12 +1591,18 @@ function formatLogForCopy(log: AILogEntry): string {
     `  provider: ${log.provider}/${log.model} | tier: ${log.tier ?? "?"} | ${log.streaming ? "stream" : "non-stream"} | ${log.success ? "ok" : "FAIL"}`,
     `  recipes: ${log.recipeCount ?? 0} | vectorize hits: ${log.vectorizeHits ?? 0} | prompt: ${log.systemPromptLength ?? 0}chars (~${Math.round((log.systemPromptLength ?? 0) / 4)}tok)`,
   ];
+  // Action marker counts (only show line if any were emitted)
+  const hasActions = (log.recipeCardsEmitted ?? 0) > 0 || (log.saveRecipesEmitted ?? 0) > 0 || (log.planActionsEmitted ?? 0) > 0 || (log.externalRecipesFetched ?? 0) > 0;
+  if (hasActions) {
+    lines.push(`  actions: cards=${log.recipeCardsEmitted ?? 0} external=${log.saveRecipesEmitted ?? 0} plan=${log.planActionsEmitted ?? 0} nyt_fetched=${log.externalRecipesFetched ?? 0}`);
+  }
   if (t) {
     lines.push(`  timing: config=${t.configMs}ms index=${t.indexMs}ms vectorize=${t.vectorizeMs}ms nyt=${t.nytMs}ms fetch(total)=${t.fetchMs}ms${t.llmMs !== undefined ? ` llm=${t.llmMs}ms` : ""} total=${log.durationMs}ms`);
   } else {
     lines.push(`  total: ${log.durationMs}ms`);
   }
   if (log.responseLength) lines.push(`  response: ${log.responseLength}chars`);
+  if (log.responsePreview) lines.push(`  preview: ${log.responsePreview}`);
   if (log.error) lines.push(`  error: ${log.error}`);
   return lines.join("\n");
 }

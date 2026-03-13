@@ -78,6 +78,14 @@ interface AILogEntry {
   responseLength?: number;
   error?: string;
   tier?: string;
+  // Action markers emitted in the response
+  recipeCardsEmitted?: number;
+  saveRecipesEmitted?: number;
+  planActionsEmitted?: number;
+  // External recipe search results injected into prompt
+  externalRecipesFetched?: number;
+  // First ~200 chars of the AI response for quick review
+  responsePreview?: string;
   timing?: {
     classifyMs: number;
     fetchMs: number;
@@ -86,6 +94,23 @@ interface AILogEntry {
     nytMs: number;
     vectorizeMs: number;
     llmMs?: number;
+  };
+}
+
+/** Count occurrences of a specific action marker type in a response string */
+function countMarkers(text: string, type: string): number {
+  const regex = new RegExp(`\\[${type}:`, "g");
+  return (text.match(regex) ?? []).length;
+}
+
+/** Extract response-level log fields from a cleaned AI response */
+function responseLogFields(cleaned: string, externalCount: number): Pick<AILogEntry, "recipeCardsEmitted" | "saveRecipesEmitted" | "planActionsEmitted" | "externalRecipesFetched" | "responsePreview"> {
+  return {
+    recipeCardsEmitted: countMarkers(cleaned, "RECIPE_CARD"),
+    saveRecipesEmitted: countMarkers(cleaned, "SAVE_RECIPE"),
+    planActionsEmitted: countMarkers(cleaned, "ADD_TO_PLAN"),
+    externalRecipesFetched: externalCount,
+    responsePreview: cleaned.replace(/\[(?:ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]+\]/g, "").replace(/\n+/g, " ").trim().slice(0, 200),
   };
 }
 
@@ -205,8 +230,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   const priorHadRecipes = priorRecipeIds.size > 0;
 
   // Follow-up about previously mentioned recipes — no need for full index or Vectorize,
-  // just include the specific recipes already in the conversation
-  const isFollowUp = priorHadRecipes && !referencesCollection && !isGeneralQuestion;
+  // just include the specific recipes already in the conversation.
+  // Exclude discovery-intent messages — if the user wants new/different ideas, they need
+  // the full collection + external search, not just previously mentioned recipes.
+  const isDiscoveryIntent = /\b(new|ideas?|discover\w*|different|something else|never tried|interesting|recommend|suggest|inspire|inspiration)\b/i.test(normalized);
+  const isFollowUp = priorHadRecipes && !referencesCollection && !isGeneralQuestion && !isDiscoveryIntent;
 
   // Full collection context only when explicitly referencing collection or asking for new suggestions
   const needsRecipeContext = !isGeneralQuestion && !isFollowUp && (referencesCollection || priorHadRecipes);
@@ -216,7 +244,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   const needsSemanticSearch = needsRecipeContext
     && !/\b(how|what is|what are|can i|should i|temperature|substitut|replac|alternativ)\b/i.test(normalized);
 
-  const needsExternalSearch = needsRecipeContext && /\b(new|outside|ideas?|different|something else|never tried)\b/i.test(normalized);
+  const needsExternalSearch = needsRecipeContext && /\b(new|outside|ideas?|different|something else|never tried|discover\w*|interesting|inspire|inspiration|recommend)\b/i.test(normalized);
 
   // Log classification tier for debugging
   const queryTier = isGeneralQuestion ? "general" : isFollowUp ? "followup" : needsRecipeContext ? (needsSemanticSearch ? "semantic" : "collection") : "unclassified";
@@ -497,6 +525,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     recipeCount: recipeIndex.length,
     vectorizeHits: vectorizeHitCount,
     tier: queryTier,
+    externalRecipesFetched: externalRecipes.length,
     timing: {
       classifyMs,
       fetchMs,
@@ -560,9 +589,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
           .replace(/\[(ADD_TO_PLAN|ADD_TO_LIST|ADD_RECIPE_INGREDIENTS|SEARCH_RECIPES|RECIPE_CARD|SAVE_RECIPE):[^\]]*$/s, "")
           .replace(/\n{3,}/g, "\n\n")
           .trim();
-        waitUntil(logAIInteraction(env.WHISK_KV,{ ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length, error: "stream failed, non-stream fallback succeeded" }).catch(() => {}));
+        const fallbackExternalMeta = externalRecipes.length > 0
+          ? externalRecipes.map((r) => ({ url: r.url, name: r.name, imageUrl: r.imageUrl, time: r.time }))
+          : undefined;
+        waitUntil(logAIInteraction(env.WHISK_KV,{ ...baseLog, streaming: false, success: true, durationMs: Date.now() - startTime, responseLength: cleaned.length, error: "stream failed, non-stream fallback succeeded", ...responseLogFields(cleaned, externalRecipes.length) }).catch(() => {}));
         return new Response(
-          JSON.stringify({ content: cleaned || "I wasn't able to generate a response. Please try again." }),
+          JSON.stringify({ content: cleaned || "I wasn't able to generate a response. Please try again.", ...(fallbackExternalMeta && { externalRecipes: fallbackExternalMeta }) }),
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (fallbackErr) {
@@ -607,9 +639,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
       );
     }
 
-    waitUntil(logAIInteraction(env.WHISK_KV,{ ...logWithLlm, streaming: false, success: true, durationMs: totalMs, responseLength: cleaned.length }).catch(() => {}));
+    // Build external recipe metadata for frontend image/detail rendering
+    const externalMeta = externalRecipes.length > 0
+      ? externalRecipes.map((r) => ({ url: r.url, name: r.name, imageUrl: r.imageUrl, time: r.time }))
+      : undefined;
+
+    waitUntil(logAIInteraction(env.WHISK_KV,{ ...logWithLlm, streaming: false, success: true, durationMs: totalMs, responseLength: cleaned.length, ...responseLogFields(cleaned, externalRecipes.length) }).catch(() => {}));
     return new Response(
-      JSON.stringify({ content: cleaned }),
+      JSON.stringify({ content: cleaned, ...(externalMeta && { externalRecipes: externalMeta }) }),
       { headers: { "Content-Type": "application/json", "X-Whisk-Timing": `tier=${queryTier} classify=${classifyMs}ms fetch=${fetchMs}ms(${fetchBreakdown}) llm=${llmMs}ms total=${totalMs}ms prompt=${promptChars}chars` } }
     );
   } catch (textErr) {
@@ -632,6 +669,7 @@ interface ExternalRecipe {
   time: string;
   rating: string;
   url: string;
+  imageUrl?: string;
 }
 
 interface NytSearchResult {
@@ -642,6 +680,7 @@ interface NytSearchResult {
     cooking_time?: { display?: string };
     avg_rating?: number;
     num_ratings?: number;
+    thumbnail_url?: string;
   };
 }
 
@@ -741,6 +780,7 @@ async function searchExternalRecipes(userMessage: string, conversationHistory?: 
           ? `${recipe.avg_rating.toFixed(1)}/5 (${recipe.num_ratings ?? 0} ratings)`
           : "unrated",
         url: `https://cooking.nytimes.com/recipes/${id}-${slug}`,
+        imageUrl: recipe?.thumbnail_url,
       };
     }).filter((r) => r.name !== "Unknown");
   } catch {
