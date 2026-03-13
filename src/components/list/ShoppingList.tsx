@@ -63,7 +63,8 @@ export function ShoppingList({
   const [isListScanning, setIsListScanning] = useState(false);
   const [listScanResult, setListScanResult] = useState<{ count: number; message?: string } | null>(null);
   const [listScanPreview, setListScanPreview] = useState<string | null>(null);
-  const [scanPendingItems, setScanPendingItems] = useState<{ name: string; selected: boolean }[]>([]);
+  const [scanPendingItems, setScanPendingItems] = useState<{ name: string; selected: boolean; confidence?: "high" | "low" }[]>([]);
+  const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [scanSortAZ, setScanSortAZ] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
@@ -72,6 +73,11 @@ export function ShoppingList({
   const [isPlanAdding, setIsPlanAdding] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  // Smart list
+  const [showSmartList, setShowSmartList] = useState(false);
+  const [isSmartLoading, setIsSmartLoading] = useState(false);
+  const [smartItems, setSmartItems] = useState<Array<{ name: string; amount: string | null; unit: string | null; category: string; sourceItemIds: string[] }>>([]);
+  const [smartStats, setSmartStats] = useState<{ originalCount: number; smartCount: number; combinedCount: number } | null>(null);
 
   const PANTRY_STAPLES = useMemo(() => new Set([
     // Salt & pepper
@@ -332,6 +338,44 @@ export function ShoppingList({
     setNewItem("");
   };
 
+  const fetchSmartList = useCallback(async () => {
+    const unchecked = list.items.filter((i) => !i.checked);
+    if (unchecked.length < 2) {
+      setSmartItems([]);
+      setSmartStats(null);
+      setShowSmartList(true);
+      return;
+    }
+    setIsSmartLoading(true);
+    setShowSmartList(true);
+    try {
+      const token = localStorage.getItem("whisk_token");
+      const res = await fetch("/api/shopping/smart-list", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          items: unchecked.map((i) => ({
+            id: i.id,
+            name: i.name,
+            amount: i.amount ?? null,
+            unit: i.unit ?? null,
+            category: i.category ?? "other",
+          })),
+        }),
+      });
+      const data = await res.json() as { smartItems?: typeof smartItems; stats?: typeof smartStats };
+      if (data.smartItems) setSmartItems(data.smartItems);
+      if (data.stats) setSmartStats(data.stats);
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setIsSmartLoading(false);
+    }
+  }, [list.items]);
+
   const handleClassify = useCallback(async () => {
     setIsClassifying(true);
     try {
@@ -384,15 +428,16 @@ export function ShoppingList({
         const totalMs = Math.round(performance.now() - scanStart);
         console.log(`[Whisk] Scan compress=${compressMs}ms roundtrip=${roundtripMs}ms total=${totalMs}ms photo=${Math.round(blob.size / 1024)}KB | server: ${serverTiming}`);
 
-        const data = (await res.json()) as { items?: { name: string }[]; message?: string; error?: string };
+        const data = (await res.json()) as { items?: { name: string; confidence?: string }[]; warnings?: string[]; message?: string; error?: string };
         if (!res.ok) {
           setListScanResult({ count: 0, message: data.error ?? data.message ?? `Scan failed (${res.status})` });
           return;
         }
         const items = data.items ?? [];
-        const validItems = items.filter((item) => item.name).map((item) => ({ name: item.name, selected: true }));
+        const validItems = items.filter((item) => item.name).map((item) => ({ name: item.name, selected: true, confidence: (item.confidence ?? "high") as "high" | "low" }));
         if (validItems.length > 0) {
           setScanPendingItems(validItems);
+          setScanWarnings(data.warnings ?? []);
           setListScanResult({ count: validItems.length });
         } else {
           setListScanResult({ count: 0, message: data.message ?? "No items found in the image. Try a clearer photo." });
@@ -636,6 +681,27 @@ export function ShoppingList({
                 <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "Classifying..." : "Review & Classify"}
               </button>
             )}
+            {/* Smart list toggle */}
+            {chatEnabled && (
+              <button
+                onClick={() => {
+                  if (showSmartList) {
+                    setShowSmartList(false);
+                  } else {
+                    fetchSmartList();
+                  }
+                }}
+                disabled={isSmartLoading}
+                className={classNames(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50",
+                  showSmartList
+                    ? "border-violet-500 text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30"
+                    : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400 hover:border-violet-300 hover:text-violet-600"
+                )}
+              >
+                <Sparkles className="w-3 h-3" /> {isSmartLoading ? "..." : "Smart"}
+              </button>
+            )}
             {/* Clear dropdown — pushed right */}
             <div className="relative ml-auto">
               <button
@@ -725,6 +791,14 @@ export function ShoppingList({
                 {/* Pending scan items review */}
                 {scanPendingItems.length > 0 && !isListScanning && (
                   <div>
+                    {scanWarnings.length > 0 && (
+                      <div className="mb-2 px-2.5 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                        <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-0.5">Some items may need review</p>
+                        {scanWarnings.map((w, i) => (
+                          <p key={i} className="text-[10px] text-amber-600 dark:text-amber-500">{w}</p>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-medium text-stone-600 dark:text-stone-300">
                         {scanPendingItems.filter((i) => i.selected).length} of {scanPendingItems.length} selected
@@ -762,6 +836,7 @@ export function ShoppingList({
                               {item.selected && <Check className="w-2.5 h-2.5" />}
                             </button>
                             <span className={classNames("text-sm", !item.selected && "text-stone-400 line-through")}>{item.name}</span>
+                            {item.confidence === "low" && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 font-medium">unclear</span>}
                           </li>
                         );
                       })}
@@ -774,6 +849,7 @@ export function ShoppingList({
                           setListScanResult({ count: selected.length });
                           setScanPendingItems([]);
                           setScanSortAZ(false);
+                          setScanWarnings([]);
                         }}
                         disabled={scanPendingItems.every((i) => !i.selected)}
                         className="flex-1 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
@@ -781,7 +857,7 @@ export function ShoppingList({
                         Add {scanPendingItems.filter((i) => i.selected).length} items
                       </button>
                       <button
-                        onClick={() => { setScanPendingItems([]); setListScanResult(null); setScanSortAZ(false); }}
+                        onClick={() => { setScanPendingItems([]); setListScanResult(null); setScanSortAZ(false); setScanWarnings([]); }}
                         className="px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-600 text-xs font-medium text-stone-600 dark:text-stone-400"
                       >
                         Cancel
@@ -860,6 +936,97 @@ export function ShoppingList({
                   </div>
                 ) : undefined}
               />
+            ) : showSmartList ? (
+              /* ── Smart List view ── */
+              <div className="space-y-3">
+                {isSmartLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-sm text-stone-400 dark:text-stone-500">
+                    <Sparkles className="w-4 h-4 animate-pulse text-violet-500" />
+                    <span>Consolidating your list...</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Stats banner */}
+                    {smartStats && smartStats.combinedCount > 0 && (
+                      <div className="flex items-center justify-between rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-3 py-2">
+                        <p className="text-xs text-violet-700 dark:text-violet-300">
+                          {smartStats.originalCount} items → {smartStats.smartCount} ({smartStats.combinedCount} combined)
+                        </p>
+                        <button
+                          onClick={fetchSmartList}
+                          className="text-violet-500 hover:text-violet-700 dark:hover:text-violet-300"
+                          title="Refresh"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    {smartStats && smartStats.combinedCount === 0 && (
+                      <div className="rounded-lg bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 px-3 py-2">
+                        <p className="text-xs text-stone-500 dark:text-stone-400">No duplicates found — your list is already clean!</p>
+                      </div>
+                    )}
+
+                    {/* Smart items grouped by category */}
+                    {(() => {
+                      const catGroups = new Map<string, typeof smartItems>();
+                      for (const si of smartItems) {
+                        const cat = si.category || "other";
+                        const arr = catGroups.get(cat) ?? [];
+                        arr.push(si);
+                        catGroups.set(cat, arr);
+                      }
+                      const catOrder = [...catGroups.entries()].sort(([a], [b]) => {
+                        const ai = CATEGORY_ORDER.indexOf(a as ShoppingCategory);
+                        const bi = CATEGORY_ORDER.indexOf(b as ShoppingCategory);
+                        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                      });
+                      return catOrder.map(([cat, items]) => (
+                        <section key={cat}>
+                          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 mb-1.5 flex items-center gap-1.5">
+                            <span>{CATEGORY_EMOJI[cat as ShoppingCategory] ?? ""}</span>
+                            {CATEGORY_LABELS[cat as ShoppingCategory] ?? cat}
+                            <span className="text-stone-300 dark:text-stone-600 font-normal">({items.length})</span>
+                          </h3>
+                          <ul className="space-y-1">
+                            {items.sort((a, b) => a.name.localeCompare(b.name)).map((si, idx) => (
+                              <li
+                                key={`${cat}-${idx}`}
+                                className="flex items-center gap-2 rounded-lg px-3 py-2 bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm dark:text-stone-100">{si.name}</span>
+                                  {si.amount && (
+                                    <span className="ml-1.5 text-xs text-stone-400 dark:text-stone-500">
+                                      {si.amount}{si.unit ? ` ${si.unit}` : ""}
+                                    </span>
+                                  )}
+                                </div>
+                                {si.sourceItemIds.length > 1 && (
+                                  <span className="text-[10px] rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 px-1.5 py-0.5 font-medium">
+                                    {si.sourceItemIds.length}x
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      ));
+                    })()}
+
+                    <div className="border-t border-stone-200 dark:border-stone-800 pt-3 text-sm text-stone-400 dark:text-stone-500 text-center">
+                      {smartItems.length} consolidated item{smartItems.length !== 1 ? "s" : ""}
+                      {" · "}
+                      <button
+                        onClick={() => setShowSmartList(false)}
+                        className="text-violet-500 hover:text-violet-600 dark:hover:text-violet-400 font-medium"
+                      >
+                        Back to full list
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : sortAZ && sortedFlat ? (
               /* A-Z flat list — optionally split into unchecked/checked sections */
               <div>

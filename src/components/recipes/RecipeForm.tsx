@@ -63,6 +63,9 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const [photos, setPhotos] = useState<RecipePhoto[]>(cachedRecipe?.photos ?? []);
   const [isUploading, setIsUploading] = useState(false);
   const [isAutoTagging, setIsAutoTagging] = useState(false);
+  const [isPhotoImporting, setIsPhotoImporting] = useState(false);
+  const [photoImportStep, setPhotoImportStep] = useState("");
+  const [photoWarnings, setPhotoWarnings] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAutoTags = async (t: string, desc: string, ings: Ingredient[]) => {
@@ -374,6 +377,73 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
     });
   };
 
+  const handleImportPhoto = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setIsPhotoImporting(true);
+      setPhotoImportStep("Processing image...");
+      try {
+        // Downscale + compress (same pattern as shopping list scan)
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+        const w = Math.round(bitmap.width * scale);
+        const h = Math.round(bitmap.height * scale);
+        const canvas = new OffscreenCanvas(w, h);
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        bitmap.close();
+        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+        const normalizedFile = new File([blob], "recipe.jpg", { type: "image/jpeg" });
+
+        setPhotoImportStep("Reading recipe from photo...");
+        const formData = new FormData();
+        formData.append("photo", normalizedFile);
+        const token = localStorage.getItem("whisk_token");
+        const res = await fetch("/api/import/photo", {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+        const data = await res.json() as Record<string, unknown>;
+        if (!res.ok || data.error) {
+          throw new Error((data.error as string) ?? "Failed to read recipe from photo");
+        }
+
+        setPhotoImportStep("Populating recipe fields...");
+        if (data.title) setTitle(data.title as string);
+        if (data.description) setDescription(data.description as string);
+        if (Array.isArray(data.ingredients) && data.ingredients.length) setIngredients(data.ingredients as Ingredient[]);
+        if (Array.isArray(data.steps) && data.steps.length) setSteps(data.steps as Step[]);
+        if (data.prepTime) setPrepTime(String(data.prepTime));
+        if (data.cookTime) setCookTime(String(data.cookTime));
+        if (data.servings) setServings(String(data.servings));
+        if (data.yield) setYieldStr(data.yield as string);
+        if (data.difficulty) setDifficulty(data.difficulty as Recipe["difficulty"]);
+        if (data.cuisine) setCuisine(data.cuisine as string);
+        if (Array.isArray(data.tags) && data.tags.length) {
+          setTags((prev) => [...new Set([...prev, ...(data.tags as string[])])]);
+        }
+        if (Array.isArray(data.warnings) && data.warnings.length) {
+          setPhotoWarnings(data.warnings as string[]);
+        }
+        setShowManualForm(true);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to read recipe from photo";
+        alert(`${msg}. You can add the recipe manually instead.`);
+        setShowManualForm(true);
+      } finally {
+        setIsPhotoImporting(false);
+        setPhotoImportStep("");
+      }
+    };
+    input.click();
+  };
+
   const handleImportUrl = async () => {
     let url = importUrl.trim();
     if (!url) return;
@@ -530,6 +600,28 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
             <div className="flex-1 border-t border-stone-200 dark:border-stone-700" />
           </div>
 
+          {/* From Photo */}
+          {isPhotoImporting ? (
+            <div className="flex items-center justify-center gap-3 py-4 text-sm text-stone-500 dark:text-stone-400">
+              <LoadingSpinner size="sm" />
+              <span>{photoImportStep || "Processing..."}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleImportPhoto}
+              className="w-full flex items-center gap-3 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 px-4 py-3 text-left hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors"
+            >
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-violet-50 dark:bg-violet-950/50">
+                <Camera className="w-5 h-5 text-violet-500" />
+              </div>
+              <div>
+                <div className="text-sm font-medium dark:text-stone-100">Scan a Recipe</div>
+                <div className="text-xs text-stone-400 dark:text-stone-500">Photo of handwritten or printed recipe</div>
+              </div>
+            </button>
+          )}
+
           <Button
             variant="secondary"
             fullWidth
@@ -543,6 +635,29 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       {/* ── Manual Form ── */}
       {showManualForm && (
       <form onSubmit={handleSubmit} className="px-4 py-4 space-y-6">
+        {/* Photo import warnings */}
+        {photoWarnings.length > 0 && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Some parts were hard to read</p>
+                <ul className="text-xs text-amber-600 dark:text-amber-500 space-y-0.5">
+                  {photoWarnings.map((w, i) => (
+                    <li key={i}>- {w}</li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhotoWarnings([])}
+                className="text-amber-400 hover:text-amber-600 dark:text-amber-600 dark:hover:text-amber-400"
+                aria-label="Dismiss warnings"
+              >
+                <XMark className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
         {/* URL import bar (compact, when in manual mode for new recipes) */}
         {!isEditing && !importUrl && (
           <div className="flex gap-2">
