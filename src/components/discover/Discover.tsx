@@ -2209,7 +2209,7 @@ function FeedCard({
           </div>
         )}
         {itemIsExpiring && (
-          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-stone-500/70 backdrop-blur-sm" title={expiryDays === 0 ? "Expiring today — save to keep" : `Leaving in ${expiryDays}d — save to keep`}>
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-amber-500/90 backdrop-blur-sm" title={expiryDays === 0 ? "Expiring today — save to keep" : `Leaving in ${expiryDays}d — save to keep`}>
             <Hourglass className="w-3.5 h-3.5 text-white" />
           </div>
         )}

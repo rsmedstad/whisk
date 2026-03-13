@@ -3,7 +3,7 @@ interface Env {
 }
 
 // Public routes that don't require auth
-const PUBLIC_PATHS = ["/api/auth", "/api/share/", "/api/deals/cron"];
+const PUBLIC_PATHS = ["/api/auth", "/api/share/"];
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url);
@@ -43,5 +43,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
-  return context.next();
+  const response = await context.next();
+
+  // Security headers
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  return response;
 };

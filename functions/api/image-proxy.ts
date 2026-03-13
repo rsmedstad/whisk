@@ -71,7 +71,7 @@ export const onRequestGet: PagesFunction = async ({ request }) => {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=86400, s-maxage=604800",
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": new URL(request.url).origin,
       },
     });
   } catch {

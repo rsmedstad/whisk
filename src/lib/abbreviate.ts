@@ -104,14 +104,3 @@ export function abbreviateName(name: string): string {
   }
   return result || name; // fallback to original if everything was stripped
 }
-
-/** Format an item for shopping display: abbreviated amount + unit + clean name */
-export function formatForShopping(
-  name: string,
-  amount?: string,
-  unit?: string,
-): string {
-  const cleanName = abbreviateName(name);
-  const shortUnit = abbreviateUnit(unit);
-  return [amount, shortUnit, cleanName].filter(Boolean).join(" ");
-}

@@ -16,18 +16,19 @@ input[type="search"]::-webkit-search-decoration {
 .prose-chat ul, .prose-chat ol { margin-top: 0.25rem; margin-bottom: 0.25rem; }
 
 @theme {
-  /* Default accent — fresh green (overridden by data-accent for seasonal/holiday themes) */
+  /* Default accent — fresh green (overridden by data-accent for seasonal/holiday themes)
+     500 = green-700 (#15803d) for WCAG AA 4.5:1 contrast with white text (5.06:1) */
   --color-orange-50: #f0fdf4;
   --color-orange-100: #dcfce7;
   --color-orange-200: #bbf7d0;
   --color-orange-300: #86efac;
-  --color-orange-400: #4ade80;
-  --color-orange-500: #22c55e;
-  --color-orange-600: #16a34a;
-  --color-orange-700: #15803d;
-  --color-orange-800: #166534;
-  --color-orange-900: #14532d;
-  --color-orange-950: #052e16;
+  --color-orange-400: #16a34a;
+  --color-orange-500: #15803d;
+  --color-orange-600: #166534;
+  --color-orange-700: #14532d;
+  --color-orange-800: #052e16;
+  --color-orange-900: #022c22;
+  --color-orange-950: #012a14;
   /* White — overridable so holiday themes can tint bg-white surfaces */
   --color-white: #ffffff;
 }
@@ -173,9 +174,9 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-200: #ffcc66;
   --color-orange-300: #ff9900;
   --color-orange-400: #ff6b00;
-  --color-orange-500: #ff5500;
-  --color-orange-600: #e04400;
-  --color-orange-700: #c03800;
+  --color-orange-500: #cc4400;
+  --color-orange-600: #b33b00;
+  --color-orange-700: #993200;
   --color-orange-800: #993000;
   --color-orange-900: #6b2200;
   --color-orange-950: #401500;
@@ -290,9 +291,9 @@ html.dark[data-accent="christmas"] {
   --color-orange-200: #f5aad0;
   --color-orange-300: #f080b8;
   --color-orange-400: #e8559d;
-  --color-orange-500: #d93884;
-  --color-orange-600: #bb2266;
-  --color-orange-700: #991a55;
+  --color-orange-500: #c03078;
+  --color-orange-600: #a02060;
+  --color-orange-700: #83184e;
   --color-orange-800: #771444;
   --color-orange-900: #550e33;
   --color-orange-950: #380820;
@@ -317,9 +318,9 @@ html.dark[data-accent="christmas"] {
   --color-orange-200: #ffdd66;
   --color-orange-300: #ffcc33;
   --color-orange-400: #f5a623;
-  --color-orange-500: #e88d0a;
-  --color-orange-600: #cc7400;
-  --color-orange-700: #a85d00;
+  --color-orange-500: #a06000;
+  --color-orange-600: #884e00;
+  --color-orange-700: #704000;
   --color-orange-800: #884a00;
   --color-orange-900: #663800;
   --color-orange-950: #442400;

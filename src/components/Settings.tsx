@@ -172,6 +172,8 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const [retagResult, setRetagResult] = useState<string | null>(null);
   const [isFixingText, setIsFixingText] = useState(false);
   const [fixTextResult, setFixTextResult] = useState<string | null>(null);
+  const [isRecrawling, setIsRecrawling] = useState(false);
+  const [recrawlResult, setRecrawlResult] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<{ recipes: Record<string, unknown>[]; name: string } | null>(null);
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; errors: number; skipped: number } | null>(null);
   const [importMode, setImportMode] = useState<"add" | "skip" | "overwrite">("skip");
@@ -1359,6 +1361,41 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       </p>
                     )}
                   </div>
+                  <div>
+                    <Button
+                      variant="secondary"
+                      fullWidth
+                      disabled={isRecrawling}
+                      onClick={async () => {
+                        setIsRecrawling(true);
+                        setRecrawlResult(null);
+                        try {
+                          const data = await api.post<{ updated: number; total: number; remaining: number; errors?: string[] }>("/recipes/recrawl");
+                          if (data.updated === 0 && data.total === 0) {
+                            setRecrawlResult("All recipes already have local images");
+                          } else {
+                            let msg = `Updated ${data.updated} of ${data.total} recipe${data.total === 1 ? "" : "s"}`;
+                            if (data.remaining > 0) msg += ` (${data.remaining} remaining — run again)`;
+                            setRecrawlResult(msg);
+                          }
+                        } catch {
+                          setRecrawlResult("Failed to recrawl recipes");
+                        } finally {
+                          setIsRecrawling(false);
+                        }
+                      }}
+                    >
+                      {isRecrawling ? "Recrawling..." : "Re-fetch Recipe Images"}
+                    </Button>
+                    <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5 text-center">
+                      Downloads missing recipe images from their original source URLs. Useful after importing a recipe book from another Whisk instance.
+                    </p>
+                    {recrawlResult && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center font-medium">
+                        {recrawlResult}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </Card>
             </section>
@@ -1425,7 +1462,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               <Card>
                 <div className="space-y-4">
                   <div className="text-sm text-stone-500 dark:text-stone-400 space-y-1">
-                    <p className="font-medium dark:text-stone-300">Whisk v0.3.1</p>
+                    <p className="font-medium dark:text-stone-300">Whisk v1.0.0</p>
                     <p>Personal Recipe Manager</p>
                   </div>
                 </div>
@@ -1477,6 +1514,43 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       Read the setup guide on GitHub
                     </a>
                   </div>
+                </div>
+              </Card>
+            </section>
+
+            {/* Support / Donate */}
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Support
+              </h2>
+              <Card>
+                <div className="space-y-3">
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
+                    Found Whisk helpful? If you'd like to show your appreciation, consider making a donation to the American Diabetes Association.
+                  </p>
+                  <a
+                    href="https://diabetes.org/ways-to-contribute"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 p-3 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 hover:border-orange-400 dark:hover:border-orange-500 transition-colors group"
+                  >
+                    {/* ADA logo — grey circle with registered mark */}
+                    <svg viewBox="0 0 48 48" className="w-10 h-10 shrink-0" aria-hidden="true">
+                      <circle cx="24" cy="24" r="23" fill="#A1A1AA" className="dark:fill-stone-500" />
+                      <text x="24" y="20" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="7" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.5">AMERICAN</text>
+                      <text x="24" y="28.5" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="7" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.5">DIABETES</text>
+                      <text x="24" y="37" textAnchor="middle" dominantBaseline="central" fill="white" fontSize="6.5" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.5">ASSOC.</text>
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-stone-700 dark:text-stone-300 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+                        American Diabetes Association
+                      </p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">
+                        diabetes.org
+                      </p>
+                    </div>
+                    <Globe className="w-4 h-4 text-stone-400 dark:text-stone-500 group-hover:text-orange-500 transition-colors shrink-0" />
+                  </a>
                 </div>
               </Card>
             </section>
@@ -1602,12 +1676,13 @@ function TimingBar({ label, ms, maxMs }: { label: string; ms: number; maxMs: num
 
 function formatLogForCopy(log: AILogEntry): string {
   const time = new Date(log.timestamp);
-  const isScan = log.feature === "scan";
+  const isImage = IMAGE_FEATURES.has(log.feature ?? "");
 
-  if (isScan) {
+  if (isImage) {
     const st = log.timing;
+    const featureLabel = log.feature === "scan" ? "LIST SCAN" : log.feature === "recipe-photo" ? "RECIPE PHOTO" : "PHOTO ID";
     const lines = [
-      `[${time.toLocaleString()}] LIST SCAN`,
+      `[${time.toLocaleString()}] ${featureLabel}`,
       `  provider: ${log.provider}/${log.model} | ${log.success ? "ok" : "FAIL"} | ${log.itemCount ?? 0} items | ${log.photoSizeKB ?? "?"}KB photo`,
     ];
     if (st) {
@@ -1641,17 +1716,29 @@ function formatLogForCopy(log: AILogEntry): string {
   return lines.join("\n");
 }
 
+type AILogTab = "all" | "text" | "image";
+const AI_LOG_TABS: { value: AILogTab; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "text", label: "Text" },
+  { value: "image", label: "Image" },
+];
+const IMAGE_FEATURES = new Set(["scan", "recipe-photo", "identify"]);
+
 function AIPerformanceLogs() {
   const [logs, setLogs] = useState<AILogEntry[] | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState<number | "all" | null>(null);
+  const [activeTab, setActiveTab] = useState<AILogTab>("all");
 
   const loadLogs = async () => {
     setIsLoading(true);
     try {
       const data = await api.get<AILogEntry[]>("/ai/logs");
-      setLogs(data);
+      // Auto-prune entries older than 7 days
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const fresh = data.filter((l) => new Date(l.timestamp).getTime() > weekAgo);
+      setLogs(fresh);
     } catch {
       setLogs([]);
     } finally {
@@ -1689,18 +1776,43 @@ function AIPerformanceLogs() {
               <p className="text-xs text-stone-400">No AI logs yet. Send a message in the Ask tab to generate data.</p>
             )}
             {logs && logs.length > 0 && (() => {
+              const filtered = activeTab === "all" ? logs
+                : activeTab === "image" ? logs.filter((l) => IMAGE_FEATURES.has(l.feature ?? ""))
+                : logs.filter((l) => !IMAGE_FEATURES.has(l.feature ?? ""));
               const todayStr = new Date().toLocaleDateString();
-              const todayCount = logs.filter((l) => new Date(l.timestamp).toLocaleDateString() === todayStr).length;
+              const todayCount = filtered.filter((l) => new Date(l.timestamp).toLocaleDateString() === todayStr).length;
+              const imageCount = logs.filter((l) => IMAGE_FEATURES.has(l.feature ?? "")).length;
+              const textCount = logs.length - imageCount;
               return (
               <>
+                {/* Tabs */}
+                <div className="flex gap-1 border-b border-stone-200 dark:border-stone-700 mb-2">
+                  {AI_LOG_TABS.map((tab) => {
+                    const count = tab.value === "all" ? logs.length : tab.value === "image" ? imageCount : textCount;
+                    return (
+                      <button
+                        key={tab.value}
+                        onClick={() => setActiveTab(tab.value)}
+                        className={classNames(
+                          "px-2.5 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors",
+                          activeTab === tab.value
+                            ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                            : "border-transparent text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300"
+                        )}
+                      >
+                        {tab.label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-stone-400 dark:text-stone-500">
-                    {todayCount > 0 ? `${todayCount} today` : "None today"} &middot; {logs.length} total
+                    {todayCount > 0 ? `${todayCount} today` : "None today"} &middot; {filtered.length} total
                   </p>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => {
-                        const text = logs.slice(0, 10).map(formatLogForCopy).join("\n\n");
+                        const text = filtered.slice(0, 10).map(formatLogForCopy).join("\n\n");
                         copyToClipboard(text, "all");
                       }}
                       className="text-xs text-orange-600 dark:text-orange-400 hover:underline"
@@ -1723,9 +1835,9 @@ function AIPerformanceLogs() {
                   </div>
                 </div>
                 <div className="space-y-4">
-                  {logs.slice(0, 10).map((log, i) => {
+                  {filtered.slice(0, 10).map((log, i) => {
                     const t = log.timing;
-                    const isScan = log.feature === "scan";
+                    const isImageFeature = IMAGE_FEATURES.has(log.feature ?? "");
                     const maxMs = Math.max(log.durationMs, t?.fetchMs ?? 0, t?.llmMs ?? 0, t?.visionMs ?? 0, 500);
                     const time = new Date(log.timestamp);
                     const isToday = time.toLocaleDateString() === new Date().toLocaleDateString();
@@ -1736,10 +1848,12 @@ function AIPerformanceLogs() {
                       <div key={i} className="border-b border-stone-100 dark:border-stone-800 pb-3 last:border-0 last:pb-0">
                         <div className="flex items-start justify-between mb-1.5">
                           <p className="text-xs text-stone-600 dark:text-stone-300 font-medium truncate max-w-[70%]">
-                            {isScan ? (
+                            {isImageFeature ? (
                               <span className="inline-flex items-center gap-1">
-                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">SCAN</span>
-                                List photo scan
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                  {log.feature === "scan" ? "SCAN" : log.feature === "recipe-photo" ? "RECIPE" : "ID"}
+                                </span>
+                                {log.feature === "scan" ? "List photo scan" : log.feature === "recipe-photo" ? "Recipe photo import" : "Photo identify"}
                               </span>
                             ) : (
                               <>&ldquo;{log.userMessage}&rdquo;</>
@@ -1765,7 +1879,7 @@ function AIPerformanceLogs() {
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-stone-400 dark:text-stone-500 mb-2">
                           <span>{timeStr}</span>
                           <span>{log.provider}/{log.model}</span>
-                          {isScan ? (
+                          {isImageFeature ? (
                             <>
                               {log.itemCount !== undefined && <span>{log.itemCount} items found</span>}
                               {log.photoSizeKB !== undefined && <span>{log.photoSizeKB}KB photo</span>}
@@ -1779,7 +1893,7 @@ function AIPerformanceLogs() {
                             </>
                           )}
                         </div>
-                        {t && !isScan && (
+                        {t && !isImageFeature && (
                           <div className="space-y-1">
                             {t.configMs > 0 && <TimingBar label="config" ms={t.configMs} maxMs={maxMs} />}
                             {t.indexMs > 0 && <TimingBar label="index" ms={t.indexMs} maxMs={maxMs} />}
@@ -1790,7 +1904,7 @@ function AIPerformanceLogs() {
                             <TimingBar label="total" ms={log.durationMs} maxMs={maxMs} />
                           </div>
                         )}
-                        {t && isScan && (
+                        {t && isImageFeature && (
                           <div className="space-y-1">
                             {t.configMs > 0 && <TimingBar label="config" ms={t.configMs} maxMs={maxMs} />}
                             {(t.uploadProcessMs ?? 0) > 0 && <TimingBar label="upload" ms={t.uploadProcessMs!} maxMs={maxMs} />}

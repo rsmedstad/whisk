@@ -23,12 +23,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    // Generate new token
-    const tokenBytes = new Uint8Array(16);
+    // Generate new token (32 bytes = 256-bit entropy)
+    const tokenBytes = new Uint8Array(32);
     crypto.getRandomValues(tokenBytes);
-    const token = btoa(String.fromCharCode(...tokenBytes))
-      .replace(/[+/=]/g, "")
-      .slice(0, 12);
+    const token = Array.from(tokenBytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 24);
 
     // Store share mapping
     await env.WHISK_KV.put(

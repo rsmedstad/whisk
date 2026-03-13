@@ -131,7 +131,6 @@ export interface ShoppingItem {
   sourceRecipeId?: string;
   addedBy?: "manual" | "recipe" | "ai" | "scan";
   addedByUser?: string; // user name who added this item
-  store?: string; // legacy field, no longer used in UI
 }
 
 export type ShoppingCategory =

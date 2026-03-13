@@ -67,6 +67,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
+  if (!photo.type.startsWith("image/")) {
+    return new Response(
+      JSON.stringify({ error: "File must be an image" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   // Convert to base64
   const arrayBuffer = await photo.arrayBuffer();
   const photoSizeKB = Math.round(arrayBuffer.byteLength / 1024);

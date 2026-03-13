@@ -195,6 +195,7 @@ function AppShell({
         />
       )}
 
+      <main>
       <Suspense fallback={<RouteSkeleton />}>
         <Routes>
           {/* Recipes — eagerly loaded, it's the home screen */}
@@ -338,6 +339,7 @@ function AppShell({
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </main>
 
       {/* Bottom nav (hidden in cook mode) */}
       <Routes>
