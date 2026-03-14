@@ -24,6 +24,7 @@ const DEFAULT_CONFIG: DiscoverConfig = {
       enabled: true,
     },
   ],
+  autoRefreshEnabled: true,
   expirationEnabled: true,
   itemLifetimeDays: 7,
   refreshIntervalDays: 2,
@@ -42,6 +43,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
 
   const updated: DiscoverConfig = {
     sources: body.sources ?? existing.sources,
+    autoRefreshEnabled: body.autoRefreshEnabled ?? existing.autoRefreshEnabled ?? true,
     expirationEnabled: body.expirationEnabled ?? existing.expirationEnabled,
     itemLifetimeDays: body.itemLifetimeDays ?? existing.itemLifetimeDays,
     refreshIntervalDays: body.refreshIntervalDays ?? existing.refreshIntervalDays,

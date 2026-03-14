@@ -356,6 +356,7 @@ export interface DiscoverSourceConfig {
 
 export interface DiscoverConfig {
   sources: DiscoverSourceConfig[];
+  autoRefreshEnabled: boolean; // when false, feed only refreshes on manual tap
   expirationEnabled: boolean; // when false, items never expire from the feed
   itemLifetimeDays: number;   // how long items stay visible (when expiration is enabled)
   refreshIntervalDays: number; // minimum days between auto-refreshes

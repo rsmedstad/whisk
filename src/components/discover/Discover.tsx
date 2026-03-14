@@ -403,6 +403,8 @@ export function Discover({
     }
   }, []);
 
+  const autoRefreshEnabled = discoverConfig?.autoRefreshEnabled !== false;
+
   useEffect(() => {
     // Use server config for refresh interval, fallback to 2 days
     const refreshDays = discoverConfig?.refreshIntervalDays ?? 2;
@@ -411,10 +413,12 @@ export function Discover({
     async function init() {
       // If we have cached data, show it immediately
       if (feed?.lastRefreshed) {
-        // Auto-refresh in background if feed is stale
-        const age = Date.now() - new Date(feed.lastRefreshed).getTime();
-        if (age > staleMs) {
-          refreshFeed(); // Background refresh — cached data shows meanwhile
+        // Auto-refresh in background if feed is stale (only when auto-refresh is on)
+        if (autoRefreshEnabled) {
+          const age = Date.now() - new Date(feed.lastRefreshed).getTime();
+          if (age > staleMs) {
+            refreshFeed(); // Background refresh — cached data shows meanwhile
+          }
         }
         return;
       }
@@ -425,13 +429,16 @@ export function Discover({
         if (data?.lastRefreshed) {
           setFeed(data);
           setLocal(FEED_CACHE_KEY, data);
-          const age = Date.now() - new Date(data.lastRefreshed).getTime();
-          if (age > staleMs) {
-            refreshFeed();
+          // Only auto-refresh stale data when enabled
+          if (autoRefreshEnabled) {
+            const age = Date.now() - new Date(data.lastRefreshed).getTime();
+            if (age > staleMs) {
+              refreshFeed();
+            }
           }
         }
-        // First visit with no feed — auto-scrape
-        else {
+        // First visit with no feed — auto-scrape (even if auto-refresh is off, need initial data)
+        else if (autoRefreshEnabled) {
           refreshFeed();
         }
       } catch {
@@ -1604,15 +1611,23 @@ export function Discover({
               {searchOpen ? <XMark className="w-5 h-5" /> : <MagnifyingGlass className="w-5 h-5" />}
             </button>
             <button
-              onClick={() => refreshFeed(true)}
+              onClick={() => {
+                if (!autoRefreshEnabled) {
+                  setFeedError("Auto-refresh is paused. Enable it in Settings > Display > Discover Feed.");
+                  return;
+                }
+                refreshFeed(true);
+              }}
               disabled={feedLoading}
               className={classNames(
-                "p-2 rounded-lg transition-all",
-                feedLoading
-                  ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
-                  : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+                "p-2 rounded-lg transition-all relative",
+                !autoRefreshEnabled
+                  ? "text-stone-300 dark:text-stone-600"
+                  : feedLoading
+                    ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
+                    : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
               )}
-              title="Refresh trending recipes"
+              title={autoRefreshEnabled ? "Refresh trending recipes" : "Auto-refresh paused"}
             >
               <RefreshCw
                 className={classNames(
@@ -1620,6 +1635,9 @@ export function Discover({
                   feedLoading && "animate-spin"
                 )}
               />
+              {!autoRefreshEnabled && (
+                <XMark className="w-3 h-3 absolute -top-0.5 -right-0.5 text-red-500 bg-white dark:bg-stone-900 rounded-full" />
+              )}
             </button>
           </div>
         </div>

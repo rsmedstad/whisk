@@ -746,36 +746,56 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     )}
                   </div>
 
-                  {/* Auto-refresh interval */}
+                  {/* Auto-refresh toggle + interval */}
                   <div>
-                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                      Auto-refresh interval
-                    </label>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-                      How often the Discover feed checks for new trending recipes.
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      {([
-                        { value: 1, label: "1 day" },
-                        { value: 2, label: "2 days" },
-                        { value: 3, label: "3 days" },
-                        { value: 7, label: "Weekly" },
-                      ] as const).map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => {
-                            const updated = { ...discoverConfig, refreshIntervalDays: opt.value };
-                            setDiscoverConfig(updated);
-                            setDiscoverConfigDirty(true);
-                          }}
-                          className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
-                            discoverConfig.refreshIntervalDays === opt.value ? activeClass : inactiveClass
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium dark:text-stone-200">Auto-refresh</span>
+                      <button
+                        onClick={() => {
+                          const updated = { ...discoverConfig, autoRefreshEnabled: !discoverConfig.autoRefreshEnabled };
+                          setDiscoverConfig(updated);
+                          setDiscoverConfigDirty(true);
+                        }}
+                        className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
+                          discoverConfig.autoRefreshEnabled !== false ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                            discoverConfig.autoRefreshEnabled !== false ? "translate-x-5" : ""
                           }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                        />
+                      </button>
                     </div>
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                      {discoverConfig.autoRefreshEnabled !== false
+                        ? "Discover feed checks for new trending recipes on a schedule."
+                        : "Auto-refresh is off. The feed will only update when you manually refresh."}
+                    </p>
+                    {discoverConfig.autoRefreshEnabled !== false && (
+                      <div className="flex gap-2 flex-wrap">
+                        {([
+                          { value: 1, label: "1 day" },
+                          { value: 2, label: "2 days" },
+                          { value: 3, label: "3 days" },
+                          { value: 7, label: "Weekly" },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              const updated = { ...discoverConfig, refreshIntervalDays: opt.value };
+                              setDiscoverConfig(updated);
+                              setDiscoverConfigDirty(true);
+                            }}
+                            className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
+                              discoverConfig.refreshIntervalDays === opt.value ? activeClass : inactiveClass
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Expiration toggle + lifetime */}

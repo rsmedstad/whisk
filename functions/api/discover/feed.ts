@@ -19,6 +19,7 @@ const DEFAULT_CONFIG: DiscoverConfig = {
     { id: "allrecipes", label: "AllRecipes", url: "https://www.allrecipes.com/", enabled: true },
     { id: "seriouseats", label: "Serious Eats", url: "https://www.seriouseats.com/", enabled: true },
   ],
+  autoRefreshEnabled: true,
   expirationEnabled: true,
   itemLifetimeDays: 7,
   refreshIntervalDays: 2,
