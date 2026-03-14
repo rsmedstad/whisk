@@ -158,6 +158,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const [exportExcludeTags, setExportExcludeTags] = useState<string[]>([]);
   const [exportIncludeNotes, setExportIncludeNotes] = useState(false);
   const [discoverConfig, setDiscoverConfig] = useState<DiscoverConfig | null>(null);
+  const [discoverConfigSnapshot, setDiscoverConfigSnapshot] = useState<DiscoverConfig | null>(null);
   const [discoverConfigDirty, setDiscoverConfigDirty] = useState(false);
   const [discoverConfigSaving, setDiscoverConfigSaving] = useState(false);
   const [discoverConfigError, setDiscoverConfigError] = useState<string | null>(null);
@@ -165,7 +166,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   // Load discover config from server
   useEffect(() => {
     api.get<DiscoverConfig>("/discover/config").then((config) => {
-      if (config) setDiscoverConfig(config);
+      if (config) {
+        setDiscoverConfig(config);
+        setDiscoverConfigSnapshot(config);
+      }
     }).catch(() => {});
   }, []);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -821,7 +825,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     )}
                   </div>
 
-                  {/* Save button */}
+                  {/* Save / Discard buttons */}
                   {discoverConfigDirty && (
                     <div className="flex items-center gap-2">
                       <Button
@@ -842,6 +846,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                             const result = await api.put<DiscoverConfig>("/discover/config", cleaned);
                             if (result) {
                               setDiscoverConfig(result);
+                              setDiscoverConfigSnapshot(result);
                               setDiscoverConfigDirty(false);
                               // Clear old localStorage keys (migrated to server config)
                               localStorage.removeItem("whisk_feed_refresh_days");
@@ -859,6 +864,18 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       >
                         {discoverConfigSaving ? "Saving..." : "Save Changes"}
                       </Button>
+                      <button
+                        onClick={() => {
+                          if (discoverConfigSnapshot) {
+                            setDiscoverConfig(discoverConfigSnapshot);
+                            setDiscoverConfigDirty(false);
+                            setDiscoverConfigError(null);
+                          }
+                        }}
+                        className="text-sm text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                      >
+                        Discard
+                      </button>
                       {discoverConfigError && (
                         <span className="text-xs text-red-500">{discoverConfigError}</span>
                       )}
