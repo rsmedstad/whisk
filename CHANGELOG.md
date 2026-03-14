@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.1.0] - 2026-03-14
+
+### Open-Source Release
+
+- **AGPL-3.0 License**: Added LICENSE file (GNU Affero General Public License v3.0)
+- **README overhaul**: Feature highlights, tech stack summary, ADA donation link, AGPL-3.0 license details
+- **CONTRIBUTING.md**: Code conventions, PR process, and contribution guidelines
+- **GitHub polish**: FUNDING.yml (ADA donation), issue templates (bug report, feature request)
+- **package.json**: Added description, license, and repository fields; removed `private: true`
+
+### Discover Feed — Configurable Sources
+
+- **User-configurable sources**: Discover feed sources are now managed in Settings instead of being hardcoded. Users can add, remove, or disable any recipe site by entering its homepage URL.
+- **Generic site scraper with framework auto-detection**: New sites are scraped using a multi-strategy pipeline: JSON-LD structured data, HTML link extraction with contextual title/image, and Browser Rendering fallback. The scraper auto-detects the site's framework (Next.js, Dotdash Meredith CMS) and applies enhanced extraction strategies — meaning any new Next.js or Dotdash Meredith recipe site gets optimized parsing automatically.
+- **Framework hint table**: Known domain → framework mappings for instant detection (covers AllRecipes, Serious Eats, Food Network, Simply Recipes, The Spruce Eats, Martha Stewart, and more). Unknown domains fall through to HTML-based auto-detection.
+- **Site-specific profiles preserved**: The three original site-specific scrapers are retained as optimized profiles — automatically used when their source IDs match. New/unknown sites use the generic pipeline with framework detection.
+- **Expiration toggle**: New "Auto-expire recipes" setting in Discover Feed config. When disabled, feed items stay permanently (useful for demo instances or small personal feeds).
+- **Server-side config**: Discover settings (sources, refresh interval, expiration) now stored in KV (`discover_config`) instead of localStorage. Shared across devices, survives cache clears.
+- **Default sources**: New installs pre-populate with NYT Cooking, AllRecipes, and Serious Eats as defaults. Users can replace or remove them.
+
+### Demo Deployment
+
+- **GitHub Actions workflow**: `deploy-demo.yml` deploys to a separate Cloudflare Pages project (`whisk-demo`) on every push to main
+- **Isolated infrastructure**: Demo runs on separate KV namespaces and R2 bucket under the same Cloudflare account
+
+---
+
 ## [0.5.2] - 2026-03-11
 
 ### Discover — Feed Quality

@@ -35,6 +35,7 @@ const SLOT_TAGS: Record<MealSlot, string[]> = {
   dinner: ["dinner", "main", "entree", "entrée", "supper"],
   snack: ["snack", "appetizer", "dip", "finger food", "side"],
   dessert: ["dessert", "desserts", "baking", "cake", "cookie", "sweet"],
+  extra: [],
 };
 
 /** Score a recipe for quick-add ranking. Higher = better suggestion. */
@@ -115,6 +116,7 @@ const ALL_MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "dinner", label: "Dinner" },
   { slot: "snack", label: "Snack" },
   { slot: "dessert", label: "Dessert" },
+  { slot: "extra", label: "Extra" },
 ];
 
 function getEnabledSlots(): MealSlot[] {
@@ -821,19 +823,21 @@ export function MealPlan({
                       )}
                     </div>
                   ) : (
-                    <button
-                      onClick={() => {
+                    <div className={classNames("space-y-1", filledMeals.length > 0 && "mt-1.5")}>
+                      {(() => {
                         const usedSlots = new Set(filledMeals.map((m) => m.slot));
-                        const nextEmpty = mealSlots.find((s) => !usedSlots.has(s.slot));
-                        setAddingSlot({ date, slot: nextEmpty?.slot ?? mealSlots[0]?.slot ?? "dinner" });
-                      }}
-                      className={classNames(
-                        "flex items-center justify-center w-full min-h-[36px] rounded-lg border border-dashed border-stone-300 dark:border-stone-700 text-xs text-orange-500 font-medium hover:border-orange-400 dark:hover:border-orange-600 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors",
-                        filledMeals.length > 0 && "mt-1.5"
-                      )}
-                    >
-                      + add meal
-                    </button>
+                        const emptySlots = mealSlots.filter((s) => !usedSlots.has(s.slot));
+                        return emptySlots.map(({ slot, label }) => (
+                          <button
+                            key={slot}
+                            onClick={() => setAddingSlot({ date, slot })}
+                            className="flex items-center justify-center w-full min-h-7 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 text-xs text-orange-500 font-medium hover:border-orange-400 dark:hover:border-orange-600 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors"
+                          >
+                            + {label.toLowerCase()}
+                          </button>
+                        ));
+                      })()}
+                    </div>
                   )}
                 </div>
               );

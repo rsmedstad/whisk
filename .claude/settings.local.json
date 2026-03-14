@@ -6,7 +6,10 @@
       "Bash(npx tsc:*)",
       "Bash(bunx vite build:*)",
       "Bash(npx vite build)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)"
     ]
   }
 }

@@ -43,6 +43,7 @@ import type {
   DiscoverFeedItem,
   DiscoverSource,
   DiscoverCategory,
+  DiscoverConfig,
 } from "../../types";
 
 // ── Props ───────────────────────────────────────────────
@@ -58,7 +59,8 @@ interface DiscoverProps {
 
 // ── Constants ───────────────────────────────────────────
 
-const SOURCE_LABELS: Record<DiscoverSource, string> = {
+/** Fallback labels for legacy source IDs */
+const LEGACY_SOURCE_LABELS: Record<string, string> = {
   nyt: "NYT Cooking",
   allrecipes: "AllRecipes",
   seriouseats: "Serious Eats",
@@ -359,6 +361,23 @@ export function Discover({
   const [showOverflow, setShowOverflow] = useState(false);
   const wakeLock = useWakeLock();
 
+  // ── Discover config (source labels + settings from server) ──
+  const [discoverConfig, setDiscoverConfig] = useState<DiscoverConfig | null>(null);
+  useEffect(() => {
+    api.get<DiscoverConfig>("/discover/config").then((config) => {
+      if (config) setDiscoverConfig(config);
+    }).catch(() => {});
+  }, []);
+
+  /** Look up display label for a source ID */
+  const sourceLabel = useCallback((sourceId: string | undefined): string => {
+    if (!sourceId) return "Recipe";
+    // Check config first, then legacy fallback
+    const fromConfig = discoverConfig?.sources.find((s) => s.id === sourceId);
+    if (fromConfig) return fromConfig.label;
+    return LEGACY_SOURCE_LABELS[sourceId] ?? sourceId;
+  }, [discoverConfig]);
+
   // ── Feed loading ──
 
   const refreshFeed = useCallback(async (force = false) => {
@@ -366,15 +385,8 @@ export function Discover({
     setFeedError(null);
     setFeedWarnings([]);
     try {
-      const lifetime = localStorage.getItem("whisk_feed_item_lifetime") ?? "7";
-      const params = new URLSearchParams({ lifetime });
+      const params = new URLSearchParams();
       if (force) params.set("force", "true");
-      const srcPref = localStorage.getItem("whisk_discover_sources");
-      if (srcPref) {
-        const enabled = Object.entries(JSON.parse(srcPref) as Record<string, boolean>)
-          .filter(([, v]) => v !== false).map(([k]) => k);
-        if (enabled.length > 0 && enabled.length < 3) params.set("sources", enabled.join(","));
-      }
       const url = `/discover/feed?${params}`;
       const data = await api.post<DiscoverFeed & { warnings?: string[] }>(url, {});
       if (data) {
@@ -392,8 +404,8 @@ export function Discover({
   }, []);
 
   useEffect(() => {
-    // Read user-configured refresh interval (default 2 days)
-    const refreshDays = parseInt(localStorage.getItem("whisk_feed_refresh_days") ?? "2", 10) || 2;
+    // Use server config for refresh interval, fallback to 2 days
+    const refreshDays = discoverConfig?.refreshIntervalDays ?? 2;
     const staleMs = refreshDays * 24 * 60 * 60 * 1000;
 
     async function init() {
@@ -407,21 +419,12 @@ export function Discover({
         return;
       }
 
-      // No cache — fetch from KV
+      // No cache — fetch from KV (server applies config-based filtering)
       try {
-        const lifetime = localStorage.getItem("whisk_feed_item_lifetime") ?? "7";
-        const getParams = new URLSearchParams({ lifetime });
-        const srcPref = localStorage.getItem("whisk_discover_sources");
-        if (srcPref) {
-          const enabled = Object.entries(JSON.parse(srcPref) as Record<string, boolean>)
-            .filter(([, v]) => v !== false).map(([k]) => k);
-          if (enabled.length > 0 && enabled.length < 3) getParams.set("sources", enabled.join(","));
-        }
-        const data = await api.get<DiscoverFeed>(`/discover/feed?${getParams}`);
+        const data = await api.get<DiscoverFeed>("/discover/feed");
         if (data?.lastRefreshed) {
           setFeed(data);
           setLocal(FEED_CACHE_KEY, data);
-          // Check staleness of server-side data too
           const age = Date.now() - new Date(data.lastRefreshed).getTime();
           if (age > staleMs) {
             refreshFeed();
@@ -436,7 +439,7 @@ export function Discover({
       }
     }
     init();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [discoverConfig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Backfill missing feed images from saved recipes ──
   useEffect(() => {
@@ -946,6 +949,7 @@ export function Discover({
   // Count new items for the badge
   const newCount = useMemo(() => allItems.filter((i) => isNewItem(i, feed?.lastRefreshed)).length, [allItems, feed?.lastRefreshed]);
   // Count expiring items (for conditional sort option)
+  const expirationEnabled = discoverConfig?.expirationEnabled !== false;
   const expiringCount = useMemo(() => allItems.filter((i) => isExpiringItem(i)).length, [allItems]);
 
   // Check if any filters are active (to switch from carousel to grid)
@@ -1135,7 +1139,7 @@ export function Discover({
                     ) : (
                       <div className="flex h-full w-full items-center justify-center">
                         <span className="text-4xl text-stone-300 dark:text-stone-600">
-                          {SOURCE_LABELS[selectedFeedItem.source]}
+                          {sourceLabel(selectedFeedItem.source)}
                         </span>
                       </div>
                     )}
@@ -1196,7 +1200,7 @@ export function Discover({
           {totalSlides === 0 && !hasFeedImage && (
             <div className="aspect-video w-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center">
               <span className="text-4xl text-stone-300 dark:text-stone-600">
-                {SOURCE_LABELS[selectedFeedItem.source]}
+                {sourceLabel(selectedFeedItem.source)}
               </span>
             </div>
           )}
@@ -1218,7 +1222,7 @@ export function Discover({
                     rel="noopener noreferrer"
                     className="text-sm text-orange-500 hover:text-orange-600"
                   >
-                    View on {SOURCE_LABELS[selectedFeedItem.source]}
+                    View on {sourceLabel(selectedFeedItem.source)}
                   </a>
                 </div>
               </Card>
@@ -1528,7 +1532,7 @@ export function Discover({
                     rel="noopener noreferrer"
                     className="text-orange-500 hover:underline"
                   >
-                    {SOURCE_LABELS[selectedFeedItem.source]}
+                    {sourceLabel(selectedFeedItem.source)}
                   </a>
                 </div>
                 {selectedFeedItem.addedAt && (
@@ -2033,7 +2037,7 @@ export function Discover({
                       )}
                       {catExpiringCount > 0 && (
                         <span className="ml-1.5 text-[10px] font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-full">
-                          {catExpiringCount} leaving soon
+                          {catExpiringCount} leaving soon{!expirationEnabled && " (paused)"}
                         </span>
                       )}
                       {showDrinkPills && (
@@ -2090,6 +2094,8 @@ export function Discover({
                         onQuickSave={() => handleQuickSave(item)}
                         isSaved={savedUrls.has(item.url)}
                         isSaving={savingUrls.has(item.url)}
+                        sourceLabel={sourceLabel(item.source)}
+                        expirationEnabled={expirationEnabled}
                       />
                     ))}
                   </div>
@@ -2149,6 +2155,7 @@ export function Discover({
                     onQuickSave={() => handleQuickSave(item)}
                     isSaved={savedUrls.has(item.url)}
                     isSaving={savingUrls.has(item.url)}
+                    sourceLabel={sourceLabel(item.source)}
                   />
                 ))}
               </div>
@@ -2171,6 +2178,8 @@ function FeedCard({
   onQuickSave,
   isSaved,
   isSaving,
+  sourceLabel,
+  expirationEnabled,
 }: {
   item: DiscoverFeedItem;
   category: DiscoverCategory;
@@ -2179,6 +2188,8 @@ function FeedCard({
   onQuickSave?: () => void;
   isSaved?: boolean;
   isSaving?: boolean;
+  sourceLabel: string;
+  expirationEnabled?: boolean;
 }) {
   const itemIsNew = isNewItem(item, lastRefreshed);
   const itemIsExpiring = !itemIsNew && isExpiringItem(item);
@@ -2209,7 +2220,7 @@ function FeedCard({
           </div>
         )}
         {itemIsExpiring && (
-          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-amber-500/90 backdrop-blur-sm" title={expiryDays === 0 ? "Expiring today — save to keep" : `Leaving in ${expiryDays}d — save to keep`}>
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-amber-500/90 backdrop-blur-sm" title={expirationEnabled === false ? "Expiration paused" : expiryDays === 0 ? "Expiring today — save to keep" : `Leaving in ${expiryDays}d — save to keep`}>
             <Hourglass className="w-3.5 h-3.5 text-white" />
           </div>
         )}
@@ -2251,7 +2262,7 @@ function FeedCard({
             ) : null}
           </span>
           {item.source && (
-            <span className="truncate">{SOURCE_LABELS[item.source ?? "nyt"]}</span>
+            <span className="truncate">{sourceLabel}</span>
           )}
         </div>
       </div>
