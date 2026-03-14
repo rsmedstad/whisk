@@ -697,20 +697,22 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
-              <img
-                src={photoPreview}
-                alt="Recipe photo"
-                onClick={() => setZoomPhoto(true)}
-                className="w-full max-h-32 object-cover cursor-pointer"
-              />
+            <div className="relative">
+              <div className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+                <img
+                  src={photoPreview}
+                  alt="Recipe photo"
+                  onClick={() => setZoomPhoto(true)}
+                  className="w-full max-h-32 object-cover cursor-pointer"
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setPhotoCollapsed(true)}
-                className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
+                className="absolute -top-2 -right-2 rounded-full bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 p-0.5 hover:bg-stone-200 dark:hover:bg-stone-600 transition-colors shadow-sm"
                 title="Collapse image"
               >
-                <ChevronUp className="w-4 h-4" />
+                <ChevronUp className="w-3.5 h-3.5" />
               </button>
             </div>
           )

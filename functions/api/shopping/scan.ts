@@ -37,7 +37,7 @@ async function logScanInteraction(kv: KVNamespace, entry: ScanLogEntry): Promise
 }
 
 // POST /api/shopping/scan - OCR handwritten shopping list from photo
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const startTime = Date.now();
 
   const configStart = Date.now();
@@ -128,13 +128,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const itemCount = result.items?.length ?? 0;
 
     console.log(`[Whisk] Scan config=${configMs}ms upload=${uploadProcessMs}ms vision=${visionMs}ms total=${totalMs}ms photo=${photoSizeKB}KB items=${itemCount}`);
-    logScanInteraction(env.WHISK_KV, {
+    waitUntil(logScanInteraction(env.WHISK_KV, {
       ...baseLog,
       success: true,
       durationMs: totalMs,
       itemCount,
       timing: { configMs, uploadProcessMs, visionMs },
-    }).catch(() => {});
+    }));
 
     return new Response(
       JSON.stringify(result),
@@ -144,13 +144,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const totalMs = Date.now() - startTime;
     const errMsg = err instanceof Error ? err.message : "Failed to scan list";
     console.error(`[Whisk] Scan error (${fnConfig.provider}/${fnConfig.model}):`, errMsg);
-    logScanInteraction(env.WHISK_KV, {
+    waitUntil(logScanInteraction(env.WHISK_KV, {
       ...baseLog,
       success: false,
       durationMs: totalMs,
       error: errMsg.slice(0, 500),
       timing: { configMs, uploadProcessMs, visionMs: totalMs - configMs - uploadProcessMs },
-    }).catch(() => {});
+    }));
 
     return new Response(
       JSON.stringify({

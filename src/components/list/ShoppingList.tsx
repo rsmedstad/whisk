@@ -751,22 +751,24 @@ export function ShoppingList({
                         <ChevronDown className="w-3.5 h-3.5" />
                       </button>
                     ) : (
-                      <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
-                        <img
-                          src={listScanPreview}
-                          alt="Scanned list"
-                          onClick={() => setZoomPhoto(listScanPreview)}
-                          className={classNames(
-                            "w-full max-h-32 object-cover transition-opacity cursor-pointer",
-                            isListScanning && "animate-pulse"
-                          )}
-                        />
+                      <div className="relative">
+                        <div className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+                          <img
+                            src={listScanPreview}
+                            alt="Scanned list"
+                            onClick={() => setZoomPhoto(listScanPreview)}
+                            className={classNames(
+                              "w-full max-h-32 object-cover transition-opacity cursor-pointer",
+                              isListScanning && "animate-pulse"
+                            )}
+                          />
+                        </div>
                         <button
                           onClick={() => setScanImageCollapsed(true)}
-                          className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
+                          className="absolute -top-2 -right-2 rounded-full bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 p-0.5 hover:bg-stone-200 dark:hover:bg-stone-600 transition-colors shadow-sm"
                           title="Collapse image"
                         >
-                          <ChevronUp className="w-4 h-4" />
+                          <ChevronUp className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     )}
@@ -824,7 +826,14 @@ export function ShoppingList({
                           A-Z
                         </button>
                         <button
-                          onClick={() => { setScanPendingItems([]); setListScanResult(null); }}
+                          onClick={() => {
+                            setScanPendingItems([]);
+                            setListScanResult(null);
+                            setScanSortAZ(false);
+                            setScanWarnings([]);
+                            setListScanPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+                            setScanImageCollapsed(false);
+                          }}
                           className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
                         >
                           Clear all

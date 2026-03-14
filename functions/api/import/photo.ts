@@ -51,7 +51,7 @@ async function logScanInteraction(kv: KVNamespace, entry: ScanLogEntry): Promise
 }
 
 // POST /api/import/photo - Extract recipe from photo of handwritten/printed recipe
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const startTime = Date.now();
 
   const configStart = Date.now();
@@ -150,12 +150,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const result = JSON.parse(jsonStr) as PhotoRecipeResult;
 
     console.log(`[Whisk] RecipePhoto config=${configMs}ms upload=${uploadProcessMs}ms vision=${visionMs}ms total=${totalMs}ms photo=${photoSizeKB}KB ingredients=${result.ingredients?.length ?? 0} steps=${result.steps?.length ?? 0}`);
-    logScanInteraction(env.WHISK_KV, {
+    waitUntil(logScanInteraction(env.WHISK_KV, {
       ...baseLog,
       success: true,
       durationMs: totalMs,
       timing: { configMs, uploadProcessMs, visionMs },
-    }).catch(() => {});
+    }));
 
     // Check if the LLM indicated this isn't a recipe
     if (!result.title) {
@@ -176,13 +176,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const totalMs = Date.now() - startTime;
     const errMsg = err instanceof Error ? err.message : "Failed to extract recipe from photo";
     console.error(`[Whisk] RecipePhoto error (${fnConfig.provider}/${fnConfig.model}):`, errMsg);
-    logScanInteraction(env.WHISK_KV, {
+    waitUntil(logScanInteraction(env.WHISK_KV, {
       ...baseLog,
       success: false,
       durationMs: totalMs,
       error: errMsg.slice(0, 500),
       timing: { configMs, uploadProcessMs, visionMs: totalMs - configMs - uploadProcessMs },
-    }).catch(() => {});
+    }));
 
     return new Response(
       JSON.stringify({

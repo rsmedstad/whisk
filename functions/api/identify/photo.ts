@@ -36,7 +36,7 @@ async function logIdentifyInteraction(kv: KVNamespace, entry: ScanLogEntry): Pro
 }
 
 // POST /api/identify/photo - AI food identification from photo
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const startTime = Date.now();
 
   const configStart = Date.now();
@@ -129,12 +129,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const result = JSON.parse(jsonStr);
 
-    logIdentifyInteraction(env.WHISK_KV, {
+    waitUntil(logIdentifyInteraction(env.WHISK_KV, {
       ...baseLog,
       success: true,
       durationMs: totalMs,
       timing: { configMs, uploadProcessMs, visionMs },
-    }).catch(() => {});
+    }));
 
     return new Response(
       JSON.stringify(result),
@@ -144,13 +144,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const totalMs = Date.now() - startTime;
     const errMsg = err instanceof Error ? err.message : "Failed to identify food";
 
-    logIdentifyInteraction(env.WHISK_KV, {
+    waitUntil(logIdentifyInteraction(env.WHISK_KV, {
       ...baseLog,
       success: false,
       durationMs: totalMs,
       error: errMsg.slice(0, 500),
       timing: { configMs, uploadProcessMs, visionMs: totalMs - configMs - uploadProcessMs },
-    }).catch(() => {});
+    }));
 
     return new Response(
       JSON.stringify({
