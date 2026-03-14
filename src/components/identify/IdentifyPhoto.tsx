@@ -19,6 +19,9 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
     title: string;
     confidence: string;
     ingredients: string[];
+    description?: string;
+    cuisine?: string;
+    tags?: string[];
   } | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +50,7 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
       });
 
       if (!res.ok) throw new Error("Identification failed");
-      const data = (await res.json()) as { title: string; confidence: string; ingredients: string[] };
+      const data = (await res.json()) as { title: string; confidence: string; ingredients: string[]; description?: string; cuisine?: string; tags?: string[] };
       setResult(data);
     } catch {
       setResult({
@@ -62,11 +65,15 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
 
   const handleSaveAsRecipe = () => {
     if (!result) return;
-    // Navigate to recipe form with pre-filled data
+    // Navigate to recipe form with pre-filled data including tags
     const params = new URLSearchParams({
       title: result.title,
       ingredients: result.ingredients.join(","),
     });
+    if (result.description) params.set("description", result.description);
+    if (result.cuisine) params.set("cuisine", result.cuisine);
+    if (result.tags?.length) params.set("tags", result.tags.join(","));
+    params.set("from", "identify");
     navigate(`/recipes/new?${params.toString()}`);
   };
 

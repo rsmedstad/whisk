@@ -10,7 +10,7 @@ import { TextArea } from "../ui/TextArea";
 import { TagChip } from "../ui/TagChip";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { parseTimerFromText } from "../../lib/utils";
-import { ChevronLeft, XMark, Plus, Camera, Sparkles, Link } from "../ui/Icon";
+import { ChevronLeft, ChevronDown, ChevronUp, XMark, Plus, Camera, Sparkles, Link } from "../ui/Icon";
 
 interface RecipeFormProps {
   allTags: string[];
@@ -67,6 +67,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const [photoImportStep, setPhotoImportStep] = useState("");
   const [photoWarnings, setPhotoWarnings] = useState<string[]>([]);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoCollapsed, setPhotoCollapsed] = useState(false);
   const [zoomPhoto, setZoomPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -210,6 +211,39 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         // Silent fail — user can still manually import or fill in
       }
     })();
+  }, [searchParams, isEditing]);
+
+  // Pre-fill from ?from=identify params (Identify Photo → Save as Recipe)
+  useEffect(() => {
+    if (searchParams.get("from") !== "identify" || isEditing || importTriggered.current) return;
+    importTriggered.current = true;
+
+    const paramTitle = searchParams.get("title")?.trim();
+    const paramIngredients = searchParams.get("ingredients")?.trim();
+    const paramDescription = searchParams.get("description")?.trim();
+    const paramCuisine = searchParams.get("cuisine")?.trim();
+    const paramTags = searchParams.get("tags")?.trim();
+
+    if (paramTitle) setTitle(paramTitle);
+    if (paramDescription) setDescription(paramDescription);
+    if (paramCuisine) setCuisine(paramCuisine);
+    if (paramIngredients) {
+      setIngredients(
+        paramIngredients.split(",").map((name) => ({ ...EMPTY_INGREDIENT, name: name.trim() }))
+      );
+    }
+    if (paramTags) {
+      const tagList = paramTags.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+      setTags((prev) => [...new Set([...prev, ...tagList])]);
+    }
+
+    // Also request AI auto-tags for richer tagging (adds difficulty, cuisine type, diet, etc.)
+    if (paramTitle) {
+      const ings = paramIngredients
+        ? paramIngredients.split(",").map((name) => ({ ...EMPTY_INGREDIENT, name: name.trim() }))
+        : [];
+      fetchAutoTags(paramTitle, paramDescription ?? "", ings);
+    }
   }, [searchParams, isEditing]);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -650,24 +684,36 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       {/* ── Manual Form ── */}
       {showManualForm && (
       <form onSubmit={handleSubmit} className="px-4 py-4 space-y-6">
-        {/* Photo preview (persistent until dismissed) */}
+        {/* Photo preview (collapsible reference image) */}
         {photoPreview && (
-          <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
-            <img
-              src={photoPreview}
-              alt="Recipe photo"
-              onClick={() => setZoomPhoto(true)}
-              className="w-full max-h-32 object-cover cursor-pointer"
-            />
+          photoCollapsed ? (
             <button
               type="button"
-              onClick={() => { setPhotoPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; }); }}
-              className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
-              title="Close preview"
+              onClick={() => setPhotoCollapsed(false)}
+              className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
             >
-              <XMark className="w-4 h-4" />
+              <Camera className="w-3.5 h-3.5" />
+              <span>Show recipe photo</span>
+              <ChevronDown className="w-3.5 h-3.5" />
             </button>
-          </div>
+          ) : (
+            <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+              <img
+                src={photoPreview}
+                alt="Recipe photo"
+                onClick={() => setZoomPhoto(true)}
+                className="w-full max-h-32 object-cover cursor-pointer"
+              />
+              <button
+                type="button"
+                onClick={() => setPhotoCollapsed(true)}
+                className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
+                title="Collapse image"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            </div>
+          )
         )}
         {/* Photo import warnings */}
         {photoWarnings.length > 0 && (
