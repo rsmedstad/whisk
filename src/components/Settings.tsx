@@ -800,27 +800,61 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                         : "Recipes stay in the feed permanently until manually removed."}
                     </p>
                     {discoverConfig.expirationEnabled && (
-                      <div className="flex gap-2 flex-wrap">
-                        {([
-                          { value: 3, label: "3 days" },
-                          { value: 5, label: "5 days" },
-                          { value: 7, label: "1 week" },
-                          { value: 14, label: "2 weeks" },
-                        ] as const).map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              const updated = { ...discoverConfig, itemLifetimeDays: opt.value };
-                              setDiscoverConfig(updated);
-                              setDiscoverConfigDirty(true);
-                            }}
-                            className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
-                              discoverConfig.itemLifetimeDays === opt.value ? activeClass : inactiveClass
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        <div className="flex gap-2 flex-wrap">
+                          {([
+                            { value: 3, label: "3 days" },
+                            { value: 5, label: "5 days" },
+                            { value: 7, label: "1 week" },
+                            { value: 14, label: "2 weeks" },
+                          ] as const).map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => {
+                                const updated = { ...discoverConfig, itemLifetimeDays: opt.value };
+                                setDiscoverConfig(updated);
+                                setDiscoverConfigDirty(true);
+                              }}
+                              className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
+                                discoverConfig.itemLifetimeDays === opt.value ? activeClass : inactiveClass
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="text-xs text-stone-500 dark:text-stone-400 mb-1.5">
+                            Restore expired recipes
+                          </p>
+                          <div className="flex gap-2 flex-wrap">
+                            {([
+                              { range: "30", label: "Past month" },
+                              { range: "90", label: "Past 3 months" },
+                              { range: "365", label: "Past year" },
+                              { range: "all", label: "All" },
+                            ] as const).map((opt) => (
+                              <button
+                                key={opt.range}
+                                onClick={async () => {
+                                  try {
+                                    const res = await api.post<{ restored: number }>(`/discover/feed/restore?range=${opt.range}`, {});
+                                    if (res && res.restored > 0) {
+                                      alert(`Restored ${res.restored} recipe${res.restored === 1 ? "" : "s"}. Refresh your Discover feed to see them.`);
+                                    } else {
+                                      alert("No expired recipes found in that range.");
+                                    }
+                                  } catch {
+                                    alert("Failed to restore recipes.");
+                                  }
+                                }}
+                                className={`px-3 py-1.5 rounded-[var(--wk-radius-btn)] text-xs font-medium border ${inactiveClass}`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
