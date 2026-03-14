@@ -1,16 +1,37 @@
 # Whisk
 
-A personal recipe manager that works like a native app on your phone. Manage recipes, plan meals, build shopping lists, and use AI to suggest recipes, identify dishes from photos, and scan handwritten lists.
+A personal recipe manager that works like a native app on your phone. Manage recipes, plan meals, build shopping lists, and use AI to discover new dishes — all from a fast, offline-capable PWA you fully own and control.
 
-Whisk is free to host on Cloudflare's free tier. No coding required to set up.
+Free to host on Cloudflare's free tier. No coding required.
 
-### Self-Hosting
+## Features
 
-Whisk is fully self-hostable — no code changes needed. Fork the repository, follow the setup guide below, and deploy to your own Cloudflare Pages project. Your app runs at your own URL (e.g. `your-project.pages.dev`), with your own data, completely independent. All API calls use relative paths, so the app works on any domain automatically.
+- **Recipe Management** — Add manually, import from URL, scan from photos, or paste from anywhere. Full-text search, tags, favorites, and category browsing.
+- **Meal Planning** — Weekly calendar with configurable meal slots. Quick-fill with smart suggestions or plan conversationally via the AI assistant.
+- **Shopping Lists** — Auto-generated from meal plans or built manually. Scan handwritten lists with your camera. Categorized by aisle.
+- **AI Assistant** — Ask for recipe suggestions, substitutions, cooking tips, or meal planning help. Streams responses in real time with recipe cards you can tap to save.
+- **Discover Feed** — Browse trending recipes from your configured sources. AI-tagged by cuisine, diet, and cook time with one-tap save to your book.
+- **Photo Recognition** — Snap a photo of a dish and AI identifies it, extracts ingredients, and creates a full recipe.
+- **Cook Mode** — Full-screen step-by-step view with wake lock, text-to-speech, and concurrent timers.
+- **Multi-User** — Share your recipe book with your household using a simple shared password.
+- **Offline-First** — Works without internet for cached data. Syncs in the background when connected.
+- **Seasonal Themes** — 11 accent palettes that auto-switch for holidays and seasons.
+
+## Tech Stack
+
+- **Frontend**: React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4
+- **Backend**: Cloudflare Pages Functions (serverless, file-based routing)
+- **Storage**: Cloudflare KV (recipes, lists, plans) + R2 (photos)
+- **AI**: Groq (recommended), Gemini, Cerebras, OpenAI, Anthropic, xAI (all optional)
+- **Search**: Cloudflare Vectorize + Workers AI (semantic recipe search)
 
 ---
 
-## What You'll Need
+## Self-Hosting Guide
+
+Whisk is fully self-hostable — no code changes needed. Fork the repository, follow the setup guide below, and deploy to your own Cloudflare Pages project. Your app runs at your own URL (e.g. `your-project.pages.dev`), with your own data, completely independent.
+
+### What You'll Need
 
 Before starting, grab a notepad (or open a notes app). You'll collect a few pieces of information during setup that you'll need at the end.
 
@@ -20,10 +41,6 @@ Before starting, grab a notepad (or open a notes app). You'll collect a few piec
 - About **15-20 minutes** for the initial setup
 
 No credit card is required for any of the above.
-
----
-
-## Setup Guide
 
 ### Step 1: Copy the Whisk Code to Your GitHub
 
@@ -278,13 +295,16 @@ GROQ_API_KEY=your-key-here
 
 ---
 
-## Tech Stack
+## Support
 
-- **Frontend**: React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4
-- **Backend**: Cloudflare Pages Functions (serverless, file-based routing)
-- **Storage**: Cloudflare KV (recipes, lists, plans) + R2 (photos)
-- **AI**: Groq (recommended), Gemini, Cerebras, OpenAI, Anthropic, xAI (all optional)
+If you find Whisk useful, consider making a donation to the [American Diabetes Association](https://diabetes.org/ways-to-contribute). This project is dedicated to the memory of a loved one.
+
+## Contributing
+
+Contributions are welcome! Please open an issue to discuss significant changes before submitting a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+You are free to self-host, modify, and share Whisk. If you deploy a modified version as a network service, you must make your source code available under the same license.
