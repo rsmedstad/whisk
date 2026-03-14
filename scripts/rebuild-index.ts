@@ -1,15 +1,9 @@
 // Rebuild the recipes:index from all recipe:* KV entries
-const CF_ACCOUNT_ID = "1d6a394479cb4f03320a4aba405c831e";
-const KV_NS = "9961b213d1114876af09f83f3884aeb9";
+// Usage: CF_ACCOUNT_ID=your-id bun scripts/rebuild-index.ts
 
-const configPath = `${process.env.APPDATA}/xdg.config/.wrangler/config/default.toml`;
-const config = await Bun.file(configPath).text();
-const tokenMatch = config.match(/oauth_token\s*=\s*"([^"]+)"/);
-if (!tokenMatch?.[1]) { console.error("No OAuth token found"); process.exit(1); }
-const token = tokenMatch[1];
+import { getKVClient } from "./lib/cloudflare";
 
-const base = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${KV_NS}`;
-const headers = { Authorization: `Bearer ${token}` };
+const { baseUrl: base, headers } = await getKVClient();
 
 // List all recipe keys
 const listRes = await fetch(`${base}/keys?prefix=recipe:&limit=1000`, { headers });

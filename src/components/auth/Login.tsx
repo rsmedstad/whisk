@@ -185,7 +185,7 @@ export function Login({
           <Input
             label="Your Name"
             type="text"
-            placeholder="e.g. Ryan"
+            placeholder="e.g. Alex"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus

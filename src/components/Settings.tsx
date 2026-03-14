@@ -963,7 +963,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     label="Display Name"
                     value={displayName}
                     onChange={(e) => handleNameChange(e.target.value)}
-                    placeholder="Ryan"
+                    placeholder="Your name"
                   />
                   <div>
                     <label className="text-sm font-medium dark:text-stone-200 block mb-2">

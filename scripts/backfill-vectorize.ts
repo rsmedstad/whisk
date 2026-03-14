@@ -1,20 +1,12 @@
-// One-time script to embed all existing recipes into the Vectorize index.
-// Run with: bun scripts/backfill-vectorize.ts
+// Embed all existing recipes into the Vectorize index.
+// Usage: CF_ACCOUNT_ID=your-id bun scripts/backfill-vectorize.ts
 
-const CF_ACCOUNT_ID = "1d6a394479cb4f03320a4aba405c831e";
-const KV_NS = "9961b213d1114876af09f83f3884aeb9";
+import { getKVClient } from "./lib/cloudflare";
+
 const VECTORIZE_INDEX = "whisk-recipes";
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
 
-// Read wrangler OAuth token
-const configPath = `${process.env.APPDATA}/xdg.config/.wrangler/config/default.toml`;
-const config = await Bun.file(configPath).text();
-const tokenMatch = config.match(/oauth_token\s*=\s*"([^"]+)"/);
-if (!tokenMatch?.[1]) { console.error("No OAuth token found"); process.exit(1); }
-const token = tokenMatch[1];
-
-const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-const kvBase = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${KV_NS}`;
+const { baseUrl: kvBase, headers, accountId: CF_ACCOUNT_ID } = await getKVClient();
 
 // List all recipe keys
 console.log("Fetching recipe list...");

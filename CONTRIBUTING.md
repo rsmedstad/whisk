@@ -1,20 +1,20 @@
 # Contributing to Whisk
 
-Thanks for your interest in contributing! Whisk is an open-source recipe manager and we welcome contributions from the community.
+Thanks for your interest! Whisk is a personal project that I've open-sourced for others to self-host and learn from. While I'm not actively seeking feature contributions, bug reports and issues are always welcome.
 
-## Getting Started
+## Reporting Issues
 
-1. Fork the repository
-2. Clone your fork locally
-3. Install dependencies: `bun install`
-4. Create a `.dev.vars` file with your environment variables (see README)
-5. Start the dev server: `bun run dev`
+If you find a bug or have a suggestion, please [open an issue](https://github.com/rsmedstad/whisk/issues). Include steps to reproduce if applicable.
 
-## Before You Submit
+## Code Changes
 
-- **Open an issue first** for significant changes (new features, architecture changes, etc.). This lets us discuss the approach before you invest time in code.
-- **Bug fixes and small improvements** can go straight to a pull request.
-- Run `bun run build` to ensure TypeScript checks pass and the production build succeeds.
+If you'd like to submit a code change:
+
+1. **Open an issue first** to discuss the approach — this avoids wasted effort on changes that may not align with the project's direction.
+2. Fork the repository and create a feature branch from `main`.
+3. Follow the code conventions below.
+4. Run `bun run build` to ensure TypeScript checks pass.
+5. Submit a pull request with a clear description.
 
 ## Code Conventions
 
@@ -25,19 +25,12 @@ Thanks for your interest in contributing! Whisk is an open-source recipe manager
 - **Function components + hooks** — no class components.
 - **Cloudflare Pages Functions** for API routes — file-based routing in `functions/api/`.
 
-## What We're Not Looking For
+## Out of Scope
 
 - Adding CSS frameworks alongside Tailwind (Bootstrap, Material UI, etc.)
 - State management libraries (Redux, Zustand, etc.) — hooks + localStorage is the pattern
 - Server-side rendering — Whisk is a client-side SPA
 - Database clients — all data goes through Cloudflare KV/R2 bindings
-
-## Pull Request Process
-
-1. Create a feature branch from `main`
-2. Make your changes
-3. Ensure `bun run build` passes
-4. Submit a pull request with a clear description of the change and its motivation
 
 ## License
 

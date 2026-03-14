@@ -11,7 +11,7 @@
  * and updates the API with the results.
  */
 
-const API_BASE = getArg("--api") ?? "https://whisk-15t.pages.dev";
+const API_BASE = getArg("--api") ?? "http://localhost:5173";
 const PASSWORD = getArg("--password") ?? "test123";
 const DRY_RUN = process.argv.includes("--dry-run");
 

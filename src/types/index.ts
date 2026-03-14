@@ -33,7 +33,7 @@ export interface Recipe {
   notes?: string;
 
   // Ratings (per-user, keyed by display name)
-  ratings?: Record<string, number>; // e.g. { "Ryan": 4, "Partner": 5 }
+  ratings?: Record<string, number>; // e.g. { "Alex": 4, "Sam": 5 }
 
   // Cooking history
   cookedCount?: number;

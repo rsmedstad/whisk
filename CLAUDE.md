@@ -3,7 +3,7 @@
 ## Project Overview
 
 Whisk is a personal recipe manager PWA deployed on Cloudflare Pages + Workers.
-Deployed at: `whisk-15t.pages.dev` | Repo: `rsmedstad/whisk` | Open-source (self-hostable)
+Repo: `rsmedstad/whisk` | Open-source (self-hostable)
 
 ## Tech Stack
 

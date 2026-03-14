@@ -17,7 +17,7 @@ function getArg(name: string): string | undefined {
 
 const hasFlag = (name: string): boolean => args.includes(`--${name}`);
 
-const BASE_URL = getArg("url") ?? "https://whisk-15t.pages.dev";
+const BASE_URL = getArg("url") ?? "http://localhost:5173";
 const VERBOSE = hasFlag("verbose");
 let AUTH_TOKEN = getArg("token") ?? process.env.WHISK_TOKEN;
 
