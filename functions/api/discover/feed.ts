@@ -474,7 +474,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const force = searchParams.get("force") === "true";
   const lifetimeDays = config.itemLifetimeDays;
   const refreshMs = config.refreshIntervalDays * 24 * 60 * 60 * 1000;
-  const MIN_FORCE_MS = 60 * 60 * 1000; // 1 hour minimum even on force
+  const MIN_FORCE_MS = 5 * 60 * 1000; // 5 minutes minimum even on force
 
   // Determine which sources to scrape
   const enabledSources = config.sources.filter((s) => s.enabled);
