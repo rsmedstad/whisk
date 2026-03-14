@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { PlannedMeal, MealSlot, RecipeIndexEntry, Ingredient } from "../../types";
 import { getWeekDates, formatDateShort, toDateString, classNames } from "../../lib/utils";
 import { getSeasonalContext } from "../../lib/seasonal";
-import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, Dice } from "../ui/Icon";
+import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, CalendarPlus, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, Dice } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
 const PANTRY_STAPLES = new Set([
@@ -299,6 +299,30 @@ export function MealPlan({
     return [...new Set(weekMeals.filter((m) => m.recipeId).map((m) => m.recipeId!))];
   }, [weekMeals]);
 
+  // Detect if all remaining slots this week (today onward) are filled
+  const isWeekFull = useMemo(() => {
+    const todayStr = toDateString(new Date());
+    for (const date of weekDates) {
+      if (toDateString(date) < todayStr) continue;
+      const meals = getMealsForDate(date);
+      for (const { slot } of mealSlots) {
+        if (!meals.some((m) => m.slot === slot)) return false;
+      }
+    }
+    return true;
+  }, [weekDates, getMealsForDate, mealSlots]);
+
+  // Detect if today's slots are all filled
+  const isTodayFull = useMemo(() => {
+    const todayDate = weekDates.find((d) => toDateString(d) === today);
+    if (!todayDate) return false; // today not in this week
+    const meals = getMealsForDate(todayDate);
+    return mealSlots.every(({ slot }) => meals.some((m) => m.slot === slot));
+  }, [weekDates, today, getMealsForDate, mealSlots]);
+
+  // Whether today is in the current viewed week
+  const todayInWeek = useMemo(() => weekDates.some((d) => toDateString(d) === today), [weekDates, today]);
+
   const handleGenerateShoppingList = async (essentialsOnly: boolean) => {
     if (!onGenerateShoppingList || linkedRecipeIds.length === 0) return;
 
@@ -378,6 +402,34 @@ export function MealPlan({
     return filled;
   }, [weekDates, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal]);
 
+  /** Fill empty slots for today only */
+  const handleAutoFillDay = useCallback(() => {
+    const todayDate = weekDates.find((d) => toDateString(d) === today);
+    if (!todayDate) return;
+
+    // Gather all recipe IDs already used this week
+    const usedRecipeIds = new Set<string>();
+    for (const date of weekDates) {
+      for (const meal of getMealsForDate(date)) {
+        if (meal.recipeId) usedRecipeIds.add(meal.recipeId);
+      }
+    }
+
+    const meals = getMealsForDate(todayDate);
+    for (const { slot } of mealSlots) {
+      if (meals.some((m) => m.slot === slot)) continue;
+      const candidates = recipeIndex
+        .filter((r) => !usedRecipeIds.has(r.id))
+        .map((r) => ({ recipe: r, score: recipeScore(r, slot, seasonalIngredients, seasonalTags) }))
+        .sort((a, b) => b.score - a.score);
+      const pick = weightedRandomPick(candidates);
+      if (pick) {
+        onAddMeal(todayDate, slot, pick.recipe.title, pick.recipe.id);
+        usedRecipeIds.add(pick.recipe.id);
+      }
+    }
+  }, [weekDates, today, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal]);
+
   const handleRerollDay = useCallback((date: Date) => {
     const meals = getMealsForDate(date);
     // Gather recipe IDs used elsewhere this week (exclude this day)
@@ -419,6 +471,12 @@ export function MealPlan({
       }
     }
   }, [weekDates, getMealsForDate, mealSlots, recipeIndex, seasonalIngredients, seasonalTags, onAddMeal, onRemoveMeal, onReplaceMealsForDate]);
+
+  /** Reroll all of today's meals */
+  const handleRerollToday = useCallback(() => {
+    const todayDate = weekDates.find((d) => toDateString(d) === today);
+    if (todayDate) handleRerollDay(todayDate);
+  }, [weekDates, today, handleRerollDay]);
 
   return (
     <div className="flex flex-col h-full">
@@ -691,9 +749,12 @@ export function MealPlan({
       <div className="flex-1 overflow-y-auto pb-24">
         {/* Plan / Quick fill action bar */}
         <div className="flex gap-2 px-4 pt-3 pb-3">
+          {/* Left button: Plan my week → Fill gaps → Shopping list (when week full) */}
           <button
             onClick={() => {
-              if (recipeIndex.length > 0) {
+              if (isWeekFull) {
+                navigate("/list");
+              } else if (recipeIndex.length > 0) {
                 handleAutoFillEmptySlots();
               } else {
                 navigate("/ask?q=" + encodeURIComponent("Plan my dinners for this week. Consider variety and what's in season."));
@@ -701,15 +762,56 @@ export function MealPlan({
             }}
             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
           >
-            <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-            {weekMeals.length > 0 ? "Fill gaps" : "Plan my week"}
+            {isWeekFull ? (
+              <>
+                <ShoppingCart className="w-3.5 h-3.5 text-orange-500" />
+                Shopping list
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                {weekMeals.length > 0 ? "Fill gaps" : "Plan my week"}
+              </>
+            )}
           </button>
+          {/* Right button: Plan my day → Reroll my day (when today full) */}
           <button
-            onClick={() => navigate("/list")}
+            onClick={() => {
+              if (!todayInWeek) {
+                // Viewing a different week — navigate to shopping list as fallback
+                navigate("/list");
+              } else if (isTodayFull) {
+                if (recipeIndex.length > 0) {
+                  handleRerollToday();
+                } else {
+                  navigate("/ask?q=" + encodeURIComponent("Suggest different meals for today. Consider variety and what's in season."));
+                }
+              } else {
+                if (recipeIndex.length > 0) {
+                  handleAutoFillDay();
+                } else {
+                  navigate("/ask?q=" + encodeURIComponent("Plan my meals for today. Consider variety and what's in season."));
+                }
+              }
+            }}
             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-3 py-2 text-xs font-medium text-stone-600 dark:text-stone-300 hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
           >
-            <ShoppingCart className="w-3.5 h-3.5 text-orange-500" />
-            Shopping list
+            {!todayInWeek ? (
+              <>
+                <ShoppingCart className="w-3.5 h-3.5 text-orange-500" />
+                Shopping list
+              </>
+            ) : isTodayFull ? (
+              <>
+                <Dice className="w-3.5 h-3.5 text-orange-500" />
+                Reroll my day
+              </>
+            ) : (
+              <>
+                <CalendarPlus className="w-3.5 h-3.5 text-orange-500" />
+                Plan my day
+              </>
+            )}
           </button>
         </div>
 
