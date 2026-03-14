@@ -212,6 +212,39 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
     })();
   }, [searchParams, isEditing]);
 
+  // Pre-fill from ?from=identify params (Identify Photo → Save as Recipe)
+  useEffect(() => {
+    if (searchParams.get("from") !== "identify" || isEditing || importTriggered.current) return;
+    importTriggered.current = true;
+
+    const paramTitle = searchParams.get("title")?.trim();
+    const paramIngredients = searchParams.get("ingredients")?.trim();
+    const paramDescription = searchParams.get("description")?.trim();
+    const paramCuisine = searchParams.get("cuisine")?.trim();
+    const paramTags = searchParams.get("tags")?.trim();
+
+    if (paramTitle) setTitle(paramTitle);
+    if (paramDescription) setDescription(paramDescription);
+    if (paramCuisine) setCuisine(paramCuisine);
+    if (paramIngredients) {
+      setIngredients(
+        paramIngredients.split(",").map((name) => ({ ...EMPTY_INGREDIENT, name: name.trim() }))
+      );
+    }
+    if (paramTags) {
+      const tagList = paramTags.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+      setTags((prev) => [...new Set([...prev, ...tagList])]);
+    }
+
+    // Also request AI auto-tags for richer tagging (adds difficulty, cuisine type, diet, etc.)
+    if (paramTitle) {
+      const ings = paramIngredients
+        ? paramIngredients.split(",").map((name) => ({ ...EMPTY_INGREDIENT, name: name.trim() }))
+        : [];
+      fetchAutoTags(paramTitle, paramDescription ?? "", ings);
+    }
+  }, [searchParams, isEditing]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
