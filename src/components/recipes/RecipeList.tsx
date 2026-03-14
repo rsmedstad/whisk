@@ -67,6 +67,24 @@ export function RecipeList({
       el.scrollTop = parseInt(pos, 10);
       sessionStorage.removeItem("whisk_recipe_scroll");
     }
+    // Restore horizontal carousel scroll positions
+    const carouselJson = sessionStorage.getItem("whisk_recipe_carousel");
+    if (el && carouselJson) {
+      try {
+        const positions = JSON.parse(carouselJson) as Record<string, number>;
+        // Use requestAnimationFrame to ensure carousels are rendered
+        requestAnimationFrame(() => {
+          const carousels = el.querySelectorAll<HTMLDivElement>("[data-carousel]");
+          carousels.forEach((carousel) => {
+            const key = carousel.dataset.carousel;
+            if (key && positions[key]) {
+              carousel.scrollLeft = positions[key];
+            }
+          });
+        });
+      } catch { /* ignore */ }
+      sessionStorage.removeItem("whisk_recipe_carousel");
+    }
   }, [recipes]);
 
   const filtered = useMemo(
@@ -163,6 +181,18 @@ export function RecipeList({
   const goToRecipe = (id: string) => {
     if (scrollRef.current) {
       sessionStorage.setItem("whisk_recipe_scroll", String(scrollRef.current.scrollTop));
+    }
+    // Save horizontal carousel scroll positions per category
+    const carousels = scrollRef.current?.querySelectorAll<HTMLDivElement>("[data-carousel]");
+    if (carousels && carousels.length > 0) {
+      const positions: Record<string, number> = {};
+      carousels.forEach((el) => {
+        const key = el.dataset.carousel;
+        if (key && el.scrollLeft > 0) positions[key] = el.scrollLeft;
+      });
+      if (Object.keys(positions).length > 0) {
+        sessionStorage.setItem("whisk_recipe_carousel", JSON.stringify(positions));
+      }
     }
     navigate(`/recipes/${id}`);
   };
@@ -526,7 +556,7 @@ export function RecipeList({
                   </span>
                 </h2>
                 {recipeLayout === "horizontal" && !search && selectedTags.length === 0 && !favoritesOnly ? (
-                  <CarouselRow>
+                  <CarouselRow category={group.label}>
                     {group.recipes.map((recipe) => (
                       <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
                         <RecipeCard
@@ -574,10 +604,10 @@ export function RecipeList({
   );
 }
 
-function CarouselRow({ children }: { children: React.ReactNode }) {
+function CarouselRow({ children, category }: { children: React.ReactNode; category?: string }) {
   return (
     <div className="overflow-hidden">
-      <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 scroll-pl-4 pl-4">
+      <div data-carousel={category} className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 scroll-pl-4 pl-4">
         {children}
       </div>
     </div>
