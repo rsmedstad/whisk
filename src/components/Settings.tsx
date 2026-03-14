@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry } from "../types";
+import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry, DiscoverConfig, DiscoverSourceConfig } from "../types";
 import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
@@ -157,16 +157,17 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [exportExcludeTags, setExportExcludeTags] = useState<string[]>([]);
   const [exportIncludeNotes, setExportIncludeNotes] = useState(false);
-  const [feedRefreshDays, setFeedRefreshDays] = useState(() =>
-    localStorage.getItem("whisk_feed_refresh_days") ?? "2"
-  );
-  const [feedItemLifetime, setFeedItemLifetime] = useState(() =>
-    localStorage.getItem("whisk_feed_item_lifetime") ?? "7"
-  );
-  const [discoverSources, setDiscoverSources] = useState<Record<string, boolean>>(() => {
-    const saved = localStorage.getItem("whisk_discover_sources");
-    return saved ? JSON.parse(saved) : { nyt: true, allrecipes: true, seriouseats: true };
-  });
+  const [discoverConfig, setDiscoverConfig] = useState<DiscoverConfig | null>(null);
+  const [discoverConfigDirty, setDiscoverConfigDirty] = useState(false);
+  const [discoverConfigSaving, setDiscoverConfigSaving] = useState(false);
+  const [discoverConfigError, setDiscoverConfigError] = useState<string | null>(null);
+
+  // Load discover config from server
+  useEffect(() => {
+    api.get<DiscoverConfig>("/discover/config").then((config) => {
+      if (config) setDiscoverConfig(config);
+    }).catch(() => {});
+  }, []);
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [isRetagging, setIsRetagging] = useState(false);
   const [retagResult, setRetagResult] = useState<string | null>(null);
@@ -656,95 +657,205 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 Discover Feed
               </h2>
               <Card>
+                {discoverConfig ? (
                 <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                      Auto-refresh interval
-                    </label>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-                      How often the Discover feed checks for new trending recipes. Uses Cloudflare Browser Rendering credits.
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      {([
-                        { value: "1", label: "1 day" },
-                        { value: "2", label: "2 days" },
-                        { value: "3", label: "3 days" },
-                        { value: "7", label: "Weekly" },
-                      ] as const).map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => {
-                            localStorage.setItem("whisk_feed_refresh_days", opt.value);
-                            setFeedRefreshDays(opt.value);
-                          }}
-                          className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
-                            feedRefreshDays === opt.value ? activeClass : inactiveClass
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
-                      Recipe visibility
-                    </label>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-                      How long discover recipes stay visible before expiring. Expired recipes are removed from the feed but saved recipes are permanent.
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      {([
-                        { value: "3", label: "3 days" },
-                        { value: "5", label: "5 days" },
-                        { value: "7", label: "1 week" },
-                        { value: "14", label: "2 weeks" },
-                      ] as const).map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => {
-                            localStorage.setItem("whisk_feed_item_lifetime", opt.value);
-                            setFeedItemLifetime(opt.value);
-                          }}
-                          className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
-                            feedItemLifetime === opt.value ? activeClass : inactiveClass
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  {/* Sources */}
                   <div>
                     <label className="text-sm font-medium dark:text-stone-200 block mb-2">
                       Sources
                     </label>
                     <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-                      Choose which recipe sites appear in your Discover feed. Changes take effect on next refresh.
+                      Recipe sites to browse in your Discover feed. Add any recipe site homepage URL.
                     </p>
-                    <div className="space-y-2">
-                      {([
-                        { key: "nyt", label: "NYT Cooking" },
-                        { key: "allrecipes", label: "AllRecipes" },
-                        { key: "seriouseats", label: "Serious Eats" },
-                      ] as const).map((src) => (
-                        <label key={src.key} className="flex items-center gap-3 cursor-pointer">
+                    <div className="space-y-3">
+                      {discoverConfig.sources.map((src, idx) => (
+                        <div key={src.id} className="flex items-start gap-2">
                           <input
                             type="checkbox"
-                            checked={discoverSources[src.key] !== false}
+                            checked={src.enabled}
                             onChange={(e) => {
-                              const updated = { ...discoverSources, [src.key]: e.target.checked };
-                              setDiscoverSources(updated);
-                              localStorage.setItem("whisk_discover_sources", JSON.stringify(updated));
+                              const updated = { ...discoverConfig, sources: discoverConfig.sources.map((s, i) => i === idx ? { ...s, enabled: e.target.checked } : s) };
+                              setDiscoverConfig(updated);
+                              setDiscoverConfigDirty(true);
                             }}
-                            className="w-4 h-4 rounded border-stone-300 dark:border-stone-600 text-orange-500 focus:ring-orange-500 dark:bg-stone-700"
+                            className="w-4 h-4 mt-2 rounded border-stone-300 dark:border-stone-600 text-orange-500 focus:ring-orange-500 dark:bg-stone-700"
                           />
-                          <span className="text-sm dark:text-stone-200">{src.label}</span>
-                        </label>
+                          <div className="flex-1 space-y-1">
+                            <input
+                              type="text"
+                              value={src.label}
+                              onChange={(e) => {
+                                const updated = { ...discoverConfig, sources: discoverConfig.sources.map((s, i) => i === idx ? { ...s, label: e.target.value } : s) };
+                                setDiscoverConfig(updated);
+                                setDiscoverConfigDirty(true);
+                              }}
+                              placeholder="Site name"
+                              className="w-full text-sm font-medium px-2 py-1 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-600 bg-white dark:bg-stone-700 dark:text-stone-100"
+                            />
+                            <input
+                              type="url"
+                              value={src.url}
+                              onChange={(e) => {
+                                const updated = { ...discoverConfig, sources: discoverConfig.sources.map((s, i) => i === idx ? { ...s, url: e.target.value } : s) };
+                                setDiscoverConfig(updated);
+                                setDiscoverConfigDirty(true);
+                              }}
+                              placeholder="https://example.com/"
+                              className="w-full text-xs px-2 py-1 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-600 bg-white dark:bg-stone-700 dark:text-stone-300"
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              const updated = { ...discoverConfig, sources: discoverConfig.sources.filter((_, i) => i !== idx) };
+                              setDiscoverConfig(updated);
+                              setDiscoverConfigDirty(true);
+                            }}
+                            className="p-1 mt-1 text-stone-400 hover:text-red-500"
+                            title="Remove source"
+                          >
+                            <XMark className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const newId = `source-${Date.now()}`;
+                        const updated = { ...discoverConfig, sources: [...discoverConfig.sources, { id: newId, label: "", url: "", enabled: true }] };
+                        setDiscoverConfig(updated);
+                        setDiscoverConfigDirty(true);
+                      }}
+                      className="mt-3 text-sm text-orange-600 dark:text-orange-400 font-medium"
+                    >
+                      + Add source
+                    </button>
+                  </div>
+
+                  {/* Auto-refresh interval */}
+                  <div>
+                    <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                      Auto-refresh interval
+                    </label>
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                      How often the Discover feed checks for new trending recipes.
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {([
+                        { value: 1, label: "1 day" },
+                        { value: 2, label: "2 days" },
+                        { value: 3, label: "3 days" },
+                        { value: 7, label: "Weekly" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            const updated = { ...discoverConfig, refreshIntervalDays: opt.value };
+                            setDiscoverConfig(updated);
+                            setDiscoverConfigDirty(true);
+                          }}
+                          className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
+                            discoverConfig.refreshIntervalDays === opt.value ? activeClass : inactiveClass
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
                       ))}
                     </div>
                   </div>
+
+                  {/* Expiration toggle + lifetime */}
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        checked={discoverConfig.expirationEnabled}
+                        onChange={(e) => {
+                          const updated = { ...discoverConfig, expirationEnabled: e.target.checked };
+                          setDiscoverConfig(updated);
+                          setDiscoverConfigDirty(true);
+                        }}
+                        className="w-4 h-4 rounded border-stone-300 dark:border-stone-600 text-orange-500 focus:ring-orange-500 dark:bg-stone-700"
+                      />
+                      <span className="text-sm font-medium dark:text-stone-200">Auto-expire recipes</span>
+                    </label>
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
+                      {discoverConfig.expirationEnabled
+                        ? "Older discover recipes are automatically hidden. Saved recipes are never affected."
+                        : "Recipes stay in the feed permanently until manually removed."}
+                    </p>
+                    {discoverConfig.expirationEnabled && (
+                      <div className="flex gap-2 flex-wrap">
+                        {([
+                          { value: 3, label: "3 days" },
+                          { value: 5, label: "5 days" },
+                          { value: 7, label: "1 week" },
+                          { value: 14, label: "2 weeks" },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              const updated = { ...discoverConfig, itemLifetimeDays: opt.value };
+                              setDiscoverConfig(updated);
+                              setDiscoverConfigDirty(true);
+                            }}
+                            className={`px-3 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border ${
+                              discoverConfig.itemLifetimeDays === opt.value ? activeClass : inactiveClass
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Save button */}
+                  {discoverConfigDirty && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={async () => {
+                          setDiscoverConfigSaving(true);
+                          setDiscoverConfigError(null);
+                          try {
+                            // Auto-generate IDs for new sources from label
+                            const cleaned = {
+                              ...discoverConfig,
+                              sources: discoverConfig.sources
+                                .filter((s) => s.label.trim() && s.url.trim())
+                                .map((s) => ({
+                                  ...s,
+                                  id: s.id.startsWith("source-") ? s.label.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || s.id : s.id,
+                                })),
+                            };
+                            const result = await api.put<DiscoverConfig>("/discover/config", cleaned);
+                            if (result) {
+                              setDiscoverConfig(result);
+                              setDiscoverConfigDirty(false);
+                              // Clear old localStorage keys (migrated to server config)
+                              localStorage.removeItem("whisk_feed_refresh_days");
+                              localStorage.removeItem("whisk_feed_item_lifetime");
+                              localStorage.removeItem("whisk_discover_sources");
+                            }
+                          } catch {
+                            setDiscoverConfigError("Failed to save");
+                          } finally {
+                            setDiscoverConfigSaving(false);
+                          }
+                        }}
+                        disabled={discoverConfigSaving}
+                        className="text-sm"
+                      >
+                        {discoverConfigSaving ? "Saving..." : "Save Changes"}
+                      </Button>
+                      {discoverConfigError && (
+                        <span className="text-xs text-red-500">{discoverConfigError}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
+                ) : (
+                  <p className="text-sm text-stone-400 dark:text-stone-500">Loading...</p>
+                )}
               </Card>
             </section>
           </>

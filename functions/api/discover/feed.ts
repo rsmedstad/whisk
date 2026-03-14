@@ -1,4 +1,4 @@
-import type { Env, DiscoverCategory, DiscoverSource } from "../../../src/types";
+import type { Env, DiscoverCategory, DiscoverSource, DiscoverConfig, DiscoverSourceConfig } from "../../../src/types";
 import {
   loadAIConfig,
   resolveConfig,
@@ -7,9 +7,27 @@ import {
 
 const KV_KEY = "discover_feed";
 const ARCHIVE_KEY = "discover_archive";
+const CONFIG_KEY = "discover_config";
 const MIN_REFRESH_MS = 2 * 24 * 60 * 60 * 1000; // 2 days between refreshes
 const DEFAULT_ITEM_LIFETIME_DAYS = 7; // how long a discover item stays visible
 const ARCHIVE_RETENTION_DAYS = 30; // keep expired items in DB for this long before purging
+
+/** Default config — matches the legacy hardcoded sources */
+const DEFAULT_CONFIG: DiscoverConfig = {
+  sources: [
+    { id: "nyt", label: "NYT Cooking", url: "https://cooking.nytimes.com/", enabled: true },
+    { id: "allrecipes", label: "AllRecipes", url: "https://www.allrecipes.com/", enabled: true },
+    { id: "seriouseats", label: "Serious Eats", url: "https://www.seriouseats.com/", enabled: true },
+  ],
+  expirationEnabled: true,
+  itemLifetimeDays: 7,
+  refreshIntervalDays: 2,
+};
+
+async function loadConfig(env: Env): Promise<DiscoverConfig> {
+  const config = await env.WHISK_KV.get<DiscoverConfig>(CONFIG_KEY, "json");
+  return config ?? DEFAULT_CONFIG;
+}
 
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
@@ -129,7 +147,7 @@ interface FeedItem {
 
 /** A feed item enriched with source, category, tags, and archive timestamp */
 interface ArchiveItem extends FeedItem {
-  source: DiscoverSource;
+  source: string; // source ID (legacy: "nyt" | "allrecipes" | "seriouseats", or user-configured slug)
   category: DiscoverCategory;
   addedAt: string;
   expiresAt?: string; // ISO date when this item leaves the discover feed
@@ -387,7 +405,11 @@ function keywordTagItem(item: ArchiveItem): string[] {
 // ── GET: return category-grouped feed from archive ──────
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+  const [archive, config] = await Promise.all([
+    env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json"),
+    loadConfig(env),
+  ]);
+
   if (!archive || archive.items.length === 0) {
     // Try legacy format for backward compat
     const legacy = await env.WHISK_KV.get<Feed>(KV_KEY, "json");
@@ -395,19 +417,21 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ lastRefreshed: null, categories: {} });
   }
 
-  // Client can pass ?lifetime=N to control how many days items stay visible
-  // Client can pass ?sources=nyt,allrecipes to filter by enabled sources
+  // Use config for lifetime, or client override via ?lifetime=N
   const { searchParams } = new URL(request.url);
-  const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || DEFAULT_ITEM_LIFETIME_DAYS;
+  const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || config.itemLifetimeDays;
   const sourcesParam = searchParams.get("sources");
-  const enabledSources = sourcesParam
-    ? new Set(sourcesParam.split(",").filter(Boolean) as DiscoverSource[])
-    : null; // null = show all
+  // Filter by enabled sources from config, or client override
+  const enabledSourceIds = sourcesParam
+    ? new Set(sourcesParam.split(",").filter(Boolean))
+    : new Set(config.sources.filter((s) => s.enabled).map((s) => s.id));
   const now = Date.now();
 
-  // Filter: only show items that haven't expired yet and match enabled sources
+  // Filter: only show items from enabled sources, and respect expiration setting
   const visibleItems = archive.items.filter((item) => {
-    if (enabledSources && item.source && !enabledSources.has(item.source)) return false;
+    if (item.source && !enabledSourceIds.has(item.source)) return false;
+    // When expiration is disabled, show all items regardless of age
+    if (!config.expirationEnabled) return true;
     const expiry = item.expiresAt
       ? new Date(item.expiresAt).getTime()
       : new Date(item.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000;
@@ -415,18 +439,21 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   });
 
   // Purge items past retention period from the archive in the background
-  const retentionCutoff = now - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-  const itemsBeforePurge = archive.items.length;
-  const retained = archive.items.filter((item) => {
-    const addedMs = new Date(item.addedAt).getTime();
-    return addedMs > retentionCutoff;
-  });
-  if (retained.length < itemsBeforePurge) {
-    // Fire-and-forget background purge
-    env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
-      lastRefreshed: archive.lastRefreshed,
-      items: retained,
-    }));
+  // (only when expiration is enabled)
+  if (config.expirationEnabled) {
+    const retentionCutoff = now - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const itemsBeforePurge = archive.items.length;
+    const retained = archive.items.filter((item) => {
+      const addedMs = new Date(item.addedAt).getTime();
+      return addedMs > retentionCutoff;
+    });
+    if (retained.length < itemsBeforePurge) {
+      // Fire-and-forget background purge
+      env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
+        lastRefreshed: archive.lastRefreshed,
+        items: retained,
+      }));
+    }
   }
 
   const filtered: Archive = { lastRefreshed: archive.lastRefreshed, items: visibleItems };
@@ -438,36 +465,58 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   brWarnings = []; // Reset warnings for this refresh cycle
-  const archive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+  const [archive, config] = await Promise.all([
+    env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json"),
+    loadConfig(env),
+  ]);
   const { searchParams } = new URL(request.url);
   const force = searchParams.get("force") === "true";
-  const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || DEFAULT_ITEM_LIFETIME_DAYS;
-  const sourcesParam = searchParams.get("sources");
-  const enabledSources = sourcesParam
-    ? new Set(sourcesParam.split(",").filter(Boolean) as DiscoverSource[])
-    : null; // null = scrape all
+  const lifetimeDays = config.itemLifetimeDays;
+  const refreshMs = config.refreshIntervalDays * 24 * 60 * 60 * 1000;
   const MIN_FORCE_MS = 60 * 60 * 1000; // 1 hour minimum even on force
 
-  // Rate limit: 2 days auto, 1 hour on manual force
+  // Determine which sources to scrape
+  const enabledSources = config.sources.filter((s) => s.enabled);
+
+  // Rate limit: configured interval auto, 1 hour on manual force
   if (archive?.lastRefreshed && archive.items.length > 10) {
     const elapsed = Date.now() - new Date(archive.lastRefreshed).getTime();
-    const limit = force ? MIN_FORCE_MS : MIN_REFRESH_MS;
+    const limit = force ? MIN_FORCE_MS : refreshMs;
     if (elapsed < limit) {
-      // Still filter by enabled sources even when rate-limited
-      const filtered = enabledSources
-        ? { ...archive, items: archive.items.filter((i) => !i.source || enabledSources.has(i.source)) }
-        : archive;
+      const enabledIds = new Set(enabledSources.map((s) => s.id));
+      const filtered = { ...archive, items: archive.items.filter((i) => !i.source || enabledIds.has(i.source)) };
       return Response.json(archiveToCategoryFeed(filtered));
     }
   }
 
-  // Scrape enabled sources in parallel — each handles its own errors
-  const scrapeAll = !enabledSources; // null means all enabled
-  const [nyt, allrecipes, seriouseats] = await Promise.all([
-    scrapeAll || enabledSources!.has("nyt") ? scrapeNYTCooking(env) : Promise.resolve([]),
-    scrapeAll || enabledSources!.has("allrecipes") ? scrapeAllRecipes(env) : Promise.resolve([]),
-    scrapeAll || enabledSources!.has("seriouseats") ? scrapeSeriousEats(env) : Promise.resolve([]),
-  ]);
+  // Map of legacy source IDs to their dedicated site-specific scrapers.
+  // These are optimized for sites with non-standard structures (Next.js RSC, Dotdash Meredith CMS).
+  // For all other sites, the generic scraper auto-detects the framework and applies enhanced parsing.
+  const SITE_PROFILES: Record<string, (env: Env) => Promise<FeedItem[]>> = {
+    nyt: scrapeNextJsSite,          // Next.js RSC framework (cooking.nytimes.com)
+    allrecipes: scrapeDotdashSite,  // Dotdash Meredith CMS (allrecipes.com)
+    seriouseats: scrapeSeriousEatsSite, // Dotdash Meredith CMS variant (seriouseats.com)
+  };
+
+  // Scrape all enabled sources in parallel — use site profiles for known sites, generic for others
+  const scrapeResults = await Promise.all(
+    enabledSources.map(async (src): Promise<{ sourceId: string; items: FeedItem[] }> => {
+      try {
+        const siteProfile = SITE_PROFILES[src.id];
+        if (siteProfile) {
+          // Use the dedicated site profile (optimized for this site's framework)
+          const items = await siteProfile(env);
+          return { sourceId: src.id, items };
+        }
+        // Generic scraper with auto-framework detection for user-configured sites
+        const items = await scrapeGenericSite(src, env);
+        return { sourceId: src.id, items };
+      } catch {
+        brWarnings.push(`Failed to scrape ${src.label}`);
+        return { sourceId: src.id, items: [] };
+      }
+    })
+  );
 
   // Merge new items into archive (dedup by URL + title similarity)
   const now = new Date().toISOString();
@@ -475,29 +524,26 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const existingTitles = (archive?.items ?? []).map((i) => i.title);
   const newItems: ArchiveItem[] = [];
 
-  const addItems = (items: FeedItem[], source: DiscoverSource) => {
+  for (const { sourceId, items } of scrapeResults) {
     for (const item of items) {
       const key = normalizeUrl(item.url);
       if (existingUrls.has(key)) continue;
-      // Also skip if title is very similar to an existing item
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
       existingUrls.add(key);
       existingTitles.push(item.title);
-      const expiresAt = new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString();
+      const expiresAt = config.expirationEnabled
+        ? new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
       newItems.push({
         ...item,
-        source,
+        source: sourceId,
         category: classifyRecipe(item.title, item.description),
         addedAt: now,
         expiresAt,
       });
     }
-  };
-
-  addItems(nyt, "nyt");
-  addItems(allrecipes, "allrecipes");
-  addItems(seriouseats, "seriouseats");
+  }
 
   // AI-tag new items (uses Groq for speed, falls back to keyword matching)
   if (newItems.length > 0) {
@@ -517,11 +563,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await batchEstimateTimes(missingTime, env);
   }
 
-  // Backfill expiresAt on existing items that don't have it
-  // Clean up any existing archive items that have person/profile images
+  // Clean up existing archive items
   const cleanedExisting = (archive?.items ?? []).map((item) => ({
     ...item,
-    expiresAt: item.expiresAt ?? new Date(new Date(item.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString(),
+    expiresAt: config.expirationEnabled
+      ? (item.expiresAt ?? new Date(new Date(item.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString())
+      : undefined,
     imageUrl: sanitizeImageUrl(item.imageUrl),
   }));
 
@@ -530,23 +577,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     items: [...cleanedExisting, ...newItems],
   };
 
-  // Also save legacy format for backward compat
-  const legacyFeed: Feed = {
-    lastRefreshed: now,
-    sources: {
-      nyt: nyt.length > 0 ? nyt : (archive?.items.filter((i) => i.source === "nyt") ?? []).slice(0, 30),
-      allrecipes: allrecipes.length > 0 ? allrecipes : (archive?.items.filter((i) => i.source === "allrecipes") ?? []).slice(0, 30),
-      seriouseats: seriouseats.length > 0 ? seriouseats : (archive?.items.filter((i) => i.source === "seriouseats") ?? []).slice(0, 30),
-    },
-  };
-
-  await Promise.all([
-    env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive)),
-    env.WHISK_KV.put(KV_KEY, JSON.stringify(legacyFeed)),
-  ]);
+  await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive));
 
   const feed = archiveToCategoryFeed(updatedArchive);
-  // Include any warnings from BR failures so the client can inform the user
   const warnings = [...new Set(brWarnings)];
   return Response.json(warnings.length > 0 ? { ...feed, warnings } : feed);
 };
@@ -700,11 +733,262 @@ function deduplicateByTitle(items: FeedItem[]): FeedItem[] {
   return result;
 }
 
-// ── NYT Cooking ─────────────────────────────────────────
-// NYT Cooking may use __NEXT_DATA__ (older Next.js) or RSC flight data
-// (newer Next.js with React Server Components). We try multiple strategies.
+// ── Framework detection ─────────────────────────────────
+// Auto-detect the CMS/framework powering a recipe site from its HTML.
+// This allows the generic scraper to apply enhanced extraction strategies.
 
-async function scrapeNYTCooking(env: Env): Promise<FeedItem[]> {
+type DetectedFramework = "nextjs" | "dotdash-meredith" | "generic";
+
+/** Known domain → framework hints. Skips detection for sites we've already profiled.
+ *  Users can add any site — unknown domains fall through to auto-detection. */
+const FRAMEWORK_HINTS: Record<string, DetectedFramework> = {
+  "cooking.nytimes.com": "nextjs",
+  "allrecipes.com": "dotdash-meredith",
+  "seriouseats.com": "dotdash-meredith",
+  "foodnetwork.com": "dotdash-meredith",
+  "simplyrecipes.com": "dotdash-meredith",
+  "thespruceeats.com": "dotdash-meredith",
+  "food.com": "dotdash-meredith",
+  "bhg.com": "dotdash-meredith",        // Better Homes & Gardens
+  "marthastewart.com": "dotdash-meredith",
+};
+
+function detectFramework(html: string, domain?: string): DetectedFramework {
+  // Check known domain hints first (instant, no HTML parsing needed)
+  if (domain) {
+    const hint = FRAMEWORK_HINTS[domain] ?? FRAMEWORK_HINTS[domain.replace(/^www\./, "")];
+    if (hint) return hint;
+  }
+  // Next.js: __NEXT_DATA__ or RSC flight data
+  if (
+    html.includes('id="__NEXT_DATA__"') ||
+    html.includes("self.__next_f.push")
+  ) {
+    return "nextjs";
+  }
+
+  // Dotdash Meredith CMS: /thmb/ image CDN + characteristic class names
+  // Used by AllRecipes, Serious Eats, Food Network, The Spruce Eats, Simply Recipes, etc.
+  if (
+    html.includes("/thmb/") &&
+    (html.includes("mntl-") || html.includes("dotdash") || html.includes("Dotdash"))
+  ) {
+    return "dotdash-meredith";
+  }
+
+  return "generic";
+}
+
+/** Extract recipes from Next.js __NEXT_DATA__ and RSC flight data (framework-level, works on any Next.js recipe site) */
+function extractNextJsData(html: string, domain: string): FeedItem[] {
+  const items: FeedItem[] = [];
+
+  // Strategy 1: __NEXT_DATA__ JSON blob (classic Next.js)
+  const nextDataMatch = html.match(
+    /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
+  );
+  if (nextDataMatch?.[1]) {
+    try {
+      const data = JSON.parse(nextDataMatch[1]);
+      findRecipesInJson(data, items, 0, domain);
+    } catch {
+      // Invalid JSON
+    }
+  }
+
+  // Strategy 2: RSC flight data (Next.js with React Server Components)
+  if (items.length === 0) {
+    const flightChunks: string[] = [];
+    const flightRegex = /self\.__next_f\.push\(\[[\d,]*"([^"]*)"\]\)/g;
+    let flightMatch;
+    while ((flightMatch = flightRegex.exec(html)) !== null) {
+      if (flightMatch[1]) {
+        flightChunks.push(flightMatch[1]);
+      }
+    }
+    if (flightChunks.length > 0) {
+      const combined = flightChunks.join("");
+      // Extract recipe URLs from flight data
+      const recipeUrlRegex = new RegExp(
+        `(?:${domain.replace(/\./g, "\\.")})?/recipes?/[a-z0-9/-]+`,
+        "gi"
+      );
+      const recipeUrls = new Set<string>();
+      let urlMatch;
+      while ((urlMatch = recipeUrlRegex.exec(combined)) !== null) {
+        const fullUrl = urlMatch[0]!.startsWith("http")
+          ? urlMatch[0]!
+          : `https://${domain}${urlMatch[0]}`;
+        recipeUrls.add(normalizeUrl(fullUrl));
+      }
+
+      // Try JSON fragments in flight data
+      const jsonFragRegex = /\{[^{}]*"(?:name|title|headline)"[^{}]*"(?:url|path|slug)"[^{}]*\}/g;
+      let fragMatch;
+      while ((fragMatch = jsonFragRegex.exec(combined)) !== null) {
+        try {
+          const obj = JSON.parse(fragMatch[0]) as Record<string, unknown>;
+          findRecipesInJson(obj, items, 0, domain);
+        } catch {
+          // Not valid JSON
+        }
+      }
+
+      // Fallback: create items from found URLs
+      if (items.length === 0 && recipeUrls.size > 0) {
+        for (const url of recipeUrls) {
+          const slugMatch = url.match(/\/(?:recipes?)\/(?:\d+-)?([a-z0-9-]+)/);
+          const slug = slugMatch?.[1];
+          if (slug) {
+            const title = slug
+              .replace(/-recipe.*$/, "")
+              .replace(/-/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+            items.push({ title, url });
+          }
+        }
+      }
+    }
+  }
+
+  return items;
+}
+
+/** Build image index from Dotdash Meredith /thmb/ CDN URLs (works for AllRecipes, Serious Eats, Food Network, etc.) */
+function buildDotdashImageIndex(html: string, domain: string): Map<string, string> {
+  const index = new Map<string, string>();
+  const imgRegex = /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]*\/thmb\/[^"]*)"/gi;
+  let m;
+  while ((m = imgRegex.exec(html)) !== null) {
+    const imgUrl = m[1]!;
+    if (isPersonImage(imgUrl)) continue;
+    const tagEnd = html.indexOf(">", m.index);
+    const tag = html.slice(m.index, tagEnd);
+    const altMatch = tag.match(/alt="([^"]+)"/i);
+    if (altMatch?.[1]) {
+      index.set(altMatch[1].toLowerCase().trim(), imgUrl);
+    }
+    const ctx = html.slice(Math.max(0, m.index - 1000), m.index + 1000);
+    const urlMatch = ctx.match(new RegExp(`href="(https?://(?:www\\.)?${domain.replace(/\./g, "\\.")}[^"]+)"`, "i"));
+    if (urlMatch?.[1]) {
+      index.set(normalizeUrl(urlMatch[1]), imgUrl);
+    }
+  }
+  // Also try <source> inside <picture> elements
+  const srcRegex = /<source[^>]+srcset="(https?:\/\/[^"]*\/thmb\/[^"\s]*)/gi;
+  while ((m = srcRegex.exec(html)) !== null) {
+    const imgUrl = m[1]!;
+    if (isPersonImage(imgUrl)) continue;
+    const ctx = html.slice(Math.max(0, m.index - 1000), m.index + 1000);
+    const urlMatch = ctx.match(new RegExp(`href="(https?://(?:www\\.)?${domain.replace(/\./g, "\\.")}[^"]+)"`, "i"));
+    if (urlMatch?.[1]) {
+      index.set(normalizeUrl(urlMatch[1]), imgUrl);
+    }
+  }
+  return index;
+}
+
+// ── Generic site scraper (for user-configured sources) ──
+// Auto-detects the site's framework and applies enhanced extraction strategies.
+// Falls back to JSON-LD → HTML link extraction → Open Graph for unknown frameworks.
+
+async function scrapeGenericSite(source: DiscoverSourceConfig, env: Env): Promise<FeedItem[]> {
+  const url = source.url;
+  const domain = new URL(url).hostname.replace(/^www\./, "");
+
+  // Fetch the homepage
+  const html = await fetchPage(url, env);
+  if (!html) return [];
+
+  // Auto-detect the framework powering this site (or use known hint)
+  const framework = detectFramework(html, domain);
+  const items: FeedItem[] = [];
+
+  // Framework-specific enhanced extraction
+  if (framework === "nextjs") {
+    const nextJsItems = extractNextJsData(html, domain);
+    items.push(...nextJsItems);
+  }
+
+  // Strategy 1: JSON-LD structured data (most reliable for recipe sites)
+  if (items.length < 5) {
+    const jsonLdItems = extractJsonLdRecipes(html, domain);
+    const existingUrls = new Set(items.map((i) => normalizeUrl(i.url)));
+    for (const item of jsonLdItems) {
+      if (!existingUrls.has(normalizeUrl(item.url))) {
+        items.push(item);
+        existingUrls.add(normalizeUrl(item.url));
+      }
+    }
+  }
+
+  // Strategy 2: HTML link extraction with contextual title/image
+  if (items.length < 5) {
+    const recipePattern = new RegExp(
+      `https?://(?:www\\.)?${domain.replace(/\./g, "\\.")}(?:/[a-z]{2})?/(?:recipes?|cooking)/[a-z0-9-]+[a-z0-9]`,
+      "gi"
+    );
+    const linkItems = extractRecipeLinks(html, recipePattern, domain);
+    const existingUrls = new Set(items.map((i) => normalizeUrl(i.url)));
+    for (const item of linkItems) {
+      if (!existingUrls.has(normalizeUrl(item.url))) {
+        items.push(item);
+        existingUrls.add(normalizeUrl(item.url));
+      }
+    }
+  }
+
+  // Strategy 3: Broader link extraction if still low results
+  if (items.length < 5) {
+    const broadPattern = new RegExp(
+      `https?://(?:www\\.)?${domain.replace(/\./g, "\\.")}(?:/[a-z0-9-]+){2,}[a-z0-9]`,
+      "gi"
+    );
+    const broadItems = extractRecipeLinks(html, broadPattern, domain);
+    const existingUrls = new Set(items.map((i) => normalizeUrl(i.url)));
+    for (const item of broadItems) {
+      if (!existingUrls.has(normalizeUrl(item.url))) {
+        items.push(item);
+        existingUrls.add(normalizeUrl(item.url));
+      }
+    }
+  }
+
+  // Strategy 4: Open Graph / meta tag for at least the featured recipe
+  if (items.length === 0) {
+    const metaItem = extractMetaTags(html, domain);
+    if (metaItem) items.push(metaItem);
+  }
+
+  // Framework-specific image backfill
+  if (framework === "dotdash-meredith") {
+    const imageIndex = buildDotdashImageIndex(html, domain);
+    for (const item of items) {
+      if (!item.imageUrl) {
+        item.imageUrl = imageIndex.get(normalizeUrl(item.url))
+          ?? imageIndex.get(item.title.toLowerCase());
+      }
+    }
+  }
+
+  // Filter out non-recipe content
+  const filtered = items.filter((item) => {
+    const lc = item.url.toLowerCase();
+    if (/\/(about|contact|privacy|terms|newsletter|subscribe|login|sign-?up|tag|category|author|search)\b/.test(lc)) return false;
+    if (/\/(how-to-|what-is-|best-|review|guide|tip|technique|equipment|comparison)/.test(lc)) return false;
+    return true;
+  });
+
+  return deduplicateByTitle(filtered).slice(0, 30);
+}
+
+// ── Next.js site profile (cooking.nytimes.com) ──────────
+// Optimized for Next.js sites using __NEXT_DATA__ or RSC flight data.
+// The generic scraper also applies Next.js extraction via extractNextJsData()
+// for any new Next.js site, but this profile has NYT-specific URL patterns
+// and image CDN handling that improve results.
+
+async function scrapeNextJsSite(env: Env): Promise<FeedItem[]> {
   try {
     const html = await fetchPage("https://cooking.nytimes.com/", env);
     if (!html) return [];
@@ -868,17 +1152,19 @@ function buildNYTImageIndex(html: string): Map<string, string> {
 
 /**
  * Recursively search a JSON tree for objects that look like recipe entries
- * (have a name/title and a URL containing "/recipes/").
+ * (have a name/title and a URL containing "/recipes/" or "/recipe/").
+ * The domain parameter is used to construct full URLs from relative paths.
  */
 function findRecipesInJson(
   obj: unknown,
   results: FeedItem[],
-  depth = 0
+  depth = 0,
+  domain = "cooking.nytimes.com"
 ): void {
   if (depth > 20 || !obj || typeof obj !== "object") return;
 
   if (Array.isArray(obj)) {
-    for (const item of obj) findRecipesInJson(item, results, depth + 1);
+    for (const item of obj) findRecipesInJson(item, results, depth + 1, domain);
     return;
   }
 
@@ -894,10 +1180,10 @@ function findRecipesInJson(
   let recipeUrl: string | null = null;
   for (const key of ["url", "uri", "path", "slug", "href", "link"]) {
     const val = rec[key];
-    if (typeof val === "string" && val.includes("/recipes/")) {
+    if (typeof val === "string" && (val.includes("/recipes/") || val.includes("/recipe/"))) {
       recipeUrl = val.startsWith("http")
         ? val
-        : `https://cooking.nytimes.com${val}`;
+        : `https://${domain}${val}`;
       break;
     }
   }
@@ -919,7 +1205,7 @@ function findRecipesInJson(
   }
 
   for (const value of Object.values(rec)) {
-    findRecipesInJson(value, results, depth + 1);
+    findRecipesInJson(value, results, depth + 1, domain);
   }
 }
 
@@ -1016,9 +1302,12 @@ function extractImageFromJson(rec: Record<string, unknown>): string | undefined 
   return undefined;
 }
 
-// ── AllRecipes (homepage + trending) ─────────────────────
+// ── Dotdash Meredith site profile (allrecipes.com) ───────
+// Optimized for Dotdash Meredith CMS sites which use /thmb/ image CDN
+// and serve JSON-LD even on 403 responses. The generic scraper also applies
+// Dotdash image handling via buildDotdashImageIndex() for any detected DM site.
 
-async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
+async function scrapeDotdashSite(env: Env): Promise<FeedItem[]> {
   const urls = [
     "https://www.allrecipes.com/",
     "https://www.allrecipes.com/recipes/",
@@ -1092,9 +1381,11 @@ async function scrapeAllRecipes(env: Env): Promise<FeedItem[]> {
   });
 }
 
-// ── Serious Eats (/recipes page + homepage) ─────────────
+// ── Dotdash Meredith variant: Serious Eats (/recipes page + homepage) ──
+// Similar to the main Dotdash profile but with additional slug-based
+// recipe vs non-recipe filtering specific to seriouseats.com's content mix.
 
-async function scrapeSeriousEats(env: Env): Promise<FeedItem[]> {
+async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
   const urls = [
     "https://www.seriouseats.com/recipes",
     "https://www.seriouseats.com/",

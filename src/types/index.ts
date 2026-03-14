@@ -302,7 +302,11 @@ export interface InspirationResponse {
 
 // ── Discover Feed ──────────────────────────────────────
 
-export type DiscoverSource = "nyt" | "allrecipes" | "seriouseats";
+/** Legacy hardcoded source IDs (kept for backward compat with existing archives) */
+export type DiscoverSourceLegacy = "nyt" | "allrecipes" | "seriouseats";
+
+/** Source is now a free-form string — either a legacy ID or a user-configured slug */
+export type DiscoverSource = string;
 
 export type DiscoverCategory =
   | "dinner"
@@ -332,13 +336,29 @@ export interface DiscoverFeedItem {
 /** Legacy format: grouped by source (used by scraper, converted for UI) */
 export interface DiscoverFeedRaw {
   lastRefreshed: string;
-  sources: Record<DiscoverSource, DiscoverFeedItem[]>;
+  sources: Record<string, DiscoverFeedItem[]>;
 }
 
 /** New format: grouped by category (used by archive + UI) */
 export interface DiscoverFeed {
   lastRefreshed: string;
   categories: Partial<Record<DiscoverCategory, DiscoverFeedItem[]>>;
+}
+
+// ── Discover Configuration ────────────────────────────
+
+export interface DiscoverSourceConfig {
+  id: string;        // slug identifier (e.g. "nyt", "budgetbytes")
+  label: string;     // display name (e.g. "NYT Cooking", "Budget Bytes")
+  url: string;       // homepage URL to scrape (e.g. "https://cooking.nytimes.com/")
+  enabled: boolean;  // whether this source is active
+}
+
+export interface DiscoverConfig {
+  sources: DiscoverSourceConfig[];
+  expirationEnabled: boolean; // when false, items never expire from the feed
+  itemLifetimeDays: number;   // how long items stay visible (when expiration is enabled)
+  refreshIntervalDays: number; // minimum days between auto-refreshes
 }
 
 // ── Import ─────────────────────────────────────────────
