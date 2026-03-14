@@ -11,9 +11,9 @@ A personal recipe manager that works like a native app on your phone. Manage rec
 Free to host on Cloudflare's free tier. No coding required.
 
 <p align="center">
+  <img src="docs/screenshots/discover.jpg" alt="Discover Feed" width="150" />
   <img src="docs/screenshots/recipes.jpg" alt="Recipes" width="150" />
   <img src="docs/screenshots/recipe-detail.jpg" alt="Recipe Detail" width="150" />
-  <img src="docs/screenshots/discover.jpg" alt="Discover Feed" width="150" />
   <img src="docs/screenshots/ask.jpg" alt="AI Assistant" width="150" />
   <img src="docs/screenshots/planner.jpg" alt="Meal Planner" width="150" />
 </p>
