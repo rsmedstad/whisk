@@ -759,10 +759,12 @@ export function Discover({
   // Toggle a tag on the imported recipe and persist to the discover feed
   const handleToggleDiscoverTag = useCallback((tag: string) => {
     let updatedTags: string[] | undefined;
+    let wasRemoved = false;
     setImportedRecipe((prev) => {
       if (!prev) return prev;
       const current = prev.tags ?? [];
-      const newTags = current.includes(tag)
+      wasRemoved = current.includes(tag);
+      const newTags = wasRemoved
         ? current.filter((t) => t !== tag)
         : [...current, tag];
       updatedTags = newTags;
@@ -773,9 +775,11 @@ export function Discover({
     if (!selectedFeedItem) return;
     const itemUrl = selectedFeedItem.url;
 
-    // Determine if category should change (tag matches a category name)
+    // Determine the correct category from the updated tags
     const CATEGORIES: Set<string> = new Set(CATEGORY_ORDER);
-    const newCategory = updatedTags?.find((t) => CATEGORIES.has(t)) as DiscoverCategory | undefined;
+    const categoryTag = updatedTags?.find((t) => CATEGORIES.has(t)) as DiscoverCategory | undefined;
+    // If the removed tag matches a category and no other category tag remains, default to "dinner"
+    const removedCategoryTag = wasRemoved && CATEGORIES.has(tag);
 
     setFeed((prev) => {
       if (!prev) return prev;
@@ -786,11 +790,14 @@ export function Discover({
         const idx = items.findIndex((i) => i.url === itemUrl);
         if (idx !== -1) {
           const item = { ...items[idx]!, tags: updatedTags };
-          if (newCategory && newCategory !== cat) {
-            // Move item to new category
+          // If a category tag exists in remaining tags, use it; if a category tag was removed
+          // and nothing replaces it, fall back to "dinner" (default); otherwise keep current
+          const targetCategory = categoryTag ?? (removedCategoryTag ? "dinner" as DiscoverCategory : cat);
+          if (targetCategory !== cat) {
+            // Move item to the target category
             updated.categories[cat] = items.filter((_, j) => j !== idx);
-            const dest = updated.categories[newCategory] ?? [];
-            updated.categories[newCategory] = [...dest, { ...item, category: newCategory }];
+            const dest = updated.categories[targetCategory] ?? [];
+            updated.categories[targetCategory] = [...dest, { ...item, category: targetCategory }];
           } else {
             updated.categories[cat] = items.map((i, j) => j === idx ? item : i);
           }
@@ -801,11 +808,12 @@ export function Discover({
       return updated;
     });
 
-    // Persist to server
+    // Persist to server — send updated category so it sticks across refreshes
+    const serverCategory = categoryTag ?? (removedCategoryTag ? "dinner" as DiscoverCategory : undefined);
     api.patch("/discover/feed", {
       url: itemUrl,
       tags: updatedTags,
-      ...(newCategory ? { category: newCategory } : {}),
+      ...(serverCategory ? { category: serverCategory } : {}),
     }).catch(() => {/* best-effort */});
   }, [selectedFeedItem]);
 
@@ -1315,6 +1323,17 @@ export function Discover({
                   </div>
                   {showTagEditor && (
                     <div className="mt-2 space-y-2">
+                      {/* Warning if no category tag is selected */}
+                      {(() => {
+                        const categorySet = new Set<string>(CATEGORY_ORDER);
+                        const hasCategory = (importedRecipe.tags ?? []).some((t) => categorySet.has(t));
+                        if (!hasCategory) return (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-1.5">
+                            No category tag selected — this recipe will appear under Dinner by default. Add a tag like dinner, breakfast, dessert, etc.
+                          </p>
+                        );
+                        return null;
+                      })()}
                       <div className="flex flex-wrap gap-1.5">
                         {tags.allTagNames
                           .filter((t) => !(importedRecipe.tags ?? []).includes(t))
