@@ -670,16 +670,22 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     <div className="space-y-3">
                       {discoverConfig.sources.map((src, idx) => (
                         <div key={src.id} className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            checked={src.enabled}
-                            onChange={(e) => {
-                              const updated = { ...discoverConfig, sources: discoverConfig.sources.map((s, i) => i === idx ? { ...s, enabled: e.target.checked } : s) };
+                          <button
+                            onClick={() => {
+                              const updated = { ...discoverConfig, sources: discoverConfig.sources.map((s, i) => i === idx ? { ...s, enabled: !s.enabled } : s) };
                               setDiscoverConfig(updated);
                               setDiscoverConfigDirty(true);
                             }}
-                            className="w-4 h-4 mt-2 rounded border-stone-300 dark:border-stone-600 text-orange-500 focus:ring-orange-500 dark:bg-stone-700"
-                          />
+                            className={`relative w-11 h-6 shrink-0 mt-1 rounded-full transition-colors ${
+                              src.enabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                src.enabled ? "translate-x-5" : ""
+                              }`}
+                            />
+                          </button>
                           <div className="flex-1 space-y-1">
                             <input
                               type="text"
@@ -765,19 +771,25 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
 
                   {/* Expiration toggle + lifetime */}
                   <div>
-                    <label className="flex items-center gap-3 cursor-pointer mb-2">
-                      <input
-                        type="checkbox"
-                        checked={discoverConfig.expirationEnabled}
-                        onChange={(e) => {
-                          const updated = { ...discoverConfig, expirationEnabled: e.target.checked };
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium dark:text-stone-200">Auto-expire recipes</span>
+                      <button
+                        onClick={() => {
+                          const updated = { ...discoverConfig, expirationEnabled: !discoverConfig.expirationEnabled };
                           setDiscoverConfig(updated);
                           setDiscoverConfigDirty(true);
                         }}
-                        className="w-4 h-4 rounded border-stone-300 dark:border-stone-600 text-orange-500 focus:ring-orange-500 dark:bg-stone-700"
-                      />
-                      <span className="text-sm font-medium dark:text-stone-200">Auto-expire recipes</span>
-                    </label>
+                        className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
+                          discoverConfig.expirationEnabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                            discoverConfig.expirationEnabled ? "translate-x-5" : ""
+                          }`}
+                        />
+                      </button>
+                    </div>
                     <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
                       {discoverConfig.expirationEnabled
                         ? "Older discover recipes are automatically hidden. Saved recipes are never affected."
