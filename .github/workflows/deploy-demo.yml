@@ -18,9 +18,11 @@ jobs:
 
       - run: bun run build
 
+      # Swap wrangler.toml with demo config (Pages only reads wrangler.toml)
+      - run: cp wrangler-demo.toml wrangler.toml
+
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3'
-          command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch main --commit-dirty=true --config wrangler-demo.toml
+          command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch main --commit-dirty=true
