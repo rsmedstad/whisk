@@ -1083,7 +1083,8 @@ function parseIngredients(
   raw: string[]
 ): { name: string; amount?: string; unit?: string }[] {
   return raw.map((str: string) => {
-    const cleaned = cleanIngredientText(str);
+    // Strip HTML first — JSON-LD ingredients may contain anchor tags or inline markup
+    const cleaned = cleanIngredientText(stripHtml(str));
     const match = cleaned.match(
       /^([\d\s./½⅓⅔¼¾⅛⅜⅝⅞]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|packages?|bunche?s?|pieces?|slices?|sticks?|heads?|stalks?|sprigs?|pinche?s?|dashes?)?\s*(.+)/i
     );

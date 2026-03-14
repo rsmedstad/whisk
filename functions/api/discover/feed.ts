@@ -486,7 +486,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (elapsed < limit) {
       const enabledIds = new Set(enabledSources.map((s) => s.id));
       const filtered = { ...archive, items: archive.items.filter((i) => !i.source || enabledIds.has(i.source)) };
-      return Response.json(archiveToCategoryFeed(filtered));
+      const remainingMin = Math.ceil((limit - elapsed) / 60000);
+      const feed = archiveToCategoryFeed(filtered);
+      return Response.json({
+        ...feed,
+        warnings: [`Feed was refreshed recently. Try again in ${remainingMin} minute${remainingMin !== 1 ? "s" : ""}.`],
+      });
     }
   }
 
@@ -582,7 +587,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const feed = archiveToCategoryFeed(updatedArchive);
   const warnings = [...new Set(brWarnings)];
-  return Response.json(warnings.length > 0 ? { ...feed, warnings } : feed);
+  const totalScraped = scrapeResults.reduce((n, r) => n + r.items.length, 0);
+  if (newItems.length === 0 && totalScraped > 0) {
+    warnings.push(`Checked ${enabledSources.length} source${enabledSources.length !== 1 ? "s" : ""} and found ${totalScraped} recipe${totalScraped !== 1 ? "s" : ""}, but all were already in your feed.`);
+  } else if (newItems.length === 0 && totalScraped === 0) {
+    warnings.push(`Checked ${enabledSources.length} source${enabledSources.length !== 1 ? "s" : ""} but couldn't extract any recipes. Sites may be blocking automated access.`);
+  }
+  return Response.json({
+    ...feed,
+    newCount: newItems.length,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  });
 };
 
 // ── PATCH: update a feed item (e.g. fix image after import) ──
@@ -1395,6 +1410,20 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
   const allItems: FeedItem[] = [];
   const seen = new Set<string>();
 
+  /** Check if a Serious Eats URL looks like a collection/roundup/gallery page.
+   *  Dotdash Meredith collection pages have a numeric ID suffix (7+ digits),
+   *  e.g. "boozy-irish-desserts-11921158" or "best-chicken-recipes-5091059" */
+  const isCollectionPage = (url: string): boolean => {
+    const path = new URL(url).pathname.replace(/\/$/, "");
+    const slug = path.split("/").pop() ?? "";
+    // Collection pages end with -DIGITS where the digits are 7+ chars (article IDs)
+    // Recipe pages with -recipe suffix may also have IDs, so exclude those
+    if (/-\d{7,}$/.test(slug) && !/-recipe-\d+$/.test(slug)) return true;
+    // Pluralized roundup patterns: "best-X-recipes", "X-desserts", "X-dishes"
+    if (/-(recipes|desserts|dishes|dinners|lunches|breakfasts|appetizers|cocktails|drinks|sides|soups|salads|snacks|meals)\b/.test(slug) && !/-recipe$/.test(slug)) return true;
+    return false;
+  };
+
   /** Check if a Serious Eats URL is likely an actual recipe page */
   const isRecipePage = (url: string): boolean => {
     const path = new URL(url).pathname.replace(/\/$/, "");
@@ -1402,6 +1431,9 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
 
     // Must have a slug with substance
     if (slug.length < 8) return false;
+
+    // Reject collection/roundup pages
+    if (isCollectionPage(url)) return false;
 
     // Positive signals: slug contains "recipe" (very common for SE recipes)
     if (/-recipe$/.test(slug) || slug.includes("-recipe-")) return true;
@@ -1497,7 +1529,17 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
           /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi,
           "seriouseats.com"
         );
-        const filtered = linkItems.filter((item) => isRecipePage(item.url));
+
+        // Separate collection pages from individual recipes
+        const collectionUrls: string[] = [];
+        const filtered = linkItems.filter((item) => {
+          if (isCollectionPage(item.url)) {
+            collectionUrls.push(item.url);
+            return false;
+          }
+          return isRecipePage(item.url);
+        });
+
         for (const item of filtered) {
           const key = normalizeUrl(item.url);
           if (!seen.has(key)) {
@@ -1508,6 +1550,48 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
                 ?? imageIndex.get(item.title.toLowerCase());
             }
             allItems.push(item);
+          }
+        }
+
+        // Crawl into collection/roundup pages to extract individual recipe links
+        // (e.g. "boozy-irish-desserts-11921158" → individual dessert recipes)
+        if (allItems.length < 20) {
+          const uniqueCollections = [...new Set(collectionUrls.map(normalizeUrl))].slice(0, 3);
+          const collectionResults = await Promise.all(
+            uniqueCollections.map(async (colUrl) => {
+              try {
+                const colHtml = await fetchPage(colUrl, env);
+                if (!colHtml) return [];
+                const colImageIndex = buildImageIndex(colHtml);
+                // Extract recipe links from the collection page
+                const colJsonLd = extractJsonLdRecipes(colHtml, "seriouseats.com");
+                const colLinks = extractRecipeLinks(
+                  colHtml,
+                  /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi,
+                  "seriouseats.com"
+                );
+                const combined = [...colJsonLd, ...colLinks].filter((i) => isRecipePage(i.url));
+                // Backfill images from the collection page
+                for (const item of combined) {
+                  if (!item.imageUrl) {
+                    item.imageUrl = colImageIndex.get(normalizeUrl(item.url))
+                      ?? colImageIndex.get(item.title.toLowerCase());
+                  }
+                }
+                return combined;
+              } catch {
+                return [];
+              }
+            })
+          );
+          for (const colItems of collectionResults) {
+            for (const item of colItems) {
+              const key = normalizeUrl(item.url);
+              if (!seen.has(key)) {
+                seen.add(key);
+                allItems.push(item);
+              }
+            }
           }
         }
       }

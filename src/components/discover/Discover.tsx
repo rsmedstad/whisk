@@ -347,6 +347,8 @@ export function Discover({
   const [savingUrls, setSavingUrls] = useState<Set<string>>(new Set());
   const [photoIndex, setPhotoIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
+  const feedScrollRef = useRef<HTMLDivElement>(null);
+  const savedScrollPos = useRef<{ vertical: number; carousels: Record<string, number> } | null>(null);
   const [activeTab, setActiveTab] = useState<"ingredients" | "steps">("ingredients");
   const [ingredientSort, setIngredientSort] = useState<"recipe" | "category">(
     () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
@@ -489,6 +491,16 @@ export function Discover({
 
   const handleFeedItemClick = useCallback(
     async (item: DiscoverFeedItem) => {
+      // Save scroll positions before navigating to detail
+      const el = feedScrollRef.current;
+      if (el) {
+        const carousels: Record<string, number> = {};
+        el.querySelectorAll<HTMLDivElement>("[data-carousel]").forEach((c) => {
+          const key = c.dataset.carousel;
+          if (key && c.scrollLeft > 0) carousels[key] = c.scrollLeft;
+        });
+        savedScrollPos.current = { vertical: el.scrollTop, carousels };
+      }
       const source = item.source ?? "nyt";
       setSelectedFeedItem({ ...item, source });
       setImportedRecipe(null);
@@ -692,6 +704,7 @@ export function Discover({
   }, [onSaveRecipe, savedUrls, savingUrls]);
 
   const handleFeedBack = () => {
+    const pos = savedScrollPos.current;
     setSelectedFeedItem(null);
     setImportedRecipe(null);
     setImportError(null);
@@ -702,6 +715,19 @@ export function Discover({
     setShowOverflow(false);
     setNewTag("");
     if (wakeLock.isActive) wakeLock.release();
+    // Restore scroll positions after returning to feed list
+    if (pos) {
+      requestAnimationFrame(() => {
+        const el = feedScrollRef.current;
+        if (el) {
+          el.scrollTop = pos.vertical;
+          el.querySelectorAll<HTMLDivElement>("[data-carousel]").forEach((c) => {
+            const key = c.dataset.carousel;
+            if (key && pos.carousels[key]) c.scrollLeft = pos.carousels[key];
+          });
+        }
+      });
+    }
   };
 
   /** Remove a discover feed item from the local feed and go back to browse */
@@ -1971,7 +1997,7 @@ export function Discover({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto pb-24">
+      <div ref={feedScrollRef} className="flex-1 overflow-y-auto pb-24">
         {/* ── Trending Feed ── */}
         {feedLoading && !hasFeedContent && (
           <LoadingSpinner className="py-16" size="lg" />
@@ -2125,7 +2151,7 @@ export function Discover({
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 px-4 scroll-pl-4">
+                  <div data-carousel={category} className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 px-4 scroll-pl-4">
                     {items.map((item, i) => (
                       <FeedCard
                         key={`${category}-${i}`}
