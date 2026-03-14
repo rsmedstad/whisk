@@ -1420,9 +1420,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       }}
                     />
                     {!importFile ? (
-                      <Button variant="secondary" fullWidth onClick={() => importFileRef.current?.click()}>
-                        Import Book
-                      </Button>
+                      <div className="space-y-2">
+                        <Button variant="secondary" fullWidth onClick={() => importFileRef.current?.click()}>
+                          Import Book
+                        </Button>
+                        <p className="text-xs text-stone-400 dark:text-stone-500 text-center">
+                          Accepts .json files exported from Whisk. If you don't see the file, change the file picker filter to "All Files."
+                        </p>
+                      </div>
                     ) : (
                       <div className="border border-stone-200 dark:border-stone-700 rounded-lg p-3 space-y-3">
                         <div className="flex items-center justify-between">
