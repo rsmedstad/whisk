@@ -22,4 +22,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch main --commit-dirty=true
+          wranglerVersion: '3'
+          command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch main --commit-dirty=true --config wrangler-demo.toml
