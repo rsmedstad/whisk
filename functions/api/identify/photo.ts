@@ -9,10 +9,40 @@ interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
 }
 
+interface ScanLogEntry {
+  timestamp: string;
+  feature: "identify";
+  provider: string;
+  model: string;
+  success: boolean;
+  durationMs: number;
+  photoSizeKB?: number;
+  error?: string;
+  timing?: {
+    configMs: number;
+    uploadProcessMs: number;
+    visionMs: number;
+  };
+}
+
+/** Append identify log to shared ai_logs KV (keep last 50 entries, 7-day TTL) */
+async function logIdentifyInteraction(kv: KVNamespace, entry: ScanLogEntry): Promise<void> {
+  try {
+    const existing = await kv.get("ai_logs", "json") as ScanLogEntry[] | null;
+    const logs = existing ?? [];
+    logs.unshift(entry);
+    await kv.put("ai_logs", JSON.stringify(logs.slice(0, 50)), { expirationTtl: 604800 });
+  } catch { /* best-effort logging */ }
+}
+
 // POST /api/identify/photo - AI food identification from photo
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const startTime = Date.now();
+
+  const configStart = Date.now();
   const config = await loadAIConfig(env.WHISK_KV);
   const fnConfig = resolveConfig(config, "vision", env);
+  const configMs = Date.now() - configStart;
 
   if (!fnConfig) {
     return new Response(
@@ -27,6 +57,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   // Read photo from form data
+  const uploadStart = Date.now();
   const formData = await request.formData();
   const photo = formData.get("photo") as File | null;
   const context = formData.get("context") as string | null;
@@ -47,10 +78,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // Convert to base64
   const arrayBuffer = await photo.arrayBuffer();
+  const photoSizeKB = Math.round(arrayBuffer.byteLength / 1024);
   const base64 = btoa(
     Array.from(new Uint8Array(arrayBuffer), (b) => String.fromCharCode(b)).join("")
   );
   const mimeType = photo.type || "image/jpeg";
+  const uploadProcessMs = Date.now() - uploadStart;
 
   const systemPrompt = [
     "You are a food identification expert for a recipe app called Whisk. You ONLY identify food, dishes, ingredients, and beverages in photos.",
@@ -70,27 +103,61 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ? `${systemPrompt}\n\nThe user says this might be: "${safeContext}"`
     : systemPrompt;
 
+  const baseLog: Omit<ScanLogEntry, "success" | "durationMs" | "error"> = {
+    timestamp: new Date().toISOString(),
+    feature: "identify",
+    provider: fnConfig.provider,
+    model: fnConfig.model,
+    photoSizeKB,
+    timing: {
+      configMs,
+      uploadProcessMs,
+      visionMs: 0,
+    },
+  };
+
   try {
+    const visionStart = Date.now();
     const content = await callVisionAI(fnConfig, env, prompt, base64, mimeType, {
       maxTokens: 512,
       temperature: 0.3,
     });
+    const visionMs = Date.now() - visionStart;
+    const totalMs = Date.now() - startTime;
 
     // Parse AI response — strip markdown fences if present
     const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const result = JSON.parse(jsonStr);
+
+    logIdentifyInteraction(env.WHISK_KV, {
+      ...baseLog,
+      success: true,
+      durationMs: totalMs,
+      timing: { configMs, uploadProcessMs, visionMs },
+    }).catch(() => {});
 
     return new Response(
       JSON.stringify(result),
       { headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
+    const totalMs = Date.now() - startTime;
+    const errMsg = err instanceof Error ? err.message : "Failed to identify food";
+
+    logIdentifyInteraction(env.WHISK_KV, {
+      ...baseLog,
+      success: false,
+      durationMs: totalMs,
+      error: errMsg.slice(0, 500),
+      timing: { configMs, uploadProcessMs, visionMs: totalMs - configMs - uploadProcessMs },
+    }).catch(() => {});
+
     return new Response(
       JSON.stringify({
         title: "Identification failed",
         confidence: "N/A",
         ingredients: [],
-        message: err instanceof Error ? err.message : "Failed to identify food",
+        message: errMsg,
       }),
       { headers: { "Content-Type": "application/json" } }
     );

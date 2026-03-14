@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList, RefreshCw, ChevronDown } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList, RefreshCw, ChevronDown, ChevronUp } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -66,6 +66,7 @@ export function ShoppingList({
   const [scanPendingItems, setScanPendingItems] = useState<{ name: string; amount?: string | null; unit?: string | null; category?: string | null; selected: boolean; confidence?: "high" | "low" }[]>([]);
   const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [scanSortAZ, setScanSortAZ] = useState(false);
+  const [scanImageCollapsed, setScanImageCollapsed] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
   // Add from plan / sync with plan
@@ -399,6 +400,7 @@ export function ShoppingList({
       setListScanPreview(previewUrl);
       setIsListScanning(true);
       setListScanResult(null);
+      setScanImageCollapsed(false);
       try {
         const scanStart = performance.now();
         // Normalize orientation via canvas (createImageBitmap respects EXIF)
@@ -448,13 +450,6 @@ export function ShoppingList({
         setListScanResult({ count: 0, message: "Failed to scan. Check your connection and try again." });
       } finally {
         setIsListScanning(false);
-        // Clear preview after a brief delay so user sees result alongside it
-        setTimeout(() => {
-          setListScanPreview((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return null;
-          });
-        }, 3000);
       }
     };
     input.click();
@@ -745,33 +740,36 @@ export function ShoppingList({
             <div className="px-4 pt-3">
               <Card>
                 {listScanPreview && (
-                  <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden mb-2">
-                    <img
-                      src={listScanPreview}
-                      alt="Scanned list"
-                      onClick={() => setZoomPhoto(listScanPreview)}
-                      className={classNames(
-                        "w-full max-h-32 object-cover transition-opacity cursor-pointer",
-                        isListScanning && "animate-pulse"
-                      )}
-                    />
-                    <button
-                      onClick={() => {
-                        setListScanPreview((prev) => {
-                          if (prev) URL.revokeObjectURL(prev);
-                          return null;
-                        });
-                        if (!isListScanning) {
-                          setListScanResult(null);
-                          setScanPendingItems([]);
-                          setScanSortAZ(false);
-                        }
-                      }}
-                      className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
-                      title="Close preview"
-                    >
-                      <XMark className="w-4 h-4" />
-                    </button>
+                  <div className="mb-2">
+                    {scanImageCollapsed ? (
+                      <button
+                        onClick={() => setScanImageCollapsed(false)}
+                        className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Show scanned image</span>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <div className="relative rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+                        <img
+                          src={listScanPreview}
+                          alt="Scanned list"
+                          onClick={() => setZoomPhoto(listScanPreview)}
+                          className={classNames(
+                            "w-full max-h-32 object-cover transition-opacity cursor-pointer",
+                            isListScanning && "animate-pulse"
+                          )}
+                        />
+                        <button
+                          onClick={() => setScanImageCollapsed(true)}
+                          className="absolute top-1.5 right-1.5 rounded-full bg-black/50 text-white p-1 hover:bg-black/70 transition-colors"
+                          title="Collapse image"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 {isListScanning && (
@@ -781,14 +779,23 @@ export function ShoppingList({
                 )}
                 {listScanResult && !isListScanning && scanPendingItems.length === 0 && (
                   <div className={classNames(
-                    "px-3 py-2 rounded-lg text-xs",
+                    "px-3 py-2 rounded-lg text-xs flex items-center justify-between",
                     listScanResult.count > 0
                       ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
                       : "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
                   )}>
-                    {listScanResult.count > 0
-                      ? `Added ${listScanResult.count} item${listScanResult.count !== 1 ? "s" : ""} to your list`
-                      : listScanResult.message}
+                    <span>
+                      {listScanResult.count > 0
+                        ? `Added ${listScanResult.count} item${listScanResult.count !== 1 ? "s" : ""} to your list`
+                        : listScanResult.message}
+                    </span>
+                    <button
+                      onClick={() => setListScanResult(null)}
+                      className="ml-2 opacity-60 hover:opacity-100 transition-opacity"
+                      aria-label="Dismiss"
+                    >
+                      <XMark className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 )}
                 {/* Pending scan items review */}
@@ -817,7 +824,7 @@ export function ShoppingList({
                           A-Z
                         </button>
                         <button
-                          onClick={() => setScanPendingItems([])}
+                          onClick={() => { setScanPendingItems([]); setListScanResult(null); }}
                           className="text-[10px] font-medium text-stone-400 hover:text-red-500 dark:text-stone-500 dark:hover:text-red-400 px-1.5 py-0.5 rounded transition-colors"
                         >
                           Clear all
@@ -861,6 +868,8 @@ export function ShoppingList({
                           setScanPendingItems([]);
                           setScanSortAZ(false);
                           setScanWarnings([]);
+                          setListScanPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+                          setScanImageCollapsed(false);
                         }}
                         disabled={scanPendingItems.every((i) => !i.selected)}
                         className="flex-1 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-medium disabled:opacity-50"
@@ -868,7 +877,14 @@ export function ShoppingList({
                         Add {scanPendingItems.filter((i) => i.selected).length} items
                       </button>
                       <button
-                        onClick={() => { setScanPendingItems([]); setListScanResult(null); setScanSortAZ(false); setScanWarnings([]); }}
+                        onClick={() => {
+                          setScanPendingItems([]);
+                          setListScanResult(null);
+                          setScanSortAZ(false);
+                          setScanWarnings([]);
+                          setListScanPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+                          setScanImageCollapsed(false);
+                        }}
                         className="px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-600 text-xs font-medium text-stone-600 dark:text-stone-400"
                       >
                         Cancel
