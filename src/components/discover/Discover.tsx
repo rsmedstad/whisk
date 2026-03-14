@@ -2029,12 +2029,17 @@ export function Discover({
 
         {feedWarnings.length > 0 && (
           <div className="px-4 pt-2">
-            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 px-3 py-2">
-              {feedWarnings.map((w, i) => (
-                <p key={i} className="text-xs text-amber-700 dark:text-amber-400">
-                  {w}
-                </p>
-              ))}
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 px-3 py-2 flex items-start justify-between gap-2">
+              <div className="flex-1">
+                {feedWarnings.map((w, i) => (
+                  <p key={i} className="text-xs text-amber-700 dark:text-amber-400">
+                    {w}
+                  </p>
+                ))}
+              </div>
+              <button onClick={() => setFeedWarnings([])} className="text-amber-400 hover:text-amber-600 shrink-0 mt-0.5">
+                <XMark className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}

@@ -183,13 +183,13 @@ interface CategoryFeed {
 
 const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
   ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?|bostock|morning buns?|dutch baby|cr[eê]pes?|shakshuka|porridge|acai bowl)\b/i],
-  ["soups", /\b(?:soup|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
-  ["salad", /\b(?:salad|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
-  ["dessert", /\b(?:dessert|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
+  ["soups", /\b(?:soups?|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
+  ["salad", /\b(?:salads?|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
+  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
   ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
-  ["drinks", /\b(?:cocktail|drink|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
-  ["appetizer", /\b(?:appetizer|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
-  ["snack", /\b(?:snack|popcorn|trail mix|chips?|crackers?|energy balls?|protein bars?)\b/i],
+  ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
+  ["appetizer", /\b(?:appetizers?|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
+  ["snack", /\b(?:snacks?|popcorn|trail mix|chips?|crackers?|energy balls?|protein bars?)\b/i],
   ["side dish", /\b(?:side dish|mashed potatoes?|roasted vegetables?|rice pilaf|couscous|baked beans|corn ?bread|mac and cheese|macaroni|stuffing|au gratin|roasted potatoes?|french fries|fries|potato salad)\b/i],
   // "dinner" is the default/catch-all for main dishes
 ];
@@ -1509,7 +1509,14 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
 
       // Try JSON-LD extraction first (most reliable — only returns @type: Recipe)
       const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
+      const jsonLdCollectionUrls: string[] = [];
       for (const item of jsonLdItems) {
+        // Filter out collection/roundup pages from JSON-LD results too
+        if (isCollectionPage(item.url)) {
+          jsonLdCollectionUrls.push(item.url);
+          continue;
+        }
+        if (!isRecipePage(item.url)) continue;
         const key = normalizeUrl(item.url);
         if (!seen.has(key)) {
           seen.add(key);
@@ -1522,6 +1529,9 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
         }
       }
 
+      // Collect all collection URLs (from JSON-LD and HTML extraction)
+      const allCollectionUrls: string[] = [...jsonLdCollectionUrls];
+
       // HTML link extraction — only if JSON-LD didn't yield enough
       if (allItems.length < 10) {
         const linkItems = extractRecipeLinks(
@@ -1531,10 +1541,9 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
         );
 
         // Separate collection pages from individual recipes
-        const collectionUrls: string[] = [];
         const filtered = linkItems.filter((item) => {
           if (isCollectionPage(item.url)) {
-            collectionUrls.push(item.url);
+            allCollectionUrls.push(item.url);
             return false;
           }
           return isRecipePage(item.url);
@@ -1552,45 +1561,45 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
             allItems.push(item);
           }
         }
+      }
 
-        // Crawl into collection/roundup pages to extract individual recipe links
-        // (e.g. "boozy-irish-desserts-11921158" → individual dessert recipes)
-        if (allItems.length < 20) {
-          const uniqueCollections = [...new Set(collectionUrls.map(normalizeUrl))].slice(0, 3);
-          const collectionResults = await Promise.all(
-            uniqueCollections.map(async (colUrl) => {
-              try {
-                const colHtml = await fetchPage(colUrl, env);
-                if (!colHtml) return [];
-                const colImageIndex = buildImageIndex(colHtml);
-                // Extract recipe links from the collection page
-                const colJsonLd = extractJsonLdRecipes(colHtml, "seriouseats.com");
-                const colLinks = extractRecipeLinks(
-                  colHtml,
-                  /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi,
-                  "seriouseats.com"
-                );
-                const combined = [...colJsonLd, ...colLinks].filter((i) => isRecipePage(i.url));
-                // Backfill images from the collection page
-                for (const item of combined) {
-                  if (!item.imageUrl) {
-                    item.imageUrl = colImageIndex.get(normalizeUrl(item.url))
-                      ?? colImageIndex.get(item.title.toLowerCase());
-                  }
+      // Crawl into collection/roundup pages to extract individual recipe links
+      // (e.g. "boozy-irish-desserts-11921158" → individual dessert recipes)
+      if (allCollectionUrls.length > 0 && allItems.length < 20) {
+        const uniqueCollections = [...new Set(allCollectionUrls.map(normalizeUrl))].slice(0, 3);
+        const collectionResults = await Promise.all(
+          uniqueCollections.map(async (colUrl) => {
+            try {
+              const colHtml = await fetchPage(colUrl, env);
+              if (!colHtml) return [];
+              const colImageIndex = buildImageIndex(colHtml);
+              // Extract recipe links from the collection page
+              const colJsonLd = extractJsonLdRecipes(colHtml, "seriouseats.com");
+              const colLinks = extractRecipeLinks(
+                colHtml,
+                /https?:\/\/www\.seriouseats\.com\/[a-z0-9][a-z0-9-]{5,}[a-z0-9]\/?/gi,
+                "seriouseats.com"
+              );
+              const combined = [...colJsonLd, ...colLinks].filter((i) => isRecipePage(i.url));
+              // Backfill images from the collection page
+              for (const item of combined) {
+                if (!item.imageUrl) {
+                  item.imageUrl = colImageIndex.get(normalizeUrl(item.url))
+                    ?? colImageIndex.get(item.title.toLowerCase());
                 }
-                return combined;
-              } catch {
-                return [];
               }
-            })
-          );
-          for (const colItems of collectionResults) {
-            for (const item of colItems) {
-              const key = normalizeUrl(item.url);
-              if (!seen.has(key)) {
-                seen.add(key);
-                allItems.push(item);
-              }
+              return combined;
+            } catch {
+              return [];
+            }
+          })
+        );
+        for (const colItems of collectionResults) {
+          for (const item of colItems) {
+            const key = normalizeUrl(item.url);
+            if (!seen.has(key)) {
+              seen.add(key);
+              allItems.push(item);
             }
           }
         }
