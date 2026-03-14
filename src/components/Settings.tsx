@@ -728,17 +728,22 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                         </div>
                       ))}
                     </div>
-                    <button
-                      onClick={() => {
-                        const newId = `source-${Date.now()}`;
-                        const updated = { ...discoverConfig, sources: [...discoverConfig.sources, { id: newId, label: "", url: "", enabled: true }] };
-                        setDiscoverConfig(updated);
-                        setDiscoverConfigDirty(true);
-                      }}
-                      className="mt-3 text-sm text-orange-600 dark:text-orange-400 font-medium"
-                    >
-                      + Add source
-                    </button>
+                    {discoverConfig.sources.length < 10 && (
+                      <button
+                        onClick={() => {
+                          const newId = `source-${Date.now()}`;
+                          const updated = { ...discoverConfig, sources: [...discoverConfig.sources, { id: newId, label: "", url: "", enabled: true }] };
+                          setDiscoverConfig(updated);
+                          setDiscoverConfigDirty(true);
+                        }}
+                        className="mt-3 text-sm text-orange-600 dark:text-orange-400 font-medium"
+                      >
+                        + Add source
+                      </button>
+                    )}
+                    {discoverConfig.sources.length >= 10 && (
+                      <p className="mt-2 text-xs text-stone-400 dark:text-stone-500">Maximum 10 sources</p>
+                    )}
                   </div>
 
                   {/* Auto-refresh interval */}

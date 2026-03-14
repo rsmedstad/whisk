@@ -47,6 +47,14 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
     refreshIntervalDays: body.refreshIntervalDays ?? existing.refreshIntervalDays,
   };
 
+  // Cap at 10 sources
+  if (updated.sources.length > 10) {
+    return new Response(
+      JSON.stringify({ error: "Maximum 10 sources allowed" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   // Validate sources have required fields
   for (const src of updated.sources) {
     if (!src.id || !src.url || !src.label) {
