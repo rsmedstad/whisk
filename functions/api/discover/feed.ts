@@ -156,9 +156,21 @@ interface ArchiveItem extends FeedItem {
   totalTime?: number;
 }
 
+/** A collection/roundup page discovered during scraping that should be crawled
+ *  for individual recipe links. Persisted across refresh cycles so we can
+ *  incrementally drain them even under Browser Rendering rate limits. */
+interface PendingCollection {
+  url: string;
+  source: string;
+  discoveredAt: string;
+  attempts: number;
+}
+
 interface Archive {
   lastRefreshed: string;
   items: ArchiveItem[];
+  /** Collection/roundup URLs discovered but not yet fully crawled */
+  pendingCollections?: PendingCollection[];
 }
 
 /** Legacy scraper format (grouped by source) */
@@ -200,6 +212,127 @@ function classifyRecipe(title: string, description?: string): DiscoverCategory {
     if (pattern.test(text)) return category;
   }
   return "dinner"; // Default: main dish / entrée
+}
+
+// ── Pending collection management ────────────────────────
+// Collection/roundup pages (e.g. "10 Best Dessert Recipes") are discovered
+// during scraping but may not be crawlable immediately due to Browser Rendering
+// rate limits. We persist them and drain incrementally across refresh cycles.
+
+const MAX_PENDING_AGE_DAYS = 14; // Drop pending collections older than 2 weeks
+const MAX_PENDING_ATTEMPTS = 5;  // Give up after 5 failed crawl attempts
+
+/** Crawl a single collection page and extract individual recipe links.
+ *  Works for any domain — uses JSON-LD + HTML link extraction. */
+async function crawlCollectionPage(
+  colUrl: string,
+  env: Env,
+): Promise<FeedItem[]> {
+  const domain = new URL(colUrl).hostname.replace(/^www\./, "");
+  const colHtml = await fetchPage(colUrl, env);
+  if (!colHtml) return [];
+
+  // Extract recipes via JSON-LD (most reliable)
+  const jsonLdItems = extractJsonLdRecipes(colHtml, domain);
+
+  // Extract recipes via HTML link patterns
+  const recipePattern = new RegExp(
+    `https?://(?:www\\.)?${domain.replace(/\./g, "\\.")}(?:/[a-z]{2})?/(?:[a-z0-9-]+/)*[a-z0-9-]+[a-z0-9]`,
+    "gi"
+  );
+  const linkItems = extractRecipeLinks(colHtml, recipePattern, domain);
+
+  // Combine, filter out obvious non-recipe and collection pages
+  const allFound = [...jsonLdItems, ...linkItems];
+  const seen = new Set<string>();
+  const deduped = allFound.filter((item) => {
+    const key = normalizeUrl(item.url);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    // Filter out non-recipe URLs
+    const lc = item.url.toLowerCase();
+    if (/\/(about|contact|privacy|terms|newsletter|subscribe|login|sign-?up|tag|category|author|search)\b/.test(lc)) return false;
+    if (/\/(how-to-|what-is-|best-|review|guide|tip|technique|equipment|comparison)/.test(lc)) return false;
+    return true;
+  });
+
+  // Try to backfill images from the collection page HTML
+  const imgRegex = /<img[^>]+(?:src|data-src)="(https?:\/\/[^"]*\/thmb\/[^"]*)"/gi;
+  const imageIndex = new Map<string, string>();
+  let m;
+  while ((m = imgRegex.exec(colHtml)) !== null) {
+    const imgUrl = m[1]!;
+    const tagEnd = colHtml.indexOf(">", m.index);
+    const tag = colHtml.slice(m.index, tagEnd);
+    const altMatch = tag.match(/alt="([^"]+)"/i);
+    if (altMatch?.[1]) {
+      imageIndex.set(altMatch[1].toLowerCase().trim(), imgUrl);
+    }
+    const ctx = colHtml.slice(Math.max(0, m.index - 1000), m.index + 1000);
+    const urlMatch = ctx.match(/href="(https?:\/\/[^"]+)"/);
+    if (urlMatch?.[1]) {
+      imageIndex.set(normalizeUrl(urlMatch[1]), imgUrl);
+    }
+  }
+  for (const item of deduped) {
+    if (!item.imageUrl) {
+      item.imageUrl = imageIndex.get(normalizeUrl(item.url))
+        ?? imageIndex.get(item.title.toLowerCase());
+    }
+  }
+
+  return deduplicateByTitle(deduped);
+}
+
+/** Drain pending collections: attempt to crawl up to `limit` URLs,
+ *  returning newly discovered items and updated pending list. */
+async function drainPendingCollections(
+  pending: PendingCollection[],
+  existingUrls: Set<string>,
+  env: Env,
+  limit = 2,
+): Promise<{ items: FeedItem[]; updatedPending: PendingCollection[] }> {
+  const now = Date.now();
+  // Filter out expired or exhausted entries
+  const viable = pending.filter((p) => {
+    const age = now - new Date(p.discoveredAt).getTime();
+    if (age > MAX_PENDING_AGE_DAYS * 24 * 60 * 60 * 1000) return false;
+    if (p.attempts >= MAX_PENDING_ATTEMPTS) return false;
+    return true;
+  });
+
+  // Take up to `limit` to crawl this cycle
+  const toCrawl = viable.slice(0, limit);
+  const remaining = viable.slice(limit);
+  const newItems: FeedItem[] = [];
+
+  const results = await Promise.all(
+    toCrawl.map(async (pc) => {
+      try {
+        const items = await crawlCollectionPage(pc.url, env);
+        const fresh = items.filter((i) => !existingUrls.has(normalizeUrl(i.url)));
+        if (fresh.length > 0) {
+          return { pc, items: fresh, success: true };
+        }
+        // Page crawled but no new items — still counts as success (don't retry)
+        return { pc, items: [], success: true };
+      } catch {
+        return { pc, items: [] as FeedItem[], success: false };
+      }
+    })
+  );
+
+  const stillPending: PendingCollection[] = [...remaining];
+  for (const r of results) {
+    newItems.push(...r.items);
+    if (!r.success) {
+      // Failed — keep in queue with incremented attempt count
+      stillPending.push({ ...r.pc, attempts: r.pc.attempts + 1 });
+    }
+    // Success — drop from queue (whether or not it found items)
+  }
+
+  return { items: newItems, updatedPending: stillPending };
 }
 
 // ── AI batch-tagging for discover items ─────────────────
@@ -453,8 +586,56 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
         lastRefreshed: archive.lastRefreshed,
         items: retained,
+        pendingCollections: archive.pendingCollections,
       }));
     }
+  }
+
+  // ── Opportunistic collection draining ──
+  // On each GET, try to crawl 1 pending collection in the background.
+  // This gradually fills in recipes from collection pages without
+  // requiring the user to manually refresh or hit Browser Rendering limits.
+  const pending = archive.pendingCollections ?? [];
+  if (pending.length > 0) {
+    const existingUrls = new Set(archive.items.map((i) => normalizeUrl(i.url)));
+    const enabledSources = config.sources.filter((s) => s.enabled);
+    // Fire-and-forget — don't block the GET response
+    drainPendingCollections(pending, existingUrls, env, 1).then(async (result) => {
+      if (result.items.length > 0 || result.updatedPending.length !== pending.length) {
+        const lifetimeDays = config.itemLifetimeDays;
+        const existingTitles = archive.items.map((i) => i.title);
+        const drainedItems: ArchiveItem[] = [];
+        for (const item of result.items) {
+          const key = normalizeUrl(item.url);
+          if (existingUrls.has(key)) continue;
+          const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
+          if (isDupTitle) continue;
+          existingUrls.add(key);
+          const domain = new URL(item.url).hostname.replace(/^www\./, "");
+          const sourceId = enabledSources.find((s) => s.url.includes(domain))?.id ?? "unknown";
+          const expiresAt = config.expirationEnabled
+            ? new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString()
+            : undefined;
+          drainedItems.push({
+            ...item,
+            source: sourceId,
+            category: classifyRecipe(item.title, item.description),
+            addedAt: new Date().toISOString(),
+            expiresAt,
+          });
+        }
+        if (drainedItems.length > 0) {
+          await batchTagItems(drainedItems, env);
+        }
+        // Re-read archive to avoid overwriting concurrent writes
+        const freshArchive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+        if (freshArchive) {
+          freshArchive.items.push(...drainedItems);
+          freshArchive.pendingCollections = result.updatedPending.length > 0 ? result.updatedPending : undefined;
+          await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(freshArchive));
+        }
+      }
+    }).catch(() => { /* fire-and-forget */ });
   }
 
   const filtered: Archive = { lastRefreshed: archive.lastRefreshed, items: visibleItems };
@@ -498,7 +679,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // Map of legacy source IDs to their dedicated site-specific scrapers.
   // These are optimized for sites with non-standard structures (Next.js RSC, Dotdash Meredith CMS).
   // For all other sites, the generic scraper auto-detects the framework and applies enhanced parsing.
-  const SITE_PROFILES: Record<string, (env: Env) => Promise<FeedItem[]>> = {
+  const SITE_PROFILES: Record<string, (env: Env) => Promise<FeedItem[] | ScrapeResult>> = {
     nyt: scrapeNextJsSite,          // Next.js RSC framework (cooking.nytimes.com)
     allrecipes: scrapeDotdashSite,  // Dotdash Meredith CMS (allrecipes.com)
     seriouseats: scrapeSeriousEatsSite, // Dotdash Meredith CMS variant (seriouseats.com)
@@ -506,13 +687,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // Scrape all enabled sources in parallel — use site profiles for known sites, generic for others
   const scrapeResults = await Promise.all(
-    enabledSources.map(async (src): Promise<{ sourceId: string; items: FeedItem[] }> => {
+    enabledSources.map(async (src): Promise<{ sourceId: string; items: FeedItem[]; uncrawledCollections?: string[] }> => {
       try {
         const siteProfile = SITE_PROFILES[src.id];
         if (siteProfile) {
-          // Use the dedicated site profile (optimized for this site's framework)
-          const items = await siteProfile(env);
-          return { sourceId: src.id, items };
+          const result = await siteProfile(env);
+          // Handle both FeedItem[] and ScrapeResult return types
+          if (Array.isArray(result)) {
+            return { sourceId: src.id, items: result };
+          }
+          return { sourceId: src.id, items: result.items, uncrawledCollections: result.uncrawledCollections };
         }
         // Generic scraper with auto-framework detection for user-configured sites
         const items = await scrapeGenericSite(src, env);
@@ -529,6 +713,54 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const existingUrls = new Set(archive?.items.map((i) => normalizeUrl(i.url)) ?? []);
   const existingTitles = (archive?.items ?? []).map((i) => i.title);
   const newItems: ArchiveItem[] = [];
+
+  // ── Drain pending collections from previous refresh cycles ──
+  // Attempt to crawl 2 pending collections each refresh, adding their recipes
+  const existingPending = archive?.pendingCollections ?? [];
+  let updatedPending: PendingCollection[] = [];
+  if (existingPending.length > 0) {
+    const drainResult = await drainPendingCollections(existingPending, existingUrls, env, 2);
+    updatedPending = drainResult.updatedPending;
+    for (const item of drainResult.items) {
+      const key = normalizeUrl(item.url);
+      if (existingUrls.has(key)) continue;
+      const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
+      if (isDupTitle) continue;
+      existingUrls.add(key);
+      existingTitles.push(item.title);
+      const expiresAt = config.expirationEnabled
+        ? new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
+      const domain = new URL(item.url).hostname.replace(/^www\./, "");
+      const sourceId = enabledSources.find((s) => s.url.includes(domain))?.id ?? "unknown";
+      newItems.push({
+        ...item,
+        source: sourceId,
+        category: classifyRecipe(item.title, item.description),
+        addedAt: now,
+        expiresAt,
+      });
+    }
+  }
+
+  // ── Collect newly discovered collection URLs from this scrape ──
+  const existingPendingUrls = new Set(updatedPending.map((p) => normalizeUrl(p.url)));
+  for (const { sourceId, uncrawledCollections } of scrapeResults) {
+    if (uncrawledCollections) {
+      for (const url of uncrawledCollections) {
+        const key = normalizeUrl(url);
+        if (!existingPendingUrls.has(key)) {
+          existingPendingUrls.add(key);
+          updatedPending.push({
+            url,
+            source: sourceId,
+            discoveredAt: now,
+            attempts: 0,
+          });
+        }
+      }
+    }
+  }
 
   for (const { sourceId, items } of scrapeResults) {
     for (const item of items) {
@@ -581,6 +813,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const updatedArchive: Archive = {
     lastRefreshed: now,
     items: [...cleanedExisting, ...newItems],
+    pendingCollections: updatedPending.length > 0 ? updatedPending : undefined,
   };
 
   await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive));
@@ -1401,7 +1634,13 @@ async function scrapeDotdashSite(env: Env): Promise<FeedItem[]> {
 // Similar to the main Dotdash profile but with additional slug-based
 // recipe vs non-recipe filtering specific to seriouseats.com's content mix.
 
-async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
+interface ScrapeResult {
+  items: FeedItem[];
+  /** Collection/roundup URLs discovered but not crawled (for incremental draining) */
+  uncrawledCollections?: string[];
+}
+
+async function scrapeSeriousEatsSite(env: Env): Promise<ScrapeResult> {
   const urls = [
     "https://www.seriouseats.com/recipes",
     "https://www.seriouseats.com/",
@@ -1409,6 +1648,7 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
 
   const allItems: FeedItem[] = [];
   const seen = new Set<string>();
+  const crawledCollectionUrls = new Set<string>();
 
   /** Check if a Serious Eats URL looks like a collection/roundup/gallery page.
    *  Dotdash Meredith collection pages have a numeric ID suffix (7+ digits),
@@ -1500,6 +1740,9 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
     return index;
   };
 
+  // Track all discovered collection URLs across page iterations
+  const allCollectionUrls: string[] = [];
+
   for (const pageUrl of urls) {
     try {
       const html = await fetchPage(pageUrl, env);
@@ -1509,11 +1752,10 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
 
       // Try JSON-LD extraction first (most reliable — only returns @type: Recipe)
       const jsonLdItems = extractJsonLdRecipes(html, "seriouseats.com");
-      const jsonLdCollectionUrls: string[] = [];
       for (const item of jsonLdItems) {
         // Filter out collection/roundup pages from JSON-LD results too
         if (isCollectionPage(item.url)) {
-          jsonLdCollectionUrls.push(item.url);
+          allCollectionUrls.push(item.url);
           continue;
         }
         if (!isRecipePage(item.url)) continue;
@@ -1528,9 +1770,6 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
           allItems.push(item);
         }
       }
-
-      // Collect all collection URLs (from JSON-LD and HTML extraction)
-      const allCollectionUrls: string[] = [...jsonLdCollectionUrls];
 
       // HTML link extraction — only if JSON-LD didn't yield enough
       if (allItems.length < 10) {
@@ -1571,7 +1810,8 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
           uniqueCollections.map(async (colUrl) => {
             try {
               const colHtml = await fetchPage(colUrl, env);
-              if (!colHtml) return [];
+              if (!colHtml) return { url: colUrl, items: [] as FeedItem[], success: false };
+              crawledCollectionUrls.add(colUrl);
               const colImageIndex = buildImageIndex(colHtml);
               // Extract recipe links from the collection page
               const colJsonLd = extractJsonLdRecipes(colHtml, "seriouseats.com");
@@ -1588,14 +1828,14 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
                     ?? colImageIndex.get(item.title.toLowerCase());
                 }
               }
-              return combined;
+              return { url: colUrl, items: combined, success: true };
             } catch {
-              return [];
+              return { url: colUrl, items: [] as FeedItem[], success: false };
             }
           })
         );
-        for (const colItems of collectionResults) {
-          for (const item of colItems) {
+        for (const result of collectionResults) {
+          for (const item of result.items) {
             const key = normalizeUrl(item.url);
             if (!seen.has(key)) {
               seen.add(key);
@@ -1611,10 +1851,17 @@ async function scrapeSeriousEatsSite(env: Env): Promise<FeedItem[]> {
     }
   }
 
-  return deduplicateByTitle(allItems).slice(0, 30).map((item) => ({
-    ...item,
-    imageUrl: sanitizeImageUrl(item.imageUrl),
-  }));
+  // Report uncrawled collections: discovered but not attempted, or attempted but failed
+  const allUniqueCollections = [...new Set(allCollectionUrls.map(normalizeUrl))];
+  const uncrawledCollections = allUniqueCollections.filter((u) => !crawledCollectionUrls.has(u));
+
+  return {
+    items: deduplicateByTitle(allItems).slice(0, 30).map((item) => ({
+      ...item,
+      imageUrl: sanitizeImageUrl(item.imageUrl),
+    })),
+    uncrawledCollections: uncrawledCollections.length > 0 ? uncrawledCollections : undefined,
+  };
 }
 
 // ── JSON-LD extraction (works for most modern recipe sites) ──
