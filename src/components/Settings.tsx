@@ -903,7 +903,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       >
                         {discoverConfigSaving ? "Saving..." : "Save Changes"}
                       </Button>
-                      <button
+                      <Button
                         onClick={() => {
                           if (discoverConfigSnapshot) {
                             setDiscoverConfig(discoverConfigSnapshot);
@@ -911,10 +911,11 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                             setDiscoverConfigError(null);
                           }
                         }}
-                        className="text-sm text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                        variant="secondary"
+                        className="text-sm"
                       >
                         Discard
-                      </button>
+                      </Button>
                       {discoverConfigError && (
                         <span className="text-xs text-red-500">{discoverConfigError}</span>
                       )}
