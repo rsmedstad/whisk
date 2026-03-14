@@ -282,6 +282,7 @@ export interface AICapabilities {
   nutritionEstimate: boolean;
   instagramImport: boolean;
   unsplash: boolean;
+  browserRendering: boolean;
 }
 
 export interface InspirationIdea {

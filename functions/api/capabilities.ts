@@ -8,6 +8,8 @@ interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
   APIFY_API_TOKEN?: string;
   UNSPLASH_ACCESS_KEY?: string;
+  CF_ACCOUNT_ID?: string;
+  CF_BR_TOKEN?: string;
 }
 
 // GET /api/capabilities — returns which AI features are available
@@ -21,9 +23,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   const nutritionEstimate = chat; // uses same provider as chat
   const instagramImport = !!env.APIFY_API_TOKEN;
   const unsplash = !!env.UNSPLASH_ACCESS_KEY;
+  const browserRendering = !!(env.CF_ACCOUNT_ID && env.CF_BR_TOKEN);
 
   return new Response(
-    JSON.stringify({ chat, vision, suggestions, nutritionEstimate, instagramImport, unsplash }),
+    JSON.stringify({ chat, vision, suggestions, nutritionEstimate, instagramImport, unsplash, browserRendering }),
     { headers: { "Content-Type": "application/json" } }
   );
 };

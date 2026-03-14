@@ -210,12 +210,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           });
         }
       }
+      const hasBR = !!(env.CF_ACCOUNT_ID && env.CF_BR_TOKEN);
+      const hasApify = !!env.APIFY_API_TOKEN;
+      let error = regularFetchFailed
+        ? "This site blocks automated access."
+        : "Received a very small response — site may be blocking automated requests.";
+      if (!hasBR && !hasApify) {
+        error += " Enable Browser Rendering (CF_ACCOUNT_ID + CF_BR_TOKEN) or Apify (APIFY_API_TOKEN) in your environment for better site support.";
+      } else if (!hasBR) {
+        error += " Enable Browser Rendering (CF_ACCOUNT_ID + CF_BR_TOKEN) for better blocked-site support.";
+      }
       return new Response(
-        JSON.stringify({
-          error: regularFetchFailed
-            ? "This site blocks automated access. Try copying the recipe text from the page and pasting it manually."
-            : "Received a very small response — site may be blocking automated requests",
-        }),
+        JSON.stringify({ error, browserRendering: hasBR }),
         { status: 422, headers: { "Content-Type": "application/json" } }
       );
     }

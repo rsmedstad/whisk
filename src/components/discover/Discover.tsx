@@ -547,10 +547,11 @@ export function Discover({
         } else {
           setImportError("Could not parse recipe from this page.");
         }
-      } catch {
-        setImportError(
-          "Could not load recipe. The site may be blocking access."
-        );
+      } catch (err) {
+        const message = err instanceof Error && err.message
+          ? err.message
+          : "Could not load recipe. The site may be blocking access.";
+        setImportError(message);
       } finally {
         setIsImporting(false);
       }

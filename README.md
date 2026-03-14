@@ -203,6 +203,28 @@ To add another provider, go to **Workers & Pages** > your project > **Settings**
 | `ANTHROPIC_API_KEY` | Anthropic | Paid | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
 | `XAI_API_KEY` | xAI Grok | Paid | [console.x.ai](https://console.x.ai/) |
 
+### Optional: Browser Rendering (Recommended)
+
+Some recipe sites (Food Network, Food52, The Kitchn, and others) block direct automated access. Browser Rendering uses a headless browser as a fallback to load these pages. Without it, Whisk can still import from most sites, but some recipe detail pages will show "site may be blocking access."
+
+1. Find your **Cloudflare Account ID** — visible in the dashboard URL (`dash.cloudflare.com/<account-id>`) or on the **Overview** page of any zone
+2. Create an **API token** with **Browser Rendering** permission:
+   - Go to **My Profile** > **API Tokens** > **Create Token**
+   - Use the **Custom token** template
+   - Add permission: **Account** > **Browser Rendering** > **Edit**
+   - Click **Continue to summary** > **Create Token**
+   - Copy the token
+3. Add both as environment variables in Cloudflare (**Workers & Pages** > your project > **Settings** > **Variables and Secrets**):
+
+| Variable name | Value |
+|---|---|
+| `CF_ACCOUNT_ID` | your Cloudflare account ID |
+| `CF_BR_TOKEN` | the API token you just created |
+
+4. Retry deployment
+
+You can check the status in **Settings > AI > Browser Rendering** — it will show "Active" when configured.
+
 ### Optional: Instagram Recipe Import
 
 This lets you paste an Instagram post URL and automatically extract the recipe from the caption.
@@ -212,6 +234,8 @@ This lets you paste an Instagram post URL and automatically extract the recipe f
 3. Copy your **Personal API token**
 4. Add it as `APIFY_API_TOKEN` in Cloudflare (**Workers & Pages** > your project > **Settings** > **Variables and Secrets**)
 5. Retry deployment
+
+You can check the status in **Settings > AI > Instagram Import** — it will show "Active" when configured.
 
 ---
 

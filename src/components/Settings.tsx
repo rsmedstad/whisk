@@ -1274,6 +1274,40 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               </Card>
             </section>
 
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Browser Rendering
+              </h2>
+              <Card>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium dark:text-stone-200">
+                        Headless Browser Fallback
+                      </p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                        Loads recipe pages that block direct access
+                      </p>
+                    </div>
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        capabilities.browserRendering
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                      }`}
+                    >
+                      {capabilities.browserRendering ? "Active" : "Not configured"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-400 dark:text-stone-500">
+                    {capabilities.browserRendering
+                      ? "Whisk can use a headless browser to load recipe pages from sites that block automated access."
+                      : "Some recipe sites block direct access. Add CF_ACCOUNT_ID and CF_BR_TOKEN to your environment variables to enable headless browser fallback. See the self-hosting guide for setup instructions."}
+                  </p>
+                </div>
+              </Card>
+            </section>
+
             <AIPerformanceLogs />
           </>
         )}

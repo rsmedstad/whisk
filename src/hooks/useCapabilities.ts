@@ -12,6 +12,7 @@ const NONE: AICapabilities = {
   nutritionEstimate: false,
   instagramImport: false,
   unsplash: false,
+  browserRendering: false,
 };
 
 export function useCapabilities() {
