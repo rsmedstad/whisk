@@ -1425,7 +1425,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                           Import Book
                         </Button>
                         <p className="text-xs text-stone-400 dark:text-stone-500 text-center">
-                          Accepts .json files exported from Whisk. If you don't see the file, change the file picker filter to "All Files."
+                          .json file from a Whisk export. You may need to set the file picker to "All Files" to see it.
                         </p>
                       </div>
                     ) : (

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Inbox, Pencil, Globe } from "../ui/Icon";
+import { Inbox, Pencil, Globe, BookOpen } from "../ui/Icon";
 
 export function FirstRunGuide() {
   const navigate = useNavigate();
@@ -63,6 +63,31 @@ export function FirstRunGuide() {
               </p>
               <p className="text-sm text-stone-500 dark:text-stone-400">
                 Grab a recipe from any website
+              </p>
+            </div>
+          </div>
+        </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 py-1">
+          <div className="flex-1 border-t border-stone-200 dark:border-stone-700" />
+          <span className="text-xs text-stone-400 dark:text-stone-500">or</span>
+          <div className="flex-1 border-t border-stone-200 dark:border-stone-700" />
+        </div>
+
+        {/* Import Whisk Book */}
+        <button
+          onClick={() => navigate("/settings", { state: { tab: "data" } })}
+          className="w-full rounded-xl border border-stone-200 bg-white p-4 text-left dark:border-stone-700 dark:bg-stone-900"
+        >
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-6 h-6 text-stone-500 dark:text-stone-400 shrink-0" />
+            <div>
+              <p className="font-semibold text-stone-800 dark:text-stone-100">
+                Import Whisk Book
+              </p>
+              <p className="text-sm text-stone-500 dark:text-stone-400">
+                Restore from a Whisk export (.json) file
               </p>
             </div>
           </div>
