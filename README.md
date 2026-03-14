@@ -1,8 +1,17 @@
 # Whisk
 
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/rsmedstad/whisk)](https://github.com/rsmedstad/whisk/releases)
+[![Deploy to Cloudflare](https://img.shields.io/badge/Deploy-Cloudflare%20Pages-orange.svg)](https://pages.cloudflare.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
+
 A personal recipe manager that works like a native app on your phone. Manage recipes, plan meals, build shopping lists, and use AI to discover new dishes — all from a fast, offline-capable PWA you fully own and control.
 
 Free to host on Cloudflare's free tier. No coding required.
+
+<!-- Add screenshots here: place images in docs/screenshots/ and reference them -->
+<!-- ![Whisk Screenshots](docs/screenshots/hero.png) -->
 
 ---
 
