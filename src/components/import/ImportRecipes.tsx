@@ -130,6 +130,11 @@ export function ImportRecipes({ onImportComplete }: ImportRecipesProps) {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
+      // Detect Whisk JSON export and redirect to Import Book in Settings
+      if (file.name.endsWith(".json")) {
+        setParseError("This looks like a Whisk export file (.json). To import it, go to Settings > Data > Import Book.");
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === "string") {
@@ -261,7 +266,7 @@ export function ImportRecipes({ onImportComplete }: ImportRecipesProps) {
               <p>
                 Paste content from Google Sheets, Excel, a text document, notes
                 app, or any list of recipes. Whisk will automatically detect the
-                format.
+                format. To import a Whisk export (.json), use Settings &gt; Data &gt; Import Book.
               </p>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {["Google Sheets", "Excel / CSV", "Plain text", "Notes"].map(
