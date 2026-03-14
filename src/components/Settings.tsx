@@ -1460,60 +1460,30 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 About
               </h2>
               <Card>
-                <div className="space-y-4">
-                  <div className="text-sm text-stone-500 dark:text-stone-400 space-y-1">
-                    <p className="font-medium dark:text-stone-300">Whisk v1.0.0</p>
-                    <p>Personal Recipe Manager</p>
-                  </div>
-                </div>
-              </Card>
-            </section>
-
-            <section>
-              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
-                Updates
-              </h2>
-              <Card>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm font-medium dark:text-stone-300 mb-1">
-                      Check for Updates
-                    </p>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-3">
-                      If you self-host Whisk, you can pull the latest features from the main repo. Go to your fork on GitHub, click &ldquo;Sync fork&rdquo;, then &ldquo;Update branch&rdquo;. Cloudflare Pages will automatically rebuild and deploy.
-                    </p>
-                    <div className="flex gap-2">
-                      <a
-                        href="https://github.com/rsmedstad/whisk"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[var(--wk-radius-btn)] text-sm font-medium border border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400 hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
-                      >
-                        <Globe className="w-4 h-4" />
-                        View on GitHub
-                      </a>
-                    </div>
-                    <p className="text-xs text-stone-400 dark:text-stone-500 mt-2">
-                      Updates are applied automatically. The app checks for new versions in the background.
-                    </p>
-                  </div>
-
-                  <div className="border-t border-stone-200 dark:border-stone-700 pt-3">
-                    <p className="text-sm font-medium dark:text-stone-300 mb-1">
-                      Self-Hosting Guide
-                    </p>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
-                      Full setup instructions for deploying your own instance with Cloudflare Pages, KV, R2, and optional AI providers.
-                    </p>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium dark:text-stone-300">Whisk v1.0.0</p>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="https://github.com/rsmedstad/whisk"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--wk-radius-btn)] text-xs font-medium border border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400 hover:border-orange-500 hover:text-orange-600 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      GitHub
+                    </a>
                     <a
                       href="https://github.com/rsmedstad/whisk#self-hosting-guide"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-medium text-orange-600 dark:text-orange-400 hover:underline"
                     >
-                      Read the setup guide on GitHub
+                      Self-hosting guide
                     </a>
                   </div>
+                  <p className="text-xs text-stone-400 dark:text-stone-500">
+                    Updates apply automatically. Self-hosters: sync your fork on GitHub to pull new features.
+                  </p>
                 </div>
               </Card>
             </section>
