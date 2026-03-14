@@ -726,6 +726,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (existingUrls.has(key)) continue;
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
+      // Skip person/author pages that were scraped as recipes
+      if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
       existingUrls.add(key);
       existingTitles.push(item.title);
       const expiresAt = config.expirationEnabled
@@ -768,6 +770,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (existingUrls.has(key)) continue;
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
+      // Skip person/author pages that were scraped as recipes
+      if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
       existingUrls.add(key);
       existingTitles.push(item.title);
       const expiresAt = config.expirationEnabled
@@ -904,6 +908,8 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
 function archiveToCategoryFeed(archive: Archive): CategoryFeed {
   const categories: Partial<Record<DiscoverCategory, ArchiveItem[]>> = {};
   for (const item of archive.items) {
+    // Skip person/author entries that slipped into the archive
+    if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
     // Re-classify instead of using the frozen category from scrape time
     const cat = classifyRecipe(item.title, item.description);
     if (!categories[cat]) categories[cat] = [];
@@ -1437,7 +1443,7 @@ function findRecipesInJson(
     }
   }
 
-  if (name && recipeUrl) {
+  if (name && recipeUrl && !isPersonTitle(name) && !isAuthorUrl(recipeUrl)) {
     const imageUrl = extractImageFromJson(rec);
     const description =
       typeof rec.description === "string"
@@ -1904,7 +1910,7 @@ function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: stri
         const e = entry as Record<string, unknown>;
         const itemUrl = typeof e.url === "string" ? e.url : undefined;
         const itemName = typeof e.name === "string" ? e.name : undefined;
-        if (itemUrl && itemName && itemUrl.includes(domain)) {
+        if (itemUrl && itemName && itemUrl.includes(domain) && !isPersonTitle(itemName) && !isAuthorUrl(itemUrl)) {
           const imageUrl = extractJsonLdImage(e);
           items.push({ title: itemName, url: itemUrl, imageUrl, description: typeof e.description === "string" ? e.description.slice(0, 200) : undefined });
         }
@@ -2123,6 +2129,30 @@ function isValidImageUrl(url: string, _domain: string): boolean {
   if (/\.(jpg|jpeg|png|webp|avif)/i.test(url)) return true;
   if (url.includes("/thmb/") || url.includes("/image/") || url.includes("imagesvc")) return true;
   return false;
+}
+
+/**
+ * Detect titles that look like a person's name rather than a recipe.
+ * Catches "First Last" patterns without food-related words.
+ */
+function isPersonTitle(title: string): boolean {
+  const t = title.trim();
+  // Two or three capitalized words with no food/recipe keywords — likely a person name
+  if (/^[A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+$/.test(t)) {
+    // Allow if it contains common recipe words
+    if (/\b(?:recipe|cake|pie|salad|soup|stew|chicken|beef|pork|pasta|rice|bread|sauce|roast|grilled|baked|fried)\b/i.test(t)) return false;
+    return true;
+  }
+  // URL path that points to an author/profile page
+  if (/\/(?:author|chef|chefs|cook|cooks|contributor|profile|person|people|staff|writers?|editors?)\//i.test(t)) return true;
+  return false;
+}
+
+/**
+ * Detect URLs that point to author/profile pages rather than recipes.
+ */
+function isAuthorUrl(url: string): boolean {
+  return /\/(?:authors?|chefs?|cooks?|contributors?|profiles?|people|staff|writers?|editors?)(?:\/|$)/i.test(url);
 }
 
 /**
