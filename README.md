@@ -1,7 +1,7 @@
 # Whisk
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/github/v/release/rsmedstad/whisk)](https://github.com/rsmedstad/whisk/releases)
+[![GitHub release](https://img.shields.io/github/v/release/rsmedstad/whisk?cache_seconds=3600)](https://github.com/rsmedstad/whisk/releases)
 [![Deploy to Cloudflare](https://img.shields.io/badge/Deploy-Cloudflare%20Pages-orange.svg)](https://pages.cloudflare.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
