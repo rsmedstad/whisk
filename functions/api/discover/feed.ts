@@ -201,15 +201,24 @@ const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
   ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
   ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
   ["appetizer", /\b(?:appetizers?|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
-  ["snack", /\b(?:snacks?|popcorn|trail mix|chips?|crackers?|energy balls?|protein bars?)\b/i],
+  ["snack", /\b(?:snacks?|popcorn|trail mix|(?<!fish and )chips?|crackers?|energy balls?|protein bars?)\b/i],
   ["side dish", /\b(?:side dish|mashed potatoes?|roasted vegetables?|rice pilaf|couscous|baked beans|corn ?bread|mac and cheese|macaroni|stuffing|au gratin|roasted potatoes?|french fries|fries|potato salad)\b/i],
   // "dinner" is the default/catch-all for main dishes
 ];
 
+/** Main-dish proteins — if the title contains one of these, override snack/appetizer categories */
+const MAIN_DISH_PROTEIN = /\b(?:fish|salmon|tuna|shrimp|chicken|turkey|duck|pork|beef|steak|lamb|veal|ribs|brisket|meatloaf|roast|chops?)\b/i;
+
 function classifyRecipe(title: string, description?: string): DiscoverCategory {
   const text = `${title} ${description ?? ""}`;
   for (const [category, pattern] of CATEGORY_KEYWORDS) {
-    if (pattern.test(text)) return category;
+    if (pattern.test(text)) {
+      // Don't let a description keyword override when the title is clearly a main dish
+      if ((category === "snack" || category === "appetizer") && MAIN_DISH_PROTEIN.test(title)) {
+        return "dinner";
+      }
+      return category;
+    }
   }
   return "dinner"; // Default: main dish / entrée
 }
@@ -393,7 +402,7 @@ async function batchTagItems(
             "Rules:",
             "- Only use tags from the list above.",
             "- Include the meal type (dinner, breakfast, dessert, etc.) and cuisine if identifiable.",
-            "- Include diet tags only when clearly applicable.",
+            "- Include diet tags only when clearly applicable. NEVER tag a recipe as 'vegan' or 'vegetarian' if it contains meat, poultry, fish, or seafood.",
             "- Estimate totalTime as a number in minutes. Use your knowledge of typical recipes.",
             '- Return JSON: { "results": [{ "index": 1, "tags": ["dinner", "italian"], "totalTime": 45 }, ...] }',
           ].join("\n"),
@@ -413,7 +422,8 @@ async function batchTagItems(
               .map((t) => t.toLowerCase().trim())
               .filter((t) => DISCOVER_TAG_SET.has(t));
             if (validTags.length > 0) {
-              item.tags = [...new Set(validTags)]; // dedupe
+              const itemText = `${item.title} ${item.description ?? ""}`.toLowerCase();
+              item.tags = sanitizeDietTags([...new Set(validTags)], itemText); // dedupe + cross-validate
             }
             // Store estimated total time (only if item doesn't already have it from JSON-LD)
             if (!item.totalTime && typeof result.totalTime === "number" && result.totalTime > 0 && result.totalTime < 1440) {
@@ -533,6 +543,22 @@ function keywordTagItem(item: ArchiveItem): string[] {
   if (/\bketo\b/.test(text)) tags.push("keto");
   if (/\bhealthy\b/.test(text)) tags.push("healthy");
 
+  // Cross-validate: remove impossible diet tags
+  return sanitizeDietTags(tags, text);
+}
+
+/** Remove diet tags that contradict the recipe content.
+ *  e.g. "vegan" on a recipe with fish, chicken, beef, etc. */
+function sanitizeDietTags(tags: string[], text: string): string[] {
+  const hasAnimalProtein = /\b(?:fish|salmon|tuna|shrimp|prawn|lobster|crab|cod|halibut|tilapia|mahi|swordfish|trout|bass|anchov|sardine|mackerel|clam|mussel|oyster|scallop|squid|calamari|octopus|seafood|chicken|turkey|duck|pork|bacon|ham|sausage|beef|steak|lamb|veal|venison|bison|meat|ribs|brisket)\b/.test(text);
+  const hasDairy = /\b(?:cheese|cream|butter|milk|yogurt|whey)\b/.test(text);
+
+  if (hasAnimalProtein) {
+    return tags.filter((t) => t !== "vegan" && t !== "vegetarian");
+  }
+  if (hasDairy) {
+    return tags.filter((t) => t !== "vegan");
+  }
   return tags;
 }
 
@@ -912,10 +938,20 @@ function archiveToCategoryFeed(archive: Archive): CategoryFeed {
     if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
     // Re-classify instead of using the frozen category from scrape time
     const cat = classifyRecipe(item.title, item.description);
+    // Ensure the item's tags include its category tag (keep them consistent)
+    const catTag = cat === "soups" ? "dinner" : cat;
+    let tags = item.tags;
+    if (tags && tags.length > 0 && DISCOVER_TAG_SET.has(catTag) && !tags.includes(catTag)) {
+      // Replace conflicting meal-type tags with the actual category
+      const mealTags = new Set(["breakfast", "brunch", "dinner", "salad", "dessert", "appetizer", "snack", "side dish", "drinks"]);
+      tags = tags.filter((t) => !mealTags.has(t));
+      tags.unshift(catTag);
+    }
     if (!categories[cat]) categories[cat] = [];
     categories[cat]!.push({
       ...item,
       category: cat,
+      tags,
       imageUrl: sanitizeImageUrl(item.imageUrl),
     });
   }
