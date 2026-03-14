@@ -5,12 +5,12 @@ pages_build_output_dir = "dist"
 # Demo KV namespace (isolated from personal instance)
 [[kv_namespaces]]
 binding = "WHISK_KV"
-id = "212ca20cb74b475da57767af91a23564"
+id = "f9cf1abb6a4f48da8ba3263d3dd2dffe"
 
 # Demo R2 bucket (isolated from personal instance)
 [[r2_buckets]]
 binding = "WHISK_R2"
-bucket_name = "whisk-demo-photos-2"
+bucket_name = "whisk-demo-photos"
 
 [vars]
 ENVIRONMENT = "production"
