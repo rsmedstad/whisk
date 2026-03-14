@@ -1977,6 +1977,15 @@ export function Discover({
           <LoadingSpinner className="py-16" size="lg" />
         )}
 
+        {feedError && hasFeedContent && (
+          <div className="mx-4 mb-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2">
+            <p className="text-xs text-amber-700 dark:text-amber-300 flex-1">{feedError}</p>
+            <button onClick={() => setFeedError(null)} className="text-amber-400 hover:text-amber-600 shrink-0">
+              <XMark className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {feedError && !hasFeedContent && (
           <div className="px-4 py-8">
             <Card>
@@ -2092,12 +2101,26 @@ export function Discover({
                           {timeAgo(feed.lastRefreshed)}
                         </span>
                         <button
-                          onClick={() => refreshFeed(true)}
+                          onClick={() => {
+                            if (!autoRefreshEnabled) {
+                              setFeedError("Auto-refresh is paused. Enable it in Settings > Display > Discover Feed.");
+                              return;
+                            }
+                            refreshFeed(true);
+                          }}
                           disabled={feedLoading}
-                          className="p-1 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
-                          title="Refresh"
+                          className={classNames(
+                            "p-1 relative transition-colors",
+                            !autoRefreshEnabled
+                              ? "text-stone-300 dark:text-stone-600"
+                              : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+                          )}
+                          title={autoRefreshEnabled ? "Refresh" : "Auto-refresh paused"}
                         >
                           <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
+                          {!autoRefreshEnabled && (
+                            <XMark className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 text-red-500 bg-white dark:bg-stone-900 rounded-full" />
+                          )}
                         </button>
                       </div>
                     )}
@@ -2137,12 +2160,26 @@ export function Discover({
                     {timeAgo(feed.lastRefreshed)}
                   </span>
                   <button
-                    onClick={() => refreshFeed(true)}
+                    onClick={() => {
+                      if (!autoRefreshEnabled) {
+                        setFeedError("Auto-refresh is paused. Enable it in Settings > Display > Discover Feed.");
+                        return;
+                      }
+                      refreshFeed(true);
+                    }}
                     disabled={feedLoading}
-                    className="p-1 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 transition-colors"
-                    title="Refresh"
+                    className={classNames(
+                      "p-1 relative transition-colors",
+                      !autoRefreshEnabled
+                        ? "text-stone-300 dark:text-stone-600"
+                        : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+                    )}
+                    title={autoRefreshEnabled ? "Refresh" : "Auto-refresh paused"}
                   >
                     <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
+                    {!autoRefreshEnabled && (
+                      <XMark className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 text-red-500 bg-white dark:bg-stone-900 rounded-full" />
+                    )}
                   </button>
                 </div>
               )}
