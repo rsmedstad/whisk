@@ -35,6 +35,7 @@ const SLOT_TAGS: Record<MealSlot, string[]> = {
   dinner: ["dinner", "main", "entree", "entrée", "supper"],
   snack: ["snack", "appetizer", "dip", "finger food", "side"],
   dessert: ["dessert", "desserts", "baking", "cake", "cookie", "sweet"],
+  extra: [],
 };
 
 /** Score a recipe for quick-add ranking. Higher = better suggestion. */

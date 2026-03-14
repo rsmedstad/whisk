@@ -921,18 +921,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
                       Which meals to show in your weekly plan
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {(["breakfast", "lunch", "dinner", "snack", "dessert"] as const).map((slot) => {
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["breakfast", "lunch", "dinner", "snack", "dessert", "extra"] as const).map((slot) => {
                         const enabled = mealSlots.includes(slot);
                         return (
-                          <label
-                            key={slot}
-                            className="flex items-center gap-2 px-3 py-2 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={enabled}
-                              onChange={() => {
+                          <div key={slot} className="flex items-center justify-between px-3 py-2 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700">
+                            <span className="text-sm dark:text-stone-200 capitalize">{slot}</span>
+                            <button
+                              onClick={() => {
                                 const updated = enabled
                                   ? mealSlots.filter((s) => s !== slot)
                                   : [...mealSlots, slot];
@@ -940,10 +936,17 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                                 setMealSlots(updated);
                                 localStorage.setItem("whisk_meal_slots", JSON.stringify(updated));
                               }}
-                              className="w-4 h-4 rounded border-stone-300 text-orange-500 accent-orange-500"
-                            />
-                            <span className="text-sm dark:text-stone-200 capitalize">{slot}</span>
-                          </label>
+                              className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
+                                enabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                              }`}
+                            >
+                              <span
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                  enabled ? "translate-x-5" : ""
+                                }`}
+                              />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>

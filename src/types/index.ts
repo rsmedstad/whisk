@@ -163,7 +163,7 @@ export interface PlannedMeal {
   sourceRecipeServings?: number;
 }
 
-export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack" | "dessert";
+export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack" | "dessert" | "extra";
 
 
 // ── User Preferences (for Ask tab context) ─────────────
