@@ -577,6 +577,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ lastRefreshed: null, categories: {} });
   }
 
+  // One-time migration: sanitize impossible diet tags on existing items
+  // (e.g. "vegan" on fish recipes). Runs once then marks archive as sanitized.
+  if (!(archive as Archive & { _dietSanitized?: boolean })._dietSanitized) {
+    let changed = false;
+    for (const item of archive.items) {
+      if (!item.tags || item.tags.length === 0) continue;
+      const text = `${item.title} ${item.description ?? ""}`.toLowerCase();
+      const sanitized = sanitizeDietTags(item.tags, text);
+      if (sanitized.length !== item.tags.length || sanitized.some((t, i) => t !== item.tags![i])) {
+        item.tags = sanitized;
+        changed = true;
+      }
+    }
+    if (changed) {
+      // Persist sanitized tags + flag back to KV (fire-and-forget)
+      (archive as Archive & { _dietSanitized?: boolean })._dietSanitized = true;
+      env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(archive));
+    }
+  }
+
   // Use config for lifetime, or client override via ?lifetime=N
   const { searchParams } = new URL(request.url);
   const lifetimeDays = parseInt(searchParams.get("lifetime") ?? "", 10) || config.itemLifetimeDays;
