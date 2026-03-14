@@ -938,10 +938,20 @@ function archiveToCategoryFeed(archive: Archive): CategoryFeed {
     if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
     // Re-classify instead of using the frozen category from scrape time
     const cat = classifyRecipe(item.title, item.description);
+    // Ensure the item's tags include its category tag (keep them consistent)
+    const catTag = cat === "soups" ? "dinner" : cat;
+    let tags = item.tags;
+    if (tags && tags.length > 0 && DISCOVER_TAG_SET.has(catTag) && !tags.includes(catTag)) {
+      // Replace conflicting meal-type tags with the actual category
+      const mealTags = new Set(["breakfast", "brunch", "dinner", "salad", "dessert", "appetizer", "snack", "side dish", "drinks"]);
+      tags = tags.filter((t) => !mealTags.has(t));
+      tags.unshift(catTag);
+    }
     if (!categories[cat]) categories[cat] = [];
     categories[cat]!.push({
       ...item,
       category: cat,
+      tags,
       imageUrl: sanitizeImageUrl(item.imageUrl),
     });
   }
