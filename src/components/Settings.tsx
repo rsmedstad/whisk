@@ -1411,7 +1411,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     <input
                       ref={importFileRef}
                       type="file"
-                      accept=".json"
+                      accept=".json,application/json"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
