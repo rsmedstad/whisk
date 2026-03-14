@@ -949,6 +949,7 @@ export function Discover({
   // Count new items for the badge
   const newCount = useMemo(() => allItems.filter((i) => isNewItem(i, feed?.lastRefreshed)).length, [allItems, feed?.lastRefreshed]);
   // Count expiring items (for conditional sort option)
+  const expirationEnabled = discoverConfig?.expirationEnabled !== false;
   const expiringCount = useMemo(() => allItems.filter((i) => isExpiringItem(i)).length, [allItems]);
 
   // Check if any filters are active (to switch from carousel to grid)
@@ -2036,7 +2037,7 @@ export function Discover({
                       )}
                       {catExpiringCount > 0 && (
                         <span className="ml-1.5 text-[10px] font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded-full">
-                          {catExpiringCount} leaving soon
+                          {catExpiringCount} leaving soon{!expirationEnabled && " (paused)"}
                         </span>
                       )}
                       {showDrinkPills && (
@@ -2094,6 +2095,7 @@ export function Discover({
                         isSaved={savedUrls.has(item.url)}
                         isSaving={savingUrls.has(item.url)}
                         sourceLabel={sourceLabel(item.source)}
+                        expirationEnabled={expirationEnabled}
                       />
                     ))}
                   </div>
@@ -2177,6 +2179,7 @@ function FeedCard({
   isSaved,
   isSaving,
   sourceLabel,
+  expirationEnabled,
 }: {
   item: DiscoverFeedItem;
   category: DiscoverCategory;
@@ -2186,6 +2189,7 @@ function FeedCard({
   isSaved?: boolean;
   isSaving?: boolean;
   sourceLabel: string;
+  expirationEnabled?: boolean;
 }) {
   const itemIsNew = isNewItem(item, lastRefreshed);
   const itemIsExpiring = !itemIsNew && isExpiringItem(item);
@@ -2216,7 +2220,7 @@ function FeedCard({
           </div>
         )}
         {itemIsExpiring && (
-          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-amber-500/90 backdrop-blur-sm" title={expiryDays === 0 ? "Expiring today — save to keep" : `Leaving in ${expiryDays}d — save to keep`}>
+          <div className="absolute top-1.5 left-1.5 p-1 rounded-full bg-amber-500/90 backdrop-blur-sm" title={expirationEnabled === false ? "Expiration paused" : expiryDays === 0 ? "Expiring today — save to keep" : `Leaving in ${expiryDays}d — save to keep`}>
             <Hourglass className="w-3.5 h-3.5 text-white" />
           </div>
         )}
