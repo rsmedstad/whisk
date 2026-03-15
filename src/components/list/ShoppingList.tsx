@@ -399,7 +399,7 @@ export function ShoppingList({
     }
   }, [onClassifyUncategorized]);
 
-  /** Single "Clean up" action: classify uncategorized items, then consolidate duplicates */
+  /** Single "Organize" action: classify uncategorized items, then consolidate duplicates */
   const handleCleanUp = useCallback(async () => {
     const needsClassification = list.items.some((i) => i.category === "other" || !i.subcategory);
     if (needsClassification) {
@@ -745,7 +745,7 @@ export function ShoppingList({
                     : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400 hover:border-violet-300 hover:text-violet-600"
                 )}
               >
-                <Sparkles className="w-3 h-3" /> {isClassifying ? "Classifying..." : isSmartLoading ? "Consolidating..." : "Clean up"}
+                <Sparkles className="w-3 h-3" /> {isClassifying ? "Classifying..." : isSmartLoading ? "Consolidating..." : "Organize"}
               </button>
             )}
           </div>
