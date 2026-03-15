@@ -740,7 +740,7 @@ export function ShoppingList({
                     : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400 hover:border-violet-300 hover:text-violet-600"
                 )}
               >
-                <Sparkles className="w-3 h-3" /> {isSmartLoading ? "..." : "Smart"}
+                <Sparkles className="w-3 h-3" /> {isSmartLoading ? "..." : "Consolidate"}
               </button>
             )}
           </div>
@@ -1041,26 +1041,55 @@ export function ShoppingList({
                             <span className="text-stone-300 dark:text-stone-600 font-normal">({items.length})</span>
                           </h3>
                           <ul className="space-y-1">
-                            {items.sort((a, b) => a.name.localeCompare(b.name)).map((si, idx) => (
+                            {(() => {
+                              const checkedMap = new Map(list.items.map(i => [i.id, i.checked]));
+                              return items.sort((a, b) => a.name.localeCompare(b.name)).map((si, idx) => {
+                              const allChecked = si.sourceItemIds.every(id => checkedMap.get(id));
+                              return (
                               <li
                                 key={`${cat}-${idx}`}
                                 className="flex items-center gap-2 rounded-lg px-3 py-2 bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800"
                               >
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-sm dark:text-stone-100">{si.name}</span>
-                                  {si.amount && (
-                                    <span className="ml-1.5 text-xs text-stone-400 dark:text-stone-500">
-                                      {si.amount}{si.unit ? ` ${si.unit}` : ""}
-                                    </span>
-                                  )}
-                                </div>
+                                <button
+                                  onClick={() => {
+                                    for (const id of si.sourceItemIds) {
+                                      const isChecked = checkedMap.get(id);
+                                      if (isChecked !== undefined && isChecked !== !allChecked) onToggleItem(id);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 flex-1 min-w-0 py-0.5 text-left"
+                                >
+                                  <span
+                                    className={classNames(
+                                      "h-5 w-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors",
+                                      allChecked
+                                        ? "bg-orange-500 border-orange-500 text-white"
+                                        : "border-stone-300 dark:border-stone-600"
+                                    )}
+                                  >
+                                    {allChecked && <Check className="w-3 h-3" />}
+                                  </span>
+                                  <span className={classNames(
+                                    "flex-1 min-w-0",
+                                    allChecked && "line-through text-stone-400 dark:text-stone-500"
+                                  )}>
+                                    <span className={classNames("text-sm", allChecked ? "text-stone-400 dark:text-stone-500" : "dark:text-stone-100")}>{si.name}</span>
+                                    {si.amount && (
+                                      <span className="ml-1.5 text-xs text-stone-400 dark:text-stone-500">
+                                        {si.amount}{si.unit ? ` ${si.unit}` : ""}
+                                      </span>
+                                    )}
+                                  </span>
+                                </button>
                                 {si.sourceItemIds.length > 1 && (
                                   <span className="text-[10px] rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 px-1.5 py-0.5 font-medium">
                                     {si.sourceItemIds.length}x
                                   </span>
                                 )}
                               </li>
-                            ))}
+                              );
+                            });
+                            })()}
                           </ul>
                         </section>
                       ));
