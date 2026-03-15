@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
@@ -53,6 +53,14 @@ export function Login({
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [bookExists, setBookExists] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth")
+      .then((r) => r.json() as Promise<{ bookExists: boolean }>)
+      .then((data) => setBookExists(data.bookExists))
+      .catch(() => setBookExists(null));
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -77,6 +85,42 @@ export function Login({
   }
 
   if (screen === "welcome") {
+    // If book exists, go straight to join screen
+    if (bookExists === true) {
+      return (
+        <main className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
+          <div className="w-full max-w-sm">
+            <div className="text-center mb-10">
+              <h1 className="text-4xl font-bold text-orange-500 mb-2">Whisk</h1>
+              <p className="text-stone-600 dark:text-stone-400">
+                Your personal recipe book
+              </p>
+            </div>
+
+            <InstallPrompt />
+
+            <div className="space-y-3">
+              <Button fullWidth onClick={() => setScreen("join")}>
+                Join This Book
+              </Button>
+              <p className="text-xs text-center text-stone-500 dark:text-stone-500">
+                Want your own book?{" "}
+                <a
+                  href="https://github.com/rsmedstad/whisk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-orange-500 underline"
+                >
+                  Fork & deploy your own Whisk
+                </a>
+              </p>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    // If no book exists (or still loading), show both options
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
         <div className="w-full max-w-sm">
@@ -90,11 +134,11 @@ export function Login({
           <InstallPrompt />
 
           <div className="space-y-3">
-            <Button fullWidth onClick={() => setScreen("join")}>
-              Join an Existing Book
-            </Button>
-            <Button variant="secondary" fullWidth onClick={() => setScreen("setup-info")}>
+            <Button fullWidth onClick={() => setScreen("setup-info")}>
               Set Up a New Book
+            </Button>
+            <Button variant="secondary" fullWidth onClick={() => setScreen("join")}>
+              I Already Have a Book
             </Button>
           </div>
         </div>
@@ -149,8 +193,17 @@ export function Login({
           </Card>
 
           <div className="mt-6 space-y-3">
-            <Button fullWidth onClick={() => setScreen("join")}>
-              I've deployed — sign in
+            <a
+              href="https://github.com/rsmedstad/whisk"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button fullWidth>
+                View Setup Guide on GitHub
+              </Button>
+            </a>
+            <Button variant="secondary" fullWidth onClick={() => setScreen("join")}>
+              I've already deployed — sign in
             </Button>
             <p className="text-xs text-center text-stone-600 dark:text-stone-400">
               After setup, use the Share button in Settings to share your book URL and password with household members so they can join
