@@ -571,23 +571,6 @@ export function ShoppingList({
             <h1 className="text-lg font-bold dark:text-stone-100">List</h1>
           </button>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                setFilterOpen((prev) => {
-                  if (prev) setFilterQuery("");
-                  return !prev;
-                });
-              }}
-              className={classNames(
-                "p-2 transition-colors",
-                filterOpen
-                  ? "text-orange-500"
-                  : "text-stone-500 dark:text-stone-400 hover:text-orange-500"
-              )}
-              title="Filter list"
-            >
-              <Filter className="w-5 h-5" />
-            </button>
             {visionEnabled && (
               <button
                 onClick={handleListScan}
@@ -662,6 +645,24 @@ export function ShoppingList({
         {/* Filter bar — sort, toggles, classify, clear */}
         {totalCount > 0 && (
           <div className={classNames("flex items-center gap-1.5 px-4 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
+            {/* Filter toggle */}
+            <button
+              onClick={() => {
+                setFilterOpen((prev) => {
+                  if (prev) setFilterQuery("");
+                  return !prev;
+                });
+              }}
+              className={classNames(
+                "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
+                filterOpen || filterQuery
+                  ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
+                  : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+              )}
+              title="Filter list"
+            >
+              <Filter className="w-3.5 h-3.5" />
+            </button>
             {/* Group mode dropdown */}
             <div className="relative">
               <button
