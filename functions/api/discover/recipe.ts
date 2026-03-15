@@ -20,6 +20,38 @@ interface GeneratedRecipe {
   tags: string[];
 }
 
+/** Hash a URL to a short hex string for KV cache key lookup */
+async function hashUrl(url: string): Promise<string> {
+  const normalized = url.replace(/\/$/, "").replace(/^http:/, "https:");
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+
+// GET /api/discover/recipe?url=... — Serve cached imported recipe data
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  const { searchParams } = new URL(request.url);
+  const url = searchParams.get("url");
+  if (!url) {
+    return new Response(JSON.stringify({ error: "url parameter required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const cacheKey = `discover_cache:${await hashUrl(url)}`;
+  const cached = await env.WHISK_KV.get(cacheKey, "text");
+  if (cached) {
+    return new Response(cached, {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify({ error: "Recipe not cached" }), {
+    status: 404,
+    headers: { "Content-Type": "application/json" },
+  });
+};
+
 // POST /api/discover/recipe — Generate a full recipe from an idea
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json()) as { title: string; description: string };

@@ -518,10 +518,31 @@ export function Discover({
       setIsImporting(true);
 
       try {
-        const data = await api.post<ImportedRecipe>("/import/url", {
-          url: item.url,
-          downloadImage: true,
-        });
+        // Try cached recipe first (fast, works for all users including demo)
+        let data: ImportedRecipe | null = null;
+        try {
+          data = await api.get<ImportedRecipe>(
+            `/discover/recipe?url=${encodeURIComponent(item.url)}`
+          );
+        } catch {
+          // Cache miss — fall through to import
+        }
+
+        // If no cache hit, try full import (only works for non-demo users)
+        if (!data?.title) {
+          if (isDemoRestricted) {
+            setImportError(
+              "This recipe hasn't been loaded yet. In the demo, only pre-loaded recipes are available. Set up your own Whisk to import any recipe!"
+            );
+            setIsImporting(false);
+            return;
+          }
+          data = await api.post<ImportedRecipe>("/import/url", {
+            url: item.url,
+            downloadImage: true,
+          });
+        }
+
         if (data?.title) {
           setImportedRecipe(data);
           // Update the feed cache with imported image and totalTime
@@ -553,11 +574,13 @@ export function Discover({
               return updated;
             });
             // Persist the fix to the server so other devices/sessions get it too
-            api.patch("/discover/feed", {
-              url: item.url,
-              ...(needsImageUpdate ? { imageUrl: importedImage } : {}),
-              ...(needsTimeUpdate ? { totalTime: importedTotalTime } : {}),
-            }).catch(() => {/* best-effort */});
+            if (!isDemoRestricted) {
+              api.patch("/discover/feed", {
+                url: item.url,
+                ...(needsImageUpdate ? { imageUrl: importedImage } : {}),
+                ...(needsTimeUpdate ? { totalTime: importedTotalTime } : {}),
+              }).catch(() => {/* best-effort */});
+            }
           }
         } else {
           setImportError("Could not parse recipe from this page.");
@@ -566,12 +589,19 @@ export function Discover({
         const message = err instanceof Error && err.message
           ? err.message
           : "Could not load recipe. The site may be blocking access.";
-        setImportError(message);
+        // Provide better demo-specific messaging
+        if (isDemoRestricted && (message.includes("demoRestricted") || message.includes("not available in the demo"))) {
+          setImportError(
+            "This recipe hasn't been loaded yet. In the demo, only pre-loaded recipes are available. Set up your own Whisk to import any recipe!"
+          );
+        } else {
+          setImportError(message);
+        }
       } finally {
         setIsImporting(false);
       }
     },
-    []
+    [isDemoRestricted]
   );
 
   const handleSaveFeedRecipe = useCallback(async () => {

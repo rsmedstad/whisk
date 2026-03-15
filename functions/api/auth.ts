@@ -17,6 +17,21 @@ interface Household {
   updatedAt: string;
 }
 
+// Check if a book (household) already exists — unauthenticated
+export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+  try {
+    const household = await env.WHISK_KV.get<Household>("household", "json");
+    const bookExists = !!household && household.members.length > 0;
+    return new Response(JSON.stringify({ bookExists }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return new Response(JSON.stringify({ bookExists: false }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+};
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const body = (await request.json()) as { password: string; name?: string };
@@ -66,6 +81,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
 
       if (!member) {
+        // Check if the name is already taken by another member (prevents duplicates)
+        const nameTaken = household.members.some(
+          (m) => m.name.toLowerCase() === displayName.toLowerCase()
+        );
+        if (nameTaken) {
+          return new Response(
+            JSON.stringify({
+              error: "Someone with that name has already joined this book. If this is you, make sure you're using the correct password. Otherwise, please choose a different name.",
+            }),
+            { status: 409, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
         // Create new member — first member is the owner
         const idData = new Uint8Array(8);
         crypto.getRandomValues(idData);
