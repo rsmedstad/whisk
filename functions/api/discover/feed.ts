@@ -166,11 +166,20 @@ interface PendingCollection {
   attempts: number;
 }
 
+/** A recipe URL that failed pre-caching and should be retried later */
+interface PendingRecipeCache {
+  url: string;
+  addedAt: string;
+  attempts: number;
+}
+
 interface Archive {
   lastRefreshed: string;
   items: ArchiveItem[];
   /** Collection/roundup URLs discovered but not yet fully crawled */
   pendingCollections?: PendingCollection[];
+  /** Recipe URLs that failed pre-caching and should be retried on subsequent requests */
+  pendingRecipeCache?: PendingRecipeCache[];
 }
 
 /** Legacy scraper format (grouped by source) */
@@ -684,6 +693,22 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     }).catch(() => { /* fire-and-forget */ });
   }
 
+  // ── Opportunistic recipe cache draining ──
+  // On each GET, try to pre-cache 2 pending recipe URLs in the background.
+  // This gradually fills the recipe cache for items that failed initial pre-caching.
+  const pendingRecipes = archive.pendingRecipeCache ?? [];
+  if (pendingRecipes.length > 0) {
+    drainPendingRecipeCache(pendingRecipes, archive.items, env, 2).then(async (updated) => {
+      if (updated.length !== pendingRecipes.length) {
+        const freshArchive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+        if (freshArchive) {
+          freshArchive.pendingRecipeCache = updated.length > 0 ? updated : undefined;
+          await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(freshArchive));
+        }
+      }
+    }).catch(() => { /* fire-and-forget */ });
+  }
+
   const filtered: Archive = { lastRefreshed: archive.lastRefreshed, items: visibleItems };
   return Response.json(archiveToCategoryFeed(filtered));
 };
@@ -860,18 +885,47 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     imageUrl: sanitizeImageUrl(item.imageUrl),
   }));
 
+  // Drain existing pending recipe cache queue during refresh (3 at a time)
+  const existingPendingRecipes = archive?.pendingRecipeCache ?? [];
+  let updatedPendingRecipes: PendingRecipeCache[] = [];
+  if (existingPendingRecipes.length > 0) {
+    updatedPendingRecipes = await drainPendingRecipeCache(
+      existingPendingRecipes, [...cleanedExisting, ...newItems], env, 3
+    );
+  }
+
   const updatedArchive: Archive = {
     lastRefreshed: now,
     items: [...cleanedExisting, ...newItems],
     pendingCollections: updatedPending.length > 0 ? updatedPending : undefined,
+    pendingRecipeCache: updatedPendingRecipes.length > 0 ? updatedPendingRecipes : undefined,
   };
 
   await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive));
 
-  // Fire-and-forget: pre-cache recipe details for new items using direct fetch only.
+  // Pre-cache recipe details for new items using direct fetch only.
   // This allows demo users (and all users) to view recipes instantly from cache.
+  // Failed URLs get added to a retry queue that drains on subsequent requests.
   if (newItems.length > 0) {
-    precacheRecipes(newItems.slice(0, 15), env).catch(() => {/* best-effort */});
+    precacheRecipes(newItems.slice(0, 15), env).then(async ({ failed }) => {
+      if (failed.length === 0) return;
+      // Add failed URLs to the pending recipe cache queue
+      const freshArchive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
+      if (!freshArchive) return;
+      const existingPendingUrls = new Set(
+        (freshArchive.pendingRecipeCache ?? []).map((p) => normalizeUrl(p.url))
+      );
+      const newPending: PendingRecipeCache[] = failed
+        .filter((url) => !existingPendingUrls.has(normalizeUrl(url)))
+        .map((url) => ({ url, addedAt: new Date().toISOString(), attempts: 1 }));
+      if (newPending.length > 0) {
+        freshArchive.pendingRecipeCache = [
+          ...(freshArchive.pendingRecipeCache ?? []),
+          ...newPending,
+        ];
+        await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(freshArchive));
+      }
+    }).catch(() => {/* best-effort */});
   }
 
   const feed = archiveToCategoryFeed(updatedArchive);
@@ -1017,9 +1071,17 @@ function extractRecipeImage(img: unknown): string | undefined {
   return undefined;
 }
 
+const MAX_RECIPE_CACHE_ATTEMPTS = 4; // Give up after 4 failed attempts
+const MAX_RECIPE_CACHE_AGE_DAYS = 14; // Drop entries older than 2 weeks
+
 /** Pre-cache a batch of recipe URLs by fetching and parsing JSON-LD.
- *  Only uses direct HTTP (no browser rendering) — fast and free. */
-async function precacheRecipes(items: ArchiveItem[], env: Env): Promise<void> {
+ *  Only uses direct HTTP (no browser rendering) — fast and free.
+ *  Returns URLs that failed so they can be queued for retry. */
+async function precacheRecipes(
+  items: { url: string; title: string; tags?: string[] }[],
+  env: Env,
+): Promise<{ failed: string[] }> {
+  const failed: string[] = [];
   // Process in batches of 5 concurrently
   for (let i = 0; i < items.length; i += 5) {
     const batch = items.slice(i, i + 5);
@@ -1038,15 +1100,23 @@ async function precacheRecipes(items: ArchiveItem[], env: Env): Promise<void> {
           headers: BROWSER_HEADERS,
         });
         const html = await res.text();
-        if (!html || html.length < 500) return;
-        if (isBlockedPage(html)) return;
+        if (!html || html.length < 500 || isBlockedPage(html)) {
+          failed.push(item.url);
+          return;
+        }
 
         const recipeData = extractFullRecipeJsonLd(html);
-        if (!recipeData) return;
+        if (!recipeData) {
+          failed.push(item.url);
+          return;
+        }
 
         const ingredients = parseIngredientsBasic(recipeData.recipeIngredient);
         const steps = parseStepsBasic(recipeData.recipeInstructions);
-        if (ingredients.length === 0 && steps.length === 0) return;
+        if (ingredients.length === 0 && steps.length === 0) {
+          failed.push(item.url);
+          return;
+        }
 
         const thumbnailUrl = extractRecipeImage(recipeData.image);
 
@@ -1068,9 +1138,52 @@ async function precacheRecipes(items: ArchiveItem[], env: Env): Promise<void> {
         await env.WHISK_KV.put(cacheKey, JSON.stringify(recipe), {
           expirationTtl: 60 * 60 * 24 * 7, // 7 days
         });
-      } catch { /* skip individual failures */ }
+      } catch {
+        failed.push(item.url);
+      }
     }));
   }
+  return { failed };
+}
+
+/** Drain pending recipe cache queue: retry a few URLs on each request. */
+async function drainPendingRecipeCache(
+  pending: PendingRecipeCache[],
+  archiveItems: ArchiveItem[],
+  env: Env,
+  limit: number,
+): Promise<PendingRecipeCache[]> {
+  const now = Date.now();
+  const cutoff = now - MAX_RECIPE_CACHE_AGE_DAYS * 24 * 60 * 60 * 1000;
+
+  // Filter out expired/exhausted entries
+  const active = pending.filter((p) =>
+    p.attempts < MAX_RECIPE_CACHE_ATTEMPTS &&
+    new Date(p.addedAt).getTime() > cutoff
+  );
+
+  if (active.length === 0) return [];
+
+  const toDrain = active.slice(0, limit);
+  const remaining = active.slice(limit);
+
+  // Build a lookup from archive for title/tags
+  const archiveMap = new Map(archiveItems.map((i) => [normalizeUrl(i.url), i]));
+
+  const stillFailing: PendingRecipeCache[] = [];
+  for (const entry of toDrain) {
+    const archiveItem = archiveMap.get(normalizeUrl(entry.url));
+    const result = await precacheRecipes(
+      [{ url: entry.url, title: archiveItem?.title ?? "", tags: archiveItem?.tags }],
+      env,
+    );
+    if (result.failed.length > 0) {
+      stillFailing.push({ ...entry, attempts: entry.attempts + 1 });
+    }
+    // If succeeded, it's now cached — just drop it from the queue
+  }
+
+  return [...remaining, ...stillFailing];
 }
 
 // ── PATCH: update a feed item (e.g. fix image after import) ──
