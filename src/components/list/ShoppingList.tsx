@@ -644,7 +644,7 @@ export function ShoppingList({
 
         {/* Filter bar — sort, toggles, classify, clear */}
         {totalCount > 0 && (
-          <div className={classNames("flex items-center gap-1.5 px-4 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
+          <div className={classNames("flex items-center gap-2 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
             {/* Filter toggle */}
             <button
               onClick={() => {
@@ -654,28 +654,28 @@ export function ShoppingList({
                 });
               }}
               className={classNames(
-                "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
+                "shrink-0 p-1.5 rounded-full transition-colors",
                 filterOpen || filterQuery
-                  ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
-                  : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                  ? "text-orange-500 bg-orange-50 dark:bg-orange-950/50"
+                  : "text-stone-400 hover:text-orange-400 dark:text-stone-500 dark:hover:text-orange-400"
               )}
               title="Filter list"
             >
-              <Filter className="w-3.5 h-3.5" />
+              <Filter className="w-5 h-5" />
             </button>
             {/* Group mode dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowSortMenu(!showSortMenu)}
                 className={classNames(
-                  "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
+                  "shrink-0 p-1.5 rounded-full transition-colors",
                   groupMode === "by-recipe"
-                    ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
-                    : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                    ? "text-orange-500 bg-orange-50 dark:bg-orange-950/50"
+                    : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
                 )}
                 title="Group by"
               >
-                <ArrowUpDown className="w-3.5 h-3.5" />
+                <ArrowUpDown className="w-4.5 h-4.5" />
               </button>
               {showSortMenu && (
                 <>
@@ -706,23 +706,24 @@ export function ShoppingList({
             <button
               onClick={() => setUncheckedFirst(!uncheckedFirst)}
               className={classNames(
-                "inline-flex items-center justify-center rounded-full border p-1 transition-colors",
+                "shrink-0 p-1.5 rounded-full transition-colors",
                 uncheckedFirst
-                  ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
-                  : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                  ? "text-orange-500 bg-orange-50 dark:bg-orange-950/50"
+                  : "text-stone-400 hover:text-orange-400 dark:text-stone-500 dark:hover:text-orange-400"
               )}
               title="Unchecked first"
             >
-              <SquareCheck className="w-3.5 h-3.5" />
+              <SquareCheck className="w-5 h-5" />
             </button>
+            <span className="text-stone-300 dark:text-stone-600 text-sm select-none">|</span>
             {/* A-Z toggle (flat alphabetical, no category groups) */}
             <button
               onClick={() => setSortAZ(!sortAZ)}
               className={classNames(
-                "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors",
+                "wk-pill inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors shrink-0",
                 sortAZ
-                  ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30"
-                  : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+                  ? "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                  : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400"
               )}
               title="Sort A-Z (flat list, no groups)"
             >
@@ -740,10 +741,10 @@ export function ShoppingList({
                 }}
                 disabled={isClassifying || isSmartLoading}
                 className={classNames(
-                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50",
+                  "wk-pill inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50 shrink-0",
                   showSmartList
-                    ? "border-violet-500 text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30"
-                    : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400 hover:border-violet-300 hover:text-violet-600"
+                    ? "border-violet-500 bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400"
+                    : "border-stone-300 text-stone-600 dark:border-stone-600 dark:text-stone-400 hover:border-violet-300 hover:text-violet-600"
                 )}
               >
                 <Sparkles className="w-3 h-3" /> {isClassifying ? "Classifying..." : isSmartLoading ? "Consolidating..." : "Organize"}
