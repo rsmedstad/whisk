@@ -54,6 +54,13 @@ function normalizeUrl(raw: string): string | null {
   }
 }
 
+/** Hash a URL to a short hex string for use as a KV cache key */
+async function hashUrl(url: string): Promise<string> {
+  const normalized = url.replace(/\/$/, "").replace(/^http:/, "https:");
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+
 // POST /api/import/url - Scrape recipe from URL
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
@@ -92,6 +99,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (nytRecipeId) {
       const nytResult = await tryNytCookingApi(nytRecipeId, downloadImage ?? false, env);
       if (nytResult) {
+        // Cache for fast subsequent views
+        const cacheKey = `discover_cache:${await hashUrl(url)}`;
+        env.WHISK_KV.put(cacheKey, JSON.stringify(nytResult), {
+          expirationTtl: 60 * 60 * 24 * 7,
+        }).catch(() => {});
         return new Response(JSON.stringify(nytResult), {
           headers: { "Content-Type": "application/json" },
         });
@@ -331,6 +343,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       tags,
       lastCrawledAt: new Date().toISOString(),
     };
+
+    // Cache the imported recipe for fast subsequent views (7-day TTL)
+    const cacheKey = `discover_cache:${await hashUrl(url)}`;
+    env.WHISK_KV.put(cacheKey, JSON.stringify(recipe), {
+      expirationTtl: 60 * 60 * 24 * 7,
+    }).catch(() => {/* best-effort */});
 
     return new Response(JSON.stringify(recipe), {
       headers: { "Content-Type": "application/json" },

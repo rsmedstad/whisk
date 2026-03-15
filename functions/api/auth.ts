@@ -87,7 +87,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         );
         if (nameTaken) {
           return new Response(
-            JSON.stringify({ error: "That name is already taken. Please choose a different name." }),
+            JSON.stringify({
+              error: "Someone with that name has already joined this book. If this is you, make sure you're using the correct password. Otherwise, please choose a different name.",
+            }),
             { status: 409, headers: { "Content-Type": "application/json" } }
           );
         }

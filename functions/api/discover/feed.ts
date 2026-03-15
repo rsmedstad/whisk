@@ -868,6 +868,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive));
 
+  // Fire-and-forget: pre-cache recipe details for new items using direct fetch only.
+  // This allows demo users (and all users) to view recipes instantly from cache.
+  if (newItems.length > 0) {
+    precacheRecipes(newItems.slice(0, 15), env).catch(() => {/* best-effort */});
+  }
+
   const feed = archiveToCategoryFeed(updatedArchive);
   const warnings = [...new Set(brWarnings)];
   const totalScraped = scrapeResults.reduce((n, r) => n + r.items.length, 0);
@@ -882,6 +888,190 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ...(warnings.length > 0 ? { warnings } : {}),
   });
 };
+
+// ── Pre-cache recipe details for fast viewing ──
+// Fetches individual recipe pages via direct HTTP (no browser rendering),
+// extracts JSON-LD recipe data, and stores a lightweight parsed version in KV.
+// This runs in the background after feed refresh so demo users can view recipes.
+
+/** Hash a URL to a short hex string for KV cache keys */
+async function hashUrlForCache(url: string): Promise<string> {
+  const normalized = url.replace(/\/$/, "").replace(/^http:/, "https:");
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+
+/** Extract full Recipe JSON-LD data from HTML (ingredients, steps, etc.) */
+function extractFullRecipeJsonLd(html: string): Record<string, unknown> | null {
+  const jsonLdRegex = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = jsonLdRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(match[1]!);
+      const recipe = findRecipeObject(data);
+      if (recipe) return recipe;
+    } catch { /* skip */ }
+  }
+  return null;
+}
+
+function findRecipeObject(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") return null;
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const found = findRecipeObject(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  const obj = data as Record<string, unknown>;
+  if (Array.isArray(obj["@graph"])) {
+    for (const item of obj["@graph"]) {
+      const found = findRecipeObject(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  const type = obj["@type"];
+  if (type === "Recipe" || (Array.isArray(type) && type.includes("Recipe"))) {
+    return obj;
+  }
+  return null;
+}
+
+/** Parse ISO 8601 duration to minutes */
+function parseDurationToMin(val: unknown): number | undefined {
+  if (typeof val !== "string") return undefined;
+  const m = val.match(/^PT(?:(\d+)H)?(?:(\d+)M)?/i);
+  if (!m) return undefined;
+  const total = (parseInt(m[1] ?? "0", 10)) * 60 + parseInt(m[2] ?? "0", 10);
+  return total > 0 ? total : undefined;
+}
+
+/** Parse recipeIngredient array into structured ingredients */
+function parseIngredientsBasic(raw: unknown): { name: string; amount?: string; unit?: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((i): i is string => typeof i === "string" && i.trim().length > 0)
+    .map((text) => {
+      const cleaned = text.replace(/<[^>]*>/g, "").trim();
+      // Try to extract amount + unit + name from common patterns
+      const m = cleaned.match(/^([\d\u00BC-\u00BE\u2150-\u215E./\s-]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|liters?|cloves?|pinch|dash|bunch|large|medium|small|whole)?\s*(.+)/i);
+      if (m) {
+        return { amount: m[1]?.trim(), unit: m[2]?.trim(), name: m[3]?.trim() ?? cleaned };
+      }
+      return { name: cleaned };
+    });
+}
+
+/** Parse recipeInstructions into step objects */
+function parseStepsBasic(raw: unknown): { text: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const steps: { text: string }[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const cleaned = item.replace(/<[^>]*>/g, "").trim();
+      if (cleaned) steps.push({ text: cleaned });
+    } else if (item && typeof item === "object") {
+      const obj = item as Record<string, unknown>;
+      // HowToStep
+      if (typeof obj.text === "string") {
+        const cleaned = obj.text.replace(/<[^>]*>/g, "").trim();
+        if (cleaned) steps.push({ text: cleaned });
+      }
+      // HowToSection with itemListElement
+      if (Array.isArray(obj.itemListElement)) {
+        for (const sub of obj.itemListElement) {
+          if (sub && typeof sub === "object" && typeof (sub as Record<string, unknown>).text === "string") {
+            const cleaned = ((sub as Record<string, unknown>).text as string).replace(/<[^>]*>/g, "").trim();
+            if (cleaned) steps.push({ text: cleaned });
+          }
+        }
+      }
+    }
+  }
+  return steps;
+}
+
+/** Parse recipeYield to a number */
+function parseServingsBasic(val: unknown): number | undefined {
+  const str = Array.isArray(val) ? val[0] : val;
+  if (typeof str !== "string") return undefined;
+  const m = str.match(/(\d+)/);
+  return m ? parseInt(m[1]!, 10) : undefined;
+}
+
+/** Extract primary image URL from JSON-LD image field */
+function extractRecipeImage(img: unknown): string | undefined {
+  if (typeof img === "string") return img;
+  if (Array.isArray(img)) {
+    for (const i of img) {
+      if (typeof i === "string") return i;
+      if (i && typeof i === "object" && typeof (i as Record<string, unknown>).url === "string") {
+        return (i as Record<string, unknown>).url as string;
+      }
+    }
+  }
+  if (img && typeof img === "object" && typeof (img as Record<string, unknown>).url === "string") {
+    return (img as Record<string, unknown>).url as string;
+  }
+  return undefined;
+}
+
+/** Pre-cache a batch of recipe URLs by fetching and parsing JSON-LD.
+ *  Only uses direct HTTP (no browser rendering) — fast and free. */
+async function precacheRecipes(items: ArchiveItem[], env: Env): Promise<void> {
+  // Process in batches of 5 concurrently
+  for (let i = 0; i < items.length; i += 5) {
+    const batch = items.slice(i, i + 5);
+    await Promise.all(batch.map(async (item) => {
+      try {
+        const hash = await hashUrlForCache(item.url);
+        const cacheKey = `discover_cache:${hash}`;
+
+        // Skip if already cached
+        const existing = await env.WHISK_KV.get(cacheKey, "text");
+        if (existing) return;
+
+        // Direct fetch only (no browser rendering) — fast and free
+        const res = await fetch(item.url, {
+          signal: AbortSignal.timeout(8000),
+          headers: BROWSER_HEADERS,
+        });
+        const html = await res.text();
+        if (!html || html.length < 500) return;
+        if (isBlockedPage(html)) return;
+
+        const recipeData = extractFullRecipeJsonLd(html);
+        if (!recipeData) return;
+
+        const ingredients = parseIngredientsBasic(recipeData.recipeIngredient);
+        const steps = parseStepsBasic(recipeData.recipeInstructions);
+        if (ingredients.length === 0 && steps.length === 0) return;
+
+        const thumbnailUrl = extractRecipeImage(recipeData.image);
+
+        const recipe = {
+          title: typeof recipeData.name === "string" ? recipeData.name : item.title,
+          description: typeof recipeData.description === "string" ? recipeData.description : "",
+          ingredients,
+          steps,
+          prepTime: parseDurationToMin(recipeData.prepTime) ?? parseDurationToMin(recipeData.totalTime),
+          cookTime: parseDurationToMin(recipeData.cookTime),
+          servings: parseServingsBasic(recipeData.recipeYield),
+          thumbnailUrl,
+          photos: thumbnailUrl ? [{ url: thumbnailUrl, isPrimary: true }] : [],
+          tags: item.tags ?? [],
+          lastCrawledAt: new Date().toISOString(),
+          source: { type: "url", url: item.url, domain: new URL(item.url).hostname.replace(/^www\./, "") },
+        };
+
+        await env.WHISK_KV.put(cacheKey, JSON.stringify(recipe), {
+          expirationTtl: 60 * 60 * 24 * 7, // 7 days
+        });
+      } catch { /* skip individual failures */ }
+    }));
+  }
+}
 
 // ── PATCH: update a feed item (e.g. fix image after import) ──
 
