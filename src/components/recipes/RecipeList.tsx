@@ -484,7 +484,7 @@ export function RecipeList({
                         return (
                           <button
                             key={tag}
-                            onClick={() => toggleTag(tag)}
+                            onClick={() => { toggleTag(tag); setOpenDropdown(null); }}
                             className={classNames(
                               "w-full px-3 py-2 text-left text-sm capitalize flex items-center justify-between gap-2 transition-colors",
                               isActive
