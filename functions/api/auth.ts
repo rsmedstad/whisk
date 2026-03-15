@@ -1,5 +1,7 @@
 interface Env {
   APP_SECRET: string;
+  OWNER_PASSWORD?: string;
+  DEMO_MODE?: string;
   WHISK_KV: KVNamespace;
 }
 
@@ -27,7 +29,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
-    if (password !== env.APP_SECRET) {
+    const isDemoMode = env.DEMO_MODE === "true";
+
+    // In demo mode, accept either APP_SECRET (regular user) or OWNER_PASSWORD (owner)
+    const isOwnerLogin = isDemoMode && !!env.OWNER_PASSWORD && password === env.OWNER_PASSWORD;
+    const isRegularLogin = password === env.APP_SECRET;
+
+    if (!isOwnerLogin && !isRegularLogin) {
       return new Response(JSON.stringify({ error: "Invalid password" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -44,10 +52,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let member: HouseholdMember | undefined;
 
     if (displayName) {
-      // Find existing member by name (case-insensitive)
-      member = household.members.find(
-        (m) => m.name.toLowerCase() === displayName.toLowerCase()
-      );
+      // In demo mode with regular login, never match an existing owner member by name
+      // This prevents someone from typing "Ryan" and getting owner access
+      if (isDemoMode && !isOwnerLogin) {
+        member = household.members.find(
+          (m) => m.name.toLowerCase() === displayName.toLowerCase() && !m.isOwner
+        );
+      } else {
+        // Find existing member by name (case-insensitive)
+        member = household.members.find(
+          (m) => m.name.toLowerCase() === displayName.toLowerCase()
+        );
+      }
 
       if (!member) {
         // Create new member — first member is the owner
@@ -76,10 +92,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .replace(/[+/=]/g, "")
       .slice(0, 48);
 
+    // In demo mode, only the owner login gets isDemoOwner flag
+    const isDemoOwner = isDemoMode && isOwnerLogin;
+
     // Store session with user identity (backwards-compatible: works with or without name)
     const sessionData = member
-      ? JSON.stringify({ userId: member.id, name: member.name })
-      : "valid";
+      ? JSON.stringify({ userId: member.id, name: member.name, isDemoOwner })
+      : isDemoOwner
+        ? JSON.stringify({ isDemoOwner: true })
+        : "valid";
 
     const sessionTtl = 60 * 60 * 24 * 30;
     await env.WHISK_KV.put(`session:${token}`, sessionData, {
@@ -104,6 +125,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         userId: member?.id ?? null,
         name: member?.name ?? null,
         isOwner: member?.isOwner ?? false,
+        demoMode: isDemoMode,
+        isDemoOwner,
       }),
       { headers: { "Content-Type": "application/json" } }
     );

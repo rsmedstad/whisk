@@ -20,6 +20,14 @@ export function useAuth() {
       if (res.name) {
         localStorage.setItem("whisk_display_name", res.name);
       }
+      // Store demo mode state
+      if (res.demoMode) {
+        localStorage.setItem("whisk_demo_mode", "true");
+        localStorage.setItem("whisk_demo_owner", res.isDemoOwner ? "true" : "false");
+      } else {
+        localStorage.removeItem("whisk_demo_mode");
+        localStorage.removeItem("whisk_demo_owner");
+      }
       setIsAuthenticated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -32,6 +40,8 @@ export function useAuth() {
   const logout = useCallback(() => {
     clearToken();
     localStorage.removeItem("whisk_user_id");
+    localStorage.removeItem("whisk_demo_mode");
+    localStorage.removeItem("whisk_demo_owner");
     setIsAuthenticated(false);
   }, []);
 
@@ -43,5 +53,7 @@ export function useAuth() {
     logout,
     userId: localStorage.getItem("whisk_user_id"),
     userName: localStorage.getItem("whisk_display_name"),
+    isDemoMode: localStorage.getItem("whisk_demo_mode") === "true",
+    isDemoOwner: localStorage.getItem("whisk_demo_owner") === "true",
   };
 }

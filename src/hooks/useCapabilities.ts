@@ -13,6 +13,7 @@ const NONE: AICapabilities = {
   instagramImport: false,
   unsplash: false,
   browserRendering: false,
+  demoMode: false,
 };
 
 export function useCapabilities() {
