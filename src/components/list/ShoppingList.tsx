@@ -399,6 +399,20 @@ export function ShoppingList({
     }
   }, [onClassifyUncategorized]);
 
+  /** Single "Clean up" action: classify uncategorized items, then consolidate duplicates */
+  const handleCleanUp = useCallback(async () => {
+    const needsClassification = list.items.some((i) => i.category === "other" || !i.subcategory);
+    if (needsClassification) {
+      setIsClassifying(true);
+      try {
+        await onClassifyUncategorized();
+      } finally {
+        setIsClassifying(false);
+      }
+    }
+    await fetchSmartList();
+  }, [list.items, onClassifyUncategorized, fetchSmartList]);
+
   const handleListScan = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -713,26 +727,17 @@ export function ShoppingList({
             >
               A-Z
             </button>
-            {needsClassificationCount > 0 && chatEnabled && (
-              <button
-                onClick={handleClassify}
-                disabled={isClassifying}
-                className="inline-flex items-center gap-1 rounded-full border border-stone-300 dark:border-stone-600 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50"
-              >
-                <Sparkles className="w-3 h-3 text-orange-500" /> {isClassifying ? "Classifying..." : "Review & Classify"}
-              </button>
-            )}
-            {/* Smart list toggle */}
+            {/* Clean up: classify + consolidate in one action */}
             {chatEnabled && (
               <button
                 onClick={() => {
                   if (showSmartList) {
                     setShowSmartList(false);
                   } else {
-                    fetchSmartList();
+                    handleCleanUp();
                   }
                 }}
-                disabled={isSmartLoading}
+                disabled={isClassifying || isSmartLoading}
                 className={classNames(
                   "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50",
                   showSmartList
@@ -740,7 +745,7 @@ export function ShoppingList({
                     : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400 hover:border-violet-300 hover:text-violet-600"
                 )}
               >
-                <Sparkles className="w-3 h-3" /> {isSmartLoading ? "..." : "Consolidate"}
+                <Sparkles className="w-3 h-3" /> {isClassifying ? "Classifying..." : isSmartLoading ? "Consolidating..." : "Clean up"}
               </button>
             )}
           </div>
