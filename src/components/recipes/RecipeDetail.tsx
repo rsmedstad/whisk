@@ -24,6 +24,7 @@ interface RecipeDetailProps {
   onAddToShoppingList: (ingredients: Ingredient[], recipeId: string) => Promise<{ added: number; skippedDuplicates: number }>;
   onUndoShoppingList: (recipeId: string) => Promise<void>;
   onAddMeal?: (date: Date, slot: MealSlot, title: string, recipeId?: string) => Promise<void>;
+  isDemoRestricted?: boolean;
 }
 
 // Common pantry staples to skip with "Add Essentials"
@@ -36,7 +37,7 @@ const PANTRY_STAPLES = new Set([
 // skip garnishes, bitters, modifiers, ice, water, and other extras
 const DRINK_NON_ESSENTIALS = new Set<string>(["garnish", "bitters_modifiers"]);
 
-export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShoppingList, onAddMeal }: RecipeDetailProps) {
+export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShoppingList, onAddMeal, isDemoRestricted }: RecipeDetailProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getRecipe, toggleFavorite, toggleWantToMake, deleteRecipe, updateRecipe, markCooked } = useRecipes();
@@ -391,52 +392,56 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             <CalendarDays className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-500" : "text-stone-400")} />
           </button>
           <div className="relative">
-            <button
-              onClick={() => setShowOverflow(!showOverflow)}
-              className="text-stone-500 dark:text-stone-400 p-2"
-            >
-              <EllipsisVertical className="w-5 h-5" />
-            </button>
-            {showOverflow && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setShowOverflow(false)}
-                />
-                <div className="wk-dropdown absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800">
-                  <button
-                    onClick={() => {
-                      navigate(`/recipes/${recipe.id}/edit`);
-                      setShowOverflow(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-700 dark:text-stone-200"
-                  >
-                    Edit Recipe
-                  </button>
-                  {recipe.source?.url && (
+            {!isDemoRestricted && (
+            <>
+              <button
+                onClick={() => setShowOverflow(!showOverflow)}
+                className="text-stone-500 dark:text-stone-400 p-2"
+              >
+                <EllipsisVertical className="w-5 h-5" />
+              </button>
+              {showOverflow && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowOverflow(false)}
+                  />
+                  <div className="wk-dropdown absolute right-0 top-8 z-50 w-48 rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800">
                     <button
                       onClick={() => {
-                        handleRefetch();
+                        navigate(`/recipes/${recipe.id}/edit`);
                         setShowOverflow(false);
                       }}
                       className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-700 dark:text-stone-200"
                     >
-                      {isRefetching ? "Updating..." : "Update from Source"}
+                      Edit Recipe
                     </button>
-                  )}
-                  <div className="my-1 border-t border-stone-200 dark:border-stone-700" />
-                  <button
-                    onClick={() => {
-                      handleDelete();
-                      setShowOverflow(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-stone-700"
-                  >
-                    Delete Recipe
-                  </button>
-                </div>
-              </>
-            )}
+                    {recipe.source?.url && (
+                      <button
+                        onClick={() => {
+                          handleRefetch();
+                          setShowOverflow(false);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-700 dark:text-stone-200"
+                      >
+                        {isRefetching ? "Updating..." : "Update from Source"}
+                      </button>
+                    )}
+                    <div className="my-1 border-t border-stone-200 dark:border-stone-700" />
+                    <button
+                      onClick={() => {
+                        handleDelete();
+                        setShowOverflow(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-stone-700"
+                    >
+                      Delete Recipe
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
           </div>
         </div>
       </div>

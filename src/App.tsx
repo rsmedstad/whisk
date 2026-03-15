@@ -13,7 +13,17 @@ import { Login } from "./components/auth/Login";
 import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
+import { DemoBanner } from "./components/ui/DemoBanner";
 import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs, UserPreferences } from "./types";
+
+/** Full-page placeholder shown when a demo-restricted route is accessed */
+function DemoRestrictedPage({ feature }: { feature: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 pt-24 pb-16">
+      <DemoBanner feature={feature} className="max-w-sm" />
+    </div>
+  );
+}
 
 // Retry dynamic imports on failure (stale chunks after deploy) by reloading once
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,6 +156,9 @@ function AppShell({
   const tags = useTags();
   const capabilities = useCapabilities();
 
+  // Demo mode: restrict expensive features for non-owner users
+  const isDemoRestricted = capabilities.demoMode && localStorage.getItem("whisk_demo_owner") !== "true";
+
   // Unique recipe IDs linked to this week's meal plan
   const plannedRecipeIds = useMemo(() => {
     return [...new Set(mealPlan.plan.meals.filter((m) => m.recipeId).map((m) => m.recipeId!))];
@@ -208,12 +221,14 @@ function AppShell({
                 onToggleFavorite={recipes.toggleFavorite}
                 onToggleWantToMake={recipes.toggleWantToMake}
                 availableTags={tags.allTagNames}
+                isDemoRestricted={isDemoRestricted}
               />
             }
           />
           <Route
             path="/recipes/new"
             element={
+              isDemoRestricted ? <DemoRestrictedPage feature="Adding recipes" /> :
               <RecipeForm
                 allTags={tags.allTagNames}
                 onAddTag={async (name: string) => { await tags.addCustomTag(name); }}
@@ -229,12 +244,14 @@ function AppShell({
                 onAddToShoppingList={handleAddToShoppingList}
                 onUndoShoppingList={handleUndoShoppingList}
                 onAddMeal={mealPlan.addMeal}
+                isDemoRestricted={isDemoRestricted}
               />
             }
           />
           <Route
             path="/recipes/:id/edit"
             element={
+              isDemoRestricted ? <DemoRestrictedPage feature="Editing recipes" /> :
               <RecipeForm
                 allTags={tags.allTagNames}
                 onAddTag={async (name: string) => { await tags.addCustomTag(name); }}
@@ -248,9 +265,10 @@ function AppShell({
           />
 
           {/* Other tabs — lazy loaded */}
-          <Route path="/discover" element={<Discover onSaveRecipe={recipes.createRecipe} onUpdateRecipe={recipes.updateRecipe} chatEnabled={capabilities.chat} recipes={recipes.recipes} />} />
+          <Route path="/discover" element={<Discover onSaveRecipe={isDemoRestricted ? undefined : recipes.createRecipe} onUpdateRecipe={isDemoRestricted ? undefined : recipes.updateRecipe} chatEnabled={isDemoRestricted ? false : capabilities.chat} recipes={recipes.recipes} isDemoRestricted={isDemoRestricted} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
           <Route path="/ask" element={
+            isDemoRestricted ? <DemoRestrictedPage feature="AI chat" /> :
             <AskChat
               chatEnabled={capabilities.chat}
               recipes={recipes.recipes}
@@ -329,6 +347,7 @@ function AppShell({
           <Route
             path="/import"
             element={
+              isDemoRestricted ? <DemoRestrictedPage feature="Importing recipes" /> :
               <ImportRecipes
                 onImportComplete={recipes.fetchRecipes}
               />

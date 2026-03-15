@@ -23,6 +23,7 @@ interface RecipeListProps {
   onToggleFavorite: (id: string) => void;
   onToggleWantToMake: (id: string) => void;
   availableTags: string[];
+  isDemoRestricted?: boolean;
 }
 
 export function RecipeList({
@@ -31,6 +32,7 @@ export function RecipeList({
   onToggleFavorite,
   onToggleWantToMake,
   availableTags,
+  isDemoRestricted,
 }: RecipeListProps) {
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -235,13 +237,15 @@ export function RecipeList({
             >
               {searchOpen ? <XMark className="w-5 h-5" /> : <MagnifyingGlass className="w-5 h-5" />}
             </button>
-            <button
-              onClick={() => navigate("/recipes/new")}
-              className="p-1.5 rounded-lg text-stone-400 hover:text-orange-500 active:bg-orange-100 active:text-orange-600 active:ring-1 active:ring-orange-300 dark:text-stone-500 dark:hover:text-orange-400 dark:active:bg-orange-950 dark:active:text-orange-400 dark:active:ring-orange-700 transition-all"
-              title="Add recipe"
-            >
-              <Plus className="w-6 h-6" strokeWidth={2.5} />
-            </button>
+            {!isDemoRestricted && (
+              <button
+                onClick={() => navigate("/recipes/new")}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-orange-500 active:bg-orange-100 active:text-orange-600 active:ring-1 active:ring-orange-300 dark:text-stone-500 dark:hover:text-orange-400 dark:active:bg-orange-950 dark:active:text-orange-400 dark:active:ring-orange-700 transition-all"
+                title="Add recipe"
+              >
+                <Plus className="w-6 h-6" strokeWidth={2.5} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -529,7 +533,7 @@ export function RecipeList({
 
       {/* Recipe cards */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 pb-24">
-        {recipes.length === 0 && !search && selectedTags.length === 0 ? (
+        {recipes.length === 0 && !search && selectedTags.length === 0 && !isDemoRestricted ? (
           <div className="px-4"><FirstRunGuide /></div>
         ) : filtered.length === 0 ? (
           <div className="px-4">

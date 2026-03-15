@@ -200,6 +200,8 @@ export interface AuthResponse {
   userId: string;
   name: string;
   isOwner: boolean;
+  demoMode: boolean;
+  isDemoOwner: boolean;
 }
 
 // ── Timer ───────────────────────────────────────────────
@@ -283,6 +285,7 @@ export interface AICapabilities {
   instagramImport: boolean;
   unsplash: boolean;
   browserRendering: boolean;
+  demoMode: boolean;
 }
 
 export interface InspirationIdea {
@@ -398,4 +401,7 @@ export interface Env {
   CF_BR_TOKEN?: string;
   // Instagram import via Apify scraper
   APIFY_API_TOKEN?: string;
+  // Demo mode — restricts expensive features to owner only
+  DEMO_MODE?: string;
+  OWNER_PASSWORD?: string;
 }

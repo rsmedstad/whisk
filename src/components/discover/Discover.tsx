@@ -33,6 +33,7 @@ import {
 } from "../ui/Icon";
 import { useTags } from "../../hooks/useTags";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
+import { DemoBanner } from "../ui/DemoBanner";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import type {
   Recipe,
@@ -55,6 +56,7 @@ interface DiscoverProps {
   onUpdateRecipe?: (id: string, updates: Partial<Recipe>) => Promise<Recipe>;
   chatEnabled?: boolean;
   recipes?: RecipeIndexEntry[];
+  isDemoRestricted?: boolean;
 }
 
 // ── Constants ───────────────────────────────────────────
@@ -302,6 +304,7 @@ export function Discover({
   onUpdateRecipe,
   chatEnabled,
   recipes: savedRecipes,
+  isDemoRestricted,
 }: DiscoverProps) {
   const navigate = useNavigate();
   const tags = useTags();
@@ -2017,6 +2020,11 @@ export function Discover({
 
       {/* Content */}
       <div ref={feedScrollRef} className="flex-1 overflow-y-auto pb-24">
+        {isDemoRestricted && (
+          <div className="px-4 pt-3">
+            <DemoBanner feature="Saving recipes" />
+          </div>
+        )}
         {/* ── Trending Feed ── */}
         {feedLoading && !hasFeedContent && (
           <LoadingSpinner className="py-16" size="lg" />
