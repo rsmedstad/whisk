@@ -631,7 +631,7 @@ export function ShoppingList({
                 onChange={(e) => setFilterQuery(e.target.value)}
                 placeholder="Search items..."
                 autoFocus
-                className="w-full rounded-lg border border-stone-300 bg-white pl-9 pr-8 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                className="w-full rounded-lg border border-stone-300 bg-white pl-9 pr-8 py-2 text-base placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
               />
               {filterQuery && (
                 <button onClick={() => setFilterQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">
