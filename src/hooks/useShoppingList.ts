@@ -87,9 +87,11 @@ export function useShoppingList() {
         addedBy: options?.addedBy ?? "manual",
         addedByUser: userName,
       };
-      await saveList({ ...list, items: [...list.items, item] });
+      // Use ref to get latest list state (avoids stale closure when called in a loop)
+      const currentList = listRef.current;
+      await saveList({ ...currentList, items: [...currentList.items, item] });
     },
-    [list, saveList]
+    [saveList]
   );
 
   const toggleItem = useCallback(
