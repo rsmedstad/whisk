@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categ
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
 import { classNames } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
-import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, Filter, SquareCheck, ClipboardList, RefreshCw, ChevronDown, ChevronUp, EllipsisVertical } from "../ui/Icon";
+import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, MagnifyingGlass, SquareCheck, ClipboardList, RefreshCw, ChevronDown, ChevronUp, EllipsisVertical } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 import { Card } from "../ui/Card";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -624,12 +624,12 @@ export function ShoppingList({
         {filterOpen && (
           <div className="px-4 py-2 border-t border-stone-100 dark:border-stone-800">
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
               <input
                 type="text"
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
-                placeholder="Filter items..."
+                placeholder="Search items..."
                 autoFocus
                 className="w-full rounded-lg border border-stone-300 bg-white pl-9 pr-8 py-2 text-sm placeholder:text-stone-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
               />
@@ -645,24 +645,6 @@ export function ShoppingList({
         {/* Filter bar — sort, toggles, classify, clear */}
         {totalCount > 0 && (
           <div className={classNames("flex items-center gap-2 pb-2 pt-1", showSortMenu ? "overflow-visible" : "overflow-x-auto no-scrollbar")}>
-            {/* Filter toggle */}
-            <button
-              onClick={() => {
-                setFilterOpen((prev) => {
-                  if (prev) setFilterQuery("");
-                  return !prev;
-                });
-              }}
-              className={classNames(
-                "shrink-0 p-1.5 rounded-full transition-colors",
-                filterOpen || filterQuery
-                  ? "text-orange-500 bg-orange-50 dark:bg-orange-950/50"
-                  : "text-stone-400 hover:text-orange-400 dark:text-stone-500 dark:hover:text-orange-400"
-              )}
-              title="Filter list"
-            >
-              <Filter className="w-5 h-5" />
-            </button>
             {/* Group mode dropdown */}
             <div className="relative">
               <button
@@ -750,6 +732,26 @@ export function ShoppingList({
                 <Sparkles className="w-3 h-3" /> {isClassifying ? "Classifying..." : isSmartLoading ? "Consolidating..." : "Organize"}
               </button>
             )}
+            {/* Spacer pushes search to far right */}
+            <div className="flex-1" />
+            {/* Search/filter toggle */}
+            <button
+              onClick={() => {
+                setFilterOpen((prev) => {
+                  if (prev) setFilterQuery("");
+                  return !prev;
+                });
+              }}
+              className={classNames(
+                "shrink-0 p-1.5 rounded-full transition-colors",
+                filterOpen || filterQuery
+                  ? "text-orange-500 bg-orange-50 dark:bg-orange-950/50"
+                  : "text-stone-400 hover:text-orange-400 dark:text-stone-500 dark:hover:text-orange-400"
+              )}
+              title="Search list"
+            >
+              <MagnifyingGlass className="w-5 h-5" />
+            </button>
           </div>
         )}
       </div>
