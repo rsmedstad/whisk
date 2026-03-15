@@ -11,7 +11,8 @@ const DEMO_RESTRICTED_PATHS = [
   "/api/recipes",       // POST (create) — GET is allowed, checked by method below
   "/api/import/",       // All import endpoints
   "/api/identify/",     // Photo identification
-  "/api/ai/",           // All AI endpoints (chat, suggest, auto-tag, group-steps)
+  "/api/ai/auto-tag",   // AI tagging (recipe creation/editing)
+  "/api/ai/group-steps", // AI step grouping (recipe editing)
   "/api/discover/feed", // POST/PATCH/DELETE feed management
 ];
 

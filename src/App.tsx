@@ -268,7 +268,6 @@ function AppShell({
           <Route path="/discover" element={<Discover onSaveRecipe={isDemoRestricted ? undefined : recipes.createRecipe} onUpdateRecipe={isDemoRestricted ? undefined : recipes.updateRecipe} chatEnabled={isDemoRestricted ? false : capabilities.chat} recipes={recipes.recipes} isDemoRestricted={isDemoRestricted} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
           <Route path="/ask" element={
-            isDemoRestricted ? <DemoRestrictedPage feature="AI chat" /> :
             <AskChat
               chatEnabled={capabilities.chat}
               recipes={recipes.recipes}
