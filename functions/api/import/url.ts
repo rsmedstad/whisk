@@ -101,7 +101,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (nytResult) {
         // Cache indefinitely — curated discover content has no reason to expire
         const cacheKey = `discover_cache:${await hashUrl(url)}`;
-        env.WHISK_KV.put(cacheKey, JSON.stringify(nytResult)).catch(() => {});
+        env.WHISK_KV.put(cacheKey, JSON.stringify(nytResult), { metadata: { permanent: true } }).catch(() => {});
         return new Response(JSON.stringify(nytResult), {
           headers: { "Content-Type": "application/json" },
         });
@@ -344,7 +344,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // Cache indefinitely — curated discover content has no reason to expire
     const cacheKey = `discover_cache:${await hashUrl(url)}`;
-    env.WHISK_KV.put(cacheKey, JSON.stringify(recipe)).catch(() => {/* best-effort */});
+    env.WHISK_KV.put(cacheKey, JSON.stringify(recipe), { metadata: { permanent: true } }).catch(() => {/* best-effort */});
 
     return new Response(JSON.stringify(recipe), {
       headers: { "Content-Type": "application/json" },

@@ -28,7 +28,7 @@ async function hashUrl(url: string): Promise<string> {
 }
 
 // GET /api/discover/recipe?url=... — Serve cached imported recipe data
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");
   if (!url) {
@@ -39,8 +39,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const cacheKey = `discover_cache:${await hashUrl(url)}`;
-  const cached = await env.WHISK_KV.get(cacheKey, "text");
+  const { value: cached, metadata } = await env.WHISK_KV.getWithMetadata<{ permanent?: boolean }>(cacheKey, "text");
   if (cached) {
+    // Re-save without TTL if the entry was previously stored with an expiry (upgrades old entries)
+    if (!metadata?.permanent) {
+      waitUntil(env.WHISK_KV.put(cacheKey, cached, { metadata: { permanent: true } }));
+    }
     return new Response(cached, {
       headers: { "Content-Type": "application/json" },
     });

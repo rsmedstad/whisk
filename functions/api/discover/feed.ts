@@ -1135,7 +1135,7 @@ async function precacheRecipes(
           source: { type: "url", url: item.url, domain: new URL(item.url).hostname.replace(/^www\./, "") },
         };
 
-        await env.WHISK_KV.put(cacheKey, JSON.stringify(recipe)); // no expiry — curated content
+        await env.WHISK_KV.put(cacheKey, JSON.stringify(recipe), { metadata: { permanent: true } }); // no expiry — curated content
       } catch {
         failed.push(item.url);
       }
