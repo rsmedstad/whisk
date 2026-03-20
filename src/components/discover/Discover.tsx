@@ -418,8 +418,8 @@ export function Discover({
     async function init() {
       // If we have cached data, show it immediately
       if (feed?.lastRefreshed) {
-        // Auto-refresh in background if feed is stale (only when auto-refresh is on)
-        if (autoRefreshEnabled) {
+        // Auto-refresh in background if feed is stale (only when auto-refresh is on, and not demo)
+        if (autoRefreshEnabled && !isDemoRestricted) {
           const age = Date.now() - new Date(feed.lastRefreshed).getTime();
           if (age > staleMs) {
             refreshFeed(); // Background refresh — cached data shows meanwhile
@@ -434,16 +434,16 @@ export function Discover({
         if (data?.lastRefreshed) {
           setFeed(data);
           setLocal(FEED_CACHE_KEY, data);
-          // Only auto-refresh stale data when enabled
-          if (autoRefreshEnabled) {
+          // Only auto-refresh stale data when enabled (and not demo)
+          if (autoRefreshEnabled && !isDemoRestricted) {
             const age = Date.now() - new Date(data.lastRefreshed).getTime();
             if (age > staleMs) {
               refreshFeed();
             }
           }
         }
-        // First visit with no feed — auto-scrape (even if auto-refresh is off, need initial data)
-        else if (autoRefreshEnabled) {
+        // First visit with no feed — auto-scrape (even if auto-refresh is off, need initial data, but not in demo)
+        else if (autoRefreshEnabled && !isDemoRestricted) {
           refreshFeed();
         }
       } catch {
@@ -1691,30 +1691,34 @@ export function Discover({
             </button>
             <button
               onClick={() => {
+                if (isDemoRestricted) {
+                  setFeedError("Refreshing the feed is not available in the demo. Set up your own Whisk to get fresh recipes.");
+                  return;
+                }
                 if (!autoRefreshEnabled) {
                   setFeedError("Auto-refresh is paused. Enable it in Settings > Display > Discover Feed.");
                   return;
                 }
                 refreshFeed(true);
               }}
-              disabled={feedLoading}
+              disabled={feedLoading && !isDemoRestricted}
               className={classNames(
                 "p-2 rounded-lg transition-all relative",
-                !autoRefreshEnabled
+                isDemoRestricted || !autoRefreshEnabled
                   ? "text-stone-300 dark:text-stone-600"
                   : feedLoading
                     ? "text-orange-500 ring-1 ring-orange-300 dark:ring-orange-700"
                     : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
               )}
-              title={autoRefreshEnabled ? "Refresh trending recipes" : "Auto-refresh paused"}
+              title={isDemoRestricted ? "Refresh not available in demo" : autoRefreshEnabled ? "Refresh trending recipes" : "Auto-refresh paused"}
             >
               <RefreshCw
                 className={classNames(
                   "w-4.5 h-4.5",
-                  feedLoading && "animate-spin"
+                  feedLoading && !isDemoRestricted && "animate-spin"
                 )}
               />
-              {!autoRefreshEnabled && (
+              {(isDemoRestricted || !autoRefreshEnabled) && (
                 <XMark className="w-3 h-3 absolute -top-0.5 -right-0.5 text-red-500 bg-white dark:bg-stone-900 rounded-full" />
               )}
             </button>
@@ -2050,11 +2054,6 @@ export function Discover({
 
       {/* Content */}
       <div ref={feedScrollRef} className="flex-1 overflow-y-auto pb-24">
-        {isDemoRestricted && (
-          <div className="px-4 pt-3">
-            <DemoBanner feature="Saving recipes" />
-          </div>
-        )}
         {/* ── Trending Feed ── */}
         {feedLoading && !hasFeedContent && (
           <LoadingSpinner className="py-16" size="lg" />
@@ -2190,23 +2189,27 @@ export function Discover({
                         </span>
                         <button
                           onClick={() => {
+                            if (isDemoRestricted) {
+                              setFeedError("Refreshing the feed is not available in the demo. Set up your own Whisk to get fresh recipes.");
+                              return;
+                            }
                             if (!autoRefreshEnabled) {
                               setFeedError("Auto-refresh is paused. Enable it in Settings > Display > Discover Feed.");
                               return;
                             }
                             refreshFeed(true);
                           }}
-                          disabled={feedLoading}
+                          disabled={feedLoading && !isDemoRestricted}
                           className={classNames(
                             "p-1 relative transition-colors",
-                            !autoRefreshEnabled
+                            isDemoRestricted || !autoRefreshEnabled
                               ? "text-stone-300 dark:text-stone-600"
                               : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
                           )}
-                          title={autoRefreshEnabled ? "Refresh" : "Auto-refresh paused"}
+                          title={isDemoRestricted ? "Refresh not available in demo" : autoRefreshEnabled ? "Refresh" : "Auto-refresh paused"}
                         >
-                          <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
-                          {!autoRefreshEnabled && (
+                          <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && !isDemoRestricted && "animate-spin")} />
+                          {(isDemoRestricted || !autoRefreshEnabled) && (
                             <XMark className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 text-red-500 bg-white dark:bg-stone-900 rounded-full" />
                           )}
                         </button>
@@ -2249,23 +2252,27 @@ export function Discover({
                   </span>
                   <button
                     onClick={() => {
+                      if (isDemoRestricted) {
+                        setFeedError("Refreshing the feed is not available in the demo. Set up your own Whisk to get fresh recipes.");
+                        return;
+                      }
                       if (!autoRefreshEnabled) {
                         setFeedError("Auto-refresh is paused. Enable it in Settings > Display > Discover Feed.");
                         return;
                       }
                       refreshFeed(true);
                     }}
-                    disabled={feedLoading}
+                    disabled={feedLoading && !isDemoRestricted}
                     className={classNames(
                       "p-1 relative transition-colors",
-                      !autoRefreshEnabled
+                      isDemoRestricted || !autoRefreshEnabled
                         ? "text-stone-300 dark:text-stone-600"
                         : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
                     )}
-                    title={autoRefreshEnabled ? "Refresh" : "Auto-refresh paused"}
+                    title={isDemoRestricted ? "Refresh not available in demo" : autoRefreshEnabled ? "Refresh" : "Auto-refresh paused"}
                   >
-                    <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && "animate-spin")} />
-                    {!autoRefreshEnabled && (
+                    <RefreshCw className={classNames("w-3.5 h-3.5", feedLoading && !isDemoRestricted && "animate-spin")} />
+                    {(isDemoRestricted || !autoRefreshEnabled) && (
                       <XMark className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 text-red-500 bg-white dark:bg-stone-900 rounded-full" />
                     )}
                   </button>

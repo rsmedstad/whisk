@@ -9,6 +9,7 @@ import { PRESET_TAGS, TIME_RANGES } from "../../lib/tags";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
+import { DemoBanner } from "../ui/DemoBanner";
 
 import { FirstRunGuide } from "./FirstRunGuide";
 import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass, CalendarDays } from "../ui/Icon";
@@ -55,6 +56,7 @@ export function RecipeList({
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
+  const [showDemoAddBanner, setShowDemoAddBanner] = useState(false);
 
   // Save filter state to sessionStorage whenever it changes
   useEffect(() => {
@@ -237,17 +239,44 @@ export function RecipeList({
             >
               {searchOpen ? <XMark className="w-5 h-5" /> : <MagnifyingGlass className="w-5 h-5" />}
             </button>
-            {!isDemoRestricted && (
-              <button
-                onClick={() => navigate("/recipes/new")}
-                className="p-1.5 rounded-lg text-stone-400 hover:text-orange-500 active:bg-orange-100 active:text-orange-600 active:ring-1 active:ring-orange-300 dark:text-stone-500 dark:hover:text-orange-400 dark:active:bg-orange-950 dark:active:text-orange-400 dark:active:ring-orange-700 transition-all"
-                title="Add recipe"
-              >
-                <Plus className="w-6 h-6" strokeWidth={2.5} />
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (isDemoRestricted) {
+                  setShowDemoAddBanner(true);
+                  return;
+                }
+                navigate("/recipes/new");
+              }}
+              className={classNames(
+                "p-1.5 rounded-lg relative transition-all",
+                isDemoRestricted
+                  ? "text-stone-300 dark:text-stone-600"
+                  : "text-stone-400 hover:text-orange-500 active:bg-orange-100 active:text-orange-600 active:ring-1 active:ring-orange-300 dark:text-stone-500 dark:hover:text-orange-400 dark:active:bg-orange-950 dark:active:text-orange-400 dark:active:ring-orange-700"
+              )}
+              title={isDemoRestricted ? "Adding recipes is not available in the demo" : "Add recipe"}
+            >
+              <Plus className="w-6 h-6" strokeWidth={2.5} />
+              {isDemoRestricted && (
+                <XMark className="w-3 h-3 absolute -top-0.5 -right-0.5 text-red-500 bg-white dark:bg-stone-900 rounded-full" />
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Demo add banner — dismissable, shown when demo user taps + */}
+        {showDemoAddBanner && (
+          <div className="mx-4 mb-2 flex items-start gap-2">
+            <div className="flex-1">
+              <DemoBanner feature="Adding recipes" />
+            </div>
+            <button
+              onClick={() => setShowDemoAddBanner(false)}
+              className="mt-2.5 shrink-0 text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+            >
+              <XMark className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Search — collapsible */}
         {searchOpen && (
