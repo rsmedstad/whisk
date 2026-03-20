@@ -99,11 +99,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (nytRecipeId) {
       const nytResult = await tryNytCookingApi(nytRecipeId, downloadImage ?? false, env);
       if (nytResult) {
-        // Cache for fast subsequent views
+        // Cache indefinitely — curated discover content has no reason to expire
         const cacheKey = `discover_cache:${await hashUrl(url)}`;
-        env.WHISK_KV.put(cacheKey, JSON.stringify(nytResult), {
-          expirationTtl: 60 * 60 * 24 * 7,
-        }).catch(() => {});
+        env.WHISK_KV.put(cacheKey, JSON.stringify(nytResult)).catch(() => {});
         return new Response(JSON.stringify(nytResult), {
           headers: { "Content-Type": "application/json" },
         });
@@ -344,11 +342,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       lastCrawledAt: new Date().toISOString(),
     };
 
-    // Cache the imported recipe for fast subsequent views (7-day TTL)
+    // Cache indefinitely — curated discover content has no reason to expire
     const cacheKey = `discover_cache:${await hashUrl(url)}`;
-    env.WHISK_KV.put(cacheKey, JSON.stringify(recipe), {
-      expirationTtl: 60 * 60 * 24 * 7,
-    }).catch(() => {/* best-effort */});
+    env.WHISK_KV.put(cacheKey, JSON.stringify(recipe)).catch(() => {/* best-effort */});
 
     return new Response(JSON.stringify(recipe), {
       headers: { "Content-Type": "application/json" },
