@@ -14,7 +14,7 @@ import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
 import { DemoBanner } from "./components/ui/DemoBanner";
-import type { Ingredient, AppSettings, AppStyle, OnboardingPrefs, UserPreferences } from "./types";
+import type { Ingredient, AppSettings, AppStyle, UserPreferences } from "./types";
 
 /** Full-page placeholder shown when a demo-restricted route is accessed */
 function DemoRestrictedPage({ feature }: { feature: string }) {
@@ -69,35 +69,12 @@ export function App() {
   const auth = useAuth();
   const { theme, setTheme, accentOverride, setAccentOverride } = useTheme();
   const { style, setStyle } = useStyle();
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const handleLogin = useCallback(async (password: string, name?: string) => {
     await auth.login(password, name);
-    if (localStorage.getItem("whisk_onboarded") !== "true") {
-      // Demo non-owners skip the units/theme onboarding — welcome card in RecipeList handles their intro
-      const isDemoGuest = localStorage.getItem("whisk_demo_mode") === "true"
-        && localStorage.getItem("whisk_demo_owner") !== "true";
-      if (isDemoGuest) {
-        localStorage.setItem("whisk_onboarded", "true");
-      } else {
-        setNeedsOnboarding(true);
-      }
-    }
-  }, [auth.login]);
-
-  const handleCompleteOnboarding = useCallback((prefs: OnboardingPrefs) => {
-    // Apply units + auto-sync temperature
-    localStorage.setItem("whisk_units", prefs.units);
-    const tempUnit = prefs.units === "metric" ? "C" : "F";
-    localStorage.setItem("whisk_temp_unit", tempUnit);
-
-    // Apply grams preference
-    localStorage.setItem("whisk_show_grams", String(prefs.showGrams));
-
-    // Mark onboarding complete
+    // Welcome card in RecipeList handles the first-run experience for all users
     localStorage.setItem("whisk_onboarded", "true");
-    setNeedsOnboarding(false);
-  }, []);
+  }, [auth.login]);
 
   if (!auth.isAuthenticated) {
     return (
@@ -105,21 +82,6 @@ export function App() {
         onLogin={handleLogin}
         isLoading={auth.isLoading}
         error={auth.error}
-      />
-    );
-  }
-
-  if (needsOnboarding) {
-    return (
-      <Login
-        onLogin={handleLogin}
-        isLoading={auth.isLoading}
-        error={auth.error}
-        showOnboarding
-        userName={auth.userName ?? ""}
-        currentTheme={theme}
-        onSetTheme={setTheme}
-        onCompleteOnboarding={handleCompleteOnboarding}
       />
     );
   }
