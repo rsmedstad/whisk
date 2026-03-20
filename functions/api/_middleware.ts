@@ -8,12 +8,15 @@ const PUBLIC_PATHS = ["/api/auth", "/api/share/"];
 
 // Endpoints restricted to demo owner when DEMO_MODE is enabled
 const DEMO_RESTRICTED_PATHS = [
-  "/api/recipes",       // POST (create) — GET is allowed, checked by method below
-  "/api/import/",       // All import endpoints
-  "/api/identify/",     // Photo identification
-  "/api/ai/auto-tag",   // AI tagging (recipe creation/editing)
+  "/api/recipes",        // POST (create) — GET is allowed, checked by method below
+  "/api/import/parse",   // Bulk text import
+  "/api/import/book",    // Book import/export
+  "/api/identify/",      // Photo identification
+  "/api/ai/auto-tag",    // AI tagging (recipe creation/editing)
   "/api/ai/group-steps", // AI step grouping (recipe editing)
-  "/api/discover/feed", // POST/PATCH/DELETE feed management
+  "/api/discover/feed",  // POST/PATCH/DELETE feed management
+  // NOTE: /api/import/url is intentionally NOT restricted — demo guests can view
+  // discover recipes (they just can't save them, which is blocked by /api/recipes POST)
 ];
 
 // These paths + methods are always allowed even in demo mode

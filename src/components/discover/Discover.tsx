@@ -528,18 +528,11 @@ export function Discover({
           // Cache miss — fall through to import
         }
 
-        // If no cache hit, try full import (only works for non-demo users)
+        // If no cache hit, import the recipe (allowed for all users including demo guests)
         if (!data?.title) {
-          if (isDemoRestricted) {
-            setImportError(
-              "This recipe hasn't been loaded yet. In the demo, only pre-loaded recipes are available. Set up your own Whisk to import any recipe!"
-            );
-            setIsImporting(false);
-            return;
-          }
           data = await api.post<ImportedRecipe>("/import/url", {
             url: item.url,
-            downloadImage: true,
+            downloadImage: !isDemoRestricted, // skip R2 image download for demo guests
           });
         }
 
@@ -589,14 +582,7 @@ export function Discover({
         const message = err instanceof Error && err.message
           ? err.message
           : "Could not load recipe. The site may be blocking access.";
-        // Provide better demo-specific messaging
-        if (isDemoRestricted && (message.includes("demoRestricted") || message.includes("not available in the demo"))) {
-          setImportError(
-            "This recipe hasn't been loaded yet. In the demo, only pre-loaded recipes are available. Set up your own Whisk to import any recipe!"
-          );
-        } else {
-          setImportError(message);
-        }
+        setImportError(message);
       } finally {
         setIsImporting(false);
       }
