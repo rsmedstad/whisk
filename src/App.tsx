@@ -74,7 +74,14 @@ export function App() {
   const handleLogin = useCallback(async (password: string, name?: string) => {
     await auth.login(password, name);
     if (localStorage.getItem("whisk_onboarded") !== "true") {
-      setNeedsOnboarding(true);
+      // Demo non-owners skip the units/theme onboarding — welcome card in RecipeList handles their intro
+      const isDemoGuest = localStorage.getItem("whisk_demo_mode") === "true"
+        && localStorage.getItem("whisk_demo_owner") !== "true";
+      if (isDemoGuest) {
+        localStorage.setItem("whisk_onboarded", "true");
+      } else {
+        setNeedsOnboarding(true);
+      }
     }
   }, [auth.login]);
 

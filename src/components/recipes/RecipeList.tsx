@@ -57,6 +57,13 @@ export function RecipeList({
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
   const [showDemoAddBanner, setShowDemoAddBanner] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(
+    localStorage.getItem("whisk_welcome_dismissed") !== "true"
+  );
+  const dismissWelcome = () => {
+    localStorage.setItem("whisk_welcome_dismissed", "true");
+    setShowWelcome(false);
+  };
 
   // Save filter state to sessionStorage whenever it changes
   useEffect(() => {
@@ -562,6 +569,41 @@ export function RecipeList({
 
       {/* Recipe cards */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 pb-24">
+        {/* Welcome card — shown once until dismissed */}
+        {showWelcome && (
+          <div className="mx-4 mb-4 rounded-xl border border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/40 p-4">
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <h2 className="font-semibold text-stone-800 dark:text-stone-100">Welcome to Whisk</h2>
+              <button onClick={dismissWelcome} className="text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 shrink-0 -mt-0.5">
+                <XMark className="w-4 h-4" />
+              </button>
+            </div>
+            <ul className="space-y-1.5 text-sm text-stone-600 dark:text-stone-400 mb-3">
+              <li><span className="font-medium text-stone-700 dark:text-stone-300">Recipes</span> — your saved collection; search, filter, and cook.</li>
+              <li><span className="font-medium text-stone-700 dark:text-stone-300">Discover</span> — browse trending recipes from top food sites.</li>
+              <li><span className="font-medium text-stone-700 dark:text-stone-300">Ask</span> — AI chat for meal ideas, substitutions, and cooking help.</li>
+              <li><span className="font-medium text-stone-700 dark:text-stone-300">Plan</span> — schedule meals for the week.</li>
+              <li><span className="font-medium text-stone-700 dark:text-stone-300">List</span> — smart shopping list, auto-organized by category.</li>
+            </ul>
+            <p className="text-xs text-stone-500 dark:text-stone-500">
+              Tap the Whisk logo (top left) to access Settings — theme, units, AI, and more.
+            </p>
+            {isDemoRestricted && (
+              <p className="text-xs text-stone-500 dark:text-stone-500 mt-2 pt-2 border-t border-orange-200 dark:border-orange-900">
+                This is a demo. Whisk is{" "}
+                <a
+                  href="https://github.com/rsmedstad/whisk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-orange-600 underline hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                >
+                  open source
+                </a>
+                {" "}— set up your own instance to unlock all features including adding recipes, full AI, and complete customization.
+              </p>
+            )}
+          </div>
+        )}
         {recipes.length === 0 && !search && selectedTags.length === 0 && !isDemoRestricted ? (
           <div className="px-4"><FirstRunGuide /></div>
         ) : filtered.length === 0 ? (
