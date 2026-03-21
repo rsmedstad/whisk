@@ -14,13 +14,33 @@ interface Household {
   updatedAt: string;
 }
 
-// GET /api/household — list all members
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+// GET /api/household — list members (non-owners only see themselves + owner)
+export const onRequestGet: PagesFunction<Env> = async ({ env, data }) => {
   const household = await env.WHISK_KV.get<Household>("household", "json");
-  return new Response(
-    JSON.stringify(household ?? { members: [], updatedAt: new Date().toISOString() }),
-    { headers: { "Content-Type": "application/json" } }
-  );
+  if (!household) {
+    return new Response(
+      JSON.stringify({ members: [], updatedAt: new Date().toISOString() }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const requestingUserId = (data as Record<string, string>).userId;
+  const requester = household.members.find((m) => m.id === requestingUserId);
+
+  // Owner sees all members; non-owners see only themselves + the owner
+  if (requester && !requester.isOwner) {
+    const filtered: Household = {
+      ...household,
+      members: household.members.filter((m) => m.isOwner || m.id === requestingUserId),
+    };
+    return new Response(JSON.stringify(filtered), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify(household), {
+    headers: { "Content-Type": "application/json" },
+  });
 };
 
 // PUT /api/household — update household (rename/remove members, transfer ownership)
