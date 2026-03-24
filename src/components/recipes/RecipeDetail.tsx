@@ -62,6 +62,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const showGrams = localStorage.getItem("whisk_show_grams") === "true";
   const [isRefetching, setIsRefetching] = useState(false);
   const [refetchResult, setRefetchResult] = useState<"success" | "error" | null>(null);
+  const [refetchSummary, setRefetchSummary] = useState("");
   const [isGroupingSteps, setIsGroupingSteps] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const wakeLock = useWakeLock();
@@ -188,16 +189,27 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         if (primary) updates.thumbnailUrl = primary.url;
       }
 
+      // Build a summary of what was found
+      const parts: string[] = [];
+      const ingCount = Array.isArray(updates.ingredients) ? (updates.ingredients as unknown[]).length : 0;
+      const stepCount = Array.isArray(updates.steps) ? (updates.steps as unknown[]).length : 0;
+      if (ingCount > 0) parts.push(`${ingCount} ingredients`);
+      if (stepCount > 0) parts.push(`${stepCount} steps`);
+      if (updates.title) parts.push("title");
+      if (updates.photos) parts.push("photos");
+
       await updateRecipe(recipe.id, updates);
       setRecipe((r) => (r ? { ...r, ...updates } as Recipe : r));
       // Reset scaling if servings changed
       if (updates.servings) setScaledServings(updates.servings as number);
+      setRefetchSummary(parts.length > 0 ? `Found ${parts.join(", ")}` : "No new data found from source");
       setRefetchResult("success");
     } catch {
       setRefetchResult("error");
+      setRefetchSummary("");
     } finally {
       setIsRefetching(false);
-      setTimeout(() => setRefetchResult(null), 5000);
+      setTimeout(() => { setRefetchResult(null); setRefetchSummary(""); }, 5000);
     }
   }, [recipe, isRefetching, updateRecipe]);
 
@@ -685,7 +697,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         {refetchResult === "success" && !isRefetching && (
           <div className="flex items-center justify-center gap-2 py-2.5 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 text-sm font-medium">
             <Check className="w-4 h-4" />
-            Recipe updated from source
+            {refetchSummary || "Recipe updated from source"}
           </div>
         )}
         {refetchResult === "error" && !isRefetching && (

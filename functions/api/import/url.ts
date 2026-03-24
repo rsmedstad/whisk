@@ -340,6 +340,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
+    // Direct WPRM fallback: extract ingredients/instructions directly from HTML
+    // without needing the container block (handles sites with non-standard page structure)
+    if (recipeData.name && (!hasIngredients || !hasSteps)) {
+      const directWprm = extractDirectWprm(html);
+      if (directWprm) {
+        backfillRecipeData(recipeData, directWprm);
+        hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+        hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+      }
+    }
+
     // Second try: if still missing data and Browser Rendering is available,
     // the recipe content may require JavaScript to render (common with WPRM,
     // cookie consent banners hiding content, or React-based sites)
@@ -385,6 +396,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             if (!hasIngredients || !hasSteps) {
               const brMicro = extractMicrodata(brHtml);
               if (brMicro) backfillRecipeData(recipeData, brMicro);
+
+              hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+              hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+            }
+
+            // Direct WPRM fallback on browser-rendered HTML
+            if (!hasIngredients || !hasSteps) {
+              const brDirect = extractDirectWprm(brHtml);
+              if (brDirect) backfillRecipeData(recipeData, brDirect);
             }
           }
         }
@@ -874,6 +894,9 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
   // ── WPRM (WP Recipe Maker) — class="wprm-recipe-container"
   const wprmBlock = html.match(
     /class="[^"]*wprm-recipe-container[^"]*"[^>]*>([\s\S]*?)(?=<div class="(?:wprm-recipe-block-container-columns|entry-content|sharedaddy)|<\/article|<footer|<section id="comments)/i
+  ) ?? html.match(
+    // Fallback: grab up to 100KB from the container start (for sites without standard end markers)
+    /class="[^"]*wprm-recipe-container[^"]*"[^>]*>([\s\S]{1,100000})/i
   );
 
   // ── Tasty Recipes — class="tasty-recipes"
@@ -901,8 +924,12 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
   const ingredients: string[] = [];
 
   // WPRM: parse ingredient groups for section names, then individual ingredients
+  // Allow flexible closing — some themes have extra wrappers between </ul> and </div>
   const wprmIngredientGroups = block.match(
-    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)<\/ul>\s*<\/div>/gi
+    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)<\/ul>[\s\S]*?<\/div>/gi
+  ) ?? block.match(
+    // Broader fallback: match each group up to the next group or end of ingredients section
+    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-ingredient-group|<div[^>]*class="[^"]*wprm-recipe-instructions|$)/gi
   );
   if (wprmIngredientGroups && wprmIngredientGroups.length > 0) {
     for (const groupBlock of wprmIngredientGroups) {
@@ -979,8 +1006,12 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
   const instructions: unknown[] = [];
 
   // WPRM: parse instruction groups for section names
+  // Allow flexible closing — some themes have extra wrappers between </ol> and </div>
   const wprmInstructionGroups = block.match(
-    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)<\/ol>\s*<\/div>/gi
+    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)<\/ol>[\s\S]*?<\/div>/gi
+  ) ?? block.match(
+    // Broader fallback: match each group up to the next group or end of recipe
+    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-instruction-group|<div[^>]*class="[^"]*wprm-recipe-notes|<div[^>]*class="[^"]*wprm-recipe-nutrition|$)/gi
   );
   if (wprmInstructionGroups && wprmInstructionGroups.length > 0) {
     for (const groupBlock of wprmInstructionGroups) {
@@ -1096,6 +1127,111 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
     cookTime: cookTime ?? undefined,
     totalTime: totalTime ?? undefined,
     recipeYield: servings ? [servings] : undefined,
+  };
+}
+
+/**
+ * Direct WPRM extraction — bypasses the container block regex entirely.
+ * Scans the full HTML for wprm-recipe-ingredient and wprm-recipe-instruction
+ * elements with group support. This is a last-resort fallback when the
+ * container regex can't find proper end boundaries.
+ */
+function extractDirectWprm(html: string): RecipeData | null {
+  // Check if this page actually has WPRM classes
+  if (!html.includes("wprm-recipe-ingredient")) return null;
+
+  const ingredients: string[] = [];
+  const instructions: unknown[] = [];
+
+  // ── Extract ingredients with group support
+  const ingredientGroups = html.match(
+    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-ingredient-group|<div[^>]*class="[^"]*wprm-recipe-instruction|<div[^>]*class="[^"]*wprm-recipe-notes|$)/gi
+  );
+
+  if (ingredientGroups && ingredientGroups.length > 0) {
+    for (const groupBlock of ingredientGroups) {
+      const groupNameMatch = groupBlock.match(
+        /class="[^"]*wprm-recipe-group-name[^"]*"[^>]*>([\s\S]*?)<\//i
+      );
+      const groupName = groupNameMatch ? stripHtml(groupNameMatch[1] ?? "").trim() : "";
+      if (groupName) ingredients.push(`${groupName}:`);
+
+      const lis = groupBlock.match(
+        /<li[^>]*class="[^"]*wprm-recipe-ingredient[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+      );
+      if (lis) {
+        for (const li of lis) {
+          const text = stripHtml(li).trim();
+          if (text.length > 1 && text.length < 300) ingredients.push(text);
+        }
+      }
+    }
+  }
+
+  // Flat ingredient fallback
+  if (ingredients.length === 0) {
+    const flatLis = html.match(
+      /<li[^>]*class="[^"]*wprm-recipe-ingredient[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+    );
+    if (flatLis) {
+      for (const li of flatLis) {
+        const text = stripHtml(li).trim();
+        if (text.length > 1 && text.length < 300) ingredients.push(text);
+      }
+    }
+  }
+
+  // ── Extract instructions with group support
+  const instructionGroups = html.match(
+    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-instruction-group|<div[^>]*class="[^"]*wprm-recipe-notes|<div[^>]*class="[^"]*wprm-recipe-nutrition|<div[^>]*class="[^"]*wprm-recipe-video|$)/gi
+  );
+
+  if (instructionGroups && instructionGroups.length > 0) {
+    for (const groupBlock of instructionGroups) {
+      const groupNameMatch = groupBlock.match(
+        /class="[^"]*wprm-recipe-group-name[^"]*"[^>]*>([\s\S]*?)<\//i
+      );
+      const groupName = groupNameMatch ? stripHtml(groupNameMatch[1] ?? "").trim() : "";
+      const lis = groupBlock.match(
+        /<li[^>]*class="[^"]*wprm-recipe-instruction[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+      );
+      if (lis) {
+        const stepItems = lis.map((li) => {
+          const cleaned = li.replace(/<img[^>]*>/gi, "");
+          return { "@type": "HowToStep" as const, text: stripHtml(cleaned).trim() };
+        }).filter((s) => s.text.length > 5);
+        if (groupName && stepItems.length > 0) {
+          instructions.push({
+            "@type": "HowToSection",
+            name: groupName,
+            itemListElement: stepItems,
+          });
+        } else {
+          instructions.push(...stepItems);
+        }
+      }
+    }
+  }
+
+  // Flat instruction fallback
+  if (instructions.length === 0) {
+    const flatLis = html.match(
+      /<li[^>]*class="[^"]*wprm-recipe-instruction[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+    );
+    if (flatLis) {
+      for (const li of flatLis) {
+        const cleaned = li.replace(/<img[^>]*>/gi, "");
+        const text = stripHtml(cleaned).trim();
+        if (text.length > 5) instructions.push(text);
+      }
+    }
+  }
+
+  if (ingredients.length === 0 && instructions.length === 0) return null;
+
+  return {
+    recipeIngredient: ingredients.map(stripHtml),
+    recipeInstructions: instructions,
   };
 }
 
