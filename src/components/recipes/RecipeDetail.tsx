@@ -190,12 +190,14 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
       await updateRecipe(recipe.id, updates);
       setRecipe((r) => (r ? { ...r, ...updates } as Recipe : r));
+      // Reset scaling if servings changed
+      if (updates.servings) setScaledServings(updates.servings as number);
       setRefetchResult("success");
     } catch {
       setRefetchResult("error");
     } finally {
       setIsRefetching(false);
-      setTimeout(() => setRefetchResult(null), 3000);
+      setTimeout(() => setRefetchResult(null), 5000);
     }
   }, [recipe, isRefetching, updateRecipe]);
 
@@ -672,6 +674,26 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
         {/* Divider between tags and ingredients/steps */}
         <div className="border-t border-stone-200 dark:border-stone-700" />
+
+        {/* Refresh status banner */}
+        {isRefetching && (
+          <div className="flex items-center justify-center gap-2 py-2.5 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 text-sm font-medium">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            Updating from source…
+          </div>
+        )}
+        {refetchResult === "success" && !isRefetching && (
+          <div className="flex items-center justify-center gap-2 py-2.5 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 text-sm font-medium">
+            <Check className="w-4 h-4" />
+            Recipe updated from source
+          </div>
+        )}
+        {refetchResult === "error" && !isRefetching && (
+          <div className="flex items-center justify-center gap-2 py-2.5 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 text-sm font-medium">
+            <XMark className="w-4 h-4" />
+            Refresh failed — site may block access
+          </div>
+        )}
 
         {/* Tab bar */}
         <div className="flex border-b border-stone-200 dark:border-stone-700">
