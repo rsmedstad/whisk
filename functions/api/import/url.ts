@@ -244,12 +244,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       recipeData = extractMicrodata(html);
     }
 
-    // Strategy 3: Plain text blog recipe (e.g. smittenkitchen)
+    // Strategy 3: WP Recipe Maker / Tasty Recipes / recipe plugin HTML classes
+    if (!recipeData) {
+      recipeData = extractRecipePluginHtml(html);
+    }
+
+    // Strategy 4: Plain text blog recipe (e.g. smittenkitchen)
     if (!recipeData) {
       recipeData = extractBlogRecipe(html);
     }
 
-    // Strategy 4: Apify universal recipe scraper (last resort)
+    // Strategy 5: Apify universal recipe scraper (last resort)
     if (!recipeData && env.APIFY_API_TOKEN) {
       recipeData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
     }
@@ -259,6 +264,74 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         JSON.stringify({ error: "No structured recipe data found" }),
         { status: 422, headers: { "Content-Type": "application/json" } }
       );
+    }
+
+    // Backfill: if we have a recipe name but empty ingredients or steps, try
+    // additional extraction strategies to fill in the gaps
+    let hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+    let hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+
+    // First try: HTML plugin extraction on the HTML we already have
+    if (recipeData.name && (!hasIngredients || !hasSteps)) {
+      const pluginData = extractRecipePluginHtml(html);
+      if (pluginData) {
+        backfillRecipeData(recipeData, pluginData);
+        hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+        hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+      }
+    }
+
+    // Second try: if still missing data and Browser Rendering is available,
+    // the recipe content may require JavaScript to render (common with WPRM,
+    // cookie consent banners hiding content, or React-based sites)
+    if (recipeData.name && (!hasIngredients || !hasSteps) && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
+      try {
+        const brRes = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${env.CF_BR_TOKEN}`,
+            },
+            body: JSON.stringify({
+              url,
+              gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+              rejectResourceTypes: ["font", "media"],
+              setExtraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+            }),
+          }
+        );
+        if (brRes.ok) {
+          const brBody = await brRes.text();
+          const brHtml = brBody.startsWith("{")
+            ? (JSON.parse(brBody) as { result?: string }).result ?? ""
+            : brBody;
+          if (brHtml.length > 500) {
+            // Re-try all extraction strategies on the JS-rendered HTML
+            const brJsonLd = extractJsonLd(brHtml);
+            if (brJsonLd) backfillRecipeData(recipeData, brJsonLd);
+
+            hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+            hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+
+            if (!hasIngredients || !hasSteps) {
+              const brPlugin = extractRecipePluginHtml(brHtml);
+              if (brPlugin) backfillRecipeData(recipeData, brPlugin);
+
+              hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+              hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+            }
+
+            if (!hasIngredients || !hasSteps) {
+              const brMicro = extractMicrodata(brHtml);
+              if (brMicro) backfillRecipeData(recipeData, brMicro);
+            }
+          }
+        }
+      } catch {
+        // Browser Rendering retry failed, continue with what we have
+      }
     }
 
     // Collect all image URLs: primary + additional from the page
@@ -358,6 +431,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
   }
 };
+
+// ── Backfill helper ─────────────────────────────────────────
+
+/** Merge missing fields from a secondary extraction into the primary recipe data */
+function backfillRecipeData(primary: RecipeData, secondary: RecipeData): void {
+  if ((primary.recipeIngredient?.length ?? 0) === 0 && (secondary.recipeIngredient?.length ?? 0) > 0) {
+    primary.recipeIngredient = secondary.recipeIngredient;
+  }
+  if ((primary.recipeInstructions?.length ?? 0) === 0 && (secondary.recipeInstructions?.length ?? 0) > 0) {
+    primary.recipeInstructions = secondary.recipeInstructions;
+  }
+  if (!primary.prepTime && secondary.prepTime) primary.prepTime = secondary.prepTime;
+  if (!primary.cookTime && secondary.cookTime) primary.cookTime = secondary.cookTime;
+  if (!primary.totalTime && secondary.totalTime) primary.totalTime = secondary.totalTime;
+  if (!primary.recipeYield && secondary.recipeYield) primary.recipeYield = secondary.recipeYield;
+  if (!primary.image && secondary.image) primary.image = secondary.image;
+}
 
 // ── Auto-tag generation ─────────────────────────────────────
 
@@ -715,7 +805,198 @@ function extractTextBlock(html: string, sectionPattern: string): string | null {
   return stripHtml(match[1]);
 }
 
-// ── Strategy 3: Plain text blog recipe ──────────────────────
+// ── Strategy 3: WP Recipe Maker / Tasty Recipes / recipe plugin HTML ──
+// WordPress recipe plugins use distinctive CSS classes for recipe cards.
+// This catches WPRM (wprm-recipe-*), Tasty Recipes (tasty-recipes-*),
+// EasyRecipe, and similar plugins. Useful when JSON-LD is missing or
+// incomplete (some plugins render JSON-LD via JavaScript only).
+
+function extractRecipePluginHtml(html: string): RecipeData | null {
+  // ── WPRM (WP Recipe Maker) — class="wprm-recipe-container"
+  const wprmBlock = html.match(
+    /class="[^"]*wprm-recipe-container[^"]*"[^>]*>([\s\S]*?)(?=<div class="(?:wprm-recipe-block-container-columns|entry-content|sharedaddy)|<\/article|<footer|<section id="comments)/i
+  );
+
+  // ── Tasty Recipes — class="tasty-recipes"
+  const tastyBlock = html.match(
+    /class="[^"]*tasty-recipes[^"]*"[^>]*>([\s\S]*?)(?=<\/div>\s*<\/div>\s*<\/div>\s*(?:<div class="(?:entry|shared)|<footer|<section))/i
+  );
+
+  // ── Generic recipe card — class="recipe-card" or "recipe-content"
+  const genericBlock = html.match(
+    /class="[^"]*(?:recipe-card|recipe-content|easyrecipe)[^"]*"[^>]*>([\s\S]*?)(?=<\/div>\s*(?:<div class="(?:entry|shared)|<footer|<section|<\/article))/i
+  );
+
+  const block = wprmBlock?.[1] ?? tastyBlock?.[1] ?? genericBlock?.[1];
+  if (!block) return null;
+
+  // ── Extract recipe name
+  const name =
+    extractWprmField(block, "wprm-recipe-name") ??
+    extractClassText(block, "tasty-recipes-title") ??
+    extractFirstTag(block, "h2") ??
+    extractFirstTag(block, "h3");
+  if (!name) return null;
+
+  // ── Extract ingredients
+  const ingredients: string[] = [];
+
+  // WPRM: <li class="wprm-recipe-ingredient">...<span class="wprm-recipe-ingredient-amount">...</span>...
+  const wprmIngredients = block.match(
+    /<li[^>]*class="[^"]*wprm-recipe-ingredient[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+  );
+  if (wprmIngredients) {
+    for (const li of wprmIngredients) {
+      const text = stripHtml(li).trim();
+      if (text.length > 1 && text.length < 300) ingredients.push(text);
+    }
+  }
+
+  // Tasty Recipes: <li> within a div.tasty-recipes-ingredients
+  if (ingredients.length === 0) {
+    const ingredSection = block.match(
+      /class="[^"]*tasty-recipes-ingredients[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+    );
+    if (ingredSection?.[1]) {
+      const lis = ingredSection[1].match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+      if (lis) {
+        for (const li of lis) {
+          const text = stripHtml(li).trim();
+          if (text.length > 1 && text.length < 300) ingredients.push(text);
+        }
+      }
+    }
+  }
+
+  // Generic: <li> within any element with "ingredient" in class/id
+  if (ingredients.length === 0) {
+    const ingredBlock = block.match(
+      /(?:class|id)="[^"]*ingredient[^"]*"[^>]*>([\s\S]*?)<\/(?:ul|ol|div)>/gi
+    );
+    if (ingredBlock) {
+      for (const section of ingredBlock) {
+        const lis = section.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+        if (lis) {
+          for (const li of lis) {
+            const text = stripHtml(li).trim();
+            if (text.length > 1 && text.length < 300) ingredients.push(text);
+          }
+        }
+      }
+    }
+  }
+
+  // ── Extract instructions
+  const instructions: string[] = [];
+
+  // WPRM: <div class="wprm-recipe-instruction-group">...<li class="wprm-recipe-instruction">
+  const wprmSteps = block.match(
+    /<li[^>]*class="[^"]*wprm-recipe-instruction[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+  );
+  if (wprmSteps) {
+    for (const li of wprmSteps) {
+      // Get the instruction text, skipping image tags
+      const cleaned = li.replace(/<img[^>]*>/gi, "");
+      const text = stripHtml(cleaned).trim();
+      if (text.length > 5) instructions.push(text);
+    }
+  }
+
+  // Tasty Recipes: <li> or <p> within div.tasty-recipes-instructions
+  if (instructions.length === 0) {
+    const instrSection = block.match(
+      /class="[^"]*tasty-recipes-instructions[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+    );
+    if (instrSection?.[1]) {
+      const items = instrSection[1].match(/<(?:li|p)[^>]*>([\s\S]*?)<\/(?:li|p)>/gi);
+      if (items) {
+        for (const item of items) {
+          const text = stripHtml(item).trim();
+          if (text.length > 10) instructions.push(text);
+        }
+      }
+    }
+  }
+
+  // Generic: <li> or <p> within any element with "instruction" or "direction" or "step" in class/id
+  if (instructions.length === 0) {
+    const instrBlock = block.match(
+      /(?:class|id)="[^"]*(?:instruction|direction|method|step)[^"]*"[^>]*>([\s\S]*?)<\/(?:ul|ol|div)>/gi
+    );
+    if (instrBlock) {
+      for (const section of instrBlock) {
+        const items = section.match(/<(?:li|p)[^>]*>([\s\S]*?)<\/(?:li|p)>/gi);
+        if (items) {
+          for (const item of items) {
+            const cleaned = item.replace(/<img[^>]*>/gi, "");
+            const text = stripHtml(cleaned).trim();
+            if (text.length > 10) instructions.push(text);
+          }
+        }
+      }
+    }
+  }
+
+  // Need at least ingredients or instructions to be useful
+  if (ingredients.length === 0 && instructions.length === 0) return null;
+
+  // ── Extract times
+  const prepTime =
+    extractWprmField(block, "wprm-recipe-prep_time-container") ??
+    extractClassText(block, "tasty-recipes-prep-time");
+  const cookTime =
+    extractWprmField(block, "wprm-recipe-cook_time-container") ??
+    extractClassText(block, "tasty-recipes-cook-time");
+  const totalTime =
+    extractWprmField(block, "wprm-recipe-total_time-container") ??
+    extractClassText(block, "tasty-recipes-total-time");
+
+  // ── Extract servings
+  const servings =
+    extractWprmField(block, "wprm-recipe-servings") ??
+    extractClassText(block, "tasty-recipes-yield");
+
+  // ── Extract description
+  const description =
+    extractWprmField(block, "wprm-recipe-summary") ??
+    extractClassText(block, "tasty-recipes-description");
+
+  // ── Extract image
+  const imageUrl = extractFirstImgSrc(block);
+
+  return {
+    name: stripHtml(name),
+    description: description ? stripHtml(description) : undefined,
+    image: imageUrl ?? undefined,
+    recipeIngredient: ingredients.map(stripHtml),
+    recipeInstructions: instructions,
+    prepTime: prepTime ?? undefined,
+    cookTime: cookTime ?? undefined,
+    totalTime: totalTime ?? undefined,
+    recipeYield: servings ? [servings] : undefined,
+  };
+}
+
+/** Extract text content from the first element with the given CSS class */
+function extractClassText(html: string, className: string): string | null {
+  const match = html.match(
+    new RegExp(`class="[^"]*${className}[^"]*"[^>]*>([\\s\\S]*?)(?=<\\/(?:div|span|p|h[1-6]))`, "i")
+  );
+  const text = match?.[1] ? stripHtml(match[1]).trim() : null;
+  return text && text.length > 0 ? text : null;
+}
+
+/** Extract text from WPRM-style class (handles nested spans) */
+function extractWprmField(html: string, className: string): string | null {
+  // WPRM wraps content in containers with nested spans — grab the whole container content
+  const match = html.match(
+    new RegExp(`class="[^"]*${className}[^"]*"[^>]*>([\\s\\S]*?)(?=<\\/(?:div|span|p|h[1-6]|li)>\\s*(?:<\\/|<(?:div|span|li|h[1-6]|section)))`, "i")
+  );
+  const text = match?.[1] ? stripHtml(match[1]).trim() : null;
+  return text && text.length > 0 ? text : null;
+}
+
+// ── Strategy 4: Plain text blog recipe ──────────────────────
 // For blogs like smittenkitchen that have recipe text in entry-content
 // without JSON-LD or microdata, but with a recognizable pattern:
 // bold recipe title → description → ingredient-like lines → instruction paragraphs
@@ -1116,26 +1397,41 @@ function parseIngredients(
 function parseSteps(raw: unknown[]): { text: string }[] {
   const steps: { text: string }[] = [];
   for (const step of raw) {
-    let text: string;
     if (typeof step === "string") {
-      text = stripHtml(step);
+      addStep(steps, stripHtml(step));
     } else if (typeof step === "object" && step !== null) {
       const s = step as Record<string, unknown>;
-      text = stripHtml(
+      const type = s["@type"] as string | undefined;
+
+      // Handle HowToSection — flatten nested itemListElement into individual steps
+      if (
+        type === "HowToSection" &&
+        Array.isArray(s.itemListElement)
+      ) {
+        const nested = parseSteps(s.itemListElement as unknown[]);
+        steps.push(...nested);
+        continue;
+      }
+
+      // Handle HowToStep or plain object
+      const text = stripHtml(
         (s.text as string) ?? (s.name as string) ?? String(step)
       );
+      addStep(steps, text);
     } else {
-      text = String(step);
-    }
-    // Split long single-step texts into logical sub-steps
-    if (text.length > 300) {
-      const split = splitLongStep(text);
-      steps.push(...split.map((t) => ({ text: t })));
-    } else if (text.trim()) {
-      steps.push({ text: text.trim() });
+      addStep(steps, String(step));
     }
   }
   return steps;
+}
+
+function addStep(steps: { text: string }[], text: string): void {
+  if (text.length > 300) {
+    const split = splitLongStep(text);
+    steps.push(...split.map((t) => ({ text: t })));
+  } else if (text.trim()) {
+    steps.push({ text: text.trim() });
+  }
 }
 
 function splitLongStep(text: string): string[] {
