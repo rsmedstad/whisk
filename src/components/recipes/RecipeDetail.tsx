@@ -189,20 +189,40 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         if (primary) updates.thumbnailUrl = primary.url;
       }
 
-      // Build a summary of what was found
+      // Build a summary of what actually changed vs existing recipe
       const parts: string[] = [];
-      const ingCount = Array.isArray(updates.ingredients) ? (updates.ingredients as unknown[]).length : 0;
-      const stepCount = Array.isArray(updates.steps) ? (updates.steps as unknown[]).length : 0;
-      if (ingCount > 0) parts.push(`${ingCount} ingredients`);
-      if (stepCount > 0) parts.push(`${stepCount} steps`);
-      if (updates.title) parts.push("title");
-      if (updates.photos) parts.push("photos");
+      if (Array.isArray(updates.ingredients)) {
+        const existingNames = new Set(
+          (recipe.ingredients ?? []).map((i: { name: string }) => i.name.toLowerCase().trim())
+        );
+        const newCount = (updates.ingredients as { name: string }[]).filter(
+          (i) => !existingNames.has(i.name.toLowerCase().trim())
+        ).length;
+        if (newCount > 0) parts.push(`${newCount} new ingredient${newCount !== 1 ? "s" : ""}`);
+        else if ((recipe.ingredients ?? []).length === 0) parts.push(`${(updates.ingredients as unknown[]).length} ingredients`);
+      }
+      if (Array.isArray(updates.steps)) {
+        const existingSteps = new Set(
+          (recipe.steps ?? []).map((s: { text: string }) => s.text.toLowerCase().trim())
+        );
+        const newCount = (updates.steps as { text: string }[]).filter(
+          (s) => !existingSteps.has(s.text.toLowerCase().trim())
+        ).length;
+        if (newCount > 0) parts.push(`${newCount} new step${newCount !== 1 ? "s" : ""}`);
+        else if ((recipe.steps ?? []).length === 0) parts.push(`${(updates.steps as unknown[]).length} steps`);
+      }
+      if (updates.title && updates.title !== recipe.title) parts.push("title");
+      if (updates.photos) {
+        const existingUrls = new Set((recipe.photos ?? []).map((p: { url: string }) => p.url));
+        const newPhotos = (updates.photos as { url: string }[]).filter((p) => !existingUrls.has(p.url));
+        if (newPhotos.length > 0) parts.push(`${newPhotos.length} new photo${newPhotos.length !== 1 ? "s" : ""}`);
+      }
 
       await updateRecipe(recipe.id, updates);
       setRecipe((r) => (r ? { ...r, ...updates } as Recipe : r));
       // Reset scaling if servings changed
       if (updates.servings) setScaledServings(updates.servings as number);
-      setRefetchSummary(parts.length > 0 ? `Found ${parts.join(", ")}` : "No new data found from source");
+      setRefetchSummary(parts.length > 0 ? `Found ${parts.join(", ")}` : "Up to date — no new data from source");
       setRefetchResult("success");
     } catch {
       setRefetchResult("error");

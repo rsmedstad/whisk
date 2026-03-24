@@ -670,7 +670,20 @@ function extractJsonLd(html: string): RecipeData | null {
       const json = match.replace(/<script[^>]*>|<\/script>/gi, "");
       const parsed = JSON.parse(json);
       const found = findRecipeInLd(parsed);
-      if (found) return found as RecipeData;
+      if (found) {
+        const rd = found as RecipeData;
+        // Normalize recipeInstructions: some sites emit a single string instead of an array
+        if (typeof rd.recipeInstructions === "string") {
+          rd.recipeInstructions = [rd.recipeInstructions];
+        } else if (rd.recipeInstructions && !Array.isArray(rd.recipeInstructions)) {
+          rd.recipeInstructions = [rd.recipeInstructions];
+        }
+        // Same for recipeIngredient
+        if (typeof rd.recipeIngredient === "string") {
+          rd.recipeIngredient = [rd.recipeIngredient];
+        }
+        return rd;
+      }
     } catch {
       continue;
     }
@@ -1055,6 +1068,38 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
     }
   }
 
+  // WPRM fallback: extract from wprm-recipe-instruction-text divs (some themes skip <li> wrapper classes)
+  if (instructions.length === 0) {
+    const textDivs = block.match(
+      /<div[^>]*class="[^"]*wprm-recipe-instruction-text[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+    );
+    if (textDivs) {
+      for (const div of textDivs) {
+        const text = stripHtml(div).trim();
+        if (text.length > 5) instructions.push(text);
+      }
+    }
+  }
+
+  // WPRM fallback: extract <li> within wprm-recipe-instructions container (plain <li> without class)
+  if (instructions.length === 0) {
+    const instrContainer = block.match(
+      /class="[^"]*wprm-recipe-instructions[^"]*"[^>]*>([\s\S]*?)<\/(?:ol|ul)>/gi
+    );
+    if (instrContainer) {
+      for (const container of instrContainer) {
+        const lis = container.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+        if (lis) {
+          for (const li of lis) {
+            const cleaned = li.replace(/<img[^>]*>/gi, "");
+            const text = stripHtml(cleaned).trim();
+            if (text.length > 5) instructions.push(text);
+          }
+        }
+      }
+    }
+  }
+
   // Tasty Recipes: <li> or <p> within div.tasty-recipes-instructions
   if (instructions.length === 0) {
     const instrSection = block.match(
@@ -1223,6 +1268,38 @@ function extractDirectWprm(html: string): RecipeData | null {
         const cleaned = li.replace(/<img[^>]*>/gi, "");
         const text = stripHtml(cleaned).trim();
         if (text.length > 5) instructions.push(text);
+      }
+    }
+  }
+
+  // Fallback: extract from wprm-recipe-instruction-text divs (themes that skip <li> class)
+  if (instructions.length === 0) {
+    const textDivs = html.match(
+      /<div[^>]*class="[^"]*wprm-recipe-instruction-text[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+    );
+    if (textDivs) {
+      for (const div of textDivs) {
+        const text = stripHtml(div).trim();
+        if (text.length > 5) instructions.push(text);
+      }
+    }
+  }
+
+  // Fallback: extract plain <li> from wprm-recipe-instructions container
+  if (instructions.length === 0) {
+    const instrContainer = html.match(
+      /class="[^"]*wprm-recipe-instructions[^"]*"[^>]*>([\s\S]*?)<\/(?:ol|ul)>/gi
+    );
+    if (instrContainer) {
+      for (const container of instrContainer) {
+        const lis = container.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+        if (lis) {
+          for (const li of lis) {
+            const cleaned = li.replace(/<img[^>]*>/gi, "");
+            const text = stripHtml(cleaned).trim();
+            if (text.length > 5) instructions.push(text);
+          }
+        }
       }
     }
   }
