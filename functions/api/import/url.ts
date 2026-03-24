@@ -1043,17 +1043,39 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
   }
 
   // Generic: <li> within any element with "ingredient" in class/id
+  // Use a greedy match to capture the FULL container (multiple <ul> blocks with
+  // <p><strong>Group:</strong></p> sub-group headers between them).
+  // The old non-greedy pattern stopped at the first </ul>, losing sub-groups.
   if (ingredients.length === 0) {
     const ingredBlock = block.match(
-      /(?:class|id)="[^"]*ingredient[^"]*"[^>]*>([\s\S]*?)<\/(?:ul|ol|div)>/gi
+      /(?:class|id)="[^"]*ingredient[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
     );
     if (ingredBlock) {
       for (const section of ingredBlock) {
-        const lis = section.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
-        if (lis) {
-          for (const li of lis) {
-            const text = stripHtml(li).trim();
-            if (text.length > 1 && text.length < 300) ingredients.push(text);
+        // Parse content sequentially: detect group headers between <ul> blocks
+        // Group headers appear as <p><strong>Name:</strong></p> or <h3>Name</h3>
+        const parts = section.split(/(<(?:ul|ol)[^>]*>[\s\S]*?<\/(?:ul|ol)>)/gi);
+        for (const part of parts) {
+          if (/<(?:ul|ol)[^>]*>/i.test(part)) {
+            // This is a list block — extract <li> items
+            const lis = part.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+            if (lis) {
+              for (const li of lis) {
+                const text = stripHtml(li).trim();
+                if (text.length > 1 && text.length < 300) ingredients.push(text);
+              }
+            }
+          } else {
+            // Check for sub-group header: <p><strong>Name:</strong></p>, <h3>Name</h3>, etc.
+            const groupMatch = part.match(
+              /<(?:p|h[2-6])[^>]*>\s*(?:<(?:strong|b)[^>]*>)?\s*([^<]+?)\s*(?::)?\s*(?:<\/(?:strong|b)>)?\s*<\/(?:p|h[2-6])>/i
+            );
+            if (groupMatch) {
+              const headerText = groupMatch[1]?.trim().replace(/:$/, "").trim();
+              if (headerText && headerText.length > 1 && headerText.length < 60) {
+                ingredients.push(`${headerText}:`);
+              }
+            }
           }
         }
       }
@@ -1145,6 +1167,32 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
     }
   }
 
+  // ACF (Advanced Custom Fields) instruction list — used by Elementor-based recipe sites
+  // Structure: div.acf-instruction-list > div.instruction-step > div.instruction-content >
+  //   div.instruction-title + div.instruction-description
+  // Match each step up to the next step or end of list (boundary-based, not div-count dependent)
+  if (instructions.length === 0) {
+    const acfSteps = block.match(
+      /<div[^>]*class="(?:[^"]*\s)?instruction-step(?:\s[^"]*|)"[^>]*>[\s\S]*?(?=<div[^>]*class="(?:[^"]*\s)?instruction-step(?:\s[^"]*|)"[^>]*>|<\/div>\s*<\/div>\s*<\/section|$)/gi
+    );
+    if (acfSteps && acfSteps.length > 0) {
+      for (const stepBlock of acfSteps) {
+        const titleMatch = stepBlock.match(
+          /class="[^"]*instruction-title[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+        );
+        const descMatch = stepBlock.match(
+          /class="[^"]*instruction-description[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+        );
+        const title = titleMatch ? stripHtml(titleMatch[1] ?? "").trim() : "";
+        const desc = descMatch ? stripHtml(descMatch[1] ?? "").trim() : "";
+        if (desc.length > 10) {
+          const text = title ? `${title}: ${desc}` : desc;
+          instructions.push(text);
+        }
+      }
+    }
+  }
+
   // Tasty Recipes: <li> or <p> within div.tasty-recipes-instructions
   if (instructions.length === 0) {
     const instrSection = block.match(
@@ -1162,9 +1210,10 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
   }
 
   // Generic: <li> or <p> within any element with "instruction" or "direction" or "step" in class/id
+  // Match to closing </div> (greedy enough to capture full containers with multiple inner blocks)
   if (instructions.length === 0) {
     const instrBlock = block.match(
-      /(?:class|id)="[^"]*(?:instruction|direction|method|step)[^"]*"[^>]*>([\s\S]*?)<\/(?:ul|ol|div)>/gi
+      /(?:class|id)="[^"]*(?:instruction|direction|method|step)[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
     );
     if (instrBlock) {
       for (const section of instrBlock) {
