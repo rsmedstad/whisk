@@ -351,6 +351,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
+    // Heading-based fallback: look for "Instructions"/"Method" heading in the full HTML
+    // and extract steps from the content that follows (handles JetEngine, Elementor, custom builders)
+    if (recipeData.name && !hasSteps) {
+      const headingSteps = extractStepsFromHeading(html);
+      if (headingSteps.length > 0) {
+        recipeData.recipeInstructions = headingSteps;
+        hasSteps = true;
+      }
+    }
+
     // Second try: if still missing data and Browser Rendering is available,
     // the recipe content may require JavaScript to render (common with WPRM,
     // cookie consent banners hiding content, or React-based sites)
@@ -405,11 +415,38 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             if (!hasIngredients || !hasSteps) {
               const brDirect = extractDirectWprm(brHtml);
               if (brDirect) backfillRecipeData(recipeData, brDirect);
+
+              hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+              hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+            }
+
+            // Heading-based fallback on browser-rendered HTML
+            if (!hasSteps) {
+              const brHeadingSteps = extractStepsFromHeading(brHtml);
+              if (brHeadingSteps.length > 0) {
+                recipeData.recipeInstructions = brHeadingSteps;
+              }
             }
           }
         }
       } catch {
         // Browser Rendering retry failed, continue with what we have
+      }
+    }
+
+    // AI fallback: if we have a recipe name but still no steps after all extraction
+    // strategies, use an AI provider to extract steps from the page text
+    hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+    hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+    if (recipeData.name && !hasSteps) {
+      const aiExtracted = await tryAIStepExtraction(html, recipeData.name, env);
+      if (aiExtracted) {
+        if (aiExtracted.steps.length > 0) {
+          recipeData.recipeInstructions = aiExtracted.steps.map((s) => s.text);
+        }
+        if (!hasIngredients && aiExtracted.ingredients.length > 0) {
+          recipeData.recipeIngredient = aiExtracted.ingredients;
+        }
       }
     }
 
@@ -922,7 +959,15 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
     /class="[^"]*(?:recipe-card|recipe-content|easyrecipe)[^"]*"[^>]*>([\s\S]*?)(?=<\/div>\s*(?:<div class="(?:entry|shared)|<footer|<section|<\/article))/i
   );
 
-  const block = wprmBlock?.[1] ?? tastyBlock?.[1] ?? genericBlock?.[1];
+  // ── Recipe section by ID — id="recipe-section", id="recipe", etc. (JetEngine / custom builders)
+  const recipeSectionBlock = html.match(
+    /id="[^"]*recipe[^"]*"[^>]*>([\s\S]*?)(?=<footer|<\/article|<div class="(?:sharedaddy|entry-footer|post-footer|comments)|<section id="comments|<nav\s)/i
+  ) ?? html.match(
+    // Fallback: grab up to 50KB from the recipe section
+    /id="[^"]*recipe[^"]*"[^>]*>([\s\S]{1,50000})/i
+  );
+
+  const block = wprmBlock?.[1] ?? tastyBlock?.[1] ?? genericBlock?.[1] ?? recipeSectionBlock?.[1];
   if (!block) return null;
 
   // ── Extract recipe name
@@ -1129,6 +1174,36 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
             const cleaned = item.replace(/<img[^>]*>/gi, "");
             const text = stripHtml(cleaned).trim();
             if (text.length > 10) instructions.push(text);
+          }
+        }
+      }
+    }
+  }
+
+  // Broader fallback: find "Instructions" or "Method" or "Steps" heading, then extract
+  // all <li> or <p> content that follows (handles JetEngine, Elementor, custom builders)
+  if (instructions.length === 0) {
+    const instrHeadingMatch = block.match(
+      /<(?:h[1-6]|strong|b)[^>]*>\s*(?:Instructions?|Method|Directions?|Steps?|How to (?:Make|Cook|Prepare))\s*<\/(?:h[1-6]|strong|b)>([\s\S]*?)(?=<(?:h[1-6]|strong|b)[^>]*>\s*(?:Notes?|Tips?|Nutrition|Related|What Our|Rate|Review|Marion|SHOP|CATEGORIES|Comments?)\b|<footer|<\/article|<div class="(?:sharedaddy|entry-footer|comments)|$)/i
+    );
+    if (instrHeadingMatch?.[1]) {
+      const instrContent = instrHeadingMatch[1];
+      // Try ordered/unordered list items first
+      const listItems = instrContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+      if (listItems && listItems.length > 0) {
+        for (const li of listItems) {
+          const cleaned = li.replace(/<img[^>]*>/gi, "");
+          const text = stripHtml(cleaned).trim();
+          if (text.length > 10) instructions.push(text);
+        }
+      } else {
+        // Fallback: extract paragraphs or divs with substantial text (cooking content)
+        const contentBlocks = instrContent.match(/<(?:p|div)[^>]*>([\s\S]*?)<\/(?:p|div)>/gi);
+        if (contentBlocks) {
+          for (const cb of contentBlocks) {
+            const cleaned = cb.replace(/<img[^>]*>/gi, "").replace(/<(?:p|div)[^>]*>/gi, "").replace(/<\/(?:p|div)>/gi, "");
+            const text = stripHtml(cleaned).trim();
+            if (text.length > 20 && COOKING_KEYWORDS.test(text)) instructions.push(text);
           }
         }
       }
@@ -1494,6 +1569,122 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
   }
 
   return urls;
+}
+
+// ── AI-based step extraction fallback ────────────────────────
+
+/**
+ * When all HTML-based extraction strategies fail to find steps, use an AI
+ * provider to extract recipe steps (and optionally ingredients) from the
+ * page's visible text content.
+ */
+async function tryAIStepExtraction(
+  html: string,
+  recipeName: string,
+  env: Env
+): Promise<{ steps: { text: string }[]; ingredients: string[] } | null> {
+  try {
+    const config = await loadAIConfig(env.WHISK_KV);
+    const fnConfig = resolveConfig(config, "chat", env);
+    if (!fnConfig) return null;
+
+    // Extract visible text from the HTML, limited to a reasonable size
+    const pageText = stripHtml(html).replace(/\s+/g, " ").trim().slice(0, 6000);
+    if (pageText.length < 100) return null;
+
+    const result = await callTextAI(fnConfig, env, [
+      {
+        role: "system",
+        content: `You are a recipe extraction assistant. Extract the cooking instructions from the provided web page text for the recipe "${recipeName}".
+
+Return ONLY a JSON object with:
+- "steps": array of {"text": string} — each step as a clear, actionable instruction
+- "ingredients": array of strings — full ingredient list including sub-groups (e.g. "Crispy skirt:", "2 tbsp cornflour")
+
+Rules:
+- Only extract actual cooking steps, not reviews, comments, or promotional content
+- Keep step text clear and complete — include the step title if present (e.g. "Make the filling: In a medium bowl, mix...")
+- Include ALL ingredient groups (main, sauce, garnish, etc.)
+- If no clear recipe steps are found, return {"steps": [], "ingredients": []}
+- Return ONLY the JSON object, no markdown or explanation.`,
+      },
+      { role: "user", content: pageText },
+    ], {
+      maxTokens: 2048,
+      temperature: 0.1,
+      jsonMode: true,
+    });
+
+    const parsed = JSON.parse(result) as Record<string, unknown>;
+    const steps = Array.isArray(parsed.steps)
+      ? (parsed.steps as { text?: string }[]).filter((s) => typeof s.text === "string" && s.text.length > 10)
+          .map((s) => ({ text: s.text! }))
+      : [];
+    const ingredients = Array.isArray(parsed.ingredients)
+      ? (parsed.ingredients as unknown[]).filter((i): i is string => typeof i === "string" && i.length > 1)
+      : [];
+
+    return steps.length > 0 || ingredients.length > 0 ? { steps, ingredients } : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Heading-based step extraction (JetEngine, Elementor, custom builders) ──
+
+/**
+ * Find an "Instructions" / "Method" / "Directions" heading in the full HTML,
+ * then extract steps from the content that follows. Handles:
+ * - <ol>/<ul> lists
+ * - Paragraphs with cooking keywords
+ * - Heading+paragraph pairs (numbered step titles followed by description)
+ */
+function extractStepsFromHeading(html: string): string[] {
+  const instrHeadingMatch = html.match(
+    /<(?:h[1-6]|strong|b)[^>]*>\s*(?:Instructions?|Method|Directions?|Steps?|How to (?:Make|Cook|Prepare))\s*<\/(?:h[1-6]|strong|b)>([\s\S]*?)(?=<(?:h[1-6]|strong|b)[^>]*>\s*(?:Notes?|Tips?|Nutrition|Related|What Our|Rate|Review|SHOP|CATEGORIES|Comments?)\b|<footer|<\/article|<div class="(?:sharedaddy|entry-footer|comments)|$)/i
+  );
+  if (!instrHeadingMatch?.[1]) return [];
+
+  const instrContent = instrHeadingMatch[1];
+  const steps: string[] = [];
+
+  // Try ordered/unordered list items first
+  const listItems = instrContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+  if (listItems && listItems.length >= 2) {
+    for (const li of listItems) {
+      const cleaned = li.replace(/<img[^>]*>/gi, "");
+      const text = stripHtml(cleaned).trim();
+      if (text.length > 10) steps.push(text);
+    }
+    if (steps.length >= 2) return steps;
+  }
+
+  // Try heading+paragraph pairs: <h3>Step title</h3><p>Description</p>
+  // Common in JetEngine custom recipe layouts
+  const headingParagraphRegex = /<h[2-6][^>]*>([\s\S]*?)<\/h[2-6]>\s*(?:<[^>]*>)*\s*<(?:p|div)[^>]*>([\s\S]*?)<\/(?:p|div)>/gi;
+  let m;
+  const hpSteps: string[] = [];
+  while ((m = headingParagraphRegex.exec(instrContent)) !== null) {
+    const heading = stripHtml(m[1] ?? "").trim();
+    const body = stripHtml((m[2] ?? "").replace(/<img[^>]*>/gi, "")).trim();
+    if (body.length > 20 && COOKING_KEYWORDS.test(body)) {
+      // Combine heading (step title) with body text
+      const combined = heading ? `${heading}: ${body}` : body;
+      hpSteps.push(combined);
+    }
+  }
+  if (hpSteps.length >= 2) return hpSteps;
+
+  // Fallback: extract paragraphs with cooking verbs
+  const pRegex = /<(?:p|div)[^>]*>([\s\S]*?)<\/(?:p|div)>/gi;
+  while ((m = pRegex.exec(instrContent)) !== null) {
+    const text = stripHtml((m[1] ?? "").replace(/<img[^>]*>/gi, "")).trim();
+    if (text.length > 20 && COOKING_KEYWORDS.test(text)) {
+      steps.push(text);
+    }
+  }
+
+  return steps;
 }
 
 // ── Cooking paragraph heuristic ─────────────────────────────
