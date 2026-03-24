@@ -1,6 +1,6 @@
 {
   "name": "whisk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "A personal recipe manager PWA — manage recipes, plan meals, build shopping lists, and use AI to discover new dishes.",
   "license": "AGPL-3.0-only",
