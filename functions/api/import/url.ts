@@ -157,9 +157,32 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // If regular fetch failed, returned a small/challenge page, or is known-blocked → try Browser Rendering
     const isChallengePage = html !== null && (
+      // Cloudflare
       html.includes("<title>Just a moment...</title>") ||
       html.includes("_cf_chl_opt") ||
-      html.includes("challenge-platform")
+      html.includes("challenge-platform") ||
+      // PerimeterX
+      html.includes("px-captcha") ||
+      html.includes("_pxhd") ||
+      html.includes("perimeterx") ||
+      // Akamai
+      html.includes("ak_bmsc") ||
+      html.includes("akamaized") ||
+      // Datadome
+      html.includes("datadome") ||
+      // Imperva / Incapsula
+      html.includes("incapsula") ||
+      html.includes("_incap_") ||
+      // Sucuri
+      html.includes("sucuri") ||
+      // Generic bot detection patterns
+      html.includes("verify you are human") ||
+      html.includes("Please verify you are a human") ||
+      html.includes("Access Denied") ||
+      // Page has no recipe-related content — likely a challenge/wall
+      (!html.includes("recipeIngredient") && !html.includes("recipe-ingredient") &&
+       !html.includes("ingredient") && !html.includes("instruction") &&
+       html.length < 5000)
     );
     const needsBrowser = regularFetchFailed || (html !== null && html.length < 500) || isChallengePage;
     if (needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
@@ -257,6 +280,42 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Strategy 5: Apify universal recipe scraper (last resort)
     if (!recipeData && env.APIFY_API_TOKEN) {
       recipeData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
+    }
+
+    // If no recipe data found and we haven't tried Browser Rendering yet, try it now.
+    // This catches cases where the page returned 200 but was actually a challenge/wall
+    // page we didn't detect, or the site requires JS to render recipe content.
+    if (!recipeData && !needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
+      try {
+        const brRes = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${env.CF_BR_TOKEN}`,
+            },
+            body: JSON.stringify({
+              url,
+              gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+              rejectResourceTypes: ["font", "media"],
+              setExtraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+            }),
+          }
+        );
+        if (brRes.ok) {
+          const brBody = await brRes.text();
+          const brHtml = brBody.startsWith("{")
+            ? (JSON.parse(brBody) as { result?: string }).result ?? ""
+            : brBody;
+          if (brHtml.length > 500) {
+            html = brHtml;
+            recipeData = extractJsonLd(brHtml) ?? extractMicrodata(brHtml) ?? extractRecipePluginHtml(brHtml) ?? extractBlogRecipe(brHtml);
+          }
+        }
+      } catch {
+        // Browser Rendering fallback failed
+      }
     }
 
     if (!recipeData) {
