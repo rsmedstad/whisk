@@ -18,7 +18,7 @@ interface RecipeData {
   description?: string;
   image?: unknown;
   additionalImages?: string[];
-  recipeIngredient?: string[];
+  recipeIngredient?: unknown[];
   recipeInstructions?: unknown[];
   prepTime?: string;
   cookTime?: string;
@@ -838,17 +838,47 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
     extractFirstTag(block, "h3");
   if (!name) return null;
 
-  // ── Extract ingredients
+  // ── Extract ingredients (with group support)
   const ingredients: string[] = [];
 
-  // WPRM: <li class="wprm-recipe-ingredient">...<span class="wprm-recipe-ingredient-amount">...</span>...
-  const wprmIngredients = block.match(
-    /<li[^>]*class="[^"]*wprm-recipe-ingredient[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+  // WPRM: parse ingredient groups for section names, then individual ingredients
+  const wprmIngredientGroups = block.match(
+    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)<\/ul>\s*<\/div>/gi
   );
-  if (wprmIngredients) {
-    for (const li of wprmIngredients) {
-      const text = stripHtml(li).trim();
-      if (text.length > 1 && text.length < 300) ingredients.push(text);
+  if (wprmIngredientGroups && wprmIngredientGroups.length > 0) {
+    for (const groupBlock of wprmIngredientGroups) {
+      // Extract group name (e.g. "For the crispy skirt")
+      const groupNameMatch = groupBlock.match(
+        /class="[^"]*wprm-recipe-group-name[^"]*"[^>]*>([\s\S]*?)<\//i
+      );
+      const groupName = groupNameMatch ? stripHtml(groupNameMatch[1] ?? "").trim() : "";
+      if (groupName) {
+        // Insert group header as a special entry that parseIngredients will detect
+        ingredients.push(`${groupName}:`);
+      }
+      // Extract individual ingredients within this group
+      const lis = groupBlock.match(
+        /<li[^>]*class="[^"]*wprm-recipe-ingredient[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+      );
+      if (lis) {
+        for (const li of lis) {
+          const text = stripHtml(li).trim();
+          if (text.length > 1 && text.length < 300) ingredients.push(text);
+        }
+      }
+    }
+  }
+
+  // WPRM fallback: no groups found, try flat ingredient list
+  if (ingredients.length === 0) {
+    const wprmIngredients = block.match(
+      /<li[^>]*class="[^"]*wprm-recipe-ingredient[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+    );
+    if (wprmIngredients) {
+      for (const li of wprmIngredients) {
+        const text = stripHtml(li).trim();
+        if (text.length > 1 && text.length < 300) ingredients.push(text);
+      }
     }
   }
 
@@ -886,19 +916,52 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
     }
   }
 
-  // ── Extract instructions
-  const instructions: string[] = [];
+  // ── Extract instructions (with group support)
+  const instructions: unknown[] = [];
 
-  // WPRM: <div class="wprm-recipe-instruction-group">...<li class="wprm-recipe-instruction">
-  const wprmSteps = block.match(
-    /<li[^>]*class="[^"]*wprm-recipe-instruction[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+  // WPRM: parse instruction groups for section names
+  const wprmInstructionGroups = block.match(
+    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)<\/ol>\s*<\/div>/gi
   );
-  if (wprmSteps) {
-    for (const li of wprmSteps) {
-      // Get the instruction text, skipping image tags
-      const cleaned = li.replace(/<img[^>]*>/gi, "");
-      const text = stripHtml(cleaned).trim();
-      if (text.length > 5) instructions.push(text);
+  if (wprmInstructionGroups && wprmInstructionGroups.length > 0) {
+    for (const groupBlock of wprmInstructionGroups) {
+      const groupNameMatch = groupBlock.match(
+        /class="[^"]*wprm-recipe-group-name[^"]*"[^>]*>([\s\S]*?)<\//i
+      );
+      const groupName = groupNameMatch ? stripHtml(groupNameMatch[1] ?? "").trim() : "";
+      const lis = groupBlock.match(
+        /<li[^>]*class="[^"]*wprm-recipe-instruction[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+      );
+      if (lis) {
+        // Build a HowToSection-like structure so parseSteps preserves groups
+        const stepItems = lis.map((li) => {
+          const cleaned = li.replace(/<img[^>]*>/gi, "");
+          return { "@type": "HowToStep", text: stripHtml(cleaned).trim() };
+        }).filter((s) => s.text.length > 5);
+        if (groupName && stepItems.length > 0) {
+          instructions.push({
+            "@type": "HowToSection",
+            name: groupName,
+            itemListElement: stepItems,
+          });
+        } else {
+          instructions.push(...stepItems);
+        }
+      }
+    }
+  }
+
+  // WPRM fallback: no groups found, try flat instruction list
+  if (instructions.length === 0) {
+    const wprmSteps = block.match(
+      /<li[^>]*class="[^"]*wprm-recipe-instruction[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+    );
+    if (wprmSteps) {
+      for (const li of wprmSteps) {
+        const cleaned = li.replace(/<img[^>]*>/gi, "");
+        const text = stripHtml(cleaned).trim();
+        if (text.length > 5) instructions.push(text);
+      }
     }
   }
 
@@ -1374,41 +1437,90 @@ function fractionToUnicode(value: number): string | null {
   return null;
 }
 
+function isIngredientGroupHeader(text: string): boolean {
+  // No digits or fractions — group headers never start with amounts
+  if (/[\d½⅓⅔¼¾⅛⅜⅝⅞]/.test(text)) return false;
+  // Must be short (typical headers are 1-6 words)
+  if (text.split(/\s+/).length > 8) return false;
+  // Explicit patterns: "For the X:", "For X:", trailing colon
+  if (/^for\s+(the\s+)?/i.test(text)) return true;
+  if (text.endsWith(":")) return true;
+  // ALL CAPS header (at least 3 chars, e.g. "DIPPING SAUCE")
+  if (text.length >= 3 && text === text.toUpperCase() && /[A-Z]/.test(text)) return true;
+  return false;
+}
+
+function cleanGroupName(text: string): string {
+  return text
+    .replace(/^for\s+(the\s+)?/i, "")
+    .replace(/:$/, "")
+    .trim();
+}
+
 function parseIngredients(
-  raw: string[]
-): { name: string; amount?: string; unit?: string }[] {
-  return raw.map((str: string) => {
+  raw: unknown[]
+): { name: string; amount?: string; unit?: string; group?: string }[] {
+  // Flatten nested arrays (some non-standard JSON-LD uses arrays of arrays)
+  const flat: string[] = [];
+  for (const item of raw) {
+    if (Array.isArray(item)) {
+      for (const sub of item) flat.push(String(sub));
+    } else {
+      flat.push(String(item));
+    }
+  }
+
+  const results: { name: string; amount?: string; unit?: string; group?: string }[] = [];
+  let currentGroup: string | undefined;
+
+  for (const str of flat) {
     // Strip HTML first — JSON-LD ingredients may contain anchor tags or inline markup
     const cleaned = cleanIngredientText(stripHtml(str));
+    if (!cleaned) continue;
+
+    // Check if this line is a section header (e.g. "For the crispy skirt:", "DIPPING SAUCE")
+    if (isIngredientGroupHeader(cleaned)) {
+      currentGroup = cleanGroupName(cleaned);
+      // Title-case the group name if it was all caps
+      if (currentGroup === currentGroup.toUpperCase() && currentGroup.length > 1) {
+        currentGroup = currentGroup.charAt(0) + currentGroup.slice(1).toLowerCase();
+      }
+      continue; // Don't add as an ingredient
+    }
+
     const match = cleaned.match(
       /^([\d\s./½⅓⅔¼¾⅛⅜⅝⅞]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|packages?|bunche?s?|pieces?|slices?|sticks?|heads?|stalks?|sprigs?|pinche?s?|dashes?)?\s*(.+)/i
     );
     if (match) {
-      return {
+      results.push({
         amount: normalizeAmount(match[1]?.trim() ?? ""),
         unit: match[2]?.trim(),
         name: match[3]?.trim() ?? cleaned,
-      };
+        group: currentGroup,
+      });
+    } else {
+      results.push({ name: cleaned, group: currentGroup });
     }
-    return { name: cleaned };
-  });
+  }
+  return results;
 }
 
-function parseSteps(raw: unknown[]): { text: string }[] {
-  const steps: { text: string }[] = [];
+function parseSteps(raw: unknown[], sectionGroup?: string): { text: string; group?: string }[] {
+  const steps: { text: string; group?: string }[] = [];
   for (const step of raw) {
     if (typeof step === "string") {
-      addStep(steps, stripHtml(step));
+      addStep(steps, stripHtml(step), sectionGroup);
     } else if (typeof step === "object" && step !== null) {
       const s = step as Record<string, unknown>;
       const type = s["@type"] as string | undefined;
 
-      // Handle HowToSection — flatten nested itemListElement into individual steps
+      // Handle HowToSection — flatten nested itemListElement, preserving section name as group
       if (
         type === "HowToSection" &&
         Array.isArray(s.itemListElement)
       ) {
-        const nested = parseSteps(s.itemListElement as unknown[]);
+        const groupName = (s.name as string | undefined)?.trim() || sectionGroup;
+        const nested = parseSteps(s.itemListElement as unknown[], groupName);
         steps.push(...nested);
         continue;
       }
@@ -1417,20 +1529,20 @@ function parseSteps(raw: unknown[]): { text: string }[] {
       const text = stripHtml(
         (s.text as string) ?? (s.name as string) ?? String(step)
       );
-      addStep(steps, text);
+      addStep(steps, text, sectionGroup);
     } else {
-      addStep(steps, String(step));
+      addStep(steps, String(step), sectionGroup);
     }
   }
   return steps;
 }
 
-function addStep(steps: { text: string }[], text: string): void {
+function addStep(steps: { text: string; group?: string }[], text: string, group?: string): void {
   if (text.length > 300) {
     const split = splitLongStep(text);
-    steps.push(...split.map((t) => ({ text: t })));
+    steps.push(...split.map((t) => ({ text: t, group })));
   } else if (text.trim()) {
-    steps.push({ text: text.trim() });
+    steps.push({ text: text.trim(), group });
   }
 }
 
@@ -2067,9 +2179,14 @@ async function tryNytCookingApi(
     const raw = (await res.json()) as NytRecipeResponse;
     if (!raw.name) return null;
 
-    // Parse ingredients from NYT's grouped parts format
+    // Parse ingredients from NYT's grouped parts format (preserving section labels)
     const rawIngredients: string[] = [];
     for (const part of raw.parts ?? []) {
+      // Insert group header if the part has a label
+      const label = part.part_label?.trim();
+      if (label) {
+        rawIngredients.push(`${label}:`);
+      }
       for (const ing of part.ingredients ?? []) {
         const text = ing.display_text ?? "";
         const qty = ing.display_quantity ?? "";
@@ -2077,11 +2194,23 @@ async function tryNytCookingApi(
       }
     }
 
-    // Parse steps from NYT's grouped directions format
-    const rawSteps: string[] = [];
+    // Parse steps from NYT's grouped directions format (preserving section labels)
+    const rawSteps: unknown[] = [];
     for (const dir of raw.directions ?? []) {
-      for (const step of dir.steps ?? []) {
-        if (step.description) rawSteps.push(step.description);
+      const label = dir.direction_label?.trim();
+      const stepItems = (dir.steps ?? [])
+        .filter((step) => step.description)
+        .map((step) => ({ "@type": "HowToStep" as const, text: step.description! }));
+      if (label && stepItems.length > 0) {
+        rawSteps.push({
+          "@type": "HowToSection",
+          name: label,
+          itemListElement: stepItems,
+        });
+      } else {
+        for (const step of stepItems) {
+          rawSteps.push(step.text);
+        }
       }
     }
 
@@ -2164,7 +2293,7 @@ async function tryNytCookingApi(
       title: raw.name,
       description,
       ingredients: parsedIngredients,
-      steps: rawSteps.map((text) => ({ text })),
+      steps: parseSteps(rawSteps),
       prepTime: undefined, // NYT API doesn't separate prep/cook
       cookTime: cookTimeMinutes || undefined,
       servings: parseServings(raw.yield),
