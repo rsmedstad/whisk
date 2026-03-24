@@ -361,6 +361,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
+    // Heading-based ingredient backfill: JSON-LD may have only the main ingredients
+    // while the HTML has grouped sections (e.g. "Crispy skirt:", "Dipping sauce:")
+    if (recipeData.name) {
+      const htmlIngredients = extractIngredientsFromHeading(html);
+      if (htmlIngredients.length > 0) {
+        const existingCount = recipeData.recipeIngredient?.length ?? 0;
+        // Use HTML ingredients if they have more items (likely includes sub-groups)
+        if (htmlIngredients.length > existingCount) {
+          recipeData.recipeIngredient = htmlIngredients;
+          hasIngredients = true;
+        }
+      }
+    }
+
     // Second try: if still missing data and Browser Rendering is available,
     // the recipe content may require JavaScript to render (common with WPRM,
     // cookie consent banners hiding content, or React-based sites)
@@ -1060,6 +1074,55 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
     }
   }
 
+  // Heading-based: find "Ingredients" heading, then extract sub-group headings + lists
+  // Handles JetEngine, Elementor, and custom recipe layouts with grouped ingredients
+  if (ingredients.length === 0) {
+    const ingredHeadingMatch = block.match(
+      /<(?:h[1-6]|strong|b)[^>]*>\s*Ingredients?\s*<\/(?:h[1-6]|strong|b)>([\s\S]*?)(?=<(?:h[1-6]|strong|b)[^>]*>\s*(?:Instructions?|Method|Directions?|Steps?|How to)\b|$)/i
+    );
+    if (ingredHeadingMatch?.[1]) {
+      const ingredContent = ingredHeadingMatch[1];
+      // Look for sub-group headings (h3/h4/strong) followed by lists
+      // e.g. <h3>Crispy skirt</h3><ul><li>2 tbsp cornflour</li>...</ul>
+      const groupRegex = /<(?:h[2-6]|strong|b)[^>]*>([\s\S]*?)<\/(?:h[2-6]|strong|b)>/gi;
+      let gm;
+      let lastIdx = 0;
+      const groups: { name: string; startIdx: number }[] = [];
+      while ((gm = groupRegex.exec(ingredContent)) !== null) {
+        const name = stripHtml(gm[1] ?? "").trim();
+        if (name.length > 1 && name.length < 60) {
+          groups.push({ name, startIdx: gm.index });
+        }
+      }
+
+      if (groups.length > 0) {
+        // Extract ingredients under each group heading
+        for (let gi = 0; gi < groups.length; gi++) {
+          const group = groups[gi]!;
+          const nextStart = groups[gi + 1]?.startIdx ?? ingredContent.length;
+          const groupSection = ingredContent.slice(group.startIdx, nextStart);
+          ingredients.push(`${group.name}:`);
+          const lis = groupSection.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+          if (lis) {
+            for (const li of lis) {
+              const text = stripHtml(li).trim();
+              if (text.length > 1 && text.length < 300) ingredients.push(text);
+            }
+          }
+        }
+      } else {
+        // No sub-groups — just extract all list items
+        const lis = ingredContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+        if (lis) {
+          for (const li of lis) {
+            const text = stripHtml(li).trim();
+            if (text.length > 1 && text.length < 300) ingredients.push(text);
+          }
+        }
+      }
+    }
+  }
+
   // ── Extract instructions (with group support)
   const instructions: unknown[] = [];
 
@@ -1569,6 +1632,73 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
   }
 
   return urls;
+}
+
+// ── Heading-based ingredient extraction (full HTML) ──────────
+
+/**
+ * Find an "Ingredients" heading in the full HTML and extract all ingredient
+ * items including sub-group headings. Handles JetEngine, Elementor, and
+ * custom WordPress builders that group ingredients under headings.
+ */
+function extractIngredientsFromHeading(html: string): string[] {
+  const ingredHeadingMatch = html.match(
+    /<(?:h[1-6]|strong|b)[^>]*>\s*Ingredients?\s*<\/(?:h[1-6]|strong|b)>([\s\S]*?)(?=<(?:h[1-6]|strong|b)[^>]*>\s*(?:Instructions?|Method|Directions?|Steps?|How to|Video)\b|<footer|<\/article|<div class="(?:sharedaddy|entry-footer|comments)|$)/i
+  );
+  if (!ingredHeadingMatch?.[1]) return [];
+
+  const ingredContent = ingredHeadingMatch[1];
+  const ingredients: string[] = [];
+
+  // Look for sub-group headings (h3/h4/h5/strong) — e.g. "Crispy skirt", "Dipping sauce"
+  const groupRegex = /<(?:h[2-6]|strong|b)[^>]*>([\s\S]*?)<\/(?:h[2-6]|strong|b)>/gi;
+  let gm;
+  const groups: { name: string; startIdx: number }[] = [];
+  while ((gm = groupRegex.exec(ingredContent)) !== null) {
+    const name = stripHtml(gm[1] ?? "").trim();
+    // Filter out non-group headings (too long, or the word "Ingredients" itself)
+    if (name.length > 1 && name.length < 60 && !/^ingredients?$/i.test(name)) {
+      groups.push({ name, startIdx: gm.index });
+    }
+  }
+
+  if (groups.length > 0) {
+    // Check if there are ingredients BEFORE the first group heading (ungrouped items)
+    const preGroupContent = ingredContent.slice(0, groups[0]!.startIdx);
+    const preLis = preGroupContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+    if (preLis) {
+      for (const li of preLis) {
+        const text = stripHtml(li).trim();
+        if (text.length > 1 && text.length < 300) ingredients.push(text);
+      }
+    }
+
+    // Extract ingredients under each group heading
+    for (let gi = 0; gi < groups.length; gi++) {
+      const group = groups[gi]!;
+      const nextStart = groups[gi + 1]?.startIdx ?? ingredContent.length;
+      const groupSection = ingredContent.slice(group.startIdx, nextStart);
+      ingredients.push(`${group.name}:`);
+      const lis = groupSection.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+      if (lis) {
+        for (const li of lis) {
+          const text = stripHtml(li).trim();
+          if (text.length > 1 && text.length < 300) ingredients.push(text);
+        }
+      }
+    }
+  } else {
+    // No sub-groups — just extract all list items
+    const lis = ingredContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+    if (lis) {
+      for (const li of lis) {
+        const text = stripHtml(li).trim();
+        if (text.length > 1 && text.length < 300) ingredients.push(text);
+      }
+    }
+  }
+
+  return ingredients;
 }
 
 // ── AI-based step extraction fallback ────────────────────────
