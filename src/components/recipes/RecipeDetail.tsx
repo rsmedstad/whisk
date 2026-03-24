@@ -14,7 +14,7 @@ import {
 import { Button } from "../ui/Button";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { TagChip } from "../ui/TagChip";
-import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun, CalendarDays } from "../ui/Icon";
+import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, Users, Check, Fire, Tag, XMark, Share, PencilSquare, CalendarPlus, Sun, CalendarDays, RefreshCw } from "../ui/Icon";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { GroupedIngredients, StepsList } from "./RecipeComponents";
 import { categorizeIngredientForDrink } from "../../lib/categories";
@@ -61,6 +61,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [hasCheckedIngredients, setHasCheckedIngredients] = useState(false);
   const showGrams = localStorage.getItem("whisk_show_grams") === "true";
   const [isRefetching, setIsRefetching] = useState(false);
+  const [refetchResult, setRefetchResult] = useState<"success" | "error" | null>(null);
   const [isGroupingSteps, setIsGroupingSteps] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const wakeLock = useWakeLock();
@@ -159,6 +160,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const handleRefetch = useCallback(async () => {
     if (!recipe?.source?.url || isRefetching) return;
     setIsRefetching(true);
+    setRefetchResult(null);
     try {
       const res = await fetch("/api/import/url", {
         method: "POST",
@@ -188,10 +190,12 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
       await updateRecipe(recipe.id, updates);
       setRecipe((r) => (r ? { ...r, ...updates } as Recipe : r));
+      setRefetchResult("success");
     } catch {
-      alert("Could not refresh from source. The site may block automated access.");
+      setRefetchResult("error");
     } finally {
       setIsRefetching(false);
+      setTimeout(() => setRefetchResult(null), 3000);
     }
   }, [recipe, isRefetching, updateRecipe]);
 
@@ -1052,24 +1056,45 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         {/* Source */}
         {(recipe.source?.url || recipe.source?.attribution) && (
           <div className="border-t border-stone-200 dark:border-stone-700 pt-4 text-sm text-stone-400 dark:text-stone-500 space-y-0.5">
-            <div>
-              Source:{" "}
-              {recipe.source.url ? (
-                <a
-                  href={recipe.source.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-orange-500 hover:underline"
+            <div className="flex items-center gap-2">
+              <div>
+                Source:{" "}
+                {recipe.source.url ? (
+                  <a
+                    href={recipe.source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-orange-500 hover:underline"
+                  >
+                    {recipe.source.domain ?? recipe.source.url}
+                  </a>
+                ) : (
+                  <span className="text-stone-600 dark:text-stone-300">{recipe.source.attribution}</span>
+                )}
+              </div>
+              {recipe.source.url && (
+                <button
+                  onClick={handleRefetch}
+                  disabled={isRefetching}
+                  className="shrink-0 p-1 rounded-full hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors disabled:opacity-50"
+                  title={isRefetching ? "Refreshing..." : "Refresh from source"}
                 >
-                  {recipe.source.domain ?? recipe.source.url}
-                </a>
-              ) : (
-                <span className="text-stone-600 dark:text-stone-300">{recipe.source.attribution}</span>
+                  {refetchResult === "success" ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : refetchResult === "error" ? (
+                    <XMark className="w-4 h-4 text-red-500" />
+                  ) : (
+                    <RefreshCw className={classNames("w-4 h-4 text-stone-400 dark:text-stone-500", isRefetching && "animate-spin")} />
+                  )}
+                </button>
               )}
             </div>
             {recipe.lastCrawledAt && (
               <div className="text-xs">
                 Last fetched {new Date(recipe.lastCrawledAt).toLocaleDateString()}
+                {refetchResult === "error" && (
+                  <span className="text-red-500 ml-1">— refresh failed, site may block access</span>
+                )}
               </div>
             )}
           </div>
