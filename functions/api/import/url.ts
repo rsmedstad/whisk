@@ -434,6 +434,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
+    // AI fallback: if we have a recipe name but still no steps after all extraction
+    // strategies, use an AI provider to extract steps from the page text
+    hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
+    hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
+    if (recipeData.name && !hasSteps) {
+      const aiExtracted = await tryAIStepExtraction(html, recipeData.name, env);
+      if (aiExtracted) {
+        if (aiExtracted.steps.length > 0) {
+          recipeData.recipeInstructions = aiExtracted.steps.map((s) => s.text);
+        }
+        if (!hasIngredients && aiExtracted.ingredients.length > 0) {
+          recipeData.recipeIngredient = aiExtracted.ingredients;
+        }
+      }
+    }
+
     // Collect all image URLs: primary + additional from the page
     const allImageUrls = extractAllImageUrls(recipeData, html);
     let thumbnailUrl = allImageUrls[0];
@@ -1553,6 +1569,65 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
   }
 
   return urls;
+}
+
+// ── AI-based step extraction fallback ────────────────────────
+
+/**
+ * When all HTML-based extraction strategies fail to find steps, use an AI
+ * provider to extract recipe steps (and optionally ingredients) from the
+ * page's visible text content.
+ */
+async function tryAIStepExtraction(
+  html: string,
+  recipeName: string,
+  env: Env
+): Promise<{ steps: { text: string }[]; ingredients: string[] } | null> {
+  try {
+    const config = await loadAIConfig(env.WHISK_KV);
+    const fnConfig = resolveConfig(config, "chat", env);
+    if (!fnConfig) return null;
+
+    // Extract visible text from the HTML, limited to a reasonable size
+    const pageText = stripHtml(html).replace(/\s+/g, " ").trim().slice(0, 6000);
+    if (pageText.length < 100) return null;
+
+    const result = await callTextAI(fnConfig, env, [
+      {
+        role: "system",
+        content: `You are a recipe extraction assistant. Extract the cooking instructions from the provided web page text for the recipe "${recipeName}".
+
+Return ONLY a JSON object with:
+- "steps": array of {"text": string} — each step as a clear, actionable instruction
+- "ingredients": array of strings — full ingredient list including sub-groups (e.g. "Crispy skirt:", "2 tbsp cornflour")
+
+Rules:
+- Only extract actual cooking steps, not reviews, comments, or promotional content
+- Keep step text clear and complete — include the step title if present (e.g. "Make the filling: In a medium bowl, mix...")
+- Include ALL ingredient groups (main, sauce, garnish, etc.)
+- If no clear recipe steps are found, return {"steps": [], "ingredients": []}
+- Return ONLY the JSON object, no markdown or explanation.`,
+      },
+      { role: "user", content: pageText },
+    ], {
+      maxTokens: 2048,
+      temperature: 0.1,
+      jsonMode: true,
+    });
+
+    const parsed = JSON.parse(result) as Record<string, unknown>;
+    const steps = Array.isArray(parsed.steps)
+      ? (parsed.steps as { text?: string }[]).filter((s) => typeof s.text === "string" && s.text.length > 10)
+          .map((s) => ({ text: s.text! }))
+      : [];
+    const ingredients = Array.isArray(parsed.ingredients)
+      ? (parsed.ingredients as unknown[]).filter((i): i is string => typeof i === "string" && i.length > 1)
+      : [];
+
+    return steps.length > 0 || ingredients.length > 0 ? { steps, ingredients } : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Heading-based step extraction (JetEngine, Elementor, custom builders) ──
