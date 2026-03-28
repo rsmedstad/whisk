@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Ingredient } from "../../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categories";
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
-import { classNames } from "../../lib/utils";
+import { classNames, decodeEntities } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
 import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, MagnifyingGlass, SquareCheck, ClipboardList, RefreshCw, ChevronDown, ChevronUp, EllipsisVertical } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
@@ -324,7 +324,7 @@ export function ShoppingList({
   const recipeNames = useMemo(() => {
     const map = new Map<string, string>();
     for (const r of recipeIndex) {
-      map.set(r.id, r.title);
+      map.set(r.id, decodeEntities(r.title));
     }
     return map;
   }, [recipeIndex]);
@@ -481,9 +481,9 @@ export function ShoppingList({
   };
 
   const renderItem = (item: ShoppingItem & { _mergedIds?: string[]; _mergedSources?: string[] }) => {
-    const displayText = abbreviateName(item.name);
+    const displayText = abbreviateName(decodeEntities(item.name));
     const shortUnit = abbreviateUnit(item.unit);
-    const fullLabel = [item.amount, shortUnit, displayText].filter(Boolean).join(" ");
+    const fullLabel = decodeEntities([item.amount, shortUnit, displayText].filter(Boolean).join(" "));
     const mergedIds = item._mergedIds;
 
     const handleToggle = () => {

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { Ingredient, Step } from "../../types";
 import { classNames, decodeEntities, parseTimerFromText, parseFraction } from "../../lib/utils";
 import { categorizeIngredient, CATEGORY_LABELS, CATEGORY_ORDER, categorizeIngredientForDrink, DRINK_CATEGORY_LABELS, DRINK_CATEGORY_ORDER } from "../../lib/categories";
@@ -7,14 +6,13 @@ import { Check, Stopwatch } from "../ui/Icon";
 
 // ── Ingredient Row ──
 
-export function IngredientRow({ ingredient, hideGroup, showGrams, onCheck }: {
+export function IngredientRow({ ingredient, hideGroup, showGrams, checked, onToggle }: {
   ingredient: Ingredient;
   hideGroup?: boolean;
   showGrams?: boolean;
-  onCheck?: () => void;
+  checked: boolean;
+  onToggle: () => void;
 }) {
-  const [checked, setChecked] = useState(false);
-
   const display = decodeEntities(
     [ingredient.amount, ingredient.unit, ingredient.name].filter(Boolean).join(" ")
   );
@@ -36,7 +34,7 @@ export function IngredientRow({ ingredient, hideGroup, showGrams, onCheck }: {
         "flex items-center gap-2 text-sm cursor-pointer",
         checked && "line-through text-stone-400 dark:text-stone-500"
       )}
-      onClick={() => { setChecked(!checked); if (!checked && onCheck) onCheck(); }}
+      onClick={onToggle}
     >
       <span
         className={classNames(
@@ -67,29 +65,35 @@ export function IngredientRow({ ingredient, hideGroup, showGrams, onCheck }: {
 
 // ── Grouped Ingredients ──
 
-export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onCheckedChange, isDrink }: {
+export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, checkedIndices, onToggleIndex, isDrink }: {
   ingredients: Ingredient[];
   sort: "recipe" | "category";
   resetKey: number;
   showGrams: boolean;
-  onCheckedChange?: (hasChecked: boolean) => void;
+  checkedIndices: Set<number>;
+  onToggleIndex: (index: number) => void;
   isDrink?: boolean;
 }) {
   const hasExplicitGroups = ingredients.some((i) => i.group);
-  const handleCheck = () => onCheckedChange?.(true);
 
   if (sort === "recipe") {
     if (hasExplicitGroups) {
-      const groups = new Map<string, Ingredient[]>();
-      for (const ing of ingredients) {
+      const groups: { group: string; items: { ing: Ingredient; idx: number }[] }[] = [];
+      const groupMap = new Map<string, { ing: Ingredient; idx: number }[]>();
+      for (let idx = 0; idx < ingredients.length; idx++) {
+        const ing = ingredients[idx]!;
         const key = ing.group ?? "";
-        const list = groups.get(key);
-        if (list) list.push(ing);
-        else groups.set(key, [ing]);
+        let list = groupMap.get(key);
+        if (!list) {
+          list = [];
+          groupMap.set(key, list);
+          groups.push({ group: key, items: list });
+        }
+        list.push({ ing, idx });
       }
       return (
         <div className="space-y-4">
-          {[...groups.entries()].map(([group, ings]) => (
+          {groups.map(({ group, items }) => (
             <div key={group}>
               {group && (
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
@@ -97,8 +101,8 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
                 </h3>
               )}
               <ul className="space-y-2">
-                {ings.map((ing, i) => (
-                  <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} hideGroup showGrams={showGrams} onCheck={handleCheck} />
+                {items.map(({ ing, idx }) => (
+                  <IngredientRow key={`${resetKey}-${idx}`} ingredient={ing} hideGroup showGrams={showGrams} checked={checkedIndices.has(idx)} onToggle={() => onToggleIndex(idx)} />
                 ))}
               </ul>
             </div>
@@ -110,28 +114,29 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
     return (
       <ul className="space-y-2">
         {ingredients.map((ing, i) => (
-          <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} showGrams={showGrams} onCheck={handleCheck} />
+          <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} showGrams={showGrams} checked={checkedIndices.has(i)} onToggle={() => onToggleIndex(i)} />
         ))}
       </ul>
     );
   }
 
-  // Category sort
-  const grouped = new Map<string, Ingredient[]>();
+  // Category sort — track original indices
+  const grouped = new Map<string, { ing: Ingredient; idx: number }[]>();
   const categoryOrder = isDrink ? DRINK_CATEGORY_ORDER : CATEGORY_ORDER;
   const categoryLabels = isDrink ? DRINK_CATEGORY_LABELS : CATEGORY_LABELS;
-  for (const ing of ingredients) {
+  for (let idx = 0; idx < ingredients.length; idx++) {
+    const ing = ingredients[idx]!;
     const cat = isDrink ? categorizeIngredientForDrink(ing.name) : categorizeIngredient(ing.name);
     const list = grouped.get(cat);
-    if (list) list.push(ing);
-    else grouped.set(cat, [ing]);
+    if (list) list.push({ ing, idx });
+    else grouped.set(cat, [{ ing, idx }]);
   }
 
   if (grouped.size <= 1) {
     return (
       <ul className="space-y-2">
         {ingredients.map((ing, i) => (
-          <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} showGrams={showGrams} onCheck={handleCheck} />
+          <IngredientRow key={`${resetKey}-${i}`} ingredient={ing} showGrams={showGrams} checked={checkedIndices.has(i)} onToggle={() => onToggleIndex(i)} />
         ))}
       </ul>
     );
@@ -140,15 +145,15 @@ export function GroupedIngredients({ ingredients, sort, resetKey, showGrams, onC
   return (
     <div className="space-y-4">
       {categoryOrder.filter((cat) => grouped.has(cat)).map((cat) => {
-        const ings = grouped.get(cat)!;
+        const items = grouped.get(cat)!;
         return (
           <div key={cat}>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
               {categoryLabels[cat as keyof typeof categoryLabels]}
             </h3>
             <ul className="space-y-2">
-              {ings.map((ing, i) => (
-                <IngredientRow key={`${resetKey}-${cat}-${i}`} ingredient={ing} showGrams={showGrams} onCheck={handleCheck} />
+              {items.map(({ ing, idx }) => (
+                <IngredientRow key={`${resetKey}-${cat}-${idx}`} ingredient={ing} showGrams={showGrams} checked={checkedIndices.has(idx)} onToggle={() => onToggleIndex(idx)} />
               ))}
             </ul>
           </div>

@@ -58,7 +58,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
   );
   const [ingredientResetKey, setIngredientResetKey] = useState(0);
-  const [hasCheckedIngredients, setHasCheckedIngredients] = useState(false);
+  const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const showGrams = localStorage.getItem("whisk_show_grams") === "true";
   const [isRefetching, setIsRefetching] = useState(false);
   const [refetchResult, setRefetchResult] = useState<"success" | "error" | null>(null);
@@ -151,6 +151,39 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
       setTimeout(() => setShoppingToast(null), 3000);
     }
   }, [recipe, onAddToShoppingList]);
+
+  const handleToggleIngredient = useCallback((index: number) => {
+    setCheckedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  const handleAddSelected = useCallback(async () => {
+    if (!recipe || checkedIndices.size === 0) return;
+    const scaled = recipe.ingredients.map((ing) =>
+      scaleIngredient(ing, recipe.servings ?? 1, scaledServings ?? recipe.servings ?? 1)
+    );
+    const selected = scaled.filter((_, i) => checkedIndices.has(i));
+    const result = await onAddToShoppingList(selected, recipe.id);
+    if (result.added > 0) {
+      setShoppingToast({
+        message: `Added ${result.added} item${result.added !== 1 ? "s" : ""} to list`,
+        recipeId: recipe.id,
+      });
+      setTimeout(() => setShoppingToast(null), 5000);
+      setCheckedIndices(new Set());
+      setIngredientResetKey((k) => k + 1);
+    } else if (result.skippedDuplicates > 0) {
+      setShoppingToast({
+        message: "Already on your list",
+        recipeId: "",
+      });
+      setTimeout(() => setShoppingToast(null), 3000);
+    }
+  }, [recipe, checkedIndices, scaledServings, onAddToShoppingList]);
 
   const handleUndoAdd = useCallback(async () => {
     if (!shoppingToast?.recipeId) return;
@@ -819,11 +852,11 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   {label}
                 </button>
               ))}
-              {hasCheckedIngredients && (
+              {checkedIndices.size > 0 && (
                 <button
                   onClick={() => {
                     setIngredientResetKey((k) => k + 1);
-                    setHasCheckedIngredients(false);
+                    setCheckedIndices(new Set());
                   }}
                   className="wk-pill ml-auto px-2.5 py-0.5 rounded-full text-xs font-medium border border-stone-300 text-stone-500 hover:border-orange-500 hover:text-orange-600 dark:border-stone-600 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
                 >
@@ -833,7 +866,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             </div>
 
             {ingredients.length > 0 ? (
-              <GroupedIngredients ingredients={ingredients} sort={ingredientSort} resetKey={ingredientResetKey} showGrams={showGrams} onCheckedChange={setHasCheckedIngredients} isDrink={isDrink} />
+              <GroupedIngredients ingredients={ingredients} sort={ingredientSort} resetKey={ingredientResetKey} showGrams={showGrams} checkedIndices={checkedIndices} onToggleIndex={handleToggleIngredient} isDrink={isDrink} />
             ) : (
               <p className="text-sm text-stone-400 dark:text-stone-500 py-4 text-center">
                 No ingredients listed
@@ -1085,9 +1118,18 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               <div className="flex gap-2">
                 <Button
                   fullWidth
+                  onClick={handleAddSelected}
+                  disabled={checkedIndices.size === 0}
+                >
+                  Add Selected ({checkedIndices.size})
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
                   onClick={() => handleAddToList(true)}
                 >
-                  Add Essentials
+                  Essentials
                 </Button>
                 <Button
                   variant="secondary"
@@ -1095,13 +1137,14 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                   className="shrink-0"
                   onClick={() => handleAddToList(false)}
                 >
-                  Add All
+                  All
                 </Button>
               </div>
               <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                {isDrink
-                  ? "Essentials skips garnishes, bitters & modifiers"
-                  : "Essentials skips salt, pepper, oil & common pantry staples"}
+                Check ingredients above, then tap Add Selected.
+                {" "}{isDrink
+                  ? "Essentials skips garnishes, bitters & modifiers."
+                  : "Essentials skips common pantry staples."}
               </p>
             </div>
           </div>

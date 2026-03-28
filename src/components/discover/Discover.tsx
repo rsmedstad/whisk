@@ -357,7 +357,7 @@ export function Discover({
     () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
   );
   const [ingredientResetKey, setIngredientResetKey] = useState(0);
-  const [hasCheckedIngredients, setHasCheckedIngredients] = useState(false);
+  const [checkedIngredientIndices, setCheckedIngredientIndices] = useState<Set<number>>(new Set());
   const [isGroupingSteps, setIsGroupingSteps] = useState(false);
   const [groupedSteps, setGroupedSteps] = useState<Step[] | null>(null);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -513,7 +513,7 @@ export function Discover({
       setActiveTab("ingredients");
       setGroupedSteps(null);
       setCompletedSteps(new Set());
-      setHasCheckedIngredients(false);
+      setCheckedIngredientIndices(new Set());
       setIngredientResetKey((k) => k + 1);
       setIsImporting(true);
 
@@ -1454,11 +1454,11 @@ export function Discover({
                             {label}
                           </button>
                         ))}
-                        {hasCheckedIngredients && (
+                        {checkedIngredientIndices.size > 0 && (
                           <button
                             onClick={() => {
                               setIngredientResetKey((k) => k + 1);
-                              setHasCheckedIngredients(false);
+                              setCheckedIngredientIndices(new Set());
                             }}
                             className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-medium border border-stone-300 text-stone-500 hover:border-orange-500 hover:text-orange-600 dark:border-stone-600 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors"
                           >
@@ -1471,7 +1471,13 @@ export function Discover({
                         sort={ingredientSort}
                         resetKey={ingredientResetKey}
                         showGrams={false}
-                        onCheckedChange={setHasCheckedIngredients}
+                        checkedIndices={checkedIngredientIndices}
+                        onToggleIndex={(idx) => setCheckedIngredientIndices((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(idx)) next.delete(idx);
+                          else next.add(idx);
+                          return next;
+                        })}
                       />
                     </>
                   ) : (

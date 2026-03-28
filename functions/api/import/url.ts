@@ -2109,8 +2109,11 @@ function parseServings(yield_: string | string[] | undefined): number | undefine
   return undefined;
 }
 
-function parseDuration(iso: string | undefined): number | undefined {
+function parseDuration(iso: unknown): number | undefined {
   if (!iso) return undefined;
+  // Already a number (e.g. from pre-parsed data)
+  if (typeof iso === "number") return iso > 0 ? iso : undefined;
+  if (typeof iso !== "string") return undefined;
 
   // ISO 8601 duration: PT30M, PT1H30M, PT45M, P0DT0H30M
   const isoMatch = iso.match(/PT?(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?/);

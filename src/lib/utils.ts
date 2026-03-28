@@ -186,13 +186,22 @@ const HTML_ENTITIES: Record<string, string> = {
   deg: "\u00B0", frac12: "\u00BD", frac14: "\u00BC", frac34: "\u00BE",
 };
 
-/** Decode HTML entities (&#123; &#xAB; &amp;) in recipe text from scraped sources. */
+/** Decode HTML entities (&#123; &#xAB; &amp;) in recipe text from scraped sources.
+ *  Handles double-encoded entities like &amp;#039; by running up to 2 passes. */
 export function decodeEntities(str: string): string {
   if (!str.includes("&")) return str;
-  return str
+  let result = str
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/&([a-z]+);/gi, (match, name) => HTML_ENTITIES[name.toLowerCase()] ?? match);
+  // Second pass for double-encoded entities (e.g. &amp;#039; → &#039; → ')
+  if (result.includes("&") && result !== str) {
+    result = result
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+      .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/&([a-z]+);/gi, (match, name) => HTML_ENTITIES[name.toLowerCase()] ?? match);
+  }
+  return result;
 }
 
 // ── Misc ────────────────────────────────────────────────
