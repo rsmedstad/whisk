@@ -206,7 +206,7 @@ const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
   ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?|bostock|morning buns?|dutch baby|cr[eê]pes?|shakshuka|porridge|acai bowl)\b/i],
   ["soups", /\b(?:soups?|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
   ["salad", /\b(?:salads?|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
-  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e)\b/i],
+  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e|brittle|toffee|praline|bark(?:\s|$)|caramels?\b(?!\s*(?:sauce|onion|chicken)))\b/i],
   ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
   ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
   ["appetizer", /\b(?:appetizers?|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
@@ -218,7 +218,7 @@ const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
 /** Main-dish proteins — if the title contains one of these, override snack/appetizer categories */
 const MAIN_DISH_PROTEIN = /\b(?:fish|salmon|tuna|shrimp|chicken|turkey|duck|pork|beef|steak|lamb|veal|ribs|brisket|meatloaf|roast|chops?)\b/i;
 
-function classifyRecipe(title: string, description?: string): DiscoverCategory {
+function classifyRecipe(title: string, description?: string, tags?: string[]): DiscoverCategory {
   const text = `${title} ${description ?? ""}`;
   for (const [category, pattern] of CATEGORY_KEYWORDS) {
     if (pattern.test(text)) {
@@ -227,6 +227,15 @@ function classifyRecipe(title: string, description?: string): DiscoverCategory {
         return "dinner";
       }
       return category;
+    }
+  }
+  // Before defaulting to "dinner", check if AI-assigned tags indicate a category
+  if (tags && tags.length > 0) {
+    const mealTags: DiscoverCategory[] = ["breakfast", "dessert", "snack", "appetizer", "salad", "side dish", "drinks", "baking", "soups"];
+    for (const tag of tags) {
+      if (mealTags.includes(tag as DiscoverCategory)) {
+        return tag as DiscoverCategory;
+      }
     }
   }
   return "dinner"; // Default: main dish / entrée
@@ -1258,7 +1267,7 @@ function archiveToCategoryFeed(archive: Archive): CategoryFeed {
     // Skip person/author entries that slipped into the archive
     if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
     // Re-classify instead of using the frozen category from scrape time
-    const cat = classifyRecipe(item.title, item.description);
+    const cat = classifyRecipe(item.title, item.description, item.tags);
     // Ensure the item's tags include its category tag (keep them consistent)
     const catTag = cat === "soups" ? "dinner" : cat;
     let tags = item.tags;
