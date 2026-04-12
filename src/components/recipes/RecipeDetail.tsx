@@ -775,7 +775,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
         {/* Ingredients */}
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+          <h2 className="mb-3 text-lg font-bold text-stone-900 dark:text-stone-100">
             Ingredients
           </h2>
             <div className="flex items-center gap-3 mb-3">
@@ -860,7 +860,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
 
         {/* Steps */}
         <section className="border-t border-stone-200 dark:border-stone-700 pt-4">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+            <h2 className="mb-3 text-lg font-bold text-stone-900 dark:text-stone-100">
               Steps{recipe.steps.length > 0 && ` (${recipe.steps.length})`}
             </h2>
             {recipe.steps.length > 0 ? (

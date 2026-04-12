@@ -1415,7 +1415,7 @@ export function Discover({
               {/* Ingredients */}
               <div className="border-t border-stone-200 dark:border-stone-700" />
               <section>
-                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                  <h2 className="mb-3 text-lg font-bold text-stone-900 dark:text-stone-100">
                     Ingredients{importedRecipe.ingredients.length > 0 ? ` (${importedRecipe.ingredients.length})` : ""}
                   </h2>
                   {importedRecipe.ingredients.length > 0 ? (
@@ -1477,7 +1477,7 @@ export function Discover({
 
               {/* Steps */}
               <section className="border-t border-stone-200 dark:border-stone-700 pt-4">
-                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                  <h2 className="mb-3 text-lg font-bold text-stone-900 dark:text-stone-100">
                     Steps{importedRecipe.steps.length > 0 ? ` (${importedRecipe.steps.length})` : ""}
                   </h2>
                   {importedRecipe.steps.length > 0 ? (
