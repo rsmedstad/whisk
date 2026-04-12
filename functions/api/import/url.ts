@@ -27,6 +27,28 @@ interface RecipeData {
   recipeCategory?: string | string[];
   recipeCuisine?: string | string[];
   keywords?: string | string[];
+  aggregateRating?: unknown;
+}
+
+/** Pull a numeric ratingValue / ratingCount from a JSON-LD aggregateRating object. */
+function parseAggregateRating(raw: unknown): { value?: number; count?: number } {
+  if (!raw || typeof raw !== "object") return {};
+  const obj = raw as Record<string, unknown>;
+  const toNum = (v: unknown): number | undefined => {
+    if (typeof v === "number" && isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = parseFloat(v);
+      return isFinite(n) ? n : undefined;
+    }
+    return undefined;
+  };
+  const rawValue = toNum(obj.ratingValue);
+  const rawCount = toNum(obj.ratingCount ?? obj.reviewCount);
+  const value = rawValue !== undefined ? Math.round(rawValue * 10) / 10 : undefined;
+  const count = rawCount !== undefined ? Math.round(rawCount) : undefined;
+  // Sanity: only 0-5 scale ratings with at least one rater
+  if (value !== undefined && (value < 0 || value > 5)) return {};
+  return { value, count };
 }
 
 /** Normalize a user-provided URL: trim, add https://, validate protocol. Returns null if invalid. */
@@ -513,6 +535,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const parsedIngredients = parseIngredients(recipeData.recipeIngredient ?? []);
     const tags = generateTags(recipeData, parsedIngredients);
+    const rating = parseAggregateRating(recipeData.aggregateRating);
 
     const recipe = {
       title: recipeData.name ?? "",
@@ -528,6 +551,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       photos,
       videoUrl,
       tags,
+      sourceRating: rating.value,
+      sourceRatingCount: rating.count,
       lastCrawledAt: new Date().toISOString(),
     };
 
@@ -1605,7 +1630,21 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
   const ogImage = html.match(/property="og:image"\s+content="([^"]*)"/i);
   if (ogImage?.[1]) addUrl(ogImage[1]);
 
-  // 5. Images from entry-content that look like recipe photos (large content images)
+  // 5. Images embedded in HowToStep / HowToSection entries in JSON-LD.
+  //    Recipe sites (AllRecipes, Serious Eats, …) often attach a step photo
+  //    via HowToStep.image, which is the cleanest source for per-step shots.
+  const collectStepImages = (instructions: unknown): void => {
+    if (!Array.isArray(instructions)) return;
+    for (const item of instructions) {
+      if (!item || typeof item !== "object") continue;
+      const obj = item as Record<string, unknown>;
+      if (obj.image !== undefined) addUrl(extractImageUrl(obj.image));
+      if (Array.isArray(obj.itemListElement)) collectStepImages(obj.itemListElement);
+    }
+  };
+  collectStepImages(data.recipeInstructions);
+
+  // 6. Images from entry-content that look like recipe photos (large content images)
   const contentMatch = html.match(
     /class="(?:entry-content|post-content|article-content|recipe-content)"[^>]*>([\s\S]*?)(?=<\/div>\s*<(?:footer|div class="entry-footer|section class="comments"))/i
   );
@@ -1614,6 +1653,20 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
     let m;
     while ((m = imgRegex.exec(contentMatch[1])) !== null) {
       addUrl(m[1]);
+    }
+  }
+
+  // 7. Images inside <figure> tags anywhere in the article body. AllRecipes
+  //    and other modern recipe templates wrap inline step photos in figures,
+  //    which are typically real content images (not icons/ads).
+  const figureRegex = /<figure\b[^>]*>([\s\S]*?)<\/figure>/gi;
+  let fm;
+  while ((fm = figureRegex.exec(html)) !== null) {
+    const inner = fm[1] ?? "";
+    const imgRegex = /<img[^>]*\s(?:data-src|src)="([^"]+)"/gi;
+    let im;
+    while ((im = imgRegex.exec(inner)) !== null) {
+      addUrl(im[1]);
     }
   }
 
@@ -2000,8 +2053,11 @@ function parseIngredients(
       continue; // Don't add as an ingredient
     }
 
+    // Unit group requires \b so short single-letter units (l, g) don't bite the
+    // first letter of an ingredient name — e.g. "9 lasagna noodles" must not
+    // parse as amount=9, unit="l", name="asagna noodles".
     const match = cleaned.match(
-      /^([\d\s./½⅓⅔¼¾⅛⅜⅝⅞]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|packages?|bunche?s?|pieces?|slices?|sticks?|heads?|stalks?|sprigs?|pinche?s?|dashes?)?\s*(.+)/i
+      /^([\d\s./½⅓⅔¼¾⅛⅜⅝⅞]+)\s*(?:(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|packages?|bunche?s?|pieces?|slices?|sticks?|heads?|stalks?|sprigs?|pinche?s?|dashes?)\b)?\s*(.+)/i
     );
     if (match) {
       results.push({

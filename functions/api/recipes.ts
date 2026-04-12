@@ -24,6 +24,8 @@ interface RecipeIndexEntry {
   difficulty?: "easy" | "medium" | "hard";
   ingredientNames?: string[];
   sourceUrl?: string;
+  sourceRating?: number;
+  sourceRatingCount?: number;
 }
 
 function computeDifficulty(totalMinutes: number, ingredientCount: number, stepCount: number): "easy" | "medium" | "hard" {
@@ -106,6 +108,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, wa
         ? (recipe.ingredients as { name?: string }[]).map((i) => i.name).filter((n): n is string => !!n).slice(0, 30)
         : undefined,
       sourceUrl: (recipe.source as { url?: string } | undefined)?.url,
+      sourceRating: recipe.sourceRating as number | undefined,
+      sourceRatingCount: recipe.sourceRatingCount as number | undefined,
     };
 
     index.unshift(entry);

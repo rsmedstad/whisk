@@ -49,7 +49,6 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
   const [scaledServings, setScaledServings] = useState<number | null>(cachedRecipe?.servings ?? null);
   const [showOverflow, setShowOverflow] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<"ingredients" | "steps">("ingredients");
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [shoppingToast, setShoppingToast] = useState<{ message: string; recipeId: string } | null>(null);
@@ -663,6 +662,20 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                       <Users className="w-4 h-4" /> {recipe.servings} servings
                     </span>
                   )}
+                  {recipe.sourceRating != null && (
+                    <span
+                      className="flex items-center gap-1 text-amber-500"
+                      title={`Source rating${recipe.sourceRatingCount ? ` (${recipe.sourceRatingCount} reviews)` : ""}`}
+                    >
+                      <svg className="w-4 h-4 fill-none stroke-amber-400" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                      </svg>
+                      {recipe.sourceRating}
+                      {recipe.sourceRatingCount ? (
+                        <span className="text-stone-400 dark:text-stone-500">({recipe.sourceRatingCount})</span>
+                      ) : null}
+                    </span>
+                  )}
                   {recipe.yield && <span>{recipe.yield}</span>}
                   {recipe.difficulty && (
                     <span className="capitalize">{recipe.difficulty}</span>
@@ -760,41 +773,11 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           </div>
         )}
 
-        {/* Tab bar */}
-        <div className="flex border-b border-stone-200 dark:border-stone-700">
-          <button
-            onClick={() => setActiveTab("ingredients")}
-            className={classNames(
-              "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
-              activeTab === "ingredients"
-                ? "text-orange-600 dark:text-orange-400"
-                : "text-stone-500 dark:text-stone-400"
-            )}
-          >
+        {/* Ingredients */}
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
             Ingredients
-            {activeTab === "ingredients" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("steps")}
-            className={classNames(
-              "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
-              activeTab === "steps"
-                ? "text-orange-600 dark:text-orange-400"
-                : "text-stone-500 dark:text-stone-400"
-            )}
-          >
-            Steps{recipe.steps.length > 0 && ` (${recipe.steps.length})`}
-            {activeTab === "steps" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
-            )}
-          </button>
-        </div>
-
-        {/* Ingredients tab */}
-        {activeTab === "ingredients" && (
-          <section>
+          </h2>
             <div className="flex items-center gap-3 mb-3">
               <span className="text-sm text-stone-500 dark:text-stone-400 shrink-0">
                 Scale:
@@ -874,11 +857,12 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
             )}
 
           </section>
-        )}
 
-        {/* Steps tab */}
-        {activeTab === "steps" && (
-          <section>
+        {/* Steps */}
+        <section className="border-t border-stone-200 dark:border-stone-700 pt-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+              Steps{recipe.steps.length > 0 && ` (${recipe.steps.length})`}
+            </h2>
             {recipe.steps.length > 0 ? (
               <>
                 <div className="flex items-center gap-2 mb-3">
@@ -929,7 +913,6 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               </p>
             )}
           </section>
-        )}
 
         {/* Notes */}
         <section className="border-t border-stone-200 dark:border-stone-700 pt-4">

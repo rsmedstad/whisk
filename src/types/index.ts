@@ -35,6 +35,10 @@ export interface Recipe {
   // Ratings (per-user, keyed by display name)
   ratings?: Record<string, number>; // e.g. { "Alex": 4, "Sam": 5 }
 
+  // External rating from the source site (JSON-LD aggregateRating)
+  sourceRating?: number; // 0-5, one decimal
+  sourceRatingCount?: number;
+
   // Cooking history
   cookedCount?: number;
   lastCookedAt?: string;
@@ -87,6 +91,8 @@ export interface RecipeIndexEntry {
   lastCookedAt?: string;
   avgRating?: number; // pre-computed average of ratings
   ratingCount?: number; // number of users who rated
+  sourceRating?: number; // external rating from source site (JSON-LD)
+  sourceRatingCount?: number;
   spirits?: string[]; // display-only: primary liquors for drinks
   ingredientCount?: number; // number of ingredients (for difficulty)
   stepCount?: number; // number of steps (for difficulty)

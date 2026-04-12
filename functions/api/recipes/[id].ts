@@ -28,6 +28,8 @@ interface RecipeIndexEntry {
   difficulty?: "easy" | "medium" | "hard";
   ingredientNames?: string[];
   sourceUrl?: string;
+  sourceRating?: number;
+  sourceRatingCount?: number;
 }
 
 function computeDifficulty(totalMinutes: number, ingredientCount: number, stepCount: number): "easy" | "medium" | "hard" {
@@ -158,6 +160,8 @@ export const onRequestPut: PagesFunction<Env> = async ({
         ? (updated.ingredients as { name?: string }[]).map((i) => i.name).filter((n): n is string => !!n).slice(0, 30)
         : entry.ingredientNames,
       sourceUrl: (updated.source as { url?: string } | undefined)?.url ?? entry.sourceUrl,
+      sourceRating: (updated.sourceRating as number | undefined) ?? entry.sourceRating,
+      sourceRatingCount: (updated.sourceRatingCount as number | undefined) ?? entry.sourceRatingCount,
     };
   });
 

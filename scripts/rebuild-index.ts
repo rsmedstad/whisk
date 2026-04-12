@@ -45,6 +45,8 @@ interface IndexEntry {
   difficulty?: "easy" | "medium" | "hard";
   ingredientNames?: string[];
   sourceUrl?: string;
+  sourceRating?: number;
+  sourceRatingCount?: number;
 }
 
 const index: IndexEntry[] = [];
@@ -83,6 +85,8 @@ for (const key of recipeKeys) {
         ? d.ingredients.map((i: { name?: string }) => i.name).filter((n: unknown): n is string => !!n).slice(0, 30)
         : undefined,
       sourceUrl: d.source?.url,
+      sourceRating: d.sourceRating,
+      sourceRatingCount: d.sourceRatingCount,
     });
   } catch (e) {
     console.log(`  SKIP ${key}: parse error`);

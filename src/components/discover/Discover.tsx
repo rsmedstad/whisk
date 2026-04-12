@@ -276,6 +276,8 @@ interface ImportedRecipe {
     attribution?: string;
   };
   tags?: string[];
+  sourceRating?: number;
+  sourceRatingCount?: number;
 }
 
 // ── Helpers ─────────────────────────────────────────────
@@ -352,7 +354,6 @@ export function Discover({
   const galleryRef = useRef<HTMLDivElement>(null);
   const feedScrollRef = useRef<HTMLDivElement>(null);
   const savedScrollPos = useRef<{ vertical: number; carousels: Record<string, number> } | null>(null);
-  const [activeTab, setActiveTab] = useState<"ingredients" | "steps">("ingredients");
   const [ingredientSort, setIngredientSort] = useState<"recipe" | "category">(
     () => (localStorage.getItem("whisk_ingredient_sort") as "recipe" | "category") ?? "recipe"
   );
@@ -510,7 +511,6 @@ export function Discover({
       setImportError(null);
       setSavedFeedRecipeId(null);
       setPhotoIndex(0);
-      setActiveTab("ingredients");
       setGroupedSteps(null);
       setCompletedSteps(new Set());
       setCheckedIngredientIndices(new Set());
@@ -613,6 +613,8 @@ export function Discover({
         cookTime: importedRecipe.cookTime,
         servings: importedRecipe.servings,
         source: importedRecipe.source as Recipe["source"],
+        sourceRating: importedRecipe.sourceRating,
+        sourceRatingCount: importedRecipe.sourceRatingCount,
       });
       setSavedFeedRecipeId(recipe.id);
       // Auto-tag in background if AI is available and tags are sparse
@@ -687,6 +689,8 @@ export function Discover({
         cookTime: data.cookTime,
         servings: data.servings,
         source: data.source as Recipe["source"],
+        sourceRating: data.sourceRating,
+        sourceRatingCount: data.sourceRatingCount,
       });
       setSavedUrls((prev) => new Set(prev).add(item.url));
       // Backfill feed image if the import got one and the feed card didn't have one
@@ -1315,6 +1319,20 @@ export function Discover({
                       <Users className="w-4 h-4" /> {importedRecipe.servings} servings
                     </span>
                   )}
+                  {importedRecipe.sourceRating != null && (
+                    <span
+                      className="flex items-center gap-1 text-amber-500"
+                      title={`Source rating${importedRecipe.sourceRatingCount ? ` (${importedRecipe.sourceRatingCount} reviews)` : ""}`}
+                    >
+                      <svg className="w-4 h-4 fill-none stroke-amber-400" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                      </svg>
+                      {importedRecipe.sourceRating}
+                      {importedRecipe.sourceRatingCount ? (
+                        <span className="text-stone-400 dark:text-stone-500">({importedRecipe.sourceRatingCount})</span>
+                      ) : null}
+                    </span>
+                  )}
                 </div>
                 {((importedRecipe.tags && importedRecipe.tags.length > 0) || showTagEditor) && (
                   <>
@@ -1394,42 +1412,12 @@ export function Discover({
                 )}
               </div>
 
-              {/* Tab bar — matches RecipeDetail */}
+              {/* Ingredients */}
               <div className="border-t border-stone-200 dark:border-stone-700" />
-              <div className="flex border-b border-stone-200 dark:border-stone-700">
-                <button
-                  onClick={() => setActiveTab("ingredients")}
-                  className={classNames(
-                    "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
-                    activeTab === "ingredients"
-                      ? "text-orange-600 dark:text-orange-400"
-                      : "text-stone-500 dark:text-stone-400"
-                  )}
-                >
-                  Ingredients{importedRecipe.ingredients.length > 0 ? ` (${importedRecipe.ingredients.length})` : ""}
-                  {activeTab === "ingredients" && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setActiveTab("steps")}
-                  className={classNames(
-                    "flex-1 py-2.5 text-sm font-semibold text-center transition-colors relative",
-                    activeTab === "steps"
-                      ? "text-orange-600 dark:text-orange-400"
-                      : "text-stone-500 dark:text-stone-400"
-                  )}
-                >
-                  Steps{importedRecipe.steps.length > 0 ? ` (${importedRecipe.steps.length})` : ""}
-                  {activeTab === "steps" && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
-                  )}
-                </button>
-              </div>
-
-              {/* Ingredients tab */}
-              {activeTab === "ingredients" && (
-                <section>
+              <section>
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                    Ingredients{importedRecipe.ingredients.length > 0 ? ` (${importedRecipe.ingredients.length})` : ""}
+                  </h2>
                   {importedRecipe.ingredients.length > 0 ? (
                     <>
                       {/* Ingredient sort toggle + clear checked */}
@@ -1486,11 +1474,12 @@ export function Discover({
                     </p>
                   )}
                 </section>
-              )}
 
-              {/* Steps tab */}
-              {activeTab === "steps" && (
-                <section>
+              {/* Steps */}
+              <section className="border-t border-stone-200 dark:border-stone-700 pt-4">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                    Steps{importedRecipe.steps.length > 0 ? ` (${importedRecipe.steps.length})` : ""}
+                  </h2>
                   {importedRecipe.steps.length > 0 ? (
                     <>
                       <div className="flex items-center gap-2 mb-3">
@@ -1570,7 +1559,6 @@ export function Discover({
                     </p>
                   )}
                 </section>
-              )}
 
               {/* Add to Recipes CTA */}
               {onSaveRecipe && !savedFeedRecipeId && (
