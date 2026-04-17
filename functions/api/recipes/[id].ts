@@ -1,4 +1,5 @@
 import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../../lib/embeddings";
+import { readJsonBody } from "../../lib/recipe-input";
 
 interface Env {
   WHISK_KV: KVNamespace;
@@ -93,7 +94,20 @@ export const onRequestPut: PagesFunction<Env> = async ({
     });
   }
 
-  const updates = (await request.json()) as Record<string, unknown>;
+  const body = await readJsonBody<Record<string, unknown>>(request);
+  if (!body.ok) {
+    return new Response(JSON.stringify({ error: body.error }), {
+      status: body.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) {
+    return new Response(JSON.stringify({ error: "Invalid update body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const updates = body.data;
   const now = new Date().toISOString();
   const userId = (data as Record<string, string>).userId;
 
