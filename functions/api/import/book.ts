@@ -1,3 +1,5 @@
+import { readJsonBody, normalizeRecipeInput } from "../../lib/recipe-input";
+
 interface Env {
   WHISK_KV: KVNamespace;
   WHISK_R2: R2Bucket;
@@ -19,23 +21,17 @@ interface RecipeIndexEntry {
   sourceUrl?: string;
 }
 
-interface ImportedRecipe {
-  title: string;
-  description?: string;
-  ingredients: unknown[];
-  steps: unknown[];
-  photos: { url: string; caption?: string; isPrimary: boolean }[];
-  thumbnailUrl?: string;
-  videoUrl?: string;
-  source?: unknown;
-  tags: string[];
-  cuisine?: string;
-  prepTime?: number;
-  cookTime?: number;
-  servings?: number;
-  yield?: string;
-  difficulty?: string;
-  notes?: string;
+/** Normalize a title for dedup: lowercase, strip punctuation, collapse whitespace.
+ *  "Chicken Tikka Masala", "chicken-tikka-masala", and "Chicken  Tikka  Masala!"
+ *  all produce the same slug. */
+function slugifyTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // strip diacritics
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, "-");
 }
 
 async function downloadPhoto(
@@ -76,9 +72,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const url = new URL(request.url);
     const mode = (url.searchParams.get("mode") ?? "add") as "add" | "skip" | "overwrite";
-    const recipe = (await request.json()) as ImportedRecipe;
-
-    if (!recipe.title) {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      return new Response(JSON.stringify({ error: body.error }), {
+        status: body.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const recipe = normalizeRecipeInput(body.data);
+    if (!recipe) {
       return new Response(JSON.stringify({ error: "Recipe title is required" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
@@ -89,10 +91,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const index =
       ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
 
-    const normalizedTitle = recipe.title.trim().toLowerCase();
-    const existingIdx = index.findIndex(
-      (e) => e.title.trim().toLowerCase() === normalizedTitle
-    );
+    // Slug-based matching collapses case, whitespace, and punctuation so that
+    // "Chicken Tikka Masala" and "chicken-tikka-masala" are treated as the
+    // same recipe on re-import.
+    const incomingSlug = slugifyTitle(recipe.title);
+    const existingIdx = index.findIndex((e) => slugifyTitle(e.title) === incomingSlug);
     const existingEntry = existingIdx >= 0 ? index[existingIdx] : undefined;
 
     // Handle duplicate based on mode
@@ -115,15 +118,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const now = new Date().toISOString();
 
     // Download thumbnail
-    let thumbnailUrl = recipe.thumbnailUrl ?? undefined;
+    let thumbnailUrl = recipe.thumbnailUrl;
     if (thumbnailUrl && (thumbnailUrl.startsWith("http://") || thumbnailUrl.startsWith("https://"))) {
       const local = await downloadPhoto(thumbnailUrl, env.WHISK_R2);
       if (local) thumbnailUrl = local;
     }
 
     // Download photos
-    const photos = [];
-    for (const photo of recipe.photos ?? []) {
+    const photos: { url: string; caption?: string; isPrimary: boolean }[] = [];
+    for (const photo of recipe.photos) {
       let url = photo.url;
       if (url.startsWith("http://") || url.startsWith("https://")) {
         const local = await downloadPhoto(url, env.WHISK_R2);
@@ -142,13 +145,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       id,
       title: recipe.title,
       description: recipe.description,
-      ingredients: recipe.ingredients ?? [],
-      steps: recipe.steps ?? [],
+      ingredients: recipe.ingredients,
+      steps: recipe.steps,
       photos,
       thumbnailUrl,
       videoUrl: recipe.videoUrl,
       source: recipe.source,
-      tags: recipe.tags ?? [],
+      tags: recipe.tags,
       cuisine: recipe.cuisine,
       prepTime: recipe.prepTime,
       cookTime: recipe.cookTime,
