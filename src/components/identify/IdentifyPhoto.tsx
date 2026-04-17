@@ -22,6 +22,8 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
     description?: string;
     cuisine?: string;
     tags?: string[];
+    errorKind?: "parse" | "vision";
+    message?: string;
   } | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,7 +52,16 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
       });
 
       if (!res.ok) throw new Error("Identification failed");
-      const data = (await res.json()) as { title: string; confidence: string; ingredients: string[]; description?: string; cuisine?: string; tags?: string[] };
+      const data = (await res.json()) as {
+        title: string;
+        confidence: string;
+        ingredients: string[];
+        description?: string;
+        cuisine?: string;
+        tags?: string[];
+        errorKind?: "parse" | "vision";
+        message?: string;
+      };
       setResult(data);
     } catch {
       setResult({
@@ -152,14 +163,20 @@ export function IdentifyPhoto({ visionEnabled = false }: IdentifyPhotoProps) {
                 <Sparkles className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm text-stone-500 dark:text-stone-400">
-                    This looks like:
+                    {result.errorKind ? "Couldn't read photo" : "This looks like:"}
                   </p>
                   <h3 className="text-lg font-bold dark:text-stone-100">
                     {result.title}
                   </h3>
-                  <p className="text-xs text-stone-400">
-                    Confidence: {result.confidence}
-                  </p>
+                  {result.errorKind && result.message ? (
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                      {result.message}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-stone-400">
+                      Confidence: {result.confidence}
+                    </p>
+                  )}
                 </div>
               </div>
 

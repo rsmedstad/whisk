@@ -457,7 +457,7 @@ export function ShoppingList({
         const totalMs = Math.round(performance.now() - scanStart);
         console.log(`[Whisk] Scan compress=${compressMs}ms roundtrip=${roundtripMs}ms total=${totalMs}ms photo=${Math.round(blob.size / 1024)}KB | server: ${serverTiming}`);
 
-        const data = (await res.json()) as { items?: { name: string; amount?: string | null; unit?: string | null; category?: string | null; confidence?: string }[]; warnings?: string[]; message?: string; error?: string };
+        const data = (await res.json()) as { items?: { name: string; amount?: string | null; unit?: string | null; category?: string | null; confidence?: string }[]; warnings?: string[]; message?: string; error?: string; errorKind?: "parse" | "vision" };
         if (!res.ok) {
           setListScanResult({ count: 0, message: data.error ?? data.message ?? `Scan failed (${res.status})` });
           return;
@@ -469,7 +469,10 @@ export function ShoppingList({
           setScanWarnings(data.warnings ?? []);
           setListScanResult({ count: validItems.length });
         } else {
-          setListScanResult({ count: 0, message: data.message ?? "No items found in the image. Try a clearer photo." });
+          const fallbackMessage = data.errorKind === "parse"
+            ? "The AI response couldn't be parsed. Try again or switch providers in Settings."
+            : data.message ?? "No items found in the image. Try a clearer photo.";
+          setListScanResult({ count: 0, message: fallbackMessage });
         }
       } catch {
         setListScanResult({ count: 0, message: "Failed to scan. Check your connection and try again." });
