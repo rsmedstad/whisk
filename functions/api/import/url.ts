@@ -1608,7 +1608,14 @@ function extractAllImageUrls(data: RecipeData, html: string): string[] {
 
   // Normalize CDN URLs to canonical keys for dedup — strips fingerprints, dimensions, filters
   const normalizeImageKey = (u: string): string => {
-    let n = u.split("?")[0]?.replace(/\/$/, "").replace(/^https?:\/\//, "") ?? u;
+    // Strip fragment, then query, trailing slash, and protocol (so
+    // protocol-relative and http/https variants of the same asset collapse).
+    let n = u
+      .split("#")[0]
+      ?.split("?")[0]
+      ?.replace(/\/$/, "")
+      .replace(/^https?:\/\//, "")
+      .replace(/^\/\//, "") ?? u;
     // Strip Dotdash /thmb/FINGERPRINT/DIMENSIONs/filters:.../ path segments
     n = n.replace(/\/thmb\/[^/]+\/[^/]*\d+x\d+[^/]*\/(?:filters:[^/]*\/)?/i, "/thmb/");
     // Strip generic CDN size/crop segments like /750x422/, /4x3/, /1500x0/
