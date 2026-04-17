@@ -17,6 +17,48 @@ interface Household {
   updatedAt: string;
 }
 
+const RATE_LIMIT_MAX = 10; // failed attempts per window per IP
+const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
+
+interface RateLimitState {
+  count: number;
+  resetAt: number; // epoch seconds
+}
+
+async function checkAndIncrementRate(
+  kv: KVNamespace,
+  ip: string
+): Promise<{ blocked: boolean; retryAfter: number }> {
+  const key = `rl:auth:${ip}`;
+  const now = Math.floor(Date.now() / 1000);
+  const existing = await kv.get<RateLimitState>(key, "json");
+  const state: RateLimitState =
+    existing && existing.resetAt > now
+      ? existing
+      : { count: 0, resetAt: now + RATE_LIMIT_WINDOW_SECONDS };
+  if (state.count >= RATE_LIMIT_MAX) {
+    return { blocked: true, retryAfter: Math.max(1, state.resetAt - now) };
+  }
+  return { blocked: false, retryAfter: 0 };
+}
+
+async function recordFailedAttempt(kv: KVNamespace, ip: string): Promise<void> {
+  const key = `rl:auth:${ip}`;
+  const now = Math.floor(Date.now() / 1000);
+  const existing = await kv.get<RateLimitState>(key, "json");
+  const state: RateLimitState =
+    existing && existing.resetAt > now
+      ? { count: existing.count + 1, resetAt: existing.resetAt }
+      : { count: 1, resetAt: now + RATE_LIMIT_WINDOW_SECONDS };
+  await kv.put(key, JSON.stringify(state), {
+    expirationTtl: Math.max(60, state.resetAt - now),
+  });
+}
+
+async function clearRateLimit(kv: KVNamespace, ip: string): Promise<void> {
+  await kv.delete(`rl:auth:${ip}`);
+}
+
 // Constant-time comparison of two strings via SHA-256 digest.
 // Hashing first ensures both inputs are the same length, so iteration
 // count doesn't leak the length of the secret.
@@ -50,6 +92,21 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    const clientIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const rate = await checkAndIncrementRate(env.WHISK_KV, clientIp);
+    if (rate.blocked) {
+      return new Response(
+        JSON.stringify({ error: "Too many attempts. Try again later." }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(rate.retryAfter),
+          },
+        }
+      );
+    }
+
     const body = (await request.json()) as { password: string; name?: string };
     const { password, name } = body;
 
@@ -70,11 +127,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const isRegularLogin = await timingSafeEqualStr(password, env.APP_SECRET);
 
     if (!isOwnerLogin && !isRegularLogin) {
+      await recordFailedAttempt(env.WHISK_KV, clientIp);
       return new Response(JSON.stringify({ error: "Invalid password" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
     }
+
+    // Successful auth — reset the rate-limit counter for this IP.
+    await clearRateLimit(env.WHISK_KV, clientIp);
 
     // Load or create household
     let household = await env.WHISK_KV.get<Household>("household", "json");
