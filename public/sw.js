@@ -46,9 +46,13 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   // ── Photos: cache-first (images don't change) ────────
+  // Only intercept same-origin images so that the SW's fetch() doesn't
+  // bump up against the document CSP's connect-src directive when the
+  // page loads external recipe-site thumbnails.
   if (
-    url.pathname.startsWith("/photos/") ||
-    url.pathname.match(/\.(webp|jpg|jpeg|png)$/)
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith("/photos/") ||
+      url.pathname.match(/\.(webp|jpg|jpeg|png)$/))
   ) {
     event.respondWith(
       caches.open(PHOTO_CACHE).then((cache) =>

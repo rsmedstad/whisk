@@ -4,7 +4,9 @@ interface Env {
 }
 
 // Public routes that don't require auth
-const PUBLIC_PATHS = ["/api/auth", "/api/share/"];
+// image-proxy is loaded by <img> tags which can't send bearer tokens;
+// it's already domain-allowlisted inside the handler, so it's safe to expose.
+const PUBLIC_PATHS = ["/api/auth", "/api/share/", "/api/image-proxy"];
 
 // Endpoints restricted to demo owner when DEMO_MODE is enabled
 const DEMO_RESTRICTED_PATHS = [
