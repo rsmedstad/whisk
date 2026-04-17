@@ -74,6 +74,9 @@ function normalizeUrl(raw: string): string | null {
 }
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB per image
+const MAX_HTML_CHARS = 10 * 1024 * 1024; // 10 MB of HTML is plenty for any recipe page
+const MAX_JSON_LD_CHARS = 1 * 1024 * 1024; // 1 MB per JSON-LD block
+const MAX_STRIP_HTML_CHARS = 500 * 1024; // 500 KB for any single stripHtml input
 
 /** Fetch an image after checking SSRF safety and reading into a bounded
  *  ArrayBuffer. Returns null if unsafe, unreachable, wrong type, or too big. */
@@ -183,6 +186,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let html: string | null = null;
     let regularFetchFailed = false;
 
+    // Cap total Browser Rendering invocations per request. Each BR call takes
+    // ~25s, so we'd rather return partial data than fire three back-to-back.
+    const MAX_BR_ATTEMPTS = 2;
+    let brAttempts = 0;
+
     if (!isKnownBlocked) {
       const pageAbort = AbortSignal.timeout(15000);
       const res = await fetch(url, {
@@ -208,7 +216,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // return full HTML with JSON-LD even on 403 responses
       const body = await res.text();
       if (body.length > 200) {
-        html = body;
+        html = body.length > MAX_HTML_CHARS ? body.slice(0, MAX_HTML_CHARS) : body;
       }
     } else {
       regularFetchFailed = true; // Skip to Browser Rendering
@@ -244,7 +252,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
        html.length < 5000)
     );
     const needsBrowser = regularFetchFailed || (html !== null && html.length < 500) || isChallengePage;
-    if (needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
+    if (needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
+      brAttempts++;
       try {
         const brRes = await fetch(
           `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
@@ -268,7 +277,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         if (brRes.ok) {
           const brBody = await brRes.text();
           // Check if BR returned actual content (not a challenge page)
-          const brHtml = brBody.startsWith("{") ? (JSON.parse(brBody) as { result?: string }).result ?? "" : brBody;
+          const rawHtml = brBody.startsWith("{") ? (JSON.parse(brBody) as { result?: string }).result ?? "" : brBody;
+          const brHtml = rawHtml.length > MAX_HTML_CHARS ? rawHtml.slice(0, MAX_HTML_CHARS) : rawHtml;
           if (brHtml.length > 500 && !brHtml.includes("<title>Just a moment...</title>")) {
             html = brHtml;
           }
@@ -344,7 +354,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // If no recipe data found and we haven't tried Browser Rendering yet, try it now.
     // This catches cases where the page returned 200 but was actually a challenge/wall
     // page we didn't detect, or the site requires JS to render recipe content.
-    if (!recipeData && !needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
+    if (!recipeData && !needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
+      brAttempts++;
       try {
         const brRes = await fetch(
           `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
@@ -364,9 +375,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         );
         if (brRes.ok) {
           const brBody = await brRes.text();
-          const brHtml = brBody.startsWith("{")
+          const rawHtml = brBody.startsWith("{")
             ? (JSON.parse(brBody) as { result?: string }).result ?? ""
             : brBody;
+          const brHtml = rawHtml.length > MAX_HTML_CHARS ? rawHtml.slice(0, MAX_HTML_CHARS) : rawHtml;
           if (brHtml.length > 500) {
             html = brHtml;
             recipeData = extractJsonLd(brHtml) ?? extractMicrodata(brHtml) ?? extractRecipePluginHtml(brHtml) ?? extractBlogRecipe(brHtml);
@@ -423,7 +435,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Second try: if still missing data and Browser Rendering is available,
     // the recipe content may require JavaScript to render (common with WPRM,
     // cookie consent banners hiding content, or React-based sites)
-    if (recipeData.name && (!hasIngredients || !hasSteps) && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN) {
+    if (recipeData.name && (!hasIngredients || !hasSteps) && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
+      brAttempts++;
       try {
         const brRes = await fetch(
           `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
@@ -443,9 +456,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         );
         if (brRes.ok) {
           const brBody = await brRes.text();
-          const brHtml = brBody.startsWith("{")
+          const rawHtml = brBody.startsWith("{")
             ? (JSON.parse(brBody) as { result?: string }).result ?? ""
             : brBody;
+          const brHtml = rawHtml.length > MAX_HTML_CHARS ? rawHtml.slice(0, MAX_HTML_CHARS) : rawHtml;
           if (brHtml.length > 500) {
             // Re-try all extraction strategies on the JS-rendered HTML
             const brJsonLd = extractJsonLd(brHtml);
@@ -748,6 +762,8 @@ function extractJsonLd(html: string): RecipeData | null {
   if (!jsonLdMatch) return null;
 
   for (const match of jsonLdMatch) {
+    // Skip absurdly large blocks — a legit recipe JSON-LD is a few KB.
+    if (match.length > MAX_JSON_LD_CHARS) continue;
     try {
       const json = match.replace(/<script[^>]*>|<\/script>/gi, "");
       const parsed = JSON.parse(json);
@@ -1864,8 +1880,10 @@ function decodeHtmlEntities(str: string): string {
 }
 
 function stripHtml(str: string): string {
+  // Bound to protect against adversarial inputs with many malformed tags.
+  const input = str.length > MAX_STRIP_HTML_CHARS ? str.slice(0, MAX_STRIP_HTML_CHARS) : str;
   return decodeHtmlEntities(
-    str
+    input
       // Block-level and line-breaking tags → space (must come first)
       .replace(/<\/?(p|br|div|li|ul|ol|tr|td|th|h[1-6]|blockquote|section|article|header|footer|dt|dd)\b[^>]*\/?>/gi, " ")
       // Inline tags → zero-width space (allows adjacent text to merge)
@@ -2590,7 +2608,8 @@ async function matchLinktreeRecipe(
     });
     if (!res.ok) return null;
 
-    const html = await res.text();
+    const raw = await res.text();
+    const html = raw.length > MAX_HTML_CHARS ? raw.slice(0, MAX_HTML_CHARS) : raw;
     // Extract __NEXT_DATA__ JSON blob
     const nextDataMatch = html.match(
       /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
