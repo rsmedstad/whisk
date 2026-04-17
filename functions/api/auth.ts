@@ -17,6 +17,22 @@ interface Household {
   updatedAt: string;
 }
 
+// Constant-time comparison of two strings via SHA-256 digest.
+// Hashing first ensures both inputs are the same length, so iteration
+// count doesn't leak the length of the secret.
+async function timingSafeEqualStr(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const va = new Uint8Array(ha);
+  const vb = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= (va[i] ?? 0) ^ (vb[i] ?? 0);
+  return diff === 0;
+}
+
 // Check if a book (household) already exists — unauthenticated
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   try {
@@ -47,8 +63,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const isDemoMode = env.DEMO_MODE === "true";
 
     // In demo mode, accept either APP_SECRET (regular user) or OWNER_PASSWORD (owner)
-    const isOwnerLogin = isDemoMode && !!env.OWNER_PASSWORD && password === env.OWNER_PASSWORD;
-    const isRegularLogin = password === env.APP_SECRET;
+    const isOwnerLogin =
+      isDemoMode &&
+      !!env.OWNER_PASSWORD &&
+      (await timingSafeEqualStr(password, env.OWNER_PASSWORD));
+    const isRegularLogin = await timingSafeEqualStr(password, env.APP_SECRET);
 
     if (!isOwnerLogin && !isRegularLogin) {
       return new Response(JSON.stringify({ error: "Invalid password" }), {
