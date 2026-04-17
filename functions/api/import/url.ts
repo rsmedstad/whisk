@@ -4,6 +4,7 @@ import {
   callTextAI,
   type ProviderEnv,
 } from "../../lib/ai-providers";
+import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
 
 interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
@@ -51,56 +52,6 @@ function parseAggregateRating(raw: unknown): { value?: number; count?: number } 
   return { value, count };
 }
 
-/** Parse a dotted-quad IPv4 literal into four numeric octets, or null if it isn't one. */
-function parseIPv4(host: string): [number, number, number, number] | null {
-  const parts = host.split(".");
-  if (parts.length !== 4) return null;
-  const nums: number[] = [];
-  for (const p of parts) {
-    if (!/^\d+$/.test(p)) return null;
-    const n = Number(p);
-    if (!Number.isInteger(n) || n < 0 || n > 255) return null;
-    nums.push(n);
-  }
-  return [nums[0]!, nums[1]!, nums[2]!, nums[3]!];
-}
-
-/** True if the IPv4 octets fall in a loopback, private, link-local, or metadata range. */
-function isPrivateIPv4(octets: [number, number, number, number]): boolean {
-  const [a, b] = octets;
-  if (a === 0) return true; // 0.0.0.0/8
-  if (a === 10) return true; // 10.0.0.0/8
-  if (a === 127) return true; // 127.0.0.0/8 loopback
-  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local + cloud metadata
-  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-  if (a === 192 && b === 168) return true; // 192.168.0.0/16
-  return false;
-}
-
-/** True for IPv6 loopback, unique-local (fc00::/7), or link-local (fe80::/10). */
-function isPrivateIPv6(host: string): boolean {
-  // URL parser wraps IPv6 hosts in []; strip if present.
-  let h = host;
-  if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
-  h = h.toLowerCase();
-  if (h === "::1" || h === "::") return true;
-  // fc00::/7 → first byte 0xfc or 0xfd → prefixes "fc" / "fd"
-  if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
-  // fe80::/10 → first 10 bits are 1111111010 → prefixes "fe8", "fe9", "fea", "feb"
-  if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
-  return false;
-}
-
-/** True for any host that should be rejected to prevent SSRF. */
-function isBlockedHost(host: string): boolean {
-  const h = host.toLowerCase();
-  if (h === "localhost" || h.endsWith(".localhost")) return true;
-  const v4 = parseIPv4(h);
-  if (v4) return isPrivateIPv4(v4);
-  if (h.includes(":") || (h.startsWith("[") && h.endsWith("]"))) return isPrivateIPv6(h);
-  return false;
-}
-
 /** Normalize a user-provided URL: trim, add https://, validate protocol. Returns null if invalid. */
 function normalizeUrl(raw: string): string | null {
   let u = raw.trim();
@@ -120,6 +71,46 @@ function normalizeUrl(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB per image
+
+/** Fetch an image after checking SSRF safety and reading into a bounded
+ *  ArrayBuffer. Returns null if unsafe, unreachable, wrong type, or too big. */
+async function safeFetchImage(
+  imgUrl: string
+): Promise<{ buffer: ArrayBuffer; contentType: string } | null> {
+  if (!isSafeFetchUrl(imgUrl)) return null;
+  try {
+    const res = await fetch(imgUrl, {
+      signal: AbortSignal.timeout(10000),
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+      },
+    });
+    if (!res.ok) return null;
+    const lenHeader = res.headers.get("content-length");
+    if (lenHeader) {
+      const declared = Number(lenHeader);
+      if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) return null;
+    }
+    const contentType = res.headers.get("content-type") ?? "image/jpeg";
+    if (!contentType.startsWith("image/")) return null;
+    const buffer = await res.arrayBuffer();
+    if (buffer.byteLength > MAX_IMAGE_BYTES) return null;
+    return { buffer, contentType };
+  } catch {
+    return null;
+  }
+}
+
+function imageExtension(contentType: string): string {
+  return contentType.includes("png")
+    ? "png"
+    : contentType.includes("webp")
+      ? "webp"
+      : "jpg";
 }
 
 /** Hash a URL to a short hex string for use as a KV cache key */
@@ -529,51 +520,34 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       const toDownload = allImageUrls.slice(0, 10);
       for (let i = 0; i < toDownload.length; i++) {
         const imgUrl = toDownload[i]!;
-        try {
-          const imgAbort = AbortSignal.timeout(10000);
-          const imgRes = await fetch(imgUrl, {
-            signal: imgAbort,
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-            },
-          });
-          if (imgRes.ok && imgRes.body) {
-            const contentType =
-              imgRes.headers.get("content-type") ?? "image/jpeg";
-            const ext = contentType.includes("png")
-              ? "png"
-              : contentType.includes("webp")
-                ? "webp"
-                : "jpg";
-            const hashBuf = await crypto.subtle.digest(
-              "SHA-256",
-              new TextEncoder().encode(imgUrl)
-            );
-            const hashHex = [...new Uint8Array(hashBuf)]
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join("")
-              .slice(0, 12);
-            const key = `photos/import-${hashHex}.${ext}`;
-
-            await env.WHISK_R2.put(key, imgRes.body, {
-              httpMetadata: { contentType },
-            });
-
-            const isPrimary = i === 0;
-            photos.push({ url: `/${key}`, isPrimary });
-            if (isPrimary) thumbnailUrl = `/${key}`;
-          }
-        } catch {
-          // Skip this image, continue with others
-        }
+        const fetched = await safeFetchImage(imgUrl);
+        if (!fetched) continue;
+        const ext = imageExtension(fetched.contentType);
+        const hashBuf = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(imgUrl)
+        );
+        const hashHex = [...new Uint8Array(hashBuf)]
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+          .slice(0, 12);
+        const key = `photos/import-${hashHex}.${ext}`;
+        await env.WHISK_R2.put(key, fetched.buffer, {
+          httpMetadata: { contentType: fetched.contentType },
+        });
+        const isPrimary = i === 0;
+        photos.push({ url: `/${key}`, isPrimary });
+        if (isPrimary) thumbnailUrl = `/${key}`;
       }
     } else if (!downloadImage && allImageUrls.length > 0) {
-      // Keep external URLs
-      photos = allImageUrls.slice(0, 10).map((imgUrl, i) => ({
-        url: imgUrl,
-        isPrimary: i === 0,
-      }));
+      // Keep external URLs (only those that pass SSRF checks)
+      photos = allImageUrls
+        .filter(isSafeFetchUrl)
+        .slice(0, 10)
+        .map((imgUrl, i) => ({
+          url: imgUrl,
+          isPrimary: i === 0,
+        }));
     }
 
     // Extract video URL from the page
@@ -2404,45 +2378,30 @@ async function handleInstagramImport(
     const toDownload = imageUrls.slice(0, 10);
     for (let i = 0; i < toDownload.length; i++) {
       const imgUrl = toDownload[i]!;
-      try {
-        const imgRes = await fetch(imgUrl, {
-          signal: AbortSignal.timeout(10000),
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-          },
-        });
-        if (imgRes.ok && imgRes.body) {
-          const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
-          const ext = contentType.includes("png")
-            ? "png"
-            : contentType.includes("webp")
-              ? "webp"
-              : "jpg";
-          const hashBuf = await crypto.subtle.digest(
-            "SHA-256",
-            new TextEncoder().encode(imgUrl)
-          );
-          const hashHex = [...new Uint8Array(hashBuf)]
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join("")
-            .slice(0, 12);
-          const key = `photos/instagram-${hashHex}.${ext}`;
-
-          await env.WHISK_R2.put(key, imgRes.body, {
-            httpMetadata: { contentType },
-          });
-
-          const isPrimary = i === 0;
-          photos.push({ url: `/${key}`, isPrimary });
-          if (isPrimary) thumbnailUrl = `/${key}`;
-        }
-      } catch {
-        // Keep external URL as fallback
-        if (i === 0 && imageUrls[0]) {
+      const fetched = await safeFetchImage(imgUrl);
+      if (!fetched) {
+        // Keep external URL as fallback for the primary image (only if safe)
+        if (i === 0 && imageUrls[0] && isSafeFetchUrl(imageUrls[0])) {
           photos.push({ url: imageUrls[0], isPrimary: true });
         }
+        continue;
       }
+      const ext = imageExtension(fetched.contentType);
+      const hashBuf = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(imgUrl)
+      );
+      const hashHex = [...new Uint8Array(hashBuf)]
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+        .slice(0, 12);
+      const key = `photos/instagram-${hashHex}.${ext}`;
+      await env.WHISK_R2.put(key, fetched.buffer, {
+        httpMetadata: { contentType: fetched.contentType },
+      });
+      const isPrimary = i === 0;
+      photos.push({ url: `/${key}`, isPrimary });
+      if (isPrimary) thumbnailUrl = `/${key}`;
     }
   } else {
     for (let i = 0; i < imageUrls.length && i < 10; i++) {
@@ -2856,34 +2815,22 @@ async function tryNytCookingApi(
       const toDownload = allImageUrls.slice(0, 5);
       for (let i = 0; i < toDownload.length; i++) {
         const imgUrl = toDownload[i]!;
-        try {
-          const imgRes = await fetch(imgUrl, {
-            signal: AbortSignal.timeout(10000),
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-            },
-          });
-          if (imgRes.ok && imgRes.body) {
-            const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
-            const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-            const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(imgUrl));
-            const hashHex = [...new Uint8Array(hashBuf)]
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join("")
-              .slice(0, 12);
-            const key = `photos/import-${hashHex}.${ext}`;
-            await env.WHISK_R2.put(key, imgRes.body, { httpMetadata: { contentType } });
-            const isPrimary = i === 0;
-            photos.push({ url: `/${key}`, isPrimary });
-            if (isPrimary) thumbnailUrl = `/${key}`;
-          }
-        } catch {
-          // Skip failed image download
-        }
+        const fetched = await safeFetchImage(imgUrl);
+        if (!fetched) continue;
+        const ext = imageExtension(fetched.contentType);
+        const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(imgUrl));
+        const hashHex = [...new Uint8Array(hashBuf)]
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+          .slice(0, 12);
+        const key = `photos/import-${hashHex}.${ext}`;
+        await env.WHISK_R2.put(key, fetched.buffer, { httpMetadata: { contentType: fetched.contentType } });
+        const isPrimary = i === 0;
+        photos.push({ url: `/${key}`, isPrimary });
+        if (isPrimary) thumbnailUrl = `/${key}`;
       }
     } else {
-      photos = allImageUrls.slice(0, 5).map((u, i) => ({ url: u, isPrimary: i === 0 }));
+      photos = allImageUrls.filter(isSafeFetchUrl).slice(0, 5).map((u, i) => ({ url: u, isPrimary: i === 0 }));
     }
 
     // Map NYT tags to our tag system

@@ -1,4 +1,7 @@
 import { readJsonBody, normalizeRecipeInput } from "../../lib/recipe-input";
+import { isSafeFetchUrl } from "../../lib/ssrf";
+
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 
 interface Env {
   WHISK_KV: KVNamespace;
@@ -38,20 +41,26 @@ async function downloadPhoto(
   url: string,
   r2: R2Bucket
 ): Promise<string | null> {
+  if (!isSafeFetchUrl(url)) return null;
   try {
     const resp = await fetch(url, {
       headers: { "User-Agent": "Whisk-Import/1.0" },
+      signal: AbortSignal.timeout(10000),
     });
-    if (!resp.ok || !resp.body) return null;
+    if (!resp.ok) return null;
+    const declared = resp.headers.get("content-length");
+    if (declared && Number(declared) > MAX_PHOTO_BYTES) return null;
+    const contentType = resp.headers.get("content-type") ?? "image/jpeg";
+    if (!contentType.startsWith("image/")) return null;
 
     const buffer = await resp.arrayBuffer();
+    if (buffer.byteLength > MAX_PHOTO_BYTES) return null;
     const hashBuf = await crypto.subtle.digest("SHA-256", buffer);
     const hashHex = [...new Uint8Array(hashBuf)]
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
       .slice(0, 16);
 
-    const contentType = resp.headers.get("content-type") ?? "image/jpeg";
     const ext = contentType.includes("png")
       ? "png"
       : contentType.includes("webp")
