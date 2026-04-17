@@ -1,4 +1,5 @@
 import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../lib/embeddings";
+import { readJsonBody, normalizeRecipeInput } from "../lib/recipe-input";
 
 interface Env {
   WHISK_KV: KVNamespace;
@@ -59,23 +60,36 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, data }) => {
 // POST /api/recipes - Create a new recipe
 export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, waitUntil }) => {
   try {
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      return new Response(JSON.stringify({ error: body.error }), {
+        status: body.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const normalized = normalizeRecipeInput(body.data);
+    if (!normalized) {
+      return new Response(JSON.stringify({ error: "Recipe title is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const id = `r_${crypto.randomUUID().split("-")[0]}`;
     const now = new Date().toISOString();
     const userId = (data as Record<string, string>).userId;
 
     // If this user favorited the recipe at creation, track in favoritedBy
-    const isFavorite = (body.favorite as boolean) ?? false;
-    const favoritedBy: string[] = isFavorite && userId ? [userId] : [];
+    const favoritedBy: string[] = normalized.favorite && userId ? [userId] : [];
 
     const recipe = {
-      ...body,
+      ...normalized,
       id,
       favoritedBy,
       createdAt: now,
       updatedAt: now,
       createdBy: userId ?? undefined,
-    } as Record<string, unknown>;
+    };
 
     await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(recipe));
 
@@ -84,32 +98,30 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, wa
       ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ??
       [];
 
-    const ingredientCount = Array.isArray(recipe.ingredients) ? (recipe.ingredients as unknown[]).length : 0;
-    const stepCount = Array.isArray(recipe.steps) ? (recipe.steps as unknown[]).length : 0;
-    const totalMinutes = ((recipe.prepTime as number) ?? 0) + ((recipe.cookTime as number) ?? 0);
+    const ingredientCount = recipe.ingredients.length;
+    const stepCount = recipe.steps.length;
+    const totalMinutes = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0);
 
     const entry: RecipeIndexEntry = {
       id,
-      title: recipe.title as string,
-      tags: (recipe.tags as string[]) ?? [],
-      cuisine: recipe.cuisine as string | undefined,
-      favorite: isFavorite,
+      title: recipe.title,
+      tags: recipe.tags,
+      cuisine: recipe.cuisine,
+      favorite: normalized.favorite,
       favoritedBy,
       updatedAt: now,
-      thumbnailUrl: recipe.thumbnailUrl as string | undefined,
-      prepTime: recipe.prepTime as number | undefined,
-      cookTime: recipe.cookTime as number | undefined,
-      servings: recipe.servings as number | undefined,
-      description: recipe.description as string | undefined,
+      thumbnailUrl: recipe.thumbnailUrl,
+      prepTime: recipe.prepTime,
+      cookTime: recipe.cookTime,
+      servings: recipe.servings,
+      description: recipe.description,
       ingredientCount,
       stepCount,
       difficulty: computeDifficulty(totalMinutes, ingredientCount, stepCount),
-      ingredientNames: Array.isArray(recipe.ingredients)
-        ? (recipe.ingredients as { name?: string }[]).map((i) => i.name).filter((n): n is string => !!n).slice(0, 30)
-        : undefined,
+      ingredientNames: recipe.ingredients.map((i) => i.name).slice(0, 30),
       sourceUrl: (recipe.source as { url?: string } | undefined)?.url,
-      sourceRating: recipe.sourceRating as number | undefined,
-      sourceRatingCount: recipe.sourceRatingCount as number | undefined,
+      sourceRating: recipe.sourceRating,
+      sourceRatingCount: recipe.sourceRatingCount,
     };
 
     index.unshift(entry);
