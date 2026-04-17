@@ -1217,10 +1217,38 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               </section>
             )}
 
-            <section className="pt-2">
+            <section className="pt-2 space-y-2">
               <Button variant="secondary" fullWidth onClick={onLogout}>
                 Sign Out
               </Button>
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      "Sign out of every device using your account? You'll need to log in again everywhere."
+                    )
+                  )
+                    return;
+                  try {
+                    const token = localStorage.getItem("whisk_token");
+                    await fetch("/api/sessions/revoke-all", {
+                      method: "POST",
+                      headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    });
+                  } catch {
+                    // Network failure — still sign this device out below
+                  }
+                  onLogout();
+                }}
+              >
+                Sign Out Everywhere
+              </Button>
+              <p className="text-xs text-stone-400 dark:text-stone-500 text-center">
+                Revokes every active session token for your account, including
+                other browsers and devices.
+              </p>
             </section>
           </>
         )}
