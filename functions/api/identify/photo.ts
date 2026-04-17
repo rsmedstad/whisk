@@ -5,6 +5,8 @@ import {
   type ProviderEnv,
 } from "../../lib/ai-providers";
 
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB
+
 interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
 }
@@ -76,6 +78,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     );
   }
 
+  if (photo.size > MAX_PHOTO_BYTES) {
+    return new Response(
+      JSON.stringify({ error: "Image must be under 10 MB" }),
+      { status: 413, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   // Convert to base64
   const arrayBuffer = await photo.arrayBuffer();
   const photoSizeKB = Math.round(arrayBuffer.byteLength / 1024);
@@ -127,7 +136,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
 
     // Parse AI response — strip markdown fences if present
     const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const result = JSON.parse(jsonStr);
+    let result: unknown;
+    try {
+      result = JSON.parse(jsonStr);
+    } catch {
+      throw new Error("AI_PARSE_ERROR: response was not valid JSON");
+    }
 
     waitUntil(logIdentifyInteraction(env.WHISK_KV, {
       ...baseLog,
@@ -143,6 +157,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   } catch (err) {
     const totalMs = Date.now() - startTime;
     const errMsg = err instanceof Error ? err.message : "Failed to identify food";
+    const isParseError = errMsg.startsWith("AI_PARSE_ERROR");
+    const publicMessage = isParseError
+      ? "The AI response couldn't be parsed. Try a different photo or provider."
+      : errMsg;
 
     waitUntil(logIdentifyInteraction(env.WHISK_KV, {
       ...baseLog,
@@ -154,10 +172,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
 
     return new Response(
       JSON.stringify({
-        title: "Identification failed",
+        title: isParseError ? "Couldn't read response" : "Identification failed",
         confidence: "N/A",
         ingredients: [],
-        message: errMsg,
+        errorKind: isParseError ? "parse" : "vision",
+        message: publicMessage,
       }),
       { headers: { "Content-Type": "application/json" } }
     );

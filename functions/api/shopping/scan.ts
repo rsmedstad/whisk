@@ -5,6 +5,8 @@ import {
   type ProviderEnv,
 } from "../../lib/ai-providers";
 
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB
+
 interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
 }
@@ -74,6 +76,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     );
   }
 
+  if (photo.size > MAX_PHOTO_BYTES) {
+    return new Response(
+      JSON.stringify({ error: "Image must be under 10 MB" }),
+      { status: 413, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   // Convert to base64
   const arrayBuffer = await photo.arrayBuffer();
   const photoSizeKB = Math.round(arrayBuffer.byteLength / 1024);
@@ -124,7 +133,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
 
     // Parse AI response — strip markdown fences if present
     const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const result = JSON.parse(jsonStr) as { items?: { name: string; confidence?: string }[]; warnings?: string[] };
+    let result: { items?: { name: string; confidence?: string }[]; warnings?: string[] };
+    try {
+      result = JSON.parse(jsonStr);
+    } catch {
+      throw new Error("AI_PARSE_ERROR: response was not valid JSON");
+    }
     const itemCount = result.items?.length ?? 0;
 
     console.log(`[Whisk] Scan config=${configMs}ms upload=${uploadProcessMs}ms vision=${visionMs}ms total=${totalMs}ms photo=${photoSizeKB}KB items=${itemCount}`);
@@ -143,6 +157,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   } catch (err) {
     const totalMs = Date.now() - startTime;
     const errMsg = err instanceof Error ? err.message : "Failed to scan list";
+    const isParseError = errMsg.startsWith("AI_PARSE_ERROR");
+    const publicMessage = isParseError
+      ? "The AI response couldn't be parsed. Try a different photo or provider."
+      : errMsg;
     console.error(`[Whisk] Scan error (${fnConfig.provider}/${fnConfig.model}):`, errMsg);
     waitUntil(logScanInteraction(env.WHISK_KV, {
       ...baseLog,
@@ -155,7 +173,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     return new Response(
       JSON.stringify({
         items: [],
-        message: errMsg,
+        errorKind: isParseError ? "parse" : "vision",
+        message: publicMessage,
       }),
       { headers: { "Content-Type": "application/json" } }
     );
