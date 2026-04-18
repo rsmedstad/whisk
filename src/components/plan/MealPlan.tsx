@@ -659,92 +659,6 @@ export function MealPlan({
         </div>
       )}
 
-      {/* Want to Make section */}
-      {wantToMakeRecipes.length > 0 && (
-        <div className="border-b border-stone-200 dark:border-stone-800">
-          <div className="px-4 pt-3 pb-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 mb-2">
-              Want to Make
-            </h3>
-            <div className="max-h-32 overflow-y-auto space-y-1.5">
-              {wantToMakeRecipes.map((recipe) => (
-                <div
-                  key={recipe.id}
-                  className="flex items-center justify-between rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 px-3 py-2"
-                >
-                  <button
-                    onClick={() => navigate(`/recipes/${recipe.id}`)}
-                    className="flex-1 text-left text-sm font-medium text-stone-700 dark:text-stone-200 truncate mr-2"
-                  >
-                    {recipe.title}
-                  </button>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => {
-                        setPlanningRecipe(recipe);
-                        setWtmPlanDate(toDateString(new Date()));
-                        setWtmPlanSlot("dinner");
-                      }}
-                      className="text-[11px] font-medium px-2 py-1 rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
-                    >
-                      Plan
-                    </button>
-                    <button
-                      onClick={() => onToggleWantToMake?.(recipe.id)}
-                      className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-                      title="Remove"
-                    >
-                      <XMark className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Date/slot picker for planning a Want to Make recipe */}
-          {planningRecipe && (
-            <div className="px-4 pb-3">
-              <div className="rounded-lg border border-orange-300 dark:border-orange-800 bg-white dark:bg-stone-800 p-3">
-                <p className="text-xs font-medium text-stone-600 dark:text-stone-300 mb-2 truncate">
-                  Plan &ldquo;{planningRecipe.title}&rdquo;
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={wtmPlanDate}
-                    onChange={(e) => setWtmPlanDate(e.target.value)}
-                    className="flex-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
-                  <select
-                    value={wtmPlanSlot}
-                    onChange={(e) => setWtmPlanSlot(e.target.value as MealSlot)}
-                    className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  >
-                    <option value="breakfast">Breakfast</option>
-                    <option value="lunch">Lunch</option>
-                    <option value="dinner">Dinner</option>
-                    <option value="snack">Snack</option>
-                    <option value="dessert">Dessert</option>
-                  </select>
-                  <button
-                    onClick={handleWtmAddToPlan}
-                    className="text-sm font-medium px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors"
-                  >
-                    Add
-                  </button>
-                  <button
-                    onClick={() => setPlanningRecipe(null)}
-                    className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-                  >
-                    <XMark className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-24">
         {/* Plan / Quick fill action bar */}
@@ -1239,6 +1153,87 @@ export function MealPlan({
         )}
         {shoppingListStatus && shoppingListStatus !== "loading" && planLayout === "list" && (
           <p className="mx-4 mt-1 text-xs text-green-600 dark:text-green-400 font-medium">{shoppingListStatus}</p>
+        )}
+
+        {/* Want to Make — compact ideas list at the bottom */}
+        {wantToMakeRecipes.length > 0 && (
+          <div className="mx-4 mt-4 border-t border-stone-200 dark:border-stone-800 pt-3">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 mb-1.5">
+              Want to Make
+            </h3>
+            <div className="max-h-40 overflow-y-auto space-y-1">
+              {wantToMakeRecipes.map((recipe) => (
+                <div
+                  key={recipe.id}
+                  className="flex items-center justify-between rounded-md bg-orange-50 dark:bg-orange-950/30 border border-orange-200/70 dark:border-orange-900/50 pl-2.5 pr-1.5 py-1"
+                >
+                  <button
+                    onClick={() => navigate(`/recipes/${recipe.id}`)}
+                    className="flex-1 text-left text-xs font-medium text-stone-700 dark:text-stone-200 truncate mr-2"
+                  >
+                    {recipe.title}
+                  </button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={() => {
+                        setPlanningRecipe(recipe);
+                        setWtmPlanDate(toDateString(new Date()));
+                        setWtmPlanSlot("dinner");
+                      }}
+                      className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                    >
+                      Plan
+                    </button>
+                    <button
+                      onClick={() => onToggleWantToMake?.(recipe.id)}
+                      className="p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                      title="Remove"
+                    >
+                      <XMark className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {planningRecipe && (
+              <div className="mt-2 rounded-md border border-orange-300 dark:border-orange-800 bg-white dark:bg-stone-800 p-2">
+                <p className="text-[11px] font-medium text-stone-600 dark:text-stone-300 mb-1.5 truncate">
+                  Plan &ldquo;{planningRecipe.title}&rdquo;
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={wtmPlanDate}
+                    onChange={(e) => setWtmPlanDate(e.target.value)}
+                    className="flex-1 min-w-0 rounded border border-stone-300 bg-white px-1.5 py-1 text-xs dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <select
+                    value={wtmPlanSlot}
+                    onChange={(e) => setWtmPlanSlot(e.target.value as MealSlot)}
+                    className="rounded border border-stone-300 bg-white px-1.5 py-1 text-xs dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  >
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner">Dinner</option>
+                    <option value="snack">Snack</option>
+                    <option value="dessert">Dessert</option>
+                  </select>
+                  <button
+                    onClick={handleWtmAddToPlan}
+                    className="text-xs font-medium px-2 py-1 rounded bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => setPlanningRecipe(null)}
+                    className="p-0.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                  >
+                    <XMark className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
       </div>
