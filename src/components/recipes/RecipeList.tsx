@@ -55,11 +55,18 @@ export function RecipeList({
   const [recipeLayout, setRecipeLayout] = useState<"horizontal" | "vertical">(() => {
     return (localStorage.getItem("whisk_recipe_layout") as "horizontal" | "vertical") ?? "horizontal";
   });
-  const [showWelcome, setShowWelcome] = useState(
-    localStorage.getItem("whisk_welcome_dismissed") !== "true"
-  );
+  const [showWelcome, setShowWelcome] = useState(() => {
+    if (isDemoRestricted) {
+      return sessionStorage.getItem("whisk_demo_welcome_dismissed") !== "true";
+    }
+    return localStorage.getItem("whisk_welcome_dismissed") !== "true";
+  });
   const dismissWelcome = () => {
-    localStorage.setItem("whisk_welcome_dismissed", "true");
+    if (isDemoRestricted) {
+      sessionStorage.setItem("whisk_demo_welcome_dismissed", "true");
+    } else {
+      localStorage.setItem("whisk_welcome_dismissed", "true");
+    }
     setShowWelcome(false);
   };
 
@@ -538,8 +545,45 @@ export function RecipeList({
 
       {/* Recipe cards */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 pb-24">
-        {/* Welcome card — shown once until dismissed */}
-        {showWelcome && (
+        {/* Welcome card — shown once until dismissed. Demo visitors see a
+            demo-focused variant (sessionStorage, reappears on refresh). */}
+        {showWelcome && isDemoRestricted && (
+          <div className="mx-4 mb-4 rounded-2xl border-2 border-orange-300 bg-linear-to-br from-orange-50 via-orange-50 to-amber-50 dark:border-orange-700/60 dark:from-orange-950/60 dark:via-orange-950/40 dark:to-amber-950/30 p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div>
+                <span className="inline-block text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-[0.12em] mb-1">
+                  Live Demo
+                </span>
+                <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 leading-tight">
+                  Welcome to Whisk
+                </h2>
+              </div>
+              <button
+                onClick={dismissWelcome}
+                className="text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 shrink-0 -mt-1 p-1"
+                aria-label="Dismiss"
+              >
+                <XMark className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-stone-700 dark:text-stone-300 mb-3">
+              A personal recipe manager PWA — browse recipes, chat with AI, plan meals, and more. Feel free to click around: any changes you make live only in your browser and reset on refresh.
+            </p>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mb-3">
+              Some admin-only features are locked (look for the lock icon). For the full experience, set up your own instance.
+            </p>
+            <a
+              href="https://github.com/rsmedstad/whisk"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-3 py-2 transition-colors"
+            >
+              Fork &amp; deploy your own
+              <span aria-hidden="true">&rarr;</span>
+            </a>
+          </div>
+        )}
+        {showWelcome && !isDemoRestricted && (
           <div className="mx-4 mb-4 rounded-xl border border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/40 p-4">
             <div className="flex items-start justify-between gap-2 mb-3">
               <h2 className="font-semibold text-stone-800 dark:text-stone-100">Welcome to Whisk</h2>
@@ -557,20 +601,6 @@ export function RecipeList({
             <p className="text-xs text-stone-500 dark:text-stone-500">
               Tap the Whisk logo (top left) to access Settings — theme, units, AI, and more.
             </p>
-            {isDemoRestricted && (
-              <p className="text-xs text-stone-500 dark:text-stone-500 mt-2 pt-2 border-t border-orange-200 dark:border-orange-900">
-                This is a demo. Whisk is{" "}
-                <a
-                  href="https://github.com/rsmedstad/whisk"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-orange-600 underline hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
-                >
-                  open source
-                </a>
-                {" "}— set up your own instance to unlock all features including adding recipes, full AI, and complete customization.
-              </p>
-            )}
           </div>
         )}
         {recipes.length === 0 && !search && selectedTags.length === 0 && !isDemoRestricted ? (
