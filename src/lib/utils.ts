@@ -47,6 +47,7 @@ export function scaleIngredient(
 }
 
 export function parseFraction(str: string): number | null {
+  if (typeof str !== "string") return null;
   str = str.trim();
 
   // Mixed number: "1 1/2"
@@ -109,6 +110,7 @@ export function formatFraction(value: number): string {
 // ── Timer Parsing ───────────────────────────────────────
 
 export function parseTimerFromText(text: string): number | null {
+  if (typeof text !== "string") return null;
   // Match patterns like "15 min", "20 minutes", "1 hour", "1.5 hours", "3 min per side"
   const patterns = [
     /(\d+(?:\.\d+)?)\s*hours?/i,
@@ -189,6 +191,7 @@ const HTML_ENTITIES: Record<string, string> = {
 /** Decode HTML entities (&#123; &#xAB; &amp;) in recipe text from scraped sources.
  *  Handles double-encoded entities like &amp;#039; by running up to 2 passes. */
 export function decodeEntities(str: string): string {
+  if (typeof str !== "string") return "";
   if (!str.includes("&")) return str;
   let result = str
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
