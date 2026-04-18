@@ -20,17 +20,8 @@ jobs:
 
       - run: bun run build
 
-      - name: Deploy to production
-        uses: cloudflare/wrangler-action@v3
+      - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_PROJECT_NAME || 'whisk' }} --branch ${{ github.head_ref || 'main' }}
-
-      - name: Deploy to demo
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name whisk-demo --branch main
