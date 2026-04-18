@@ -939,14 +939,19 @@ export function Discover({
     }
     // Deduplicate by URL and filter out items without images
     // (imageless items are typically roundup/collection pages that fail on import)
+    // Also drop items past their expiresAt — the server filters on refresh, but
+    // cached feeds in localStorage can outlive individual items.
+    const expirationOn = discoverConfig?.expirationEnabled !== false;
+    const now = Date.now();
     const seen = new Set<string>();
     return items.filter((item) => {
       if (!item.imageUrl) return false;
       if (seen.has(item.url)) return false;
+      if (expirationOn && item.expiresAt && new Date(item.expiresAt).getTime() <= now) return false;
       seen.add(item.url);
       return true;
     });
-  }, [feed]);
+  }, [feed, discoverConfig?.expirationEnabled]);
 
   const filteredItems = useMemo(() => {
     let items = allItems;

@@ -453,8 +453,14 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
           <button
             onClick={() => {
               if (!recipe) return;
+              const wasWanted = recipe.wantToMake;
               toggleWantToMake(recipe.id);
               setRecipe((r) => r ? { ...r, wantToMake: !r.wantToMake } : r);
+              setShoppingToast({
+                message: wasWanted ? "Removed from Want to Make" : "Added to Want to Make · Plan tab",
+                recipeId: "",
+              });
+              setTimeout(() => setShoppingToast(null), 3000);
             }}
             className="p-2"
             title={recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
