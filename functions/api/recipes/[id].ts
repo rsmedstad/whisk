@@ -14,6 +14,7 @@ interface RecipeIndexEntry {
   cuisine?: string;
   favorite: boolean;
   favoritedBy?: string[];
+  wantToMake?: boolean;
   updatedAt: string;
   thumbnailUrl?: string;
   prepTime?: number;
@@ -157,6 +158,7 @@ export const onRequestPut: PagesFunction<Env> = async ({
       cuisine: updated.cuisine as string | undefined,
       favorite: (updated.favorite as boolean) ?? entry.favorite,
       favoritedBy: (updated.favoritedBy as string[]) ?? entry.favoritedBy,
+      wantToMake: (updated.wantToMake as boolean | undefined) ?? entry.wantToMake,
       updatedAt: now,
       thumbnailUrl: updated.thumbnailUrl as string | undefined,
       prepTime: updated.prepTime as number | undefined,

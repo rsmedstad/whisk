@@ -29,6 +29,7 @@ interface IndexEntry {
   cuisine?: string;
   favorite: boolean;
   favoritedBy?: string[];
+  wantToMake?: boolean;
   updatedAt: string;
   thumbnailUrl?: string;
   prepTime?: number;
@@ -67,6 +68,7 @@ for (const key of recipeKeys) {
       cuisine: d.cuisine,
       favorite: d.favorite ?? false,
       favoritedBy: d.favoritedBy,
+      wantToMake: d.wantToMake,
       updatedAt: d.updatedAt ?? new Date().toISOString(),
       thumbnailUrl: d.thumbnailUrl,
       prepTime: d.prepTime,

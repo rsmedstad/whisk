@@ -14,6 +14,7 @@ interface RecipeIndexEntry {
   cuisine?: string;
   favorite: boolean;
   favoritedBy?: string[];
+  wantToMake?: boolean;
   updatedAt: string;
   thumbnailUrl?: string;
   prepTime?: number;
@@ -109,6 +110,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, wa
       cuisine: recipe.cuisine,
       favorite: normalized.favorite,
       favoritedBy,
+      wantToMake: normalized.wantToMake,
       updatedAt: now,
       thumbnailUrl: recipe.thumbnailUrl,
       prepTime: recipe.prepTime,
