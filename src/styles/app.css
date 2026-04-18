@@ -934,6 +934,12 @@ html.dark[data-accent="july4th"] .wk-card {
   animation: festive-sparkle 2s ease-in-out infinite;
 }
 
+/* Demo toast slide-up */
+@keyframes slideUp {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
 /* Print styles */
 @media print {
   .no-print {

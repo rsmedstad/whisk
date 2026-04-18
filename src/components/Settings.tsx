@@ -11,6 +11,7 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
+import { DemoLock } from "./ui/Demo";
 import { classNames } from "../lib/utils";
 import {
   ChevronLeft, Trash, Globe, Share, Check, ChevronDown, XMark, Sun, Moon, ComputerDesktop, CalendarDays,
@@ -27,6 +28,8 @@ interface SettingsProps {
   onSetStyle: (style: AppStyle) => void;
   onLogout: () => void;
   capabilities: AICapabilities;
+  isDemoRestricted?: boolean;
+  onOpenAdminLogin?: () => void;
 }
 
 type SettingsTab = "general" | "account" | "ai" | "data" | "about";
@@ -76,7 +79,7 @@ const ACCENT_COLORS: Record<string, string[]> = {
   christmas: ["#cc0000", "#1a6b1a", "#d4a828"],
 };
 
-export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities }: SettingsProps) {
+export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities, isDemoRestricted = false, onOpenAdminLogin }: SettingsProps) {
   const aiConfig = useAIConfig();
   const hh = useHousehold();
   const navigate = useNavigate();
@@ -334,13 +337,15 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
           <h1 className="text-xl font-bold dark:text-stone-100">Settings</h1>
-          <button
-            onClick={() => setShowShareModal(true)}
-            className="ml-auto p-2 text-stone-400 hover:text-orange-500 dark:text-stone-500 dark:hover:text-orange-400 transition-colors"
-            title="Invite to recipe book"
-          >
-            <Share className="w-5 h-5" />
-          </button>
+          {!isDemoRestricted && (
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="ml-auto p-2 text-stone-400 hover:text-orange-500 dark:text-stone-500 dark:hover:text-orange-400 transition-colors"
+              title="Invite to recipe book"
+            >
+              <Share className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Tab bar */}
@@ -660,6 +665,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
                 Discover Feed
               </h2>
+              <DemoLock active={isDemoRestricted} reason="Discover feed sources are admin-only in the demo">
               <Card>
                 {discoverConfig ? (
                 <div className="space-y-4">
@@ -946,6 +952,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   <p className="text-sm text-stone-400 dark:text-stone-500">Loading...</p>
                 )}
               </Card>
+              </DemoLock>
             </section>
           </>
         )}
@@ -1218,9 +1225,11 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
             )}
 
             <section className="pt-2 space-y-2">
-              <Button variant="secondary" fullWidth onClick={onLogout}>
-                Sign Out
+              <Button variant="secondary" fullWidth onClick={isDemoRestricted ? () => { handleReset(); window.location.reload(); } : onLogout}>
+                {isDemoRestricted ? "End Demo Session" : "Sign Out"}
               </Button>
+              {!isDemoRestricted && (
+              <>
               <Button
                 variant="secondary"
                 fullWidth
@@ -1249,6 +1258,8 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 Revokes every active session token for your account, including
                 other browsers and devices.
               </p>
+              </>
+              )}
             </section>
           </>
         )}
@@ -1260,14 +1271,16 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
                 AI Model Configuration
               </h2>
-              <AIConfigPanel
-                config={aiConfig.config}
-                providers={aiConfig.providers}
-                isLoading={aiConfig.isLoading}
-                isSaving={aiConfig.isSaving}
-                error={aiConfig.error}
-                onSave={aiConfig.saveConfig}
-              />
+              <DemoLock active={isDemoRestricted} reason="AI configuration is admin-only in the demo">
+                <AIConfigPanel
+                  config={aiConfig.config}
+                  providers={aiConfig.providers}
+                  isLoading={aiConfig.isLoading}
+                  isSaving={aiConfig.isSaving}
+                  error={aiConfig.error}
+                  onSave={aiConfig.saveConfig}
+                />
+              </DemoLock>
             </section>
 
             <section>
@@ -1348,6 +1361,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
                 Import & Export
               </h2>
+              <DemoLock active={isDemoRestricted} reason="Book import/export is admin-only in the demo">
               <Card>
                 <div className="space-y-3">
                   {/* Export Book */}
@@ -1564,6 +1578,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   </div>
                 </div>
               </Card>
+              </DemoLock>
             </section>
 
             {/* Recipe Book Maintenance */}
@@ -1571,6 +1586,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
                 Maintenance
               </h2>
+              <DemoLock active={isDemoRestricted} reason="Maintenance tasks are admin-only in the demo">
               <Card>
                 <div className="space-y-3">
                   <div>
@@ -1668,6 +1684,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                   </div>
                 </div>
               </Card>
+              </DemoLock>
             </section>
 
             {/* Troubleshooting */}
@@ -1793,6 +1810,18 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
               </Card>
             </section>
           </>
+        )}
+
+        {/* Admin access — only visible when viewing as a non-owner in demo mode */}
+        {isDemoRestricted && onOpenAdminLogin && (
+          <div className="pt-6 pb-2 text-center">
+            <button
+              onClick={onOpenAdminLogin}
+              className="text-xs text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors"
+            >
+              Admin access
+            </button>
+          </div>
         )}
 
       </div>

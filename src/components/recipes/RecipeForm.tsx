@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { Recipe, RecipePhoto, Ingredient, Step } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
+import { api } from "../../lib/api";
 import { compressImage } from "../../lib/compress";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -357,24 +358,20 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]!;
-        // Compress before upload
         const compressed = await compressImage(file, "hero");
-        const form = new FormData();
-        form.append("file", compressed, `photo-${Date.now()}.webp`);
-
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
-          },
-          body: form,
-        });
-        if (!res.ok) continue;
-        const data = (await res.json()) as { url: string };
-        setPhotos((prev) => [
-          ...prev,
-          { url: data.url, isPrimary: prev.length === 0 },
-        ]);
+        try {
+          const data = await api.upload<{ url: string }>(
+            "/upload",
+            compressed,
+            `photo-${Date.now()}.webp`
+          );
+          setPhotos((prev) => [
+            ...prev,
+            { url: data.url, isPrimary: prev.length === 0 },
+          ]);
+        } catch {
+          // Upload failed (could be demo restriction or network) — skip this file
+        }
       }
     } catch {
       alert("Failed to upload photo");

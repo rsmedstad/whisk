@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback, useMemo } from "react";
+import { lazy, Suspense, useState, useCallback, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
@@ -8,12 +8,14 @@ import { useShoppingList } from "./hooks/useShoppingList";
 import { useMealPlan } from "./hooks/useMealPlan";
 import { useTimers } from "./hooks/useTimers";
 import { useTags } from "./hooks/useTags";
-import { useCapabilities } from "./hooks/useCapabilities";
+import { useCapabilities, type CapabilitiesState } from "./hooks/useCapabilities";
 import { Login } from "./components/auth/Login";
+import { AdminLoginModal } from "./components/auth/AdminLoginModal";
 import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
 import { DemoBanner } from "./components/ui/DemoBanner";
+import { DemoPill, DemoInfoModal, DemoToastHost } from "./components/ui/Demo";
 import type { Ingredient, AppSettings, AppStyle, UserPreferences } from "./types";
 
 /** Full-page placeholder shown when a demo-restricted route is accessed */
@@ -65,16 +67,53 @@ function RouteSkeleton() {
   );
 }
 
+function BootLoader() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-stone-50 dark:bg-stone-950">
+      <div className="text-4xl font-bold text-orange-500 animate-pulse">Whisk</div>
+    </main>
+  );
+}
+
 export function App() {
   const auth = useAuth();
+  const capabilities = useCapabilities();
   const { theme, setTheme, accentOverride, setAccentOverride } = useTheme();
   const { style, setStyle } = useStyle();
+
+  // Auto-enter demo guest mode when the backend reports demo mode and no one
+  // is logged in. This skips the login wall for portfolio visitors.
+  useEffect(() => {
+    if (
+      capabilities.isLoaded &&
+      capabilities.demoMode &&
+      !auth.isAuthenticated
+    ) {
+      auth.initDemoGuest();
+    }
+  }, [capabilities.isLoaded, capabilities.demoMode, auth.isAuthenticated, auth.initDemoGuest]);
 
   const handleLogin = useCallback(async (password: string, name?: string) => {
     await auth.login(password, name);
     // Welcome card in RecipeList handles the first-run experience for all users
     localStorage.setItem("whisk_onboarded", "true");
   }, [auth.login]);
+
+  // While capabilities are loading on a fresh visit (no cache, no token),
+  // show a minimal boot splash to avoid a flash of the login wall when
+  // we're about to auto-enter demo mode.
+  if (!auth.isAuthenticated && !capabilities.isLoaded) {
+    return <BootLoader />;
+  }
+
+  // Still waiting for demo-guest auto-init to apply (one render cycle)
+  if (
+    capabilities.isLoaded &&
+    capabilities.demoMode &&
+    !auth.isAuthenticated
+  ) {
+    return <BootLoader />;
+  }
 
   if (!auth.isAuthenticated) {
     return (
@@ -96,6 +135,7 @@ export function App() {
         style={style}
         onSetStyle={setStyle}
         onLogout={auth.logout}
+        capabilities={capabilities}
       />
     </BrowserRouter>
   );
@@ -109,6 +149,7 @@ function AppShell({
   style,
   onSetStyle,
   onLogout,
+  capabilities,
 }: {
   theme: AppSettings["theme"];
   onSetTheme: (t: AppSettings["theme"]) => void;
@@ -117,16 +158,21 @@ function AppShell({
   style: AppStyle;
   onSetStyle: (s: AppStyle) => void;
   onLogout: () => void;
+  capabilities: CapabilitiesState;
 }) {
   const recipes = useRecipes();
   const shoppingList = useShoppingList();
   const mealPlan = useMealPlan();
   const timers = useTimers();
   const tags = useTags();
-  const capabilities = useCapabilities();
 
-  // Demo mode: restrict expensive features for non-owner users
+  // Demo mode: anyone who isn't the demo owner sees the demo UI (pill, toasts,
+  // ephemeral mutations). This covers both unauthenticated guests and
+  // household members who logged in with APP_SECRET.
   const isDemoRestricted = capabilities.demoMode && localStorage.getItem("whisk_demo_owner") !== "true";
+
+  const [showDemoInfo, setShowDemoInfo] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
 
   // Unique recipe IDs linked to this week's meal plan
   const plannedRecipeIds = useMemo(() => {
@@ -197,7 +243,6 @@ function AppShell({
           <Route
             path="/recipes/new"
             element={
-              isDemoRestricted ? <DemoRestrictedPage feature="Adding recipes" /> :
               <RecipeForm
                 allTags={tags.allTagNames}
                 onAddTag={async (name: string) => { await tags.addCustomTag(name); }}
@@ -220,7 +265,6 @@ function AppShell({
           <Route
             path="/recipes/:id/edit"
             element={
-              isDemoRestricted ? <DemoRestrictedPage feature="Editing recipes" /> :
               <RecipeForm
                 allTags={tags.allTagNames}
                 onAddTag={async (name: string) => { await tags.addCustomTag(name); }}
@@ -234,7 +278,7 @@ function AppShell({
           />
 
           {/* Other tabs — lazy loaded */}
-          <Route path="/discover" element={<Discover onSaveRecipe={isDemoRestricted ? undefined : recipes.createRecipe} onUpdateRecipe={isDemoRestricted ? undefined : recipes.updateRecipe} chatEnabled={isDemoRestricted ? false : capabilities.chat} recipes={recipes.recipes} isDemoRestricted={isDemoRestricted} />} />
+          <Route path="/discover" element={<Discover onSaveRecipe={recipes.createRecipe} onUpdateRecipe={recipes.updateRecipe} chatEnabled={capabilities.chat} recipes={recipes.recipes} isDemoRestricted={isDemoRestricted} />} />
           <Route path="/identify" element={<Navigate to="/discover" replace />} />
           <Route path="/ask" element={
             <AskChat
@@ -309,6 +353,8 @@ function AppShell({
                 onSetStyle={onSetStyle}
                 onLogout={onLogout}
                 capabilities={capabilities}
+                isDemoRestricted={isDemoRestricted}
+                onOpenAdminLogin={() => setShowAdminLogin(true)}
               />
             }
           />
@@ -334,6 +380,27 @@ function AppShell({
         <Route path="*" element={<BottomNav />} />
       </Routes>
       </div>
+
+      {/* Demo UI — only rendered when viewing as non-owner in demo mode */}
+      {isDemoRestricted && (
+        <>
+          <Routes>
+            <Route path="/recipes/:id/cook" element={null} />
+            <Route path="*" element={<DemoPill onClick={() => setShowDemoInfo(true)} />} />
+          </Routes>
+          <DemoInfoModal
+            open={showDemoInfo}
+            onClose={() => setShowDemoInfo(false)}
+            onOpenAdminLogin={() => setShowAdminLogin(true)}
+          />
+          <AdminLoginModal
+            open={showAdminLogin}
+            onClose={() => setShowAdminLogin(false)}
+            onSuccess={() => window.location.reload()}
+          />
+        </>
+      )}
+      <DemoToastHost />
     </div>
   );
 }
