@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
 import { getLocal, setLocal, CACHE_KEYS } from "../lib/cache";
 import type { Recipe, RecipeIndexEntry } from "../types";
-import { normalizeSearch } from "../lib/utils";
+import { normalizeSearch, normalizeRecipe } from "../lib/utils";
 
 type SortOption = "recent" | "alpha" | "cookTime" | "lastViewed" | "category" | "mostCooked" | "simple";
 
@@ -44,13 +44,14 @@ export function useRecipes() {
     if (cached) {
       // Background refresh
       api.get<Recipe>(`/recipes/${id}`)
-        .then((fresh) => setLocal(CACHE_KEYS.RECIPE(id), fresh))
+        .then((fresh) => setLocal(CACHE_KEYS.RECIPE(id), normalizeRecipe(fresh)))
         .catch(() => {});
-      return cached;
+      return normalizeRecipe(cached);
     }
     const recipe = await api.get<Recipe>(`/recipes/${id}`);
-    setLocal(CACHE_KEYS.RECIPE(id), recipe);
-    return recipe;
+    const normalized = normalizeRecipe(recipe);
+    setLocal(CACHE_KEYS.RECIPE(id), normalized);
+    return normalized;
   }, []);
 
   const createRecipe = useCallback(

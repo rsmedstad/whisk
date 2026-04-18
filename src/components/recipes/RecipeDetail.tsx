@@ -1101,18 +1101,18 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
               <div className="flex gap-2">
                 <Button
                   fullWidth
-                  onClick={handleAddSelected}
-                  disabled={checkedIndices.size === 0}
+                  onClick={() => handleAddToList(true)}
                 >
-                  Add Selected ({checkedIndices.size})
+                  Add Essentials
                 </Button>
                 <Button
                   variant="secondary"
                   size="sm"
                   className="shrink-0"
-                  onClick={() => handleAddToList(true)}
+                  onClick={handleAddSelected}
+                  disabled={checkedIndices.size === 0}
                 >
-                  Essentials
+                  Selected ({checkedIndices.size})
                 </Button>
                 <Button
                   variant="secondary"
@@ -1124,10 +1124,10 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
                 </Button>
               </div>
               <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                Check ingredients above, then tap Add Selected.
-                {" "}{isDrink
+                {isDrink
                   ? "Essentials skips garnishes, bitters & modifiers."
                   : "Essentials skips common pantry staples."}
+                {" "}Check ingredients above to add only selected items.
               </p>
             </div>
           </div>

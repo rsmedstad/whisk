@@ -1,4 +1,4 @@
-import type { Ingredient } from "../types";
+import type { Ingredient, Recipe, Step } from "../types";
 
 // ── Formatting ──────────────────────────────────────────
 
@@ -213,4 +213,33 @@ export function classNames(
   ...classes: (string | boolean | undefined | null)[]
 ): string {
   return classes.filter(Boolean).join(" ");
+}
+
+// ── Recipe Normalization ────────────────────────────────
+
+/** Coerce legacy/malformed recipe shapes into canonical form.
+ *  Some older recipes were stored with steps/ingredients as bare strings
+ *  instead of objects — normalize so components can rely on the type. */
+export function normalizeRecipe<T extends Partial<Recipe>>(recipe: T): T {
+  if (!recipe || typeof recipe !== "object") return recipe;
+  const out: T = { ...recipe };
+  if (Array.isArray(out.steps)) {
+    out.steps = out.steps
+      .map((s): Step | null => {
+        if (typeof s === "string") return { text: s };
+        if (s && typeof s === "object" && typeof (s as Step).text === "string") return s as Step;
+        return null;
+      })
+      .filter((s): s is Step => s !== null);
+  }
+  if (Array.isArray(out.ingredients)) {
+    out.ingredients = out.ingredients
+      .map((i): Ingredient | null => {
+        if (typeof i === "string") return { name: i };
+        if (i && typeof i === "object" && typeof (i as Ingredient).name === "string") return i as Ingredient;
+        return null;
+      })
+      .filter((i): i is Ingredient => i !== null);
+  }
+  return out;
 }
