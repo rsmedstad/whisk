@@ -9,7 +9,7 @@ import { useMealPlan } from "./hooks/useMealPlan";
 import { useTimers } from "./hooks/useTimers";
 import { useTags } from "./hooks/useTags";
 import { useCapabilities, type CapabilitiesState } from "./hooks/useCapabilities";
-import { useRecipeBadge } from "./hooks/useRecipeBadge";
+import { useDiscoverBadge } from "./hooks/useDiscoverBadge";
 import { Login } from "./components/auth/Login";
 import { AdminLoginModal } from "./components/auth/AdminLoginModal";
 import { BottomNav } from "./components/BottomNav";
@@ -167,7 +167,7 @@ function AppShell({
   const timers = useTimers();
   const tags = useTags();
   const location = useLocation();
-  useRecipeBadge(recipes.recipes.length, location.pathname === "/");
+  useDiscoverBadge(location.pathname === "/discover");
 
   // Demo mode: anyone who isn't the demo owner sees the demo UI (pill, toasts,
   // ephemeral mutations). This covers both unauthenticated guests and

@@ -224,9 +224,11 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
       if (!granted && typeof Notification !== "undefined" && Notification.permission === "denied") {
         return;
       }
+      // Clear the seen-URL set so the hook recalibrates against the current
+      // Discover feed (no badge for the existing backlog).
+      localStorage.removeItem("whisk_discover_seen_urls");
       setBadgeEnabled(true);
       localStorage.setItem("whisk_badge_enabled", "true");
-      localStorage.removeItem("whisk_last_seen_recipe_count");
     } else {
       setBadgeEnabled(false);
       localStorage.setItem("whisk_badge_enabled", "false");
@@ -687,10 +689,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <label className="text-sm font-medium dark:text-stone-200 block">
-                          Home screen badge
+                          Discover badge
                         </label>
                         <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                          Show a count on the app icon when new recipes are added. Requires Whisk to be installed to your home screen; iOS also requires notification permission.
+                          Show a count on the app icon for new items in your Discover feed. Requires Whisk to be installed to your home screen; iOS also requires notification permission.
                         </p>
                       </div>
                       <button
