@@ -7,6 +7,7 @@ import { useHousehold } from "../hooks/useHousehold";
 import { ACCENT_OPTIONS } from "../hooks/useTheme";
 import { PRESET_TAGS, TAG_GROUP_LABELS, TAG_GROUP_ORDER } from "../lib/tags";
 import { api } from "../lib/api";
+import { isBadgeSupported, requestBadgePermission, clearBadge } from "../lib/badge";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
@@ -94,6 +95,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     const saved = localStorage.getItem("whisk_show_grams");
     return saved === null ? true : saved === "true";
   });
+  const [badgeEnabled, setBadgeEnabled] = useState(() => {
+    return localStorage.getItem("whisk_badge_enabled") === "true";
+  });
+  const badgeSupported = isBadgeSupported();
   const [displayName, setDisplayName] = useState(() => {
     return localStorage.getItem("whisk_display_name") ?? "";
   });
@@ -209,6 +214,26 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
     localStorage.setItem("whisk_show_grams", String(next));
   };
 
+  const handleBadgeToggle = async () => {
+    const next = !badgeEnabled;
+    if (next) {
+      const granted = await requestBadgePermission();
+      // iOS requires Notifications permission for the badge to render. Other
+      // platforms (Chrome desktop) don't, so we still enable on a "default"
+      // permission state — the badge will simply no-op on iOS.
+      if (!granted && typeof Notification !== "undefined" && Notification.permission === "denied") {
+        return;
+      }
+      setBadgeEnabled(true);
+      localStorage.setItem("whisk_badge_enabled", "true");
+      localStorage.removeItem("whisk_last_seen_recipe_count");
+    } else {
+      setBadgeEnabled(false);
+      localStorage.setItem("whisk_badge_enabled", "false");
+      clearBadge();
+    }
+  };
+
   const handleNameChange = (name: string) => {
     setDisplayName(name);
     localStorage.setItem("whisk_display_name", name);
@@ -224,6 +249,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const handleReset = () => {
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("whisk_") || k.startsWith("recipes_") || k.startsWith("recipe_") || k.startsWith("shopping_") || k.startsWith("meal_plan_") || k.startsWith("tag_") || k.startsWith("ai_"));
     keys.forEach((k) => localStorage.removeItem(k));
+    clearBadge();
     onLogout();
   };
 
@@ -656,6 +682,32 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       />
                     </button>
                   </div>
+
+                  {badgeSupported && (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium dark:text-stone-200 block">
+                          Home screen badge
+                        </label>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                          Show a count on the app icon when new recipes are added. Requires Whisk to be installed to your home screen; iOS also requires notification permission.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleBadgeToggle}
+                        className={`relative w-11 h-6 shrink-0 mt-1 rounded-full transition-colors ${
+                          badgeEnabled ? "bg-orange-500" : "bg-stone-300 dark:bg-stone-600"
+                        }`}
+                        aria-label="Toggle home screen badge"
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                            badgeEnabled ? "translate-x-5" : ""
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </Card>
             </section>
