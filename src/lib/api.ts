@@ -155,8 +155,17 @@ async function request<T>(
   });
 
   if (res.status === 401 && path !== "/auth") {
-    clearToken();
-    window.location.reload();
+    // Only react if this request actually carried a token. Otherwise the 401
+    // is expected (caller is unauthenticated) and we must not touch storage:
+    //  - clearing would wipe a freshly-written token from a racing login
+    //  - signaling auth-invalid would bounce a guest off the Login screen
+    if (token) {
+      clearToken();
+      // Soft logout: a hard reload here loops forever if the 401 is sticky
+      // (e.g. KV propagation lag right after login, or a revoked session).
+      // Let useAuth react and render the Login screen instead.
+      window.dispatchEvent(new Event("whisk:auth-invalid"));
+    }
     throw new Error("Unauthorized");
   }
 

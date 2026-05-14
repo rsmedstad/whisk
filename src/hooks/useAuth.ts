@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { api, setToken, clearToken, hasToken } from "../lib/api";
 import type { AuthResponse } from "../types";
 
@@ -12,6 +12,16 @@ export function useAuth() {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // api.ts dispatches this when a request comes back 401 with a token attached.
+  // We drop authentication state so App swaps to Login, without a hard reload
+  // (a reload here loops forever if the 401 is sticky — KV propagation lag
+  // right after login, revoked session, etc.).
+  useEffect(() => {
+    const onInvalid = () => setIsAuthenticated(false);
+    window.addEventListener("whisk:auth-invalid", onInvalid);
+    return () => window.removeEventListener("whisk:auth-invalid", onInvalid);
+  }, []);
 
   const login = useCallback(async (password: string, name?: string) => {
     setIsLoading(true);
