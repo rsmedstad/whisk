@@ -1,34 +1,7 @@
 import type { Env, DiscoverConfig } from "../../../src/types";
+import { DEFAULT_DISCOVER_CONFIG as DEFAULT_CONFIG } from "../../lib/discover-config";
 
 const KV_KEY = "discover_config";
-
-/** Default sources — pre-populated for new installs */
-const DEFAULT_CONFIG: DiscoverConfig = {
-  sources: [
-    {
-      id: "nyt",
-      label: "NYT Cooking",
-      url: "https://cooking.nytimes.com/",
-      enabled: true,
-    },
-    {
-      id: "allrecipes",
-      label: "AllRecipes",
-      url: "https://www.allrecipes.com/",
-      enabled: true,
-    },
-    {
-      id: "seriouseats",
-      label: "Serious Eats",
-      url: "https://www.seriouseats.com/",
-      enabled: true,
-    },
-  ],
-  autoRefreshEnabled: true,
-  expirationEnabled: true,
-  itemLifetimeDays: 7,
-  refreshIntervalDays: 2,
-};
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   const config = await env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json");
