@@ -12,12 +12,19 @@ const MIN_REFRESH_MS = 2 * 24 * 60 * 60 * 1000; // 2 days between refreshes
 const DEFAULT_ITEM_LIFETIME_DAYS = 7; // how long a discover item stays visible
 const ARCHIVE_RETENTION_DAYS = 30; // keep expired items in DB for this long before purging
 
-/** Default config — matches the legacy hardcoded sources */
+/** Default config — NYT (HTML) plus RSS-based blog sources.
+ *  AllRecipes & Serious Eats (People Inc / Dotdash) are kept but disabled: they
+ *  IP-block Cloudflare, so they yield nothing — left here so they auto-recover
+ *  if that ever changes (the scraper surfaces a block warning either way). */
 const DEFAULT_CONFIG: DiscoverConfig = {
   sources: [
     { id: "nyt", label: "NYT Cooking", url: "https://cooking.nytimes.com/", enabled: true },
-    { id: "allrecipes", label: "AllRecipes", url: "https://www.allrecipes.com/", enabled: true },
-    { id: "seriouseats", label: "Serious Eats", url: "https://www.seriouseats.com/", enabled: true },
+    { id: "smittenkitchen", label: "Smitten Kitchen", url: "https://smittenkitchen.com/", feedUrl: "https://smittenkitchen.com/feed/", enabled: true },
+    { id: "loveandlemons", label: "Love and Lemons", url: "https://www.loveandlemons.com/", feedUrl: "https://www.loveandlemons.com/feed/", enabled: true },
+    { id: "thekitchn", label: "The Kitchn", url: "https://www.thekitchn.com/", feedUrl: "https://www.thekitchn.com/main.rss", enabled: true },
+    { id: "pinchofyum", label: "Pinch of Yum", url: "https://pinchofyum.com/", feedUrl: "https://pinchofyum.com/feed/", enabled: true },
+    { id: "allrecipes", label: "AllRecipes", url: "https://www.allrecipes.com/", enabled: false },
+    { id: "seriouseats", label: "Serious Eats", url: "https://www.seriouseats.com/", enabled: false },
   ],
   autoRefreshEnabled: true,
   expirationEnabled: true,
@@ -78,13 +85,29 @@ async function fetchWithBrowserRendering(
     const html = body.startsWith("{")
       ? ((JSON.parse(body) as { result?: string }).result ?? "")
       : body;
-    if (html.length > 500 && !html.includes("<title>Just a moment...</title>")) {
+    // A 200 response can still be a block page (e.g. Dotdash/People Inc serves a
+    // "contact support@people.inc" notice to Cloudflare IPs). Treat those as failures
+    // and surface a warning so the source doesn't silently produce zero recipes.
+    if (!isBlockedPage(html)) {
       return html;
+    }
+    if (isPeopleIncBlock(html)) {
+      brWarnings.push(`${new URL(url).hostname} is blocking our server's IP (People Inc / Dotdash Meredith). These recipes can't be fetched from Cloudflare.`);
     }
     return null;
   } catch {
     return null;
   }
+}
+
+/** Dotdash Meredith / People Inc hard block served to datacenter IPs.
+ *  Returns 200 with a short "access issue — contact support@people.inc" notice
+ *  instead of the page, so it must be detected by content, not status. */
+function isPeopleIncBlock(html: string): boolean {
+  return (
+    html.includes("support@people.inc") ||
+    html.includes("contentlicensing@people.inc")
+  );
 }
 
 /** Check if fetched HTML is a bot challenge / blocked page */
@@ -96,7 +119,8 @@ function isBlockedPage(html: string): boolean {
     html.includes("challenge-platform") ||
     html.includes("Checking your browser") ||
     html.includes("Vercel Security Checkpoint") ||
-    html.includes("Access Denied")
+    html.includes("Access Denied") ||
+    isPeopleIncBlock(html)
   );
 }
 
@@ -206,24 +230,32 @@ const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
   ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?|bostock|morning buns?|dutch baby|cr[eê]pes?|shakshuka|porridge|acai bowl)\b/i],
   ["soups", /\b(?:soups?|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
   ["salad", /\b(?:salads?|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
-  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e|brittle|toffee|praline|bark(?:\s|$)|caramels?\b(?!\s*(?:sauce|onion|chicken)))\b/i],
+  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e|brittle|toffee|praline|turnover|strudel|baklava|bark(?:\s|$)|caramels?\b(?!\s*(?:sauce|onion|chicken)))\b/i],
   ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
-  ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
+  ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|limeade|margarita|sangria|spritz|mojito|caipirinha|paloma|negroni|sidecar|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
   ["appetizer", /\b(?:appetizers?|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
   ["snack", /\b(?:snacks?|popcorn|trail mix|(?<!fish and )chips?|crackers?|energy balls?|protein bars?)\b/i],
   ["side dish", /\b(?:side dish|mashed potatoes?|roasted vegetables?|rice pilaf|couscous|baked beans|corn ?bread|mac and cheese|macaroni|stuffing|au gratin|roasted potatoes?|french fries|fries|potato salad)\b/i],
   // "dinner" is the default/catch-all for main dishes
 ];
 
-/** Main-dish proteins — if the title contains one of these, override snack/appetizer categories */
+/** Main-dish proteins — if the title contains one of these, override snack/appetizer/drinks categories */
 const MAIN_DISH_PROTEIN = /\b(?:fish|salmon|tuna|shrimp|chicken|turkey|duck|pork|beef|steak|lamb|veal|ribs|brisket|meatloaf|roast|chops?)\b/i;
+
+/** Savory pie/tart markers — these match the dessert regex via "pie"/"tart" but are mains */
+const SAVORY_PIE = /\b(?:shepherd'?s?|cottage|pot|meat|mince|savou?ry|guinness|chicken|beef|pork|lamb|turkey|ham|fish|seafood|crab|leek|spinach|quiche|pizza|asparagus|tomato|onion|mushroom|goat)\b/i;
 
 function classifyRecipe(title: string, description?: string, tags?: string[]): DiscoverCategory {
   const text = `${title} ${description ?? ""}`;
   for (const [category, pattern] of CATEGORY_KEYWORDS) {
     if (pattern.test(text)) {
-      // Don't let a description keyword override when the title is clearly a main dish
-      if ((category === "snack" || category === "appetizer") && MAIN_DISH_PROTEIN.test(title)) {
+      // Don't let a keyword override when the title is clearly a main dish
+      // (e.g. "Sweet Tea-Brined Roast Chicken" matches drinks via "tea")
+      if ((category === "snack" || category === "appetizer" || category === "drinks") && MAIN_DISH_PROTEIN.test(title)) {
+        return "dinner";
+      }
+      // Savory pies/tarts (shepherd's, cottage, pot, mince…) match dessert via "pie"/"tart"
+      if (category === "dessert" && /\b(?:pie|tart)\b/i.test(title) && SAVORY_PIE.test(title)) {
         return "dinner";
       }
       return category;
@@ -769,6 +801,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const scrapeResults = await Promise.all(
     enabledSources.map(async (src): Promise<{ sourceId: string; items: FeedItem[]; uncrawledCollections?: string[] }> => {
       try {
+        // Prefer an RSS/Atom feed when configured — far more stable than HTML scraping
+        if (src.feedUrl) {
+          const items = await scrapeRssFeed(src, env);
+          return { sourceId: src.id, items };
+        }
         const siteProfile = SITE_PROFILES[src.id];
         if (siteProfile) {
           const result = await siteProfile(env);
@@ -1507,6 +1544,116 @@ function buildDotdashImageIndex(html: string, domain: string): Map<string, strin
     }
   }
   return index;
+}
+
+// ── RSS / Atom feed scraper ─────────────────────────────
+// For sources with a `feedUrl`, parse the feed directly instead of scraping
+// HTML. Feeds are stable, recency-ordered, and include title + link + image —
+// ideal for "what's new". Works for WordPress (Smitten Kitchen, Love & Lemons),
+// The Kitchn, Bon Appétit, etc. Recipe details are pre-cached separately by
+// fetching each item's page for JSON-LD.
+
+/** Strip CDATA wrappers and decode the handful of XML entities feeds use. */
+function decodeXml(s: string): string {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&#8217;/g, "’")
+    .replace(/&#8216;/g, "‘")
+    .replace(/&#8211;/g, "–")
+    .replace(/&#8212;/g, "—")
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
+/** Pull the first tag value out of an item/entry block. */
+function xmlTag(block: string, tag: string): string | undefined {
+  const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "i"));
+  return m?.[1] !== undefined ? decodeXml(m[1]) : undefined;
+}
+
+/** Titles that signal editorial/news/roundups rather than a single recipe
+ *  (mixed blog feeds like The Kitchn and Pinch of Yum include these). */
+function isNonRecipeFeedTitle(title: string): boolean {
+  // Numeric roundups / listicles: "22 Must-Make Summer Desserts", "40 Easy Dinners"
+  if (/^\d{1,3}\b[\s\S]*\b(?:recipes?|dinners?|desserts?|ideas|meals?|ways|sides?|salads?|snacks?|dishes|cocktails?|drinks?|breakfasts?|lunches|appetizers?|bakes?)\b/i.test(title.trim())) return true;
+  // Editorial / shopping / news patterns
+  return /\b(?:why|how a|shares|review|deal|sale|amazon|costco|trader joe|aldi|i tried|i asked|we tried|according to|best \w+ of \d{4}|gift guide|news|announc|recall|worth the hype|taste test)\b/i.test(title);
+}
+
+async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<FeedItem[]> {
+  const feedUrl = source.feedUrl!;
+  const domain = new URL(source.url).hostname.replace(/^www\./, "");
+
+  let xml: string | null = null;
+  try {
+    const res = await fetch(feedUrl, {
+      signal: AbortSignal.timeout(12000),
+      headers: { ...BROWSER_HEADERS, Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" },
+    });
+    const body = await res.text();
+    if (res.ok && body.length > 200) xml = body;
+  } catch {
+    // fall through to Browser Rendering
+  }
+  // Some hosts bot-block plain fetches but allow headless — try BR as a fallback
+  if (!xml) xml = await fetchWithBrowserRendering(feedUrl, env);
+  if (!xml) {
+    brWarnings.push(`Couldn't load the feed for ${source.label}.`);
+    return [];
+  }
+
+  // Split into <item> (RSS) or <entry> (Atom) blocks
+  const blocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi)
+    ?? xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi)
+    ?? [];
+
+  const items: FeedItem[] = [];
+  const seen = new Set<string>();
+
+  for (const block of blocks) {
+    const title = xmlTag(block, "title");
+    if (!title || title.length < 3) continue;
+
+    // Link: RSS <link>url</link>, or Atom <link href="..."> (prefer rel="alternate")
+    let url = xmlTag(block, "link");
+    if (!url || !url.startsWith("http")) {
+      const alt = block.match(/<link[^>]*rel=["']alternate["'][^>]*href=["']([^"']+)["']/i)
+        ?? block.match(/<link[^>]*href=["']([^"']+)["']/i);
+      url = alt?.[1];
+    }
+    if (!url || !url.startsWith("http")) continue;
+    // Only keep links on the source's own domain (drops feed self-refs, ads)
+    if (!url.includes(domain)) continue;
+    const key = normalizeUrl(url);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    if (isPersonTitle(title) || isAuthorUrl(url) || isNonRecipeFeedTitle(title)) continue;
+
+    // Image: media:content / media:thumbnail / enclosure / first <img> in content
+    const contentHtml = block.match(/<content:encoded(?:\s[^>]*)?>([\s\S]*?)<\/content:encoded>/i)?.[1]
+      ?? block.match(/<description(?:\s[^>]*)?>([\s\S]*?)<\/description>/i)?.[1]
+      ?? "";
+    const decodedContent = decodeXml(contentHtml);
+    const imageUrl = sanitizeImageUrl(
+      block.match(/<media:content[^>]+url=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)?.[1]
+      ?? block.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/i)?.[1]
+      ?? block.match(/<enclosure[^>]+url=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)?.[1]
+      ?? decodedContent.match(/<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)?.[1]
+    );
+
+    const descText = decodedContent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    const description = descText ? descText.slice(0, 200) : undefined;
+
+    items.push({ title, url, imageUrl, description });
+    if (items.length >= 20) break;
+  }
+
+  return deduplicateByTitle(items);
 }
 
 // ── Generic site scraper (for user-configured sources) ──
