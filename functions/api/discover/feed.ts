@@ -230,24 +230,32 @@ const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
   ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?|bostock|morning buns?|dutch baby|cr[eê]pes?|shakshuka|porridge|acai bowl)\b/i],
   ["soups", /\b(?:soups?|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
   ["salad", /\b(?:salads?|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
-  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e|brittle|toffee|praline|bark(?:\s|$)|caramels?\b(?!\s*(?:sauce|onion|chicken)))\b/i],
+  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e|brittle|toffee|praline|turnover|strudel|baklava|bark(?:\s|$)|caramels?\b(?!\s*(?:sauce|onion|chicken)))\b/i],
   ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
-  ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|margarita|sangria|spritz|mojito|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
+  ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|limeade|margarita|sangria|spritz|mojito|caipirinha|paloma|negroni|sidecar|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
   ["appetizer", /\b(?:appetizers?|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
   ["snack", /\b(?:snacks?|popcorn|trail mix|(?<!fish and )chips?|crackers?|energy balls?|protein bars?)\b/i],
   ["side dish", /\b(?:side dish|mashed potatoes?|roasted vegetables?|rice pilaf|couscous|baked beans|corn ?bread|mac and cheese|macaroni|stuffing|au gratin|roasted potatoes?|french fries|fries|potato salad)\b/i],
   // "dinner" is the default/catch-all for main dishes
 ];
 
-/** Main-dish proteins — if the title contains one of these, override snack/appetizer categories */
+/** Main-dish proteins — if the title contains one of these, override snack/appetizer/drinks categories */
 const MAIN_DISH_PROTEIN = /\b(?:fish|salmon|tuna|shrimp|chicken|turkey|duck|pork|beef|steak|lamb|veal|ribs|brisket|meatloaf|roast|chops?)\b/i;
+
+/** Savory pie/tart markers — these match the dessert regex via "pie"/"tart" but are mains */
+const SAVORY_PIE = /\b(?:shepherd'?s?|cottage|pot|meat|mince|savou?ry|guinness|chicken|beef|pork|lamb|turkey|ham|fish|seafood|crab|leek|spinach|quiche|pizza|asparagus|tomato|onion|mushroom|goat)\b/i;
 
 function classifyRecipe(title: string, description?: string, tags?: string[]): DiscoverCategory {
   const text = `${title} ${description ?? ""}`;
   for (const [category, pattern] of CATEGORY_KEYWORDS) {
     if (pattern.test(text)) {
-      // Don't let a description keyword override when the title is clearly a main dish
-      if ((category === "snack" || category === "appetizer") && MAIN_DISH_PROTEIN.test(title)) {
+      // Don't let a keyword override when the title is clearly a main dish
+      // (e.g. "Sweet Tea-Brined Roast Chicken" matches drinks via "tea")
+      if ((category === "snack" || category === "appetizer" || category === "drinks") && MAIN_DISH_PROTEIN.test(title)) {
+        return "dinner";
+      }
+      // Savory pies/tarts (shepherd's, cottage, pot, mince…) match dessert via "pie"/"tart"
+      if (category === "dessert" && /\b(?:pie|tart)\b/i.test(title) && SAVORY_PIE.test(title)) {
         return "dinner";
       }
       return category;
