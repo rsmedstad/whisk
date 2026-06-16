@@ -4,6 +4,7 @@ import {
   resolveConfig,
   callTextAI,
 } from "../../lib/ai-providers";
+import { DEFAULT_DISCOVER_CONFIG } from "../../lib/discover-config";
 
 const KV_KEY = "discover_feed";
 const ARCHIVE_KEY = "discover_archive";
@@ -12,25 +13,8 @@ const MIN_REFRESH_MS = 2 * 24 * 60 * 60 * 1000; // 2 days between refreshes
 const DEFAULT_ITEM_LIFETIME_DAYS = 7; // how long a discover item stays visible
 const ARCHIVE_RETENTION_DAYS = 30; // keep expired items in DB for this long before purging
 
-/** Default config — NYT (HTML) plus RSS-based blog sources.
- *  AllRecipes & Serious Eats (People Inc / Dotdash) are kept but disabled: they
- *  IP-block Cloudflare, so they yield nothing — left here so they auto-recover
- *  if that ever changes (the scraper surfaces a block warning either way). */
-const DEFAULT_CONFIG: DiscoverConfig = {
-  sources: [
-    { id: "nyt", label: "NYT Cooking", url: "https://cooking.nytimes.com/", enabled: true },
-    { id: "smittenkitchen", label: "Smitten Kitchen", url: "https://smittenkitchen.com/", feedUrl: "https://smittenkitchen.com/feed/", enabled: true },
-    { id: "loveandlemons", label: "Love and Lemons", url: "https://www.loveandlemons.com/", feedUrl: "https://www.loveandlemons.com/feed/", enabled: true },
-    { id: "thekitchn", label: "The Kitchn", url: "https://www.thekitchn.com/", feedUrl: "https://www.thekitchn.com/main.rss", enabled: true },
-    { id: "pinchofyum", label: "Pinch of Yum", url: "https://pinchofyum.com/", feedUrl: "https://pinchofyum.com/feed/", enabled: true },
-    { id: "allrecipes", label: "AllRecipes", url: "https://www.allrecipes.com/", enabled: false },
-    { id: "seriouseats", label: "Serious Eats", url: "https://www.seriouseats.com/", enabled: false },
-  ],
-  autoRefreshEnabled: true,
-  expirationEnabled: true,
-  itemLifetimeDays: 7,
-  refreshIntervalDays: 2,
-};
+/** Default config (shared with the Settings config API so the two never drift). */
+const DEFAULT_CONFIG = DEFAULT_DISCOVER_CONFIG;
 
 async function loadConfig(env: Env): Promise<DiscoverConfig> {
   const config = await env.WHISK_KV.get<DiscoverConfig>(CONFIG_KEY, "json");
