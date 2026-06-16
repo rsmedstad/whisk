@@ -362,6 +362,7 @@ export interface DiscoverSourceConfig {
   label: string;     // display name (e.g. "NYT Cooking", "Budget Bytes")
   url: string;       // homepage URL to scrape (e.g. "https://cooking.nytimes.com/")
   enabled: boolean;  // whether this source is active
+  feedUrl?: string;  // optional RSS/Atom feed URL — when set, the feed is scraped instead of the HTML page (more stable)
 }
 
 export interface DiscoverConfig {

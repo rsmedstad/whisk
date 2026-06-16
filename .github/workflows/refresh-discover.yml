@@ -1,0 +1,47 @@
+name: Refresh Discover feed
+
+# Keeps the Discover feed updating on a cadence even when nobody opens the app.
+# The feed is otherwise only refreshed client-side when a logged-in user visits
+# the Discover tab, so without this it can go stale for days.
+#
+# Setup (one-time):
+#   - Repo secret  APP_SECRET  = the app password (same value as the Cloudflare APP_SECRET env var)
+#   - Repo variable APP_URL    = the deployed origin, e.g. https://whisk.pages.dev (no trailing slash)
+
+on:
+  schedule:
+    - cron: "0 11 */2 * *" # every 2 days at 11:00 UTC — matches the feed's 2-day refresh interval
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger feed refresh
+        env:
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL:-}" ] || [ -z "${APP_SECRET:-}" ]; then
+            echo "::error::APP_URL variable and APP_SECRET secret must both be set."
+            exit 1
+          fi
+
+          echo "Authenticating against $APP_URL ..."
+          TOKEN=$(curl -sf -X POST "$APP_URL/api/auth" \
+            -H "Content-Type: application/json" \
+            -d "{\"password\":\"$APP_SECRET\"}" | jq -r '.token')
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "::error::Auth failed — check APP_SECRET and APP_URL."
+            exit 1
+          fi
+
+          echo "Refreshing Discover feed ..."
+          RESP=$(curl -sf -X POST "$APP_URL/api/discover/feed?force=true" \
+            -H "Authorization: Bearer $TOKEN")
+
+          echo "New items added: $(echo "$RESP" | jq -r '.newCount // 0')"
+          # Surface any scraper/Browser-Rendering warnings (e.g. blocked sources)
+          echo "$RESP" | jq -r '.warnings[]? | "::warning::" + .'
