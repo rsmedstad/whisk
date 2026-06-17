@@ -327,6 +327,26 @@ async function crawlCollectionPage(
   return deduplicateByTitle(deduped);
 }
 
+/** Keep only pending-queue entries whose URL belongs to a currently-enabled
+ *  source. Entries from disabled/removed sources (e.g. the IP-blocked People Inc
+ *  sites) are dropped so they stop being retried — and stop emitting block
+ *  warnings — and get cleaned out of the persisted queue on the next write. */
+function pendingForEnabledSources<T extends { url: string }>(
+  pending: T[],
+  enabledSources: DiscoverSourceConfig[],
+): T[] {
+  const domains = enabledSources
+    .map((s) => {
+      try { return new URL(s.url).hostname.replace(/^www\./, ""); } catch { return ""; }
+    })
+    .filter(Boolean);
+  return pending.filter((p) => {
+    let host: string;
+    try { host = new URL(p.url).hostname.replace(/^www\./, ""); } catch { return false; }
+    return domains.some((d) => host === d || host.endsWith("." + d));
+  });
+}
+
 /** Drain pending collections: attempt to crawl up to `limit` URLs,
  *  returning newly discovered items and updated pending list. */
 async function drainPendingCollections(
@@ -675,10 +695,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // On each GET, try to crawl 1 pending collection in the background.
   // This gradually fills in recipes from collection pages without
   // requiring the user to manually refresh or hit Browser Rendering limits.
-  const pending = archive.pendingCollections ?? [];
+  const enabledSources = config.sources.filter((s) => s.enabled);
+  const pending = pendingForEnabledSources(archive.pendingCollections ?? [], enabledSources);
   if (pending.length > 0) {
     const existingUrls = new Set(archive.items.map((i) => normalizeUrl(i.url)));
-    const enabledSources = config.sources.filter((s) => s.enabled);
     // Fire-and-forget — don't block the GET response
     drainPendingCollections(pending, existingUrls, env, 1).then(async (result) => {
       if (result.items.length > 0 || result.updatedPending.length !== pending.length) {
@@ -721,7 +741,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // ── Opportunistic recipe cache draining ──
   // On each GET, try to pre-cache 2 pending recipe URLs in the background.
   // This gradually fills the recipe cache for items that failed initial pre-caching.
-  const pendingRecipes = archive.pendingRecipeCache ?? [];
+  const pendingRecipes = pendingForEnabledSources(archive.pendingRecipeCache ?? [], enabledSources);
   if (pendingRecipes.length > 0) {
     drainPendingRecipeCache(pendingRecipes, archive.items, env, 2).then(async (updated) => {
       if (updated.length !== pendingRecipes.length) {
@@ -816,8 +836,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const newItems: ArchiveItem[] = [];
 
   // ── Drain pending collections from previous refresh cycles ──
-  // Attempt to crawl 2 pending collections each refresh, adding their recipes
-  const existingPending = archive?.pendingCollections ?? [];
+  // Attempt to crawl 2 pending collections each refresh, adding their recipes.
+  // Drop any queued for now-disabled sources so they aren't retried/warned.
+  const existingPending = pendingForEnabledSources(archive?.pendingCollections ?? [], enabledSources);
   let updatedPending: PendingCollection[] = [];
   if (existingPending.length > 0) {
     const drainResult = await drainPendingCollections(existingPending, existingUrls, env, 2);
@@ -915,8 +936,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     imageUrl: sanitizeImageUrl(item.imageUrl),
   }));
 
-  // Drain existing pending recipe cache queue during refresh (3 at a time)
-  const existingPendingRecipes = archive?.pendingRecipeCache ?? [];
+  // Drain existing pending recipe cache queue during refresh (3 at a time);
+  // drop entries for now-disabled sources so they aren't retried/warned.
+  const existingPendingRecipes = pendingForEnabledSources(archive?.pendingRecipeCache ?? [], enabledSources);
   let updatedPendingRecipes: PendingRecipeCache[] = [];
   if (existingPendingRecipes.length > 0) {
     updatedPendingRecipes = await drainPendingRecipeCache(
