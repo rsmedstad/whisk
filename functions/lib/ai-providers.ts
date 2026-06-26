@@ -63,7 +63,6 @@ export const PROVIDERS: Record<string, ProviderDef> = {
       { id: "openai/gpt-oss-120b", name: "GPT OSS 120B" },
       { id: "openai/gpt-oss-20b", name: "GPT OSS 20B (Fast)" },
       { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
-      { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B (Fast)" },
       { id: "qwen/qwen3-32b", name: "Qwen3 32B" },
       { id: "meta-llama/llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout" },
     ],
