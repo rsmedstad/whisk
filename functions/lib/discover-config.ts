@@ -16,6 +16,7 @@ export const DEFAULT_DISCOVER_CONFIG: DiscoverConfig = {
     { id: "loveandlemons", label: "Love and Lemons", url: "https://www.loveandlemons.com/", feedUrl: "https://www.loveandlemons.com/feed/", enabled: true },
     { id: "thekitchn", label: "The Kitchn", url: "https://www.thekitchn.com/", feedUrl: "https://www.thekitchn.com/main.rss", enabled: true },
     { id: "pinchofyum", label: "Pinch of Yum", url: "https://pinchofyum.com/", feedUrl: "https://pinchofyum.com/feed/", enabled: true },
+    { id: "bbcgoodfood", label: "BBC Good Food", url: "https://www.bbcgoodfood.com/", feedUrl: "https://www.bbcgoodfood.com/recipes/feed", enabled: true },
     { id: "allrecipes", label: "AllRecipes", url: "https://www.allrecipes.com/", enabled: false },
     { id: "seriouseats", label: "Serious Eats", url: "https://www.seriouseats.com/", enabled: false },
   ],
