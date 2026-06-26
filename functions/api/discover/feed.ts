@@ -292,7 +292,8 @@ async function crawlCollectionPage(
     const key = normalizeUrl(item.url);
     if (seen.has(key)) return false;
     seen.add(key);
-    // Filter out non-recipe URLs
+    // Filter out non-recipe URLs and nested collection/roundup hubs
+    if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title)) return false;
     const lc = item.url.toLowerCase();
     if (/\/(about|contact|privacy|terms|newsletter|subscribe|login|sign-?up|tag|category|author|search)\b/.test(lc)) return false;
     if (/\/(how-to-|what-is-|best-|review|guide|tip|technique|equipment|comparison)/.test(lc)) return false;
@@ -664,6 +665,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // Filter: only show items from enabled sources, and respect expiration setting
   const visibleItems = archive.items.filter((item) => {
     if (item.source && !enabledSourceIds.has(item.source)) return false;
+    // Hide collection/roundup pages that were archived before they were filtered
+    if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title)) return false;
     // When expiration is disabled, show all items regardless of age
     if (!config.expirationEnabled) return true;
     const expiry = item.expiresAt
@@ -783,11 +786,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (elapsed < limit) {
       const enabledIds = new Set(enabledSources.map((s) => s.id));
       const filtered = { ...archive, items: archive.items.filter((i) => !i.source || enabledIds.has(i.source)) };
-      const remainingMin = Math.ceil((limit - elapsed) / 60000);
       const feed = archiveToCategoryFeed(filtered);
       return Response.json({
         ...feed,
-        warnings: [`Feed was refreshed recently. Try again in ${remainingMin} minute${remainingMin !== 1 ? "s" : ""}.`],
+        warnings: [`Feed was refreshed recently. Try again in ${formatDuration(limit - elapsed)}.`],
       });
     }
   }
@@ -848,8 +850,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (existingUrls.has(key)) continue;
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
-      // Skip person/author pages that were scraped as recipes
+      // Skip person/author pages and collection/roundup hubs scraped as recipes
       if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
+      if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title)) continue;
       existingUrls.add(key);
       existingTitles.push(item.title);
       const expiresAt = config.expirationEnabled
@@ -892,8 +895,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (existingUrls.has(key)) continue;
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
-      // Skip person/author pages that were scraped as recipes
+      // Skip person/author pages and collection/roundup hubs scraped as recipes
       if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
+      if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title)) continue;
       existingUrls.add(key);
       existingTitles.push(item.title);
       const expiresAt = config.expirationEnabled
@@ -1747,6 +1751,7 @@ async function scrapeGenericSite(source: DiscoverSourceConfig, env: Env): Promis
 
   // Filter out non-recipe content
   const filtered = items.filter((item) => {
+    if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title)) return false;
     const lc = item.url.toLowerCase();
     if (/\/(about|contact|privacy|terms|newsletter|subscribe|login|sign-?up|tag|category|author|search)\b/.test(lc)) return false;
     if (/\/(how-to-|what-is-|best-|review|guide|tip|technique|equipment|comparison)/.test(lc)) return false;
@@ -2672,6 +2677,43 @@ function isPersonTitle(title: string): boolean {
  */
 function isAuthorUrl(url: string): boolean {
   return /\/(?:authors?|chefs?|cooks?|contributors?|profiles?|people|staff|writers?|editors?)(?:\/|$)/i.test(url);
+}
+
+/**
+ * Detect URLs that point to a collection/roundup or editorial section rather
+ * than a single recipe. Recipe sites expose "hub" pages — e.g.
+ * bbcgoodfood.com/recipes/collection/cherry-recipes — that list many recipes;
+ * these have no ingredients or steps and fail when imported as a recipe.
+ */
+function isNonRecipeUrl(url: string): boolean {
+  const lc = url.toLowerCase();
+  // Collection / roundup / gallery / premium hubs
+  if (/\/(?:collections?|roundups?|galler(?:y|ies)|premium)\//.test(lc)) return true;
+  // Editorial / shopping / news / how-to sections
+  if (/\/(?:reviews?|health|news-?trends?|news|how-?to|guides?|inspiration|advice|shopping|wellness|opinion|video)\//.test(lc)) return true;
+  return false;
+}
+
+/**
+ * Detect titles that name a roundup/collection ("Cherry recipes", "Exclusive
+ * salad recipes", "Sheet Pan Chicken Dinners") rather than a single dish.
+ * Individual recipes are named after the dish ("Mexican street corn salad"),
+ * so a multi-word title ending in a plural roundup noun is almost always a hub.
+ */
+function isCollectionTitle(title: string): boolean {
+  const t = title.trim();
+  if (t.split(/\s+/).length < 2) return false;
+  return /\b(?:recipes|ideas|dishes|bakes|traybakes|dinners|lunches|breakfasts|desserts|mains|sides)$/i.test(t);
+}
+
+/** Human-friendly duration, rounded up: "2 minutes", "3 hours", "2 days". */
+function formatDuration(ms: number): string {
+  const min = Math.max(1, Math.ceil(ms / 60000));
+  if (min < 60) return `${min} minute${min !== 1 ? "s" : ""}`;
+  const hours = Math.round(min / 60);
+  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""}`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days !== 1 ? "s" : ""}`;
 }
 
 /**

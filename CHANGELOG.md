@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.1] - 2026-06-26
+
+### Discover — Collection-Page Filtering & RSS Sources
+
+- **Collection/roundup pages filtered out**: Hub pages like `bbcgoodfood.com/recipes/collection/cherry-recipes` and listicle roundups ("Cherry recipes", "Sheet Pan Chicken Dinners") are no longer mistaken for individual recipes. New shared `isNonRecipeUrl()` + `isCollectionTitle()` filters run at every scrape ingestion point, on read (so previously-archived items disappear immediately), and in the generic + collection-crawl scrapers. A client-side mirror clears stale items from feeds cached in localStorage.
+- **BBC Good Food uses its recipes RSS feed**: Sources scraped from their homepage pull mostly collection pages; BBC now points at `https://www.bbcgoodfood.com/recipes/feed` for clean individual recipes, and is included in the default Discover config.
+- **Cleanup script**: `scripts/cleanup-discover-collections.ts` purges previously-archived collection items and fixes the BBC feed URL (backs up first; idempotent).
+
+### Discover — Refresh Status Polish
+
+- **No spurious "refreshed recently" warning on open**: The rate-limit warning now only appears for a manual (button) refresh. A background auto-refresh that gets rate-limited — common with two devices/users — stays silent.
+- **Human-friendly cooldown**: Durations render as "2 minutes" / "3 hours" / "1 day" instead of raw minutes (e.g. "1475 minutes").
+
+---
+
 ## [1.1.0] - 2026-03-14
 
 ### Open-Source Release

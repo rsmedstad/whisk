@@ -193,6 +193,17 @@ const FEED_CACHE_KEY = "discover_feed";
 
 type DiscoverSort = "category" | "recent" | "expiring" | "alpha";
 
+/** Collection/roundup pages (e.g. .../recipes/collection/cherry-recipes, or a
+ *  "Cherry recipes" listicle) have no ingredients or steps and shouldn't appear
+ *  as individual recipes. The server filters these now, but a cached feed in
+ *  localStorage can still hold ones added before the fix — drop them here too. */
+function isCollectionItem(item: { url: string; title: string }): boolean {
+  const lc = item.url.toLowerCase();
+  if (/\/(?:collections?|roundups?|premium)\//.test(lc)) return true;
+  const t = item.title.trim();
+  return t.split(/\s+/).length >= 2 && /\b(?:recipes|ideas|dishes)$/i.test(t);
+}
+
 /** An item is "new" if it was added in the most recent crawl (same timestamp as lastRefreshed) */
 function isNewItem(item: DiscoverFeedItem, lastRefreshed?: string): boolean {
   if (!item.addedAt || !lastRefreshed) return false;
@@ -396,7 +407,11 @@ export function Discover({
       const url = `/discover/feed?${params}`;
       const data = await api.post<DiscoverFeed & { warnings?: string[] }>(url, {});
       if (data) {
-        if (data.warnings?.length) {
+        // Only surface "refreshed recently" rate-limit warnings for a manual
+        // (user-initiated) refresh. A background auto-refresh that gets rate-
+        // limited should stay silent — the cached feed is already current, so
+        // there's nothing for the user to act on.
+        if (force && data.warnings?.length) {
           setFeedWarnings(data.warnings);
         }
         setFeed(data);
@@ -946,6 +961,7 @@ export function Discover({
     const seen = new Set<string>();
     return items.filter((item) => {
       if (!item.imageUrl) return false;
+      if (isCollectionItem(item)) return false;
       if (seen.has(item.url)) return false;
       if (expirationOn && item.expiresAt && new Date(item.expiresAt).getTime() <= now) return false;
       seen.add(item.url);
