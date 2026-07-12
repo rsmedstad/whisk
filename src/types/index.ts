@@ -371,6 +371,17 @@ export interface DiscoverConfig {
   expirationEnabled: boolean; // when false, items never expire from the feed
   itemLifetimeDays: number;   // how long items stay visible (when expiration is enabled)
   refreshIntervalDays: number; // minimum days between auto-refreshes
+  /** Read-only, attached by GET /api/discover/config from the feed archive */
+  sourceHealth?: Record<string, DiscoverSourceHealth>;
+}
+
+/** Per-source scrape health recorded during feed refreshes */
+export interface DiscoverSourceHealth {
+  lastAttempt: string;
+  lastSuccess?: string;
+  lastItemCount: number;
+  lastNewCount: number;
+  lastError?: string;
 }
 
 // ── Import ─────────────────────────────────────────────

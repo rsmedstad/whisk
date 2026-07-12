@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { getLocal, setLocal, CACHE_KEYS } from "../lib/cache";
 import type { Recipe, RecipeIndexEntry } from "../types";
@@ -36,6 +36,24 @@ export function useRecipes() {
 
   useEffect(() => {
     fetchRecipes();
+  }, [fetchRecipes]);
+
+  // Refetch when the app resumes (iOS PWA suspends the page, so changes made
+  // on another device otherwise stay hidden until a full restart)
+  const lastFetchAtRef = useRef(Date.now());
+  useEffect(() => {
+    const onResume = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchAtRef.current < 30_000) return;
+      lastFetchAtRef.current = Date.now();
+      fetchRecipes();
+    };
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
+    return () => {
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
+    };
   }, [fetchRecipes]);
 
   const getRecipe = useCallback(async (id: string): Promise<Recipe> => {

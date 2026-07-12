@@ -2,12 +2,13 @@ import { useCallback, useEffect } from "react";
 import { setBadge, clearBadge } from "../lib/badge";
 import { api } from "../lib/api";
 import { getLocal, setLocal } from "../lib/cache";
-import type { DiscoverFeed } from "../types";
+import type { DiscoverFeed, DiscoverFeedItem } from "../types";
 
 const SEEN_KEY = "whisk_discover_seen_urls";
+const SEEN_AT_KEY = "whisk_discover_seen_at";
 const ENABLED_KEY = "whisk_badge_enabled";
 const FEED_CACHE_KEY = "discover_feed";
-const MAX_SEEN = 500;
+const MAX_SEEN = 2000;
 const FETCH_THROTTLE_MS = 60_000;
 
 let lastFetchAt = 0;
@@ -37,16 +38,26 @@ function saveSeen(set: Set<string>): void {
   }
 }
 
-function feedUrls(feed: DiscoverFeed | null): string[] {
+function feedItems(feed: DiscoverFeed | null): DiscoverFeedItem[] {
   if (!feed?.categories) return [];
-  const urls: string[] = [];
+  const result: DiscoverFeedItem[] = [];
   for (const items of Object.values(feed.categories)) {
     if (!items) continue;
     for (const item of items) {
-      if (item.url) urls.push(item.url);
+      if (item.url) result.push(item);
     }
   }
-  return urls;
+  return result;
+}
+
+function markAllSeen(items: DiscoverFeedItem[], seen: Set<string>): void {
+  for (const item of items) seen.add(item.url);
+  saveSeen(seen);
+  try {
+    localStorage.setItem(SEEN_AT_KEY, new Date().toISOString());
+  } catch {
+    // localStorage full — timestamp tracking degrades gracefully
+  }
 }
 
 async function maybeFetchFeed(): Promise<void> {
@@ -73,28 +84,35 @@ export function useDiscoverBadge(onDiscoverTab: boolean): void {
       return;
     }
     const feed = getLocal<DiscoverFeed>(FEED_CACHE_KEY);
-    const urls = feedUrls(feed);
-    if (urls.length === 0) return;
+    const items = feedItems(feed);
+    if (items.length === 0) return;
 
     const seen = getSeen();
 
     // First run on this device: calibrate without badging the backlog.
     if (seen.size === 0) {
-      for (const u of urls) seen.add(u);
-      saveSeen(seen);
+      markAllSeen(items, seen);
       clearBadge();
       return;
     }
 
     if (onDiscoverTab && document.visibilityState === "visible") {
-      for (const u of urls) seen.add(u);
-      saveSeen(seen);
+      markAllSeen(items, seen);
       clearBadge();
       return;
     }
 
+    // Count only items added after the last time everything was marked seen.
+    // The seen set alone isn't enough: it's capped, so on large feeds old
+    // trimmed URLs would otherwise all count as "new" (the 883-badge bug).
+    const lastSeenAt = localStorage.getItem(SEEN_AT_KEY);
     let unseen = 0;
-    for (const u of urls) if (!seen.has(u)) unseen++;
+    for (const item of items) {
+      if (seen.has(item.url)) continue;
+      if (!item.addedAt) continue;
+      if (lastSeenAt && item.addedAt <= lastSeenAt) continue;
+      unseen++;
+    }
     setBadge(unseen);
   }, [onDiscoverTab]);
 

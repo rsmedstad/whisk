@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { getLocal, setLocal, CACHE_KEYS } from "../lib/cache";
 import { nanoid } from "nanoid";
@@ -25,6 +25,25 @@ export function useMealPlan() {
     () => !getLocal(CACHE_KEYS.MEAL_PLAN(weekId))
   );
 
+  const fetchPlan = useCallback(() => {
+    api
+      .get<MealPlan>(`/plan?week=${weekId}`)
+      .then((data) => {
+        setPlan((prev) => {
+          // Don't let a stale server response clobber a newer optimistic edit
+          // (e.g. a resume-refetch racing an in-flight savePlan PUT). A null
+          // server plan also never overwrites local meals for the same week.
+          if (!data && prev.id === weekId && prev.meals.length > 0) return prev;
+          const result = data ?? emptyPlan(currentDate);
+          if (prev.id === result.id && prev.updatedAt > result.updatedAt) return prev;
+          setLocal(CACHE_KEYS.MEAL_PLAN(weekId), result);
+          return result;
+        });
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, [weekId, currentDate]);
+
   // Background sync when week changes
   useEffect(() => {
     const cached = getLocal<MealPlan>(CACHE_KEYS.MEAL_PLAN(weekId));
@@ -32,17 +51,26 @@ export function useMealPlan() {
       setPlan(cached);
       setIsLoading(false);
     }
+    fetchPlan();
+  }, [weekId, fetchPlan]);
 
-    api
-      .get<MealPlan>(`/plan?week=${weekId}`)
-      .then((data) => {
-        const result = data ?? emptyPlan(currentDate);
-        setPlan(result);
-        setLocal(CACHE_KEYS.MEAL_PLAN(weekId), result);
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
-  }, [weekId, currentDate]);
+  // Refetch when the app resumes (iOS PWA suspends the page, so meals added
+  // on another device otherwise stay hidden until a full restart)
+  const lastFetchAtRef = useRef(Date.now());
+  useEffect(() => {
+    const onResume = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchAtRef.current < 30_000) return;
+      lastFetchAtRef.current = Date.now();
+      fetchPlan();
+    };
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
+    return () => {
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
+    };
+  }, [fetchPlan]);
 
   // Optimistic save
   const savePlan = useCallback(
@@ -253,6 +281,6 @@ export function useMealPlan() {
     pasteWeek,
     copiedMeals,
     getWeekHistory,
-    fetchPlan: () => {},
+    fetchPlan,
   };
 }

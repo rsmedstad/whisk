@@ -4,8 +4,14 @@ import { DEFAULT_DISCOVER_CONFIG as DEFAULT_CONFIG } from "../../lib/discover-co
 const KV_KEY = "discover_config";
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-  const config = await env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json");
-  return Response.json(config ?? DEFAULT_CONFIG);
+  const [config, archive] = await Promise.all([
+    env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json"),
+    env.WHISK_KV.get<{ sourceHealth?: DiscoverConfig["sourceHealth"] }>("discover_archive", "json"),
+  ]);
+  return Response.json({
+    ...(config ?? DEFAULT_CONFIG),
+    ...(archive?.sourceHealth ? { sourceHealth: archive.sourceHealth } : {}),
+  });
 };
 
 export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {

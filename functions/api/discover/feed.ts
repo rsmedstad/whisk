@@ -181,6 +181,15 @@ interface PendingRecipeCache {
   attempts: number;
 }
 
+/** Per-source scrape health, updated on every refresh */
+interface SourceHealth {
+  lastAttempt: string;
+  lastSuccess?: string;
+  lastItemCount: number;
+  lastNewCount: number;
+  lastError?: string;
+}
+
 interface Archive {
   lastRefreshed: string;
   items: ArchiveItem[];
@@ -188,6 +197,8 @@ interface Archive {
   pendingCollections?: PendingCollection[];
   /** Recipe URLs that failed pre-caching and should be retried on subsequent requests */
   pendingRecipeCache?: PendingRecipeCache[];
+  /** Per-source scrape health from the most recent refreshes */
+  sourceHealth?: Record<string, SourceHealth>;
 }
 
 /** Legacy scraper format (grouped by source) */
@@ -764,7 +775,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 // ── POST: refresh feed by scraping, merge into archive ──
 // Pass ?force=true to bypass 2-day rate limit (still respects 1-hour minimum)
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   brWarnings = []; // Reset warnings for this refresh cycle
   const [archive, config] = await Promise.all([
     env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json"),
@@ -805,7 +816,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // Scrape all enabled sources in parallel — use site profiles for known sites, generic for others
   const scrapeResults = await Promise.all(
-    enabledSources.map(async (src): Promise<{ sourceId: string; items: FeedItem[]; uncrawledCollections?: string[] }> => {
+    enabledSources.map(async (src): Promise<{ sourceId: string; items: FeedItem[]; uncrawledCollections?: string[]; error?: string }> => {
       try {
         // Prefer an RSS/Atom feed when configured — far more stable than HTML scraping
         if (src.feedUrl) {
@@ -824,12 +835,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         // Generic scraper with auto-framework detection for user-configured sites
         const items = await scrapeGenericSite(src, env);
         return { sourceId: src.id, items };
-      } catch {
+      } catch (err) {
         brWarnings.push(`Failed to scrape ${src.label}`);
-        return { sourceId: src.id, items: [] };
+        return { sourceId: src.id, items: [], error: err instanceof Error ? err.message : "scrape failed" };
       }
     })
   );
+
+  // Surface sources that silently returned nothing (site-profile catches and
+  // filtered-to-zero scrapes produce no warning of their own)
+  for (const result of scrapeResults) {
+    if (result.items.length > 0) continue;
+    const src = enabledSources.find((s) => s.id === result.sourceId);
+    if (src && !brWarnings.some((w) => w.includes(src.label))) {
+      brWarnings.push(`${src.label} returned no recipes — it may be blocking automated access.`);
+    }
+  }
 
   // Merge new items into archive (dedup by URL + title similarity)
   const now = new Date().toISOString();
@@ -950,11 +971,27 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
+  // Update per-source health (preserve lastSuccess across failed attempts)
+  const sourceHealth: Record<string, SourceHealth> = { ...(archive?.sourceHealth ?? {}) };
+  for (const result of scrapeResults) {
+    const prev = sourceHealth[result.sourceId];
+    const newCountForSource = newItems.filter((i) => i.source === result.sourceId).length;
+    const succeeded = result.items.length > 0;
+    sourceHealth[result.sourceId] = {
+      lastAttempt: now,
+      lastSuccess: succeeded ? now : prev?.lastSuccess,
+      lastItemCount: result.items.length,
+      lastNewCount: newCountForSource,
+      lastError: succeeded ? undefined : (result.error ?? "no recipes found"),
+    };
+  }
+
   const updatedArchive: Archive = {
     lastRefreshed: now,
     items: [...cleanedExisting, ...newItems],
     pendingCollections: updatedPending.length > 0 ? updatedPending : undefined,
     pendingRecipeCache: updatedPendingRecipes.length > 0 ? updatedPendingRecipes : undefined,
+    sourceHealth,
   };
 
   await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive));
@@ -963,7 +1000,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // This allows demo users (and all users) to view recipes instantly from cache.
   // Failed URLs get added to a retry queue that drains on subsequent requests.
   if (newItems.length > 0) {
-    precacheRecipes(newItems.slice(0, 15), env).then(async ({ failed }) => {
+    // waitUntil keeps the pre-cache work alive after the response returns —
+    // a bare floating promise can be killed mid-write by the runtime
+    waitUntil(precacheRecipes(newItems.slice(0, 15), env).then(async ({ failed }) => {
       if (failed.length === 0) return;
       // Add failed URLs to the pending recipe cache queue
       const freshArchive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
@@ -981,7 +1020,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ];
         await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(freshArchive));
       }
-    }).catch(() => {/* best-effort */});
+    }).catch(() => {/* best-effort */}));
   }
 
   const feed = archiveToCategoryFeed(updatedArchive);
@@ -1310,9 +1349,15 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
  *  defaulted to "dinner" because the keyword wasn't in the list yet). */
 function archiveToCategoryFeed(archive: Archive): CategoryFeed {
   const categories: Partial<Record<DiscoverCategory, ArchiveItem[]>> = {};
-  for (const item of archive.items) {
-    // Skip person/author entries that slipped into the archive
-    if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
+  for (const rawItem of archive.items) {
+    // Decode HTML entities left in older archived titles (e.g. "&#038;")
+    const item: ArchiveItem = {
+      ...rawItem,
+      title: decodeXml(rawItem.title),
+      description: rawItem.description ? decodeXml(rawItem.description) : rawItem.description,
+    };
+    // Skip person/author/editorial entries that slipped into the archive
+    if (isPersonTitle(item.title) || isAuthorUrl(item.url) || isNonRecipeFeedTitle(item.title)) continue;
     // Re-classify instead of using the frozen category from scrape time
     const cat = classifyRecipe(item.title, item.description, item.tags);
     // Ensure the item's tags include its category tag (keep them consistent)
@@ -1570,11 +1615,24 @@ function decodeXml(s: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#0?39;|&apos;/g, "'")
-    .replace(/&#8217;/g, "’")
-    .replace(/&#8216;/g, "‘")
-    .replace(/&#8211;/g, "–")
-    .replace(/&#8212;/g, "—")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&ndash;/g, "–")
+    .replace(/&mdash;/g, "—")
+    .replace(/&rsquo;/g, "’")
+    .replace(/&lsquo;/g, "‘")
+    .replace(/&ldquo;/g, "“")
+    .replace(/&rdquo;/g, "”")
+    .replace(/&hellip;/g, "…")
+    .replace(/&eacute;/g, "é")
+    .replace(/&#x([0-9a-fA-F]+);/g, (m, hex: string) => {
+      const n = parseInt(hex, 16);
+      return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m;
+    })
+    .replace(/&#(\d+);/g, (m, dec: string) => {
+      const n = parseInt(dec, 10);
+      return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m;
+    })
     .replace(/&amp;/g, "&")
     .trim();
 }
@@ -1591,7 +1649,7 @@ function isNonRecipeFeedTitle(title: string): boolean {
   // Numeric roundups / listicles: "22 Must-Make Summer Desserts", "40 Easy Dinners"
   if (/^\d{1,3}\b[\s\S]*\b(?:recipes?|dinners?|desserts?|ideas|meals?|ways|sides?|salads?|snacks?|dishes|cocktails?|drinks?|breakfasts?|lunches|appetizers?|bakes?)\b/i.test(title.trim())) return true;
   // Editorial / shopping / news patterns
-  return /\b(?:why|how a|shares|review|deal|sale|amazon|costco|trader joe|aldi|i tried|i asked|we tried|according to|best \w+ of \d{4}|gift guide|news|announc|recall|worth the hype|taste test)\b/i.test(title);
+  return /\b(?:why|how a|shares|review|deal|sale|amazon|costco|trader joe|aldi|i tried|i asked|we tried|according to|best \w+ of \d{4}|gift guide|news|announc|recall|worth the hype|taste test|cooking club|newsletter|meal plan|what to cook|weekly menu|giveaway|podcast)\b/i.test(title);
 }
 
 async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<FeedItem[]> {
@@ -2451,7 +2509,7 @@ function extractRecipesFromJsonLd(data: unknown, items: FeedItem[], domain: stri
     let url = typeof obj.url === "string" ? obj.url
       : typeof obj.mainEntityOfPage === "string" ? obj.mainEntityOfPage
       : undefined;
-    if (url && !url.startsWith("http")) url = `https://www.${domain}${url}`;
+    if (url && !url.startsWith("http")) url = `https://${domain}${url}`;
 
     if (name && url) {
       const imageUrl = extractJsonLdImage(obj);

@@ -80,6 +80,19 @@ const ACCENT_COLORS: Record<string, string[]> = {
   christmas: ["#cc0000", "#1a6b1a", "#d4a828"],
 };
 
+/** Compact relative time for source-health lines ("3h ago", "2d ago") */
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities, isDemoRestricted = false, onOpenAdminLogin }: SettingsProps) {
   const aiConfig = useAIConfig();
   const hh = useHousehold();
@@ -773,6 +786,18 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                               placeholder="https://example.com/"
                               className="w-full text-xs px-2 py-1 rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-600 bg-white dark:bg-stone-700 dark:text-stone-300"
                             />
+                            {(() => {
+                              const health = discoverConfig.sourceHealth?.[src.id];
+                              if (!health || !src.enabled) return null;
+                              const ok = !health.lastError;
+                              return (
+                                <p className={`text-[11px] ${ok ? "text-stone-400 dark:text-stone-500" : "text-amber-600 dark:text-amber-400"}`}>
+                                  {ok
+                                    ? `Last crawl: ${relativeTime(health.lastAttempt)} · ${health.lastItemCount} found, ${health.lastNewCount} new`
+                                    : `Last crawl failed (${relativeTime(health.lastAttempt)})${health.lastSuccess ? ` · last worked ${relativeTime(health.lastSuccess)}` : " · never succeeded"}`}
+                                </p>
+                              );
+                            })()}
                           </div>
                           <button
                             onClick={() => {

@@ -344,6 +344,7 @@ export function Discover({
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedWarnings, setFeedWarnings] = useState<string[]>([]);
+  const [feedNotice, setFeedNotice] = useState<string | null>(null);
 
   // ── Feed detail state ──
   const [selectedFeedItem, setSelectedFeedItem] = useState<
@@ -401,11 +402,12 @@ export function Discover({
     setFeedLoading(true);
     setFeedError(null);
     setFeedWarnings([]);
+    setFeedNotice(null);
     try {
       const params = new URLSearchParams();
       if (force) params.set("force", "true");
       const url = `/discover/feed?${params}`;
-      const data = await api.post<DiscoverFeed & { warnings?: string[] }>(url, {});
+      const data = await api.post<DiscoverFeed & { warnings?: string[]; newCount?: number }>(url, {});
       if (data) {
         // Only surface "refreshed recently" rate-limit warnings for a manual
         // (user-initiated) refresh. A background auto-refresh that gets rate-
@@ -413,6 +415,11 @@ export function Discover({
         // there's nothing for the user to act on.
         if (force && data.warnings?.length) {
           setFeedWarnings(data.warnings);
+        }
+        // Positive feedback on a manual refresh: the server's authoritative
+        // count of items added this crawl (same set the "new" pills mark)
+        if (force && typeof data.newCount === "number" && data.newCount > 0) {
+          setFeedNotice(`${data.newCount} new recipe${data.newCount !== 1 ? "s" : ""} added to your feed.`);
         }
         setFeed(data);
         setLocal(FEED_CACHE_KEY, data);
@@ -2081,6 +2088,17 @@ export function Discover({
                 </Button>
               </div>
             </Card>
+          </div>
+        )}
+
+        {feedNotice && (
+          <div className="px-4 pt-2">
+            <div className="rounded-lg border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/50 px-3 py-2 flex items-start justify-between gap-2">
+              <p className="flex-1 text-xs text-green-700 dark:text-green-400">{feedNotice}</p>
+              <button onClick={() => setFeedNotice(null)} className="text-green-400 hover:text-green-600 shrink-0 mt-0.5">
+                <XMark className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
