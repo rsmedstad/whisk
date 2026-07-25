@@ -426,7 +426,7 @@ function extractImageUrl(img: unknown): string | undefined {
 function parseIngredients(raw: string[]): { name: string; amount?: string; unit?: string }[] {
   return raw.map((str: string) => {
     const match = str.match(
-      /^([\d\s/½⅓⅔¼¾⅛⅜⅝⅞]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|packages?|bunche?s?|pieces?|slices?|sticks?|heads?|stalks?|sprigs?|pinche?s?|dashes?)?\s*(.+)/i
+      /^([\d\s/½⅓⅔¼¾⅛⅜⅝⅞]+)\s*(?:(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|liters?|cloves?|cans?|packages?|bunche?s?|pieces?|slices?|sticks?|heads?|stalks?|sprigs?|pinche?s?|dashes?)\b)?\s*(.+)/i
     );
     if (match) {
       return { amount: match[1]?.trim(), unit: match[2]?.trim(), name: match[3]?.trim() ?? str };
