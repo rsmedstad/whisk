@@ -1104,7 +1104,7 @@ function parseIngredientsBasic(raw: unknown): { name: string; amount?: string; u
     .map((text) => {
       const cleaned = text.replace(/<[^>]*>/g, "").trim();
       // Try to extract amount + unit + name from common patterns
-      const m = cleaned.match(/^([\d\u00BC-\u00BE\u2150-\u215E./\s-]+)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|liters?|cloves?|pinch|dash|bunch|large|medium|small|whole)?\s*(.+)/i);
+      const m = cleaned.match(/^([\d\u00BC-\u00BE\u2150-\u215E./\s-]+)\s*(?:(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|liters?|cloves?|pinch|dash|bunch|large|medium|small|whole)\b)?\s*(.+)/i);
       if (m) {
         return { amount: m[1]?.trim(), unit: m[2]?.trim(), name: m[3]?.trim() ?? cleaned };
       }
