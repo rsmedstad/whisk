@@ -696,11 +696,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       return addedMs > retentionCutoff;
     });
     if (retained.length < itemsBeforePurge) {
-      // Fire-and-forget background purge
+      // Fire-and-forget background purge (preserve all other archive fields)
       env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
-        lastRefreshed: archive.lastRefreshed,
+        ...archive,
         items: retained,
-        pendingCollections: archive.pendingCollections,
       }));
     }
   }
@@ -854,9 +853,43 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
 
   // Merge new items into archive (dedup by URL + title similarity)
   const now = new Date().toISOString();
+  const nowMs = Date.now();
   const existingUrls = new Set(archive?.items.map((i) => normalizeUrl(i.url)) ?? []);
-  const existingTitles = (archive?.items ?? []).map((i) => i.title);
+  // Expired items stay hidden in the archive for ARCHIVE_RETENTION_DAYS, so a
+  // re-scraped URL must NOT be silently deduped against them — otherwise sources
+  // that recirculate evergreen recipes (e.g. the NYT Cooking homepage) can never
+  // repopulate after their items expire. Instead, "resurrect" the archived item
+  // by resetting its expiry when a scrape finds it again.
+  const isExpiredItem = (i: ArchiveItem): boolean => {
+    if (!config.expirationEnabled) return false;
+    const expiry = i.expiresAt
+      ? new Date(i.expiresAt).getTime()
+      : new Date(i.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000;
+    return expiry <= nowMs;
+  };
+  const expiredByUrl = new Map<string, ArchiveItem>();
+  for (const item of archive?.items ?? []) {
+    if (isExpiredItem(item)) expiredByUrl.set(normalizeUrl(item.url), item);
+  }
+  // Title dedup should only consider currently-visible items — expired titles
+  // would otherwise block similar new recipes from ever appearing.
+  const existingTitles = (archive?.items ?? []).filter((i) => !isExpiredItem(i)).map((i) => i.title);
   const newItems: ArchiveItem[] = [];
+  let resurrectedCount = 0;
+  /** If a scraped URL matches an expired archived item, refresh it in place. Returns true if handled. */
+  const resurrectIfExpired = (item: FeedItem): boolean => {
+    const archived = expiredByUrl.get(normalizeUrl(item.url));
+    if (!archived) return false;
+    archived.addedAt = now;
+    archived.expiresAt = config.expirationEnabled
+      ? new Date(nowMs + lifetimeDays * 24 * 60 * 60 * 1000).toISOString()
+      : undefined;
+    if (item.imageUrl && !archived.imageUrl) archived.imageUrl = item.imageUrl;
+    expiredByUrl.delete(normalizeUrl(item.url));
+    existingTitles.push(archived.title);
+    resurrectedCount++;
+    return true;
+  };
 
   // ── Drain pending collections from previous refresh cycles ──
   // Attempt to crawl 2 pending collections each refresh, adding their recipes.
@@ -868,7 +901,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     updatedPending = drainResult.updatedPending;
     for (const item of drainResult.items) {
       const key = normalizeUrl(item.url);
-      if (existingUrls.has(key)) continue;
+      if (existingUrls.has(key)) {
+        resurrectIfExpired(item);
+        continue;
+      }
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
       // Skip person/author pages and collection/roundup hubs scraped as recipes
@@ -913,7 +949,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   for (const { sourceId, items } of scrapeResults) {
     for (const item of items) {
       const key = normalizeUrl(item.url);
-      if (existingUrls.has(key)) continue;
+      if (existingUrls.has(key)) {
+        resurrectIfExpired(item);
+        continue;
+      }
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
       // Skip person/author pages and collection/roundup hubs scraped as recipes
@@ -1026,14 +1065,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   const feed = archiveToCategoryFeed(updatedArchive);
   const warnings = [...new Set(brWarnings)];
   const totalScraped = scrapeResults.reduce((n, r) => n + r.items.length, 0);
-  if (newItems.length === 0 && totalScraped > 0) {
+  if (newItems.length === 0 && resurrectedCount === 0 && totalScraped > 0) {
     warnings.push(`Checked ${enabledSources.length} source${enabledSources.length !== 1 ? "s" : ""} and found ${totalScraped} recipe${totalScraped !== 1 ? "s" : ""}, but all were already in your feed.`);
   } else if (newItems.length === 0 && totalScraped === 0) {
     warnings.push(`Checked ${enabledSources.length} source${enabledSources.length !== 1 ? "s" : ""} but couldn't extract any recipes. Sites may be blocking automated access.`);
   }
   return Response.json({
     ...feed,
-    newCount: newItems.length,
+    newCount: newItems.length + resurrectedCount,
     ...(warnings.length > 0 ? { warnings } : {}),
   });
 };
