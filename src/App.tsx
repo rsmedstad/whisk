@@ -15,6 +15,7 @@ import { AdminLoginModal } from "./components/auth/AdminLoginModal";
 import { BottomNav } from "./components/BottomNav";
 import { TimerBar } from "./components/ui/TimerBar";
 import { RecipeList } from "./components/recipes/RecipeList";
+import { toDateString } from "./lib/utils";
 import { DemoBanner } from "./components/ui/DemoBanner";
 import { DemoPill, DemoInfoModal, DemoToastHost } from "./components/ui/Demo";
 import type { Ingredient, AppSettings, AppStyle, UserPreferences } from "./types";
@@ -182,6 +183,17 @@ function AppShell({
     return [...new Set(mealPlan.plan.meals.filter((m) => m.recipeId).map((m) => m.recipeId!))];
   }, [mealPlan.plan.meals]);
 
+  // Recipe IDs planned for today or later (not yet cooked) — past meals don't
+  // count as "planned" on the recipe cards' calendar badge
+  const upcomingPlannedRecipeIds = useMemo(() => {
+    const today = toDateString(new Date());
+    return new Set(
+      mealPlan.plan.meals
+        .filter((m) => m.recipeId && m.date >= today && !m.completed)
+        .map((m) => m.recipeId!)
+    );
+  }, [mealPlan.plan.meals]);
+
   const userPreferences = useMemo((): UserPreferences | undefined => {
     try {
       const raw = localStorage.getItem("whisk_preferences");
@@ -238,6 +250,7 @@ function AppShell({
                 isLoading={recipes.isLoading}
                 onToggleFavorite={recipes.toggleFavorite}
                 onToggleWantToMake={recipes.toggleWantToMake}
+                plannedRecipeIds={upcomingPlannedRecipeIds}
                 availableTags={tags.allTagNames}
                 isDemoRestricted={isDemoRestricted}
               />

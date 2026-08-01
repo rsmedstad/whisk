@@ -22,6 +22,8 @@ interface RecipeListProps {
   isLoading: boolean;
   onToggleFavorite: (id: string) => void;
   onToggleWantToMake: (id: string) => void;
+  /** Recipe IDs planned for today or later — lights up the calendar badge */
+  plannedRecipeIds?: Set<string>;
   availableTags: string[];
   isDemoRestricted?: boolean;
 }
@@ -31,6 +33,7 @@ export function RecipeList({
   isLoading,
   onToggleFavorite,
   onToggleWantToMake,
+  plannedRecipeIds,
   availableTags,
   isDemoRestricted,
 }: RecipeListProps) {
@@ -635,6 +638,7 @@ export function RecipeList({
                       <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
                         <RecipeCard
                           recipe={recipe}
+                          isPlanned={plannedRecipeIds?.has(recipe.id)}
                           onClick={() => goToRecipe(recipe.id)}
                           onToggleFavorite={() => onToggleFavorite(recipe.id)}
                           onToggleWantToMake={() => onToggleWantToMake(recipe.id)}
@@ -650,6 +654,7 @@ export function RecipeList({
                       <RecipeCard
                         key={recipe.id}
                         recipe={recipe}
+                        isPlanned={plannedRecipeIds?.has(recipe.id)}
                         onClick={() => goToRecipe(recipe.id)}
                         onToggleFavorite={() => onToggleFavorite(recipe.id)}
                         onToggleWantToMake={() => onToggleWantToMake(recipe.id)}
@@ -666,6 +671,7 @@ export function RecipeList({
               <RecipeCard
                 key={recipe.id}
                 recipe={recipe}
+                isPlanned={plannedRecipeIds?.has(recipe.id)}
                 onClick={() => goToRecipe(recipe.id)}
                 onToggleFavorite={() => onToggleFavorite(recipe.id)}
                 onToggleWantToMake={() => onToggleWantToMake(recipe.id)}
@@ -735,11 +741,13 @@ function RecipeImage({ src, alt }: { src: string; alt: string }) {
 
 function RecipeCard({
   recipe,
+  isPlanned,
   onClick,
   onToggleFavorite,
   onToggleWantToMake,
 }: {
   recipe: RecipeIndexEntry;
+  isPlanned?: boolean;
   onClick: () => void;
   onToggleFavorite: () => void;
   onToggleWantToMake: () => void;
@@ -777,9 +785,9 @@ function RecipeCard({
             onToggleWantToMake();
           }}
           className="absolute top-1.5 left-1.5 p-1.5 rounded-full bg-black/30 backdrop-blur-sm"
-          title={recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
+          title={isPlanned ? "Planned this week" : recipe.wantToMake ? "Remove from Want to Make" : "Want to Make"}
         >
-          <CalendarDays className={classNames("w-5 h-5", recipe.wantToMake ? "text-orange-400" : "text-white/80")} />
+          <CalendarDays className={classNames("w-5 h-5", recipe.wantToMake || isPlanned ? "text-orange-400" : "text-white/80")} />
         </button>
         <button
           onClick={(e) => {
