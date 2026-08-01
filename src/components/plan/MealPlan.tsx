@@ -243,6 +243,11 @@ export function MealPlan({
     const mealTitle = title ?? mealInput.trim();
     if (!mealTitle) return;
     onAddMeal(addingSlot.date, addingSlot.slot, mealTitle, recipeId);
+    // Planning a "Want to Make" recipe fulfills the flag, same as the WTM modal path
+    if (recipeId && onToggleWantToMake) {
+      const planned = recipeIndex.find((r) => r.id === recipeId);
+      if (planned?.wantToMake) onToggleWantToMake(recipeId);
+    }
     setMealInput("");
     setAddingSlot(null);
     setShowSuggestions(false);
