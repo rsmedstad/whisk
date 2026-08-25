@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, setToken } from "../../lib/api";
-import { XMark, Lock } from "../ui/Icon";
+import { XMark, Lock, Eye, EyeSlash } from "../ui/Icon";
 import type { AuthResponse } from "../../types";
 
 interface AdminLoginModalProps {
@@ -17,6 +17,7 @@ interface AdminLoginModalProps {
 export function AdminLoginModal({ open, onClose, onSuccess }: AdminLoginModalProps) {
   const [password, setPassword] = useState("");
   const [name, setName] = useState(() => localStorage.getItem("whisk_display_name") ?? "");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -92,14 +93,29 @@ export function AdminLoginModal({ open, onClose, onSuccess }: AdminLoginModalPro
             <label className="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1">
               Admin password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-              autoComplete="current-password"
-              className="w-full rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 px-3 py-2 text-sm dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoFocus
+                autoComplete="current-password"
+                className="w-full rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 pl-3 pr-11 py-2 text-sm dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center justify-center w-11 text-stone-500 dark:text-stone-400"
+                tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeSlash className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
+            </div>
           </div>
 
           {error && (
