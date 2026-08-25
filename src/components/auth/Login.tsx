@@ -260,7 +260,7 @@ export function Login({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
-                className="!pr-11"
+                className="!pr-11 min-h-11"
               />
               <button
                 type="button"

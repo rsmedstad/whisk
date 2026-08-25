@@ -100,7 +100,7 @@ export function AdminLoginModal({ open, onClose, onSuccess }: AdminLoginModalPro
                 onChange={(e) => setPassword(e.target.value)}
                 autoFocus
                 autoComplete="current-password"
-                className="w-full rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 pl-3 pr-11 py-2 text-sm dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                className="w-full min-h-11 rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 pl-3 pr-11 py-2 text-sm dark:text-stone-100 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
               <button
                 type="button"
