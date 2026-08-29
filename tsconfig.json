@@ -23,5 +23,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "functions"]
+  "include": ["src", "functions"],
+  "exclude": ["**/*.test.ts"]
 }
