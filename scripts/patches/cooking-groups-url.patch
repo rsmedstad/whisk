@@ -1,0 +1,16 @@
+--- a/functions/api/import/url.ts
++++ b/functions/api/import/url.ts
+@@ -5,6 +5,13 @@
+   type ProviderEnv,
+ } from "../../lib/ai-providers";
+ import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
++import {
++  collectHtmlIngredientLines,
++  overlayIngredientGroups,
++  howToStepGroup,
++  isIngredientGroupHeader,
++  cleanGroupName,
++} from "../../lib/cooking-groups";
+ 
+ interface Env extends ProviderEnv {
+   WHISK_KV: KVNamespace;
