@@ -1,0 +1,166 @@
+--- a/functions/api/import/url.ts
++++ b/functions/api/import/url.ts
+@@ -5,6 +5,13 @@
+   type ProviderEnv,
+ } from "../../lib/ai-providers";
+ import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
++import {
++  collectHtmlIngredientLines,
++  overlayIngredientGroups,
++  howToStepGroup,
++  isIngredientGroupHeader,
++  cleanGroupName,
++} from "../../lib/cooking-groups";
+ 
+ interface Env extends ProviderEnv {
+   WHISK_KV: KVNamespace;
+@@ -567,7 +574,21 @@
+     // Extract video URL from the page
+     const videoUrl = extractVideoUrl(html);
+ 
+-    const parsedIngredients = parseIngredients(recipeData.recipeIngredient ?? []);
++    let parsedIngredients = parseIngredients(recipeData.recipeIngredient ?? []);
++    // JSON-LD owns amounts/names. If every ingredient is ungrouped, overlay
++    // cooking-group headings from visible recipe-card HTML (Tasty/WPRM/generic).
++    if (
++      parsedIngredients.length > 0 &&
++      parsedIngredients.every((i) => !i.group)
++    ) {
++      const htmlLines = collectHtmlIngredientLines(html);
++      if (htmlLines.length > 0) {
++        parsedIngredients = overlayIngredientGroups(
++          parsedIngredients,
++          parseIngredients(htmlLines)
++        );
++      }
++    }
+     const tags = generateTags(recipeData, parsedIngredients);
+     const rating = parseAggregateRating(recipeData.aggregateRating);
+ 
+@@ -1010,9 +1031,9 @@
+     /class="[^"]*wprm-recipe-container[^"]*"[^>]*>([\s\S]{1,100000})/i
+   );
+ 
+-  // ── Tasty Recipes — class="tasty-recipes"
++  // ── Tasty Recipes — wrapper class="tasty-recipes" (not tasty-recipes-*)
+   const tastyBlock = html.match(
+-    /class="[^"]*tasty-recipes[^"]*"[^>]*>([\s\S]*?)(?=<\/div>\s*<\/div>\s*<\/div>\s*(?:<div class="(?:entry|shared)|<footer|<section))/i
++    /<div[^>]*class="[^"]*\btasty-recipes(?!-)[^"]*"[^>]*>([\s\S]{1,150000})/i
+   );
+ 
+   // ── Generic recipe card — class="recipe-card" or "recipe-content"
+@@ -1042,6 +1063,13 @@
+   // ── Extract ingredients (with group support)
+   const ingredients: string[] = [];
+ 
++  // Tasty / WPRM / generic heading-between-lists walk (full page HTML so we
++  // do not stop at the first nested </div> inside tasty-recipes-ingredients).
++  const collectedLines = collectHtmlIngredientLines(html);
++  if (collectedLines.length > 0) {
++    ingredients.push(...collectedLines);
++  }
++
+   // WPRM: parse ingredient groups for section names, then individual ingredients
+   // Allow flexible closing — some themes have extra wrappers between </ul> and </div>
+   const wprmIngredientGroups = block.match(
+@@ -1050,7 +1078,7 @@
+     // Broader fallback: match each group up to the next group or end of ingredients section
+     /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-ingredient-group|<div[^>]*class="[^"]*wprm-recipe-instructions|$)/gi
+   );
+-  if (wprmIngredientGroups && wprmIngredientGroups.length > 0) {
++  if (ingredients.length === 0 && wprmIngredientGroups && wprmIngredientGroups.length > 0) {
+     for (const groupBlock of wprmIngredientGroups) {
+       // Extract group name (e.g. "For the crispy skirt")
+       const groupNameMatch = groupBlock.match(
+@@ -1087,19 +1115,11 @@
+     }
+   }
+ 
+-  // Tasty Recipes: <li> within a div.tasty-recipes-ingredients
++  // Tasty Recipes: headings between ingredient lists (same sentinels as WPRM)
+   if (ingredients.length === 0) {
+-    const ingredSection = block.match(
+-      /class="[^"]*tasty-recipes-ingredients[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+-    );
+-    if (ingredSection?.[1]) {
+-      const lis = ingredSection[1].match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+-      if (lis) {
+-        for (const li of lis) {
+-          const text = stripHtml(li).trim();
+-          if (text.length > 1 && text.length < 300) ingredients.push(text);
+-        }
+-      }
++    const tastyLines = collectHtmlIngredientLines(block);
++    if (tastyLines.length > 0) {
++      ingredients.push(...tastyLines);
+     }
+   }
+ 
+@@ -2047,26 +2067,6 @@
+   return null;
+ }
+ 
+-function isIngredientGroupHeader(text: string): boolean {
+-  // No digits or fractions — group headers never start with amounts
+-  if (/[\d½⅓⅔¼¾⅛⅜⅝⅞]/.test(text)) return false;
+-  // Must be short (typical headers are 1-6 words)
+-  if (text.split(/\s+/).length > 8) return false;
+-  // Explicit patterns: "For the X:", "For X:", trailing colon
+-  if (/^for\s+(the\s+)?/i.test(text)) return true;
+-  if (text.endsWith(":")) return true;
+-  // ALL CAPS header (at least 3 chars, e.g. "DIPPING SAUCE")
+-  if (text.length >= 3 && text === text.toUpperCase() && /[A-Z]/.test(text)) return true;
+-  return false;
+-}
+-
+-function cleanGroupName(text: string): string {
+-  return text
+-    .replace(/^for\s+(the\s+)?/i, "")
+-    .replace(/:$/, "")
+-    .trim();
+-}
+-
+ function parseIngredients(
+   raw: unknown[]
+ ): { name: string; amount?: string; unit?: string; group?: string }[] {
+@@ -2138,11 +2138,14 @@
+         continue;
+       }
+ 
+-      // Handle HowToStep or plain object
+-      const text = stripHtml(
+-        (s.text as string) ?? (s.name as string) ?? String(step)
+-      );
+-      addStep(steps, text, sectionGroup);
++      // Handle HowToStep or plain object.
++      // If both name and text exist, name is the cooking group — not the step text.
++      const rawText =
++        typeof s.text === "string" && s.text.trim()
++          ? s.text
++          : ((s.name as string) ?? String(step));
++      const text = stripHtml(rawText);
++      addStep(steps, text, howToStepGroup(s.name, s.text, sectionGroup));
+     } else {
+       addStep(steps, String(step), sectionGroup);
+     }
+@@ -2339,7 +2342,19 @@
+     const pageHtml = await pageRes.text();
+     const recipeData = extractJsonLd(pageHtml) ?? extractMicrodata(pageHtml);
+     if (!recipeData) return null;
+-    const ingredients = parseIngredients(recipeData.recipeIngredient ?? []);
++    let ingredients = parseIngredients(recipeData.recipeIngredient ?? []);
++    if (
++      ingredients.length > 0 &&
++      ingredients.every((i) => !i.group)
++    ) {
++      const htmlLines = collectHtmlIngredientLines(pageHtml);
++      if (htmlLines.length > 0) {
++        ingredients = overlayIngredientGroups(
++          ingredients,
++          parseIngredients(htmlLines)
++        );
++      }
++    }
+     const steps = parseSteps(recipeData.recipeInstructions ?? []);
+     if (!recipeData.name && ingredients.length === 0 && steps.length === 0) return null;
+     const allImageUrls = extractAllImageUrls(recipeData, pageHtml);

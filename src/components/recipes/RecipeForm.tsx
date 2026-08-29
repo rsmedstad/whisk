@@ -256,11 +256,17 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       const recipeData = {
         title: title.trim(),
         description: description.trim() || undefined,
-        ingredients: ingredients.filter((i) => (i.name ?? "").trim()),
+        ingredients: ingredients
+          .filter((i) => (i.name ?? "").trim())
+          .map((i) => ({
+            ...i,
+            group: i.group?.trim() || undefined,
+          })),
         steps: steps
           .filter((s) => (s.text ?? "").trim())
           .map((s) => ({
             ...s,
+            group: s.group?.trim() || undefined,
             timerMinutes: s.timerMinutes ?? parseTimerFromText(s.text) ?? undefined,
           })),
         favorite: false,
@@ -323,9 +329,9 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const removeIngredient = (index: number) =>
     setIngredients((prev) => prev.filter((_, i) => i !== index));
 
-  const updateStep = (index: number, text: string) => {
+  const updateStep = (index: number, field: keyof Step, value: string) => {
     setSteps((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, text } : s))
+      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s))
     );
   };
 
@@ -878,34 +884,43 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           </h2>
           <div className="space-y-2">
             {ingredients.map((ing, i) => (
-              <div key={i} className="flex gap-2 items-start">
+              <div key={i} className="space-y-1">
+                <div className="flex gap-2 items-start">
+                  <input
+                    className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                    placeholder="Amt"
+                    value={ing.amount ?? ""}
+                    onChange={(e) => updateIngredient(i, "amount", e.target.value)}
+                  />
+                  <input
+                    className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                    placeholder="Unit"
+                    value={ing.unit ?? ""}
+                    onChange={(e) => updateIngredient(i, "unit", e.target.value)}
+                  />
+                  <input
+                    className="flex-1 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                    placeholder="Ingredient name"
+                    value={ing.name}
+                    onChange={(e) => updateIngredient(i, "name", e.target.value)}
+                  />
+                  {ingredients.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(i)}
+                      className="p-2 text-stone-400 hover:text-red-500"
+                    >
+                      <XMark className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
                 <input
-                  className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                  placeholder="Amt"
-                  value={ing.amount ?? ""}
-                  onChange={(e) => updateIngredient(i, "amount", e.target.value)}
+                  className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-xs sm:text-sm placeholder:text-stone-400 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+                  placeholder="Group (optional)"
+                  aria-label="Ingredient group"
+                  value={ing.group ?? ""}
+                  onChange={(e) => updateIngredient(i, "group", e.target.value)}
                 />
-                <input
-                  className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                  placeholder="Unit"
-                  value={ing.unit ?? ""}
-                  onChange={(e) => updateIngredient(i, "unit", e.target.value)}
-                />
-                <input
-                  className="flex-1 rounded-lg border border-stone-300 bg-white px-2 py-2 text-base sm:text-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                  placeholder="Ingredient name"
-                  value={ing.name}
-                  onChange={(e) => updateIngredient(i, "name", e.target.value)}
-                />
-                {ingredients.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeIngredient(i)}
-                    className="p-2 text-stone-400 hover:text-red-500"
-                  >
-                    <XMark className="w-4 h-4" />
-                  </button>
-                )}
               </div>
             ))}
           </div>
@@ -931,13 +946,22 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
                 <span className="mt-2 text-sm font-medium text-stone-400 w-6 text-right">
                   {i + 1}.
                 </span>
-                <textarea
-                  className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm resize-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                  placeholder="Describe this step..."
-                  value={step.text}
-                  onChange={(e) => updateStep(i, e.target.value)}
-                  rows={2}
-                />
+                <div className="flex-1 space-y-1">
+                  <input
+                    className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-xs sm:text-sm placeholder:text-stone-400 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
+                    placeholder="Group (optional)"
+                    aria-label="Step group"
+                    value={step.group ?? ""}
+                    onChange={(e) => updateStep(i, "group", e.target.value)}
+                  />
+                  <textarea
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm resize-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                    placeholder="Describe this step..."
+                    value={step.text}
+                    onChange={(e) => updateStep(i, "text", e.target.value)}
+                    rows={2}
+                  />
+                </div>
                 {steps.length > 1 && (
                   <button
                     type="button"
