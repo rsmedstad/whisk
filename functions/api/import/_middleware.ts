@@ -1,4 +1,4 @@
-import { overlayImportedRecipe } from "../../lib/cooking-groups";
+import { overlayImportedRecipe } from "../../lib/cooking-groups-overlay";
 
 /**
  * URL import prefers JSON-LD, which flattens cooking groups.
