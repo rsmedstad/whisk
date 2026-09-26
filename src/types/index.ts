@@ -393,6 +393,8 @@ export interface DiscoverRefreshStats {
   new: number;
   refeatured: number;
   purged: number;
+  /** Items rejected as non-recipe (shopping/editorial filters + AI isRecipe gate). Absent on runs before v1.1.2. */
+  rejected?: number;
   visible: number;
   expired: number;
   withImage: number; // visible items that have an imageUrl

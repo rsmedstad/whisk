@@ -5,6 +5,14 @@ import {
   callTextAI,
 } from "../../lib/ai-providers";
 import { DEFAULT_DISCOVER_CONFIG } from "../../lib/discover-config";
+import {
+  classifyRecipe,
+  isCollectionTitle,
+  isNonRecipeFeedCategories,
+  isNonRecipeFeedTitle,
+  isNonRecipeUrl,
+  MAIN_DISH_PROTEIN,
+} from "../../lib/discover-filters";
 
 const KV_KEY = "discover_feed";
 const ARCHIVE_KEY = "discover_archive";
@@ -33,6 +41,10 @@ const BROWSER_HEADERS: Record<string, string> = {
 
 // Track BR errors during a refresh cycle so we can report them to the client
 let brWarnings: string[] = [];
+
+// Track items rejected as non-recipe (shopping/editorial/AI-gated) during a
+// refresh cycle — recorded in the refresh-stats ring for observability.
+let nonRecipeRejects: string[] = [];
 
 /** Fetch HTML via Cloudflare Browser Rendering (headless browser) */
 async function fetchWithBrowserRendering(
@@ -200,6 +212,7 @@ interface RefreshStats {
   new: number;
   refeatured: number;
   purged: number;
+  rejected: number; // items rejected as non-recipe (filters + AI isRecipe gate)
   visible: number;
   expired: number;
   withImage: number; // visible items that have an imageUrl
@@ -232,56 +245,8 @@ interface CategoryFeed {
   categories: Partial<Record<DiscoverCategory, ArchiveItem[]>>;
 }
 
-// ── Category classifier ─────────────────────────────────
-// Maps recipe titles to meal categories using keyword matching.
-// These align with the existing tag system's "meal" group.
-
-const CATEGORY_KEYWORDS: [DiscoverCategory, RegExp][] = [
-  ["breakfast", /\b(?:breakfast|pancakes?|waffles?|french toast|omelette|omelet|scrambled?|frittata|eggs?\b(?!plant)|brunch|granola|oatmeal|cereal|bagels?|bostock|morning buns?|dutch baby|cr[eê]pes?|shakshuka|porridge|acai bowl)\b/i],
-  ["soups", /\b(?:soups?|stew|chowder|bisque|broth|gumbo|chili|ramen|pho|pozole|minestrone|gazpacho|consomm[eé])\b/i],
-  ["salad", /\b(?:salads?|slaw|coleslaw|ceviche|poke bowl|grain bowl)\b/i],
-  ["dessert", /\b(?:desserts?|cake|cookies?|brownies?|pie|tart|ice cream|gelato|pudding|mousse|crumble|cobbler|cupcakes?|cheesecake|tiramisu|macarons?|fudge|candy|chocolate truffles?|sorbet|panna cotta|souffl[eé]|pastry|eclair|profiterole|cr[eê]me br[uû]l[eé]e|brittle|toffee|praline|turnover|strudel|baklava|bark(?:\s|$)|caramels?\b(?!\s*(?:sauce|onion|chicken)))\b/i],
-  ["baking", /\b(?:bread|biscuits?|scones?|focaccia|pretzel|croissant|challah|sourdough|brioche|ciabatta|flatbread|naan|pita|cinnamon rolls?|doughnuts?|donuts?|muffins?|danish pastry)\b/i],
-  ["drinks", /\b(?:cocktails?|drinks?|smoothie|lemonade|limeade|margarita|sangria|spritz|mojito|caipirinha|paloma|negroni|sidecar|punch|tea\b|coffee\b|latte|chai|matcha|hot chocolate|eggnog|cider)\b/i],
-  ["appetizer", /\b(?:appetizers?|dip|hummus|bruschetta|crostini|spring rolls?|dumplings?|wontons?|empanadas?|quesadillas?|nachos?|sliders?|bites?\b|crab cakes?|deviled eggs?|charcuterie)\b/i],
-  ["snack", /\b(?:snacks?|popcorn|trail mix|(?<!fish and )chips?|crackers?|energy balls?|protein bars?)\b/i],
-  ["side dish", /\b(?:side dish|mashed potatoes?|roasted vegetables?|rice pilaf|couscous|baked beans|corn ?bread|mac and cheese|macaroni|stuffing|au gratin|roasted potatoes?|french fries|fries|potato salad)\b/i],
-  // "dinner" is the default/catch-all for main dishes
-];
-
-/** Main-dish proteins — if the title contains one of these, override snack/appetizer/drinks categories */
-const MAIN_DISH_PROTEIN = /\b(?:fish|salmon|tuna|shrimp|chicken|turkey|duck|pork|beef|steak|lamb|veal|ribs|brisket|meatloaf|roast|chops?)\b/i;
-
-/** Savory pie/tart markers — these match the dessert regex via "pie"/"tart" but are mains */
-const SAVORY_PIE = /\b(?:shepherd'?s?|cottage|pot|meat|mince|savou?ry|guinness|chicken|beef|pork|lamb|turkey|ham|fish|seafood|crab|leek|spinach|quiche|pizza|asparagus|tomato|onion|mushroom|goat)\b/i;
-
-function classifyRecipe(title: string, description?: string, tags?: string[]): DiscoverCategory {
-  const text = `${title} ${description ?? ""}`;
-  for (const [category, pattern] of CATEGORY_KEYWORDS) {
-    if (pattern.test(text)) {
-      // Don't let a keyword override when the title is clearly a main dish
-      // (e.g. "Sweet Tea-Brined Roast Chicken" matches drinks via "tea")
-      if ((category === "snack" || category === "appetizer" || category === "drinks") && MAIN_DISH_PROTEIN.test(title)) {
-        return "dinner";
-      }
-      // Savory pies/tarts (shepherd's, cottage, pot, mince…) match dessert via "pie"/"tart"
-      if (category === "dessert" && /\b(?:pie|tart)\b/i.test(title) && SAVORY_PIE.test(title)) {
-        return "dinner";
-      }
-      return category;
-    }
-  }
-  // Before defaulting to "dinner", check if AI-assigned tags indicate a category
-  if (tags && tags.length > 0) {
-    const mealTags: DiscoverCategory[] = ["breakfast", "dessert", "snack", "appetizer", "salad", "side dish", "drinks", "baking", "soups"];
-    for (const tag of tags) {
-      if (mealTags.includes(tag as DiscoverCategory)) {
-        return tag as DiscoverCategory;
-      }
-    }
-  }
-  return "dinner"; // Default: main dish / entrée
-}
+// Category classifier + non-recipe filters live in ../../lib/discover-filters
+// (shared, pure, unit-tested). This module wires them into scrape/serve paths.
 
 // ── Pending collection management ────────────────────────
 // Collection/roundup pages (e.g. "10 Best Dessert Recipes") are discovered
@@ -444,13 +409,18 @@ const DISCOVER_TAGS = [
 const DISCOVER_TAG_SET = new Set<string>(DISCOVER_TAGS);
 
 /** Batch-tag items using AI. Processes up to 20 items per call for efficiency.
- *  Also estimates totalTime for items missing it. */
+ *  Also estimates totalTime for items missing it, and gates on `isRecipe`:
+ *  items the model explicitly flags as non-recipes (product roundups, gear
+ *  reviews, shopping/news posts) are returned in `rejected` so callers can
+ *  skip archiving them. Conservative — only an explicit `isRecipe: false`
+ *  rejects; parse failures and missing fields keep the item. */
 async function batchTagItems(
   items: ArchiveItem[],
   env: Env
-): Promise<void> {
+): Promise<{ rejected: ArchiveItem[] }> {
+  const rejected: ArchiveItem[] = [];
   const untagged = items.filter((i) => !i.tags || i.tags.length === 0);
-  if (untagged.length === 0) return;
+  if (untagged.length === 0) return { rejected };
 
   const config = await loadAIConfig(env.WHISK_KV);
   const fnConfig = resolveConfig(config, "chat", env);
@@ -460,13 +430,14 @@ async function batchTagItems(
     for (const item of untagged) {
       item.tags = keywordTagItem(item);
     }
-    return;
+    return { rejected };
   }
 
   // Process in batches of 20
   const BATCH_SIZE = 20;
   for (let i = 0; i < untagged.length; i += BATCH_SIZE) {
     const batch = untagged.slice(i, i + BATCH_SIZE);
+    const rejectedInBatch = new Set<ArchiveItem>();
     try {
       const numbered = batch.map((item, idx) => `${idx + 1}. "${item.title}"${item.description ? ` — ${item.description}` : ""}`).join("\n");
 
@@ -474,7 +445,10 @@ async function batchTagItems(
         {
           role: "system",
           content: [
-            "You are a recipe classifier. For each numbered recipe, assign 2-4 tags from this exact list:",
+            "You are a recipe classifier. For each numbered item, first decide whether it is an actual cookable recipe for a specific dish (isRecipe).",
+            "Product roundups, shopping/deals posts, kitchen-gear or appliance reviews, gift guides, news articles, and general cooking-tips posts are NOT recipes.",
+            "",
+            "For each recipe, assign 2-4 tags from this exact list:",
             "",
             DISCOVER_TAGS.join(", "),
             "",
@@ -483,33 +457,40 @@ async function batchTagItems(
             "Rules:",
             "- Only use tags from the list above.",
             "- Include the meal type (dinner, breakfast, dessert, etc.) and cuisine if identifiable.",
+            "- Meal type: use 'baking' for breads, pretzels, and other savory baked goods; 'snack' for snack foods. Only use 'dinner' for savory main dishes — do not default to 'dinner' when unsure.",
             "- Include diet tags only when clearly applicable. NEVER tag a recipe as 'vegan' or 'vegetarian' if it contains meat, poultry, fish, or seafood.",
             "- Estimate totalTime as a number in minutes. Use your knowledge of typical recipes.",
-            '- Return JSON: { "results": [{ "index": 1, "tags": ["dinner", "italian"], "totalTime": 45 }, ...] }',
+            '- Return JSON: { "results": [{ "index": 1, "isRecipe": true, "tags": ["dinner", "italian"], "totalTime": 45 }, ...] }',
+            '- For non-recipe items return { "index": N, "isRecipe": false, "tags": [] }.',
           ].join("\n"),
         },
         { role: "user", content: numbered },
       ], { maxTokens: 1024, temperature: 0.2, jsonMode: true });
 
-      const parsed = JSON.parse(content) as { results?: { index: number; tags: unknown; totalTime?: unknown }[] };
+      const parsed = JSON.parse(content) as { results?: { index: number; isRecipe?: unknown; tags: unknown; totalTime?: unknown }[] };
       if (Array.isArray(parsed.results)) {
         for (const result of parsed.results) {
-          if (typeof result.index !== "number" || !Array.isArray(result.tags)) continue;
+          if (typeof result.index !== "number") continue;
           const item = batch[result.index - 1];
-          if (item) {
-            // Normalize to lowercase and validate against allowed set
-            const validTags = result.tags
-              .filter((t): t is string => typeof t === "string")
-              .map((t) => t.toLowerCase().trim())
-              .filter((t) => DISCOVER_TAG_SET.has(t));
-            if (validTags.length > 0) {
-              const itemText = `${item.title} ${item.description ?? ""}`.toLowerCase();
-              item.tags = sanitizeDietTags([...new Set(validTags)], itemText); // dedupe + cross-validate
-            }
-            // Store estimated total time (only if item doesn't already have it from JSON-LD)
-            if (!item.totalTime && typeof result.totalTime === "number" && result.totalTime > 0 && result.totalTime < 1440) {
-              item.totalTime = Math.round(result.totalTime);
-            }
+          if (!item) continue;
+          if (result.isRecipe === false) {
+            rejected.push(item);
+            rejectedInBatch.add(item);
+            continue;
+          }
+          if (!Array.isArray(result.tags)) continue;
+          // Normalize to lowercase and validate against allowed set
+          const validTags = result.tags
+            .filter((t): t is string => typeof t === "string")
+            .map((t) => t.toLowerCase().trim())
+            .filter((t) => DISCOVER_TAG_SET.has(t));
+          if (validTags.length > 0) {
+            const itemText = `${item.title} ${item.description ?? ""}`.toLowerCase();
+            item.tags = sanitizeDietTags([...new Set(validTags)], itemText); // dedupe + cross-validate
+          }
+          // Store estimated total time (only if item doesn't already have it from JSON-LD)
+          if (!item.totalTime && typeof result.totalTime === "number" && result.totalTime > 0 && result.totalTime < 1440) {
+            item.totalTime = Math.round(result.totalTime);
           }
         }
       }
@@ -522,13 +503,15 @@ async function batchTagItems(
       }
     }
 
-    // Fill in any items that didn't get tags from AI
+    // Fill in any items that didn't get tags from AI (skip AI-rejected ones)
     for (const item of batch) {
+      if (rejectedInBatch.has(item)) continue;
       if (!item.tags || item.tags.length === 0) {
         item.tags = keywordTagItem(item);
       }
     }
   }
+  return { rejected };
 }
 
 /** Estimate totalTime for items that have tags but are missing time */
@@ -584,8 +567,12 @@ function keywordTagItem(item: ArchiveItem): string[] {
     // Map DiscoverCategory to tag names (most are 1:1)
     const catTag = item.category === "soups" ? "dinner" : item.category === "baking" ? "baking" : item.category;
     if (DISCOVER_TAG_SET.has(catTag)) tags.push(catTag);
+  } else if (MAIN_DISH_PROTEIN.test(text) || /\b(?:dinner|supper|casseroles?|pasta|curry|main (?:dish|course))\b/.test(text)) {
+    // Only stamp "dinner" when there's a real main-dish signal — ambiguous
+    // items no longer default to a false "dinner" tag; they just omit the
+    // meal tag until the AI (or a better keyword) can place them.
+    tags.push("dinner");
   }
-  if (tags.length === 0 || item.category === "dinner") tags.push("dinner");
 
   // Cuisine detection
   const cuisineKeywords: [string, string[]][] = [
@@ -755,7 +742,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
           });
         }
         if (drainedItems.length > 0) {
-          await batchTagItems(drainedItems, env);
+          const { rejected } = await batchTagItems(drainedItems, env);
+          if (rejected.length > 0) {
+            const rejectedSet = new Set(rejected);
+            for (let i = drainedItems.length - 1; i >= 0; i--) {
+              if (rejectedSet.has(drainedItems[i]!)) drainedItems.splice(i, 1);
+            }
+          }
         }
         // Re-read archive to avoid overwriting concurrent writes
         const freshArchive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
@@ -793,6 +786,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   brWarnings = []; // Reset warnings for this refresh cycle
+  nonRecipeRejects = []; // Reset non-recipe reject tally for this refresh cycle
   const [archive, config] = await Promise.all([
     env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json"),
     loadConfig(env),
@@ -926,9 +920,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
       }
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
-      // Skip person/author pages and collection/roundup hubs scraped as recipes
+      // Skip person/author pages and collection/roundup/shopping pages scraped as recipes
       if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
-      if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title)) continue;
+      if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title) || isNonRecipeFeedTitle(item.title)) {
+        nonRecipeRejects.push(item.title);
+        continue;
+      }
       existingUrls.add(key);
       existingTitles.push(item.title);
       const expiresAt = config.expirationEnabled
@@ -974,9 +971,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
       }
       const isDupTitle = existingTitles.some((t) => titleSimilarity(item.title, t) >= 0.75);
       if (isDupTitle) continue;
-      // Skip person/author pages and collection/roundup hubs scraped as recipes
+      // Skip person/author pages and collection/roundup/shopping pages scraped as recipes
       if (isPersonTitle(item.title) || isAuthorUrl(item.url)) continue;
-      if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title)) continue;
+      if (isNonRecipeUrl(item.url) || isCollectionTitle(item.title) || isNonRecipeFeedTitle(item.title)) {
+        nonRecipeRejects.push(item.title);
+        continue;
+      }
       existingUrls.add(key);
       existingTitles.push(item.title);
       const expiresAt = config.expirationEnabled
@@ -992,15 +992,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     }
   }
 
-  // AI-tag new items (uses Groq for speed, falls back to keyword matching)
+  // AI-tag new items (uses Groq for speed, falls back to keyword matching).
+  // The tagger also gates on isRecipe — items the AI flags as non-recipes
+  // (product roundups, gear reviews, shopping posts) are dropped before archiving.
   if (newItems.length > 0) {
-    await batchTagItems(newItems, env);
+    const { rejected } = await batchTagItems(newItems, env);
+    if (rejected.length > 0) {
+      const rejectedSet = new Set(rejected);
+      for (let i = newItems.length - 1; i >= 0; i--) {
+        if (rejectedSet.has(newItems[i]!)) {
+          nonRecipeRejects.push(newItems[i]!.title);
+          newItems.splice(i, 1);
+        }
+      }
+    }
   }
 
-  // Also tag any existing items that don't have tags yet (backfill)
+  // Also tag any existing items that don't have tags yet (backfill).
+  // Existing items the AI rejects as non-recipes get purged from the archive below.
+  const aiRejectedExisting = new Set<ArchiveItem>();
   const untaggedExisting = (archive?.items ?? []).filter((i) => !i.tags || i.tags.length === 0);
   if (untaggedExisting.length > 0) {
-    await batchTagItems(untaggedExisting, env);
+    const { rejected } = await batchTagItems(untaggedExisting, env);
+    for (const item of rejected) aiRejectedExisting.add(item);
   }
 
   // Backfill totalTime for items that have tags but no time estimate
@@ -1015,9 +1029,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
   // stale never-rescraped rows are dropped. This keeps the archive (and URL/title
   // dedup against it) from growing without bound.
   const retentionCutoff = nowMs - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-  const retainedExisting = (archive?.items ?? []).filter(
+  const retainedAfterRetention = (archive?.items ?? []).filter(
     (item) => !config.expirationEnabled || new Date(item.addedAt).getTime() > retentionCutoff
   );
+  // One-shot cleanup: purge previously archived non-recipe items (shopping/
+  // product posts like thekitchn.com/best-coffee-mug-warmer-23845669, roundup
+  // hubs, and anything the AI backfill just flagged) from KV. These were
+  // already hidden at serve time; this removes them from the archive for good.
+  const retainedExisting = retainedAfterRetention.filter((item) => {
+    const title = decodeXml(item.title);
+    const isNonRecipe = aiRejectedExisting.has(item)
+      || isNonRecipeUrl(item.url) || isCollectionTitle(title) || isNonRecipeFeedTitle(title);
+    if (isNonRecipe) nonRecipeRejects.push(title);
+    return !isNonRecipe;
+  });
   const purgedCount = (archive?.items.length ?? 0) - retainedExisting.length;
   const cleanedExisting = retainedExisting.map((item) => ({
     ...item,
@@ -1071,6 +1096,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     new: newItems.length,
     refeatured: resurrectedCount,
     purged: purgedCount,
+    rejected: nonRecipeRejects.length,
     visible: visibleAfter.length,
     expired: updatedArchive.items.length - visibleAfter.length,
     withImage: visibleAfter.filter((i) => i.imageUrl).length,
@@ -1727,15 +1753,6 @@ function xmlTag(block: string, tag: string): string | undefined {
   return m?.[1] !== undefined ? decodeXml(m[1]) : undefined;
 }
 
-/** Titles that signal editorial/news/roundups rather than a single recipe
- *  (mixed blog feeds like The Kitchn and Pinch of Yum include these). */
-function isNonRecipeFeedTitle(title: string): boolean {
-  // Numeric roundups / listicles: "22 Must-Make Summer Desserts", "40 Easy Dinners"
-  if (/^\d{1,3}\b[\s\S]*\b(?:recipes?|dinners?|desserts?|ideas|meals?|ways|sides?|salads?|snacks?|dishes|cocktails?|drinks?|breakfasts?|lunches|appetizers?|bakes?)\b/i.test(title.trim())) return true;
-  // Editorial / shopping / news patterns
-  return /\b(?:why|how a|shares|review|deal|sale|amazon|costco|trader joe|aldi|i tried|i asked|we tried|according to|best \w+ of \d{4}|gift guide|news|announc|recall|worth the hype|taste test|cooking club|newsletter|meal plan|what to cook|weekly menu|giveaway|podcast)\b/i.test(title);
-}
-
 async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<FeedItem[]> {
   const feedUrl = source.feedUrl!;
   const domain = new URL(source.url).hostname.replace(/^www\./, "");
@@ -1784,7 +1801,23 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
     if (seen.has(key)) continue;
     seen.add(key);
 
-    if (isPersonTitle(title) || isAuthorUrl(url) || isNonRecipeFeedTitle(title)) continue;
+    if (isPersonTitle(title) || isAuthorUrl(url)) continue;
+    if (isNonRecipeFeedTitle(title) || isNonRecipeUrl(url)) {
+      nonRecipeRejects.push(title);
+      continue;
+    }
+
+    // Strong recipe signal from RSS <category> tags: editorial+commerce feeds
+    // (esp. The Kitchn) mark recipes with "Recipes"/"recipe" and shopping posts
+    // with "shopping"/"product review"/… — reject shopping/news items that no
+    // recipe category vouches for. Feeds without categories are unaffected.
+    const rssCategories = [...block.matchAll(/<category(?:\s[^>]*)?>([\s\S]*?)<\/category>/gi)]
+      .map((m) => decodeXml(m[1]!.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")).trim())
+      .filter(Boolean);
+    if (isNonRecipeFeedCategories(rssCategories)) {
+      nonRecipeRejects.push(title);
+      continue;
+    }
 
     // Image: media:content / media:thumbnail / enclosure / g:image_link / first <img> in content.
     // Some feeds (e.g. The Kitchn's cdn.apartmenttherapy.info) serve image URLs with
@@ -2823,33 +2856,6 @@ function isPersonTitle(title: string): boolean {
  */
 function isAuthorUrl(url: string): boolean {
   return /\/(?:authors?|chefs?|cooks?|contributors?|profiles?|people|staff|writers?|editors?)(?:\/|$)/i.test(url);
-}
-
-/**
- * Detect URLs that point to a collection/roundup or editorial section rather
- * than a single recipe. Recipe sites expose "hub" pages — e.g.
- * bbcgoodfood.com/recipes/collection/cherry-recipes — that list many recipes;
- * these have no ingredients or steps and fail when imported as a recipe.
- */
-function isNonRecipeUrl(url: string): boolean {
-  const lc = url.toLowerCase();
-  // Collection / roundup / gallery / premium hubs
-  if (/\/(?:collections?|roundups?|galler(?:y|ies)|premium)\//.test(lc)) return true;
-  // Editorial / shopping / news / how-to sections
-  if (/\/(?:reviews?|health|news-?trends?|news|how-?to|guides?|inspiration|advice|shopping|wellness|opinion|video)\//.test(lc)) return true;
-  return false;
-}
-
-/**
- * Detect titles that name a roundup/collection ("Cherry recipes", "Exclusive
- * salad recipes", "Sheet Pan Chicken Dinners") rather than a single dish.
- * Individual recipes are named after the dish ("Mexican street corn salad"),
- * so a multi-word title ending in a plural roundup noun is almost always a hub.
- */
-function isCollectionTitle(title: string): boolean {
-  const t = title.trim();
-  if (t.split(/\s+/).length < 2) return false;
-  return /\b(?:recipes|ideas|dishes|bakes|traybakes|dinners|lunches|breakfasts|desserts|mains|sides)$/i.test(t);
 }
 
 /** Human-friendly duration, rounded up: "2 minutes", "3 hours", "2 days". */
