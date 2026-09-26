@@ -9,6 +9,8 @@ import { DEFAULT_DISCOVER_CONFIG } from "../../lib/discover-config";
 const KV_KEY = "discover_feed";
 const ARCHIVE_KEY = "discover_archive";
 const CONFIG_KEY = "discover_config";
+const REFRESH_LOG_KEY = "discover_refresh_log"; // small ring buffer of per-refresh stats
+const REFRESH_LOG_MAX = 10; // keep the last N refresh runs
 const MIN_REFRESH_MS = 2 * 24 * 60 * 60 * 1000; // 2 days between refreshes
 const DEFAULT_ITEM_LIFETIME_DAYS = 7; // how long a discover item stays visible
 const ARCHIVE_RETENTION_DAYS = 30; // keep expired items in DB for this long before purging
@@ -188,6 +190,19 @@ interface SourceHealth {
   lastItemCount: number;
   lastNewCount: number;
   lastError?: string;
+}
+
+/** Per-refresh outcome stats, kept in a short KV ring for observability
+ *  (surfaced in Settings next to source health). */
+interface RefreshStats {
+  at: string;
+  scraped: number;
+  new: number;
+  refeatured: number;
+  purged: number;
+  visible: number;
+  expired: number;
+  withImage: number; // visible items that have an imageUrl
 }
 
 interface Archive {
@@ -630,7 +645,7 @@ function sanitizeDietTags(tags: string[], text: string): string[] {
 
 // ── GET: return category-grouped feed from archive ──────
 
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const [archive, config] = await Promise.all([
     env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json"),
     loadConfig(env),
@@ -696,11 +711,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       return addedMs > retentionCutoff;
     });
     if (retained.length < itemsBeforePurge) {
-      // Fire-and-forget background purge (preserve all other archive fields)
-      env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
+      // Background purge (preserve all other archive fields). waitUntil keeps the
+      // write alive after the response returns — a bare floating promise can be
+      // killed mid-write by the runtime, which left stale items accumulating.
+      waitUntil(env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
         ...archive,
         items: retained,
-      }));
+      })));
     }
   }
 
@@ -712,8 +729,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const pending = pendingForEnabledSources(archive.pendingCollections ?? [], enabledSources);
   if (pending.length > 0) {
     const existingUrls = new Set(archive.items.map((i) => normalizeUrl(i.url)));
-    // Fire-and-forget — don't block the GET response
-    drainPendingCollections(pending, existingUrls, env, 1).then(async (result) => {
+    // Background — don't block the GET response, but keep the work alive via waitUntil
+    waitUntil(drainPendingCollections(pending, existingUrls, env, 1).then(async (result) => {
       if (result.items.length > 0 || result.updatedPending.length !== pending.length) {
         const lifetimeDays = config.itemLifetimeDays;
         const existingTitles = archive.items.map((i) => i.title);
@@ -748,7 +765,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(freshArchive));
         }
       }
-    }).catch(() => { /* fire-and-forget */ });
+    }).catch(() => { /* best-effort */ }));
   }
 
   // ── Opportunistic recipe cache draining ──
@@ -756,7 +773,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // This gradually fills the recipe cache for items that failed initial pre-caching.
   const pendingRecipes = pendingForEnabledSources(archive.pendingRecipeCache ?? [], enabledSources);
   if (pendingRecipes.length > 0) {
-    drainPendingRecipeCache(pendingRecipes, archive.items, env, 2).then(async (updated) => {
+    waitUntil(drainPendingRecipeCache(pendingRecipes, archive.items, env, 2).then(async (updated) => {
       if (updated.length !== pendingRecipes.length) {
         const freshArchive = await env.WHISK_KV.get<Archive>(ARCHIVE_KEY, "json");
         if (freshArchive) {
@@ -764,7 +781,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(freshArchive));
         }
       }
-    }).catch(() => { /* fire-and-forget */ });
+    }).catch(() => { /* best-effort */ }));
   }
 
   const filtered: Archive = { lastRefreshed: archive.lastRefreshed, items: visibleItems };
@@ -885,6 +902,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
       ? new Date(nowMs + lifetimeDays * 24 * 60 * 60 * 1000).toISOString()
       : undefined;
     if (item.imageUrl && !archived.imageUrl) archived.imageUrl = item.imageUrl;
+    if (item.description && !archived.description) archived.description = item.description;
+    if (item.totalTime && !archived.totalTime) archived.totalTime = item.totalTime;
     expiredByUrl.delete(normalizeUrl(item.url));
     existingTitles.push(archived.title);
     resurrectedCount++;
@@ -991,8 +1010,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
     await batchEstimateTimes(missingTime, env);
   }
 
-  // Clean up existing archive items
-  const cleanedExisting = (archive?.items ?? []).map((item) => ({
+  // Clean up existing archive items. Purge items past the retention window here
+  // too (not just on GET) — resurrected items got addedAt reset above, so only
+  // stale never-rescraped rows are dropped. This keeps the archive (and URL/title
+  // dedup against it) from growing without bound.
+  const retentionCutoff = nowMs - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const retainedExisting = (archive?.items ?? []).filter(
+    (item) => !config.expirationEnabled || new Date(item.addedAt).getTime() > retentionCutoff
+  );
+  const purgedCount = (archive?.items.length ?? 0) - retainedExisting.length;
+  const cleanedExisting = retainedExisting.map((item) => ({
     ...item,
     expiresAt: config.expirationEnabled
       ? (item.expiresAt ?? new Date(new Date(item.addedAt).getTime() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString())
@@ -1035,6 +1062,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
 
   await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify(updatedArchive));
 
+  // ── Record per-refresh stats in a short KV ring (observability) ──
+  const totalScraped = scrapeResults.reduce((n, r) => n + r.items.length, 0);
+  const visibleAfter = updatedArchive.items.filter((i) => !isExpiredItem(i));
+  const refreshStats: RefreshStats = {
+    at: now,
+    scraped: totalScraped,
+    new: newItems.length,
+    refeatured: resurrectedCount,
+    purged: purgedCount,
+    visible: visibleAfter.length,
+    expired: updatedArchive.items.length - visibleAfter.length,
+    withImage: visibleAfter.filter((i) => i.imageUrl).length,
+  };
+  waitUntil((async () => {
+    const log = (await env.WHISK_KV.get<RefreshStats[]>(REFRESH_LOG_KEY, "json")) ?? [];
+    log.unshift(refreshStats);
+    await env.WHISK_KV.put(REFRESH_LOG_KEY, JSON.stringify(log.slice(0, REFRESH_LOG_MAX)));
+  })().catch(() => { /* best-effort */ }));
+
   // Pre-cache recipe details for new items using direct fetch only.
   // This allows demo users (and all users) to view recipes instantly from cache.
   // Failed URLs get added to a retry queue that drains on subsequent requests.
@@ -1064,7 +1110,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUnti
 
   const feed = archiveToCategoryFeed(updatedArchive);
   const warnings = [...new Set(brWarnings)];
-  const totalScraped = scrapeResults.reduce((n, r) => n + r.items.length, 0);
   if (newItems.length === 0 && resurrectedCount === 0 && totalScraped > 0) {
     warnings.push(`Checked ${enabledSources.length} source${enabledSources.length !== 1 ? "s" : ""} and found ${totalScraped} recipe${totalScraped !== 1 ? "s" : ""}, but all were already in your feed.`);
   } else if (newItems.length === 0 && totalScraped === 0) {
@@ -1741,7 +1786,9 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
 
     if (isPersonTitle(title) || isAuthorUrl(url) || isNonRecipeFeedTitle(title)) continue;
 
-    // Image: media:content / media:thumbnail / enclosure / first <img> in content
+    // Image: media:content / media:thumbnail / enclosure / g:image_link / first <img> in content.
+    // Some feeds (e.g. The Kitchn's cdn.apartmenttherapy.info) serve image URLs with
+    // no file extension, so the <img> and g:image_link fallbacks must not require one.
     const contentHtml = block.match(/<content:encoded(?:\s[^>]*)?>([\s\S]*?)<\/content:encoded>/i)?.[1]
       ?? block.match(/<description(?:\s[^>]*)?>([\s\S]*?)<\/description>/i)?.[1]
       ?? "";
@@ -1750,7 +1797,9 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
       block.match(/<media:content[^>]+url=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)?.[1]
       ?? block.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/i)?.[1]
       ?? block.match(/<enclosure[^>]+url=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)?.[1]
+      ?? block.match(/<g:image_link(?:\s[^>]*)?>\s*(https?:\/\/[^<\s]+)\s*<\/g:image_link>/i)?.[1]
       ?? decodedContent.match(/<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)?.[1]
+      ?? decodedContent.match(/<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"'\s]+)["']/i)?.[1]
     );
 
     const descText = decodedContent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();

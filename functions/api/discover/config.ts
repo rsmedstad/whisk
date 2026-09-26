@@ -1,16 +1,18 @@
-import type { Env, DiscoverConfig } from "../../../src/types";
+import type { Env, DiscoverConfig, DiscoverRefreshStats } from "../../../src/types";
 import { DEFAULT_DISCOVER_CONFIG as DEFAULT_CONFIG } from "../../lib/discover-config";
 
 const KV_KEY = "discover_config";
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-  const [config, archive] = await Promise.all([
+  const [config, archive, refreshLog] = await Promise.all([
     env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json"),
     env.WHISK_KV.get<{ sourceHealth?: DiscoverConfig["sourceHealth"] }>("discover_archive", "json"),
+    env.WHISK_KV.get<DiscoverRefreshStats[]>("discover_refresh_log", "json"),
   ]);
   return Response.json({
     ...(config ?? DEFAULT_CONFIG),
     ...(archive?.sourceHealth ? { sourceHealth: archive.sourceHealth } : {}),
+    ...(refreshLog && refreshLog.length > 0 ? { refreshLog } : {}),
   });
 };
 

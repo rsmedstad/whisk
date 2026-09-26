@@ -48,8 +48,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return item;
   });
 
+  // Preserve all other archive fields (sourceHealth, pending queues, flags)
   await env.WHISK_KV.put(ARCHIVE_KEY, JSON.stringify({
-    lastRefreshed: archive.lastRefreshed,
+    ...archive,
     items: updated,
   }));
 

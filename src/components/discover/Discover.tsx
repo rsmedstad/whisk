@@ -61,6 +61,11 @@ interface DiscoverProps {
 
 // ── Constants ───────────────────────────────────────────
 
+/** When at least this many with-image cards exist, imageless items are hidden.
+ *  Below this floor, imageless items render title-only cards instead so the
+ *  grid never looks empty. (Mirrored by the low-image warning in Settings.) */
+const MIN_GRID_WITH_IMAGE = 12;
+
 /** Fallback labels for legacy source IDs */
 const LEGACY_SOURCE_LABELS: Record<string, string> = {
   nyt: "NYT Cooking",
@@ -959,21 +964,25 @@ export function Discover({
         });
       }
     }
-    // Deduplicate by URL and filter out items without images
-    // (imageless items are typically roundup/collection pages that fail on import)
+    // Deduplicate by URL and drop collection/roundup pages.
     // Also drop items past their expiresAt — the server filters on refresh, but
     // cached feeds in localStorage can outlive individual items.
     const expirationOn = discoverConfig?.expirationEnabled !== false;
     const now = Date.now();
     const seen = new Set<string>();
-    return items.filter((item) => {
-      if (!item.imageUrl) return false;
+    const valid = items.filter((item) => {
       if (isCollectionItem(item)) return false;
       if (seen.has(item.url)) return false;
       if (expirationOn && item.expiresAt && new Date(item.expiresAt).getTime() <= now) return false;
       seen.add(item.url);
       return true;
     });
+    // Prefer items with images (imageless ones are often weaker cards), but don't
+    // hard-drop all of them when that would leave the grid near-empty — seasonal
+    // re-featured items may lack an image and still deserve a title-only card.
+    const withImage = valid.filter((item) => item.imageUrl);
+    if (withImage.length >= MIN_GRID_WITH_IMAGE) return withImage;
+    return [...withImage, ...valid.filter((item) => !item.imageUrl)];
   }, [feed, discoverConfig?.expirationEnabled]);
 
   const filteredItems = useMemo(() => {

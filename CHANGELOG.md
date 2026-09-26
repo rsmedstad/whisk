@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Discover — Re-featuring, Retention Purge & Feed Health
+
+- **Retention purge actually runs**: The 30-day archive purge on GET was a fire-and-forget KV write that the runtime could kill mid-flight; it's now kept alive with `waitUntil`, and the purge also runs during every POST refresh (resurrected items are safe — their `addedAt` is reset first). Stale expired rows no longer accumulate, keeping URL/title dedup and KV size healthy.
+- **Re-featured items get richer metadata**: When a re-scrape resurrects an expired item, missing `description`/`totalTime` are now backfilled alongside the image.
+- **The Kitchn (and similar feeds) get images again**: RSS image extraction now reads `<g:image_link>` tags and accepts extensionless image URLs (e.g. `cdn.apartmenttherapy.info/image/upload/...`), so new Kitchn items carry an `imageUrl` instead of rendering as hidden imageless cards.
+- **Graceful imageless fallback in the grid**: Discover no longer hard-drops every card without an image. When at least 12 with-image cards exist, imageless ones stay hidden (old behavior); below that floor, they render as title-only cards so the grid never looks empty.
+- **Feed health in Settings**: Each refresh records `{scraped, new, refeatured, purged, visible, expired, withImage}` into a short KV ring (`discover_refresh_log`, last 10 runs). Settings → Discover Feed shows the latest gauges, the last 5 runs, and a soft amber warning when fewer than 12 visible items have images.
+- **Restore endpoint preserves archive fields**: `POST /api/discover/feed/restore` no longer drops `sourceHealth` and the pending crawl queues when rewriting the archive.
+
 ## [1.1.1] - 2026-06-26
 
 ### Discover — Collection-Page Filtering & RSS Sources

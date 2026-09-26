@@ -373,6 +373,8 @@ export interface DiscoverConfig {
   refreshIntervalDays: number; // minimum days between auto-refreshes
   /** Read-only, attached by GET /api/discover/config from the feed archive */
   sourceHealth?: Record<string, DiscoverSourceHealth>;
+  /** Read-only, attached by GET /api/discover/config — recent refresh runs, newest first */
+  refreshLog?: DiscoverRefreshStats[];
 }
 
 /** Per-source scrape health recorded during feed refreshes */
@@ -382,6 +384,18 @@ export interface DiscoverSourceHealth {
   lastItemCount: number;
   lastNewCount: number;
   lastError?: string;
+}
+
+/** Per-refresh outcome stats kept in a short KV ring (`discover_refresh_log`) */
+export interface DiscoverRefreshStats {
+  at: string;
+  scraped: number;
+  new: number;
+  refeatured: number;
+  purged: number;
+  visible: number;
+  expired: number;
+  withImage: number; // visible items that have an imageUrl
 }
 
 // ── Import ─────────────────────────────────────────────

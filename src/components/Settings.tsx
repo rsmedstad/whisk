@@ -80,6 +80,10 @@ const ACCENT_COLORS: Record<string, string[]> = {
   christmas: ["#cc0000", "#1a6b1a", "#d4a828"],
 };
 
+/** Soft-alert floor for Discover feed health: warn when fewer visible items
+ *  have images (mirrors MIN_GRID_WITH_IMAGE in Discover.tsx). */
+const MIN_VISIBLE_WITH_IMAGE = 12;
+
 /** Compact relative time for source-health lines ("3h ago", "2d ago") */
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -830,6 +834,48 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                       <p className="mt-2 text-xs text-stone-400 dark:text-stone-500">Maximum 10 sources</p>
                     )}
                   </div>
+
+                  {/* Feed health — per-refresh stats from the server-side ring buffer */}
+                  {discoverConfig.refreshLog && discoverConfig.refreshLog.length > 0 && (() => {
+                    const latest = discoverConfig.refreshLog[0]!;
+                    const lowImages = latest.withImage < MIN_VISIBLE_WITH_IMAGE;
+                    return (
+                      <div>
+                        <label className="text-sm font-medium dark:text-stone-200 block mb-2">
+                          Feed health
+                        </label>
+                        {lowImages && (
+                          <div className="mb-2 rounded-[var(--wk-radius-btn)] border border-amber-300 dark:border-amber-600/50 bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                              Only {latest.withImage} visible recipe{latest.withImage === 1 ? "" : "s"} {latest.withImage === 1 ? "has" : "have"} an image (below {MIN_VISIBLE_WITH_IMAGE}). The Discover grid may look sparse — try refreshing the feed or checking source health above.
+                            </p>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-3 gap-2 mb-2">
+                          {([
+                            { label: "Visible", value: latest.visible },
+                            { label: "With image", value: latest.withImage },
+                            { label: "New", value: latest.new },
+                            { label: "Re-featured", value: latest.refeatured },
+                            { label: "Expired", value: latest.expired },
+                            { label: "Purged", value: latest.purged },
+                          ] as const).map((g) => (
+                            <div key={g.label} className="rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 px-2 py-1.5 text-center">
+                              <div className={`text-sm font-semibold ${g.label === "With image" && lowImages ? "text-amber-600 dark:text-amber-400" : "dark:text-stone-100"}`}>{g.value}</div>
+                              <div className="text-[10px] text-stone-400 dark:text-stone-500">{g.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="space-y-0.5">
+                          {discoverConfig.refreshLog.slice(0, 5).map((run) => (
+                            <p key={run.at} className="text-[11px] text-stone-400 dark:text-stone-500">
+                              {relativeTime(run.at)} · {run.scraped} scraped, {run.new} new, {run.refeatured} re-featured · {run.visible} visible ({run.withImage} with image)
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Auto-refresh toggle + interval */}
                   <div>
