@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Discover — Non-Recipe/Shopping Filtering & Meal Classification
+
+- **Shopping/product posts filtered out (Kitchn + global)**: Expanded title, URL, and RSS `<category>` heuristics reject product roundups and gear posts — "Best X of/for 20XX" (any word count), shopping CTAs ("order online", "on sale", "under $N", "% off", "deals"), and end-of-title kitchen-gear nouns ("The Best Milk Frothers"). URL slugs like `/best-coffee-mug-warmer-23845669`, `-deals-`, and `gift-guide` are rejected too. For feeds that annotate items (esp. The Kitchn), items with `shopping`/`product review`/`news`/`skills` categories are rejected unless a `Recipes` category vouches for them. Filters extracted to `functions/lib/discover-filters.ts` and unit-tested (`tests/discover-filters.test.ts`).
+- **Groq `isRecipe` gate**: The Discover AI tag batch now returns `isRecipe` per item; anything the model explicitly flags as a non-recipe (product roundup, gear review, shopping/news post) is skipped before archiving. Conservative — parse failures or missing fields keep the item.
+- **Meal classification fixes**: Baking keywords now match plurals ("Easy Soft Pretzels" → baking, not dinner) and more baked goods (baguettes, babka, sticky buns, crescent rolls…); snack keywords expanded (granola bars, energy bites, chex mix…). The keyword tagger no longer stamps a false `dinner` tag on ambiguous items — it omits the meal tag unless there's a real main-dish signal, letting AI tags place the item instead.
+- **Archive cleanup on refresh**: Each refresh now purges previously archived items that match the non-recipe filters (or that the AI backfill flags), removing stale shopping posts like the Kitchn mug-warmer from KV for good (they were already hidden at serve time).
+- **Non-recipe rejects in feed health**: Refresh stats record `rejected` (non-recipe items filtered this run), shown as a "Non-recipe" gauge and in the run history in Settings → Discover Feed.
+
 ### Discover — Re-featuring, Retention Purge & Feed Health
 
 - **Retention purge actually runs**: The 30-day archive purge on GET was a fire-and-forget KV write that the runtime could kill mid-flight; it's now kept alive with `waitUntil`, and the purge also runs during every POST refresh (resurrected items are safe — their `addedAt` is reset first). Stale expired rows no longer accumulate, keeping URL/title dedup and KV size healthy.

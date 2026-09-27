@@ -859,6 +859,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                             { label: "Re-featured", value: latest.refeatured },
                             { label: "Expired", value: latest.expired },
                             { label: "Purged", value: latest.purged },
+                            { label: "Non-recipe", value: latest.rejected ?? 0 },
                           ] as const).map((g) => (
                             <div key={g.label} className="rounded-[var(--wk-radius-btn)] border border-stone-200 dark:border-stone-700 px-2 py-1.5 text-center">
                               <div className={`text-sm font-semibold ${g.label === "With image" && lowImages ? "text-amber-600 dark:text-amber-400" : "dark:text-stone-100"}`}>{g.value}</div>
@@ -869,7 +870,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                         <div className="space-y-0.5">
                           {discoverConfig.refreshLog.slice(0, 5).map((run) => (
                             <p key={run.at} className="text-[11px] text-stone-400 dark:text-stone-500">
-                              {relativeTime(run.at)} · {run.scraped} scraped, {run.new} new, {run.refeatured} re-featured · {run.visible} visible ({run.withImage} with image)
+                              {relativeTime(run.at)} · {run.scraped} scraped, {run.new} new, {run.refeatured} re-featured{run.rejected != null ? `, ${run.rejected} non-recipe` : ""} · {run.visible} visible ({run.withImage} with image)
                             </p>
                           ))}
                         </div>
