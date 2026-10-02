@@ -1,0 +1,5 @@
+﻿# Local Wrangler Pages secrets (copy to .dev.vars — never commit .dev.vars)
+# APP_SECRET=          # existing app session secret — NOT for MCP
+# WHISK_MCP_TOKEN=     # Bearer token for /mcp only (generate a long random string)
+
+WHISK_MCP_TOKEN=
