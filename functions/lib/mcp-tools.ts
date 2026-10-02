@@ -1,10 +1,12 @@
-﻿// MCP tool implementations for Whisk (phase 1).
+﻿// MCP tool implementations for Whisk (phase 1 + phase 2 read tools).
 // Writes are add-only where applicable; never delete recipes or clear plans.
 // Attribution: household owner via resolveMcpActor (see mcp-actor.ts).
 
 import { normalizeRecipeInput } from "./recipe-input";
 import { resolveMcpActor, type McpActor } from "./mcp-actor";
 import { onRequestPost as importUrlPost } from "../api/import/url";
+import { queryRecipes } from "./embeddings";
+import { DEFAULT_DISCOVER_CONFIG } from "./discover-config";
 
 export type ToolDef = {
   name: string;
@@ -24,6 +26,7 @@ export type McpToolEnv = {
   CF_ACCOUNT_ID?: string;
   CF_BR_TOKEN?: string;
   APIFY_API_TOKEN?: string;
+  UNSPLASH_ACCESS_KEY?: string;
 };
 
 type RecipeIndexEntry = {
@@ -203,6 +206,60 @@ export const TOOL_DEFS: ToolDef[] = [
       required: ["url"],
     },
   },
+  {
+    name: "list_tags",
+    description:
+      "Load tags:index from WHISK_KV (same shape as GET /api/tags). Returns { tags, updatedAt } or empty defaults.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "list_discover_feed",
+    description:
+      "Read-only discover feed from KV (discover_archive, fallback discover_feed). Returns compact items (no long descriptions). Optional source/category filters and limit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", description: "Filter by source id (e.g. nyt)" },
+        category: { type: "string", description: "Filter by category (e.g. dinner)" },
+        limit: { type: "number", description: "Max items, default 40, max 100" },
+        includeExpired: {
+          type: "boolean",
+          description: "When true, include expired items. Default false.",
+        },
+      },
+    },
+  },
+  {
+    name: "get_discover_item",
+    description:
+      "Load one discover archive item by url or id (id may be the stored url). Matches normalized url key.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Item id or url as stored" },
+        url: { type: "string", description: "Item url (alternative to id)" },
+      },
+    },
+  },
+  {
+    name: "search_semantic",
+    description:
+      "Semantic recipe search via Workers AI embeddings + Vectorize. Requires VECTORIZE + AI bindings; otherwise returns { error: \"vectorize_unavailable\" }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Natural-language search query" },
+        topK: { type: "number", description: "Max matches, default 10, max 30" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_settings_public",
+    description:
+      "Non-secret public settings only: capability flags, AI provider/model prefs (no keys), discover config flags/sources. Never returns APP_SECRET, WHISK_MCP_TOKEN, API keys, session or CF tokens.",
+    inputSchema: { type: "object", properties: {} },
+  },
 ];
 
 function textResult(
@@ -341,6 +398,16 @@ export async function callTool(
         return await toolAddToMealPlan(args, env, actor);
       case "import_recipe_url":
         return await toolImportRecipeUrl(args, env, actor);
+      case "list_tags":
+        return await toolListTags(env);
+      case "list_discover_feed":
+        return await toolListDiscoverFeed(args, env);
+      case "get_discover_item":
+        return await toolGetDiscoverItem(args, env);
+      case "search_semantic":
+        return await toolSearchSemantic(args, env);
+      case "get_settings_public":
+        return await toolGetSettingsPublic(env);
       default:
         return textResult({ error: `unknown tool: ${name}` }, true);
     }
@@ -600,4 +667,294 @@ async function toolImportRecipeUrl(
     id: entry.id,
     recipe,
   });
+}
+
+
+// ── Phase 2 read tools ──────────────────────────────────
+
+type DiscoverArchiveItem = {
+  title: string;
+  url: string;
+  imageUrl?: string;
+  description?: string;
+  source?: string;
+  category?: string;
+  addedAt?: string;
+  expiresAt?: string;
+  tags?: string[];
+  totalTime?: number;
+};
+
+type CompactDiscoverItem = {
+  title: string;
+  url: string;
+  source?: string;
+  category?: string;
+  tags?: string[];
+  imageUrl?: string;
+  addedAt?: string;
+  expiresAt?: string;
+  totalTime?: number;
+  description?: string;
+};
+
+function normalizeDiscoverUrl(url: string): string {
+  return url.replace(/\/$/, "").replace(/^http:/, "https:");
+}
+
+function toCompactDiscover(item: DiscoverArchiveItem): CompactDiscoverItem {
+  const desc =
+    typeof item.description === "string" && item.description.trim()
+      ? item.description.trim().slice(0, 160)
+      : undefined;
+  return {
+    title: item.title,
+    url: item.url,
+    source: item.source,
+    category: item.category,
+    tags: item.tags,
+    imageUrl: item.imageUrl,
+    addedAt: item.addedAt,
+    expiresAt: item.expiresAt,
+    totalTime: item.totalTime,
+    ...(desc ? { description: desc } : {}),
+  };
+}
+
+function isDiscoverExpired(item: DiscoverArchiveItem, nowMs: number): boolean {
+  if (!item.expiresAt) return false;
+  const t = new Date(item.expiresAt).getTime();
+  return Number.isFinite(t) && t <= nowMs;
+}
+
+async function loadDiscoverItems(env: McpToolEnv): Promise<{
+  lastRefreshed: string | null;
+  items: DiscoverArchiveItem[];
+  source: "discover_archive" | "discover_feed" | "empty";
+}> {
+  const archive = (await env.WHISK_KV.get("discover_archive", "json")) as {
+    lastRefreshed?: string;
+    items?: DiscoverArchiveItem[];
+  } | null;
+  if (archive && Array.isArray(archive.items)) {
+    return {
+      lastRefreshed: archive.lastRefreshed ?? null,
+      items: archive.items,
+      source: "discover_archive",
+    };
+  }
+
+  const legacy = (await env.WHISK_KV.get("discover_feed", "json")) as {
+    lastRefreshed?: string;
+    sources?: Record<string, DiscoverArchiveItem[]>;
+    categories?: Record<string, DiscoverArchiveItem[]>;
+  } | null;
+  if (legacy) {
+    const items: DiscoverArchiveItem[] = [];
+    if (legacy.categories && typeof legacy.categories === "object") {
+      for (const [cat, list] of Object.entries(legacy.categories)) {
+        if (!Array.isArray(list)) continue;
+        for (const it of list) {
+          items.push({ ...it, category: it.category ?? cat });
+        }
+      }
+    } else if (legacy.sources && typeof legacy.sources === "object") {
+      for (const [src, list] of Object.entries(legacy.sources)) {
+        if (!Array.isArray(list)) continue;
+        for (const it of list) {
+          items.push({ ...it, source: it.source ?? src });
+        }
+      }
+    }
+    return {
+      lastRefreshed: legacy.lastRefreshed ?? null,
+      items,
+      source: "discover_feed",
+    };
+  }
+
+  return { lastRefreshed: null, items: [], source: "empty" };
+}
+
+async function toolListTags(env: McpToolEnv) {
+  const tags =
+    ((await env.WHISK_KV.get("tags:index", "json")) as {
+      tags?: unknown[];
+      updatedAt?: string;
+    } | null) ?? null;
+  if (!tags) {
+    return textResult({ tags: [], updatedAt: null });
+  }
+  return textResult({
+    tags: Array.isArray(tags.tags) ? tags.tags : [],
+    updatedAt: tags.updatedAt ?? null,
+  });
+}
+
+async function toolListDiscoverFeed(args: Record<string, unknown>, env: McpToolEnv) {
+  const { lastRefreshed, items, source } = await loadDiscoverItems(env);
+  const sourceFilter =
+    typeof args.source === "string" && args.source.trim()
+      ? args.source.trim().toLowerCase()
+      : "";
+  const categoryFilter =
+    typeof args.category === "string" && args.category.trim()
+      ? args.category.trim().toLowerCase()
+      : "";
+  const includeExpired = args.includeExpired === true;
+  const limit = parsePositiveInt(args.limit, 40, 100);
+  const now = Date.now();
+
+  const filtered = items.filter((it) => {
+    if (!includeExpired && isDiscoverExpired(it, now)) return false;
+    if (sourceFilter && (it.source ?? "").toLowerCase() !== sourceFilter) return false;
+    if (categoryFilter && (it.category ?? "").toLowerCase() !== categoryFilter) return false;
+    return Boolean(it.url && it.title);
+  });
+
+  const compact = filtered.slice(0, limit).map(toCompactDiscover);
+  return textResult({
+    lastRefreshed,
+    kvSource: source,
+    count: compact.length,
+    totalMatching: filtered.length,
+    items: compact,
+  });
+}
+
+async function toolGetDiscoverItem(args: Record<string, unknown>, env: McpToolEnv) {
+  const raw =
+    (typeof args.url === "string" && args.url.trim()) ||
+    (typeof args.id === "string" && args.id.trim()) ||
+    "";
+  if (!raw) return textResult({ error: "id or url required" }, true);
+
+  const { items, source } = await loadDiscoverItems(env);
+  const key = normalizeDiscoverUrl(raw);
+  const found = items.find((it) => {
+    if (!it.url) return false;
+    return normalizeDiscoverUrl(it.url) === key || it.url === raw;
+  });
+  if (!found) {
+    return textResult({ error: "Discover item not found", id: raw, kvSource: source }, true);
+  }
+  return textResult({ kvSource: source, item: found });
+}
+
+async function toolSearchSemantic(args: Record<string, unknown>, env: McpToolEnv) {
+  const query = typeof args.query === "string" ? args.query.trim() : "";
+  if (!query) return textResult({ error: "query required" }, true);
+
+  if (!env.AI || !env.VECTORIZE) {
+    return textResult({ error: "vectorize_unavailable" }, true);
+  }
+
+  const topK = parsePositiveInt(args.topK, 10, 30);
+  const matches = await queryRecipes(env.AI, env.VECTORIZE, query, topK);
+  const index = await loadIndex(env);
+  const byId = new Map(index.map((e) => [e.id, e]));
+
+  const items = matches.map((m) => {
+    const entry = byId.get(m.id);
+    const metaTitle =
+      m.metadata && typeof (m.metadata as { title?: unknown }).title === "string"
+        ? (m.metadata as { title: string }).title
+        : undefined;
+    return {
+      id: m.id,
+      score: m.score,
+      title: entry?.title ?? metaTitle,
+      tags: entry?.tags,
+      cuisine: entry?.cuisine,
+      thumbnailUrl: entry?.thumbnailUrl,
+    };
+  });
+
+  return textResult({ query, count: items.length, items });
+}
+
+async function toolGetSettingsPublic(env: McpToolEnv) {
+  // Capability flags only — never surface secret values or token strings.
+  const aiConfig = (await env.WHISK_KV.get("ai_config", "json")) as Record<
+    string,
+    unknown
+  > | null;
+  const discoverRaw = (await env.WHISK_KV.get("discover_config", "json")) as {
+    sources?: { id: string; label: string; url?: string; feedUrl?: string; enabled: boolean }[];
+    autoRefreshEnabled?: boolean;
+    expirationEnabled?: boolean;
+    itemLifetimeDays?: number;
+    refreshIntervalDays?: number;
+  } | null;
+
+  const discover = discoverRaw ?? DEFAULT_DISCOVER_CONFIG;
+  const publicDiscover = {
+    autoRefreshEnabled: discover.autoRefreshEnabled ?? DEFAULT_DISCOVER_CONFIG.autoRefreshEnabled,
+    expirationEnabled: discover.expirationEnabled ?? DEFAULT_DISCOVER_CONFIG.expirationEnabled,
+    itemLifetimeDays: discover.itemLifetimeDays ?? DEFAULT_DISCOVER_CONFIG.itemLifetimeDays,
+    refreshIntervalDays:
+      discover.refreshIntervalDays ?? DEFAULT_DISCOVER_CONFIG.refreshIntervalDays,
+    sources: (discover.sources ?? DEFAULT_DISCOVER_CONFIG.sources).map((s) => ({
+      id: s.id,
+      label: s.label,
+      enabled: s.enabled,
+      // Public homepage URL is fine; omit feedUrl to reduce scrape-target surface.
+      url: s.url,
+    })),
+  };
+
+  // Strip any accidental secret-looking keys from ai_config (defense in depth).
+  const safeAi =
+    aiConfig && typeof aiConfig === "object" && !Array.isArray(aiConfig)
+      ? sanitizePublicObject(aiConfig)
+      : null;
+
+  return textResult({
+    capabilities: {
+      vectorize: Boolean(env.AI && env.VECTORIZE),
+      workersAi: Boolean(env.AI),
+      r2: Boolean(env.WHISK_R2),
+      // Presence flags only — never return the secret values.
+      hasGroq: Boolean(env.GROQ_API_KEY),
+      hasCerebras: Boolean(env.CEREBRAS_API_KEY),
+      hasBrowserRendering: Boolean(env.CF_ACCOUNT_ID && env.CF_BR_TOKEN),
+      hasApify: Boolean(env.APIFY_API_TOKEN),
+    },
+    aiConfig: safeAi,
+    discover: publicDiscover,
+    notes: [
+      "Theme, units, and user preferences are client-local (not in KV).",
+      "Secrets (APP_SECRET, WHISK_MCP_TOKEN, API keys, session/CF tokens) are never returned.",
+    ],
+  });
+}
+
+const SECRET_KEY_RE =
+  /(secret|token|password|api[_-]?key|authorization|bearer|cookie|session|private[_-]?key|credential)/i;
+
+function sanitizePublicObject(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (SECRET_KEY_RE.test(k)) continue;
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = sanitizePublicObject(v as Record<string, unknown>);
+    } else if (
+      typeof v === "string" ||
+      typeof v === "number" ||
+      typeof v === "boolean" ||
+      v === null ||
+      Array.isArray(v)
+    ) {
+      if (Array.isArray(v)) {
+        out[k] = v.map((item) =>
+          item && typeof item === "object" && !Array.isArray(item)
+            ? sanitizePublicObject(item as Record<string, unknown>)
+            : item
+        );
+      } else {
+        out[k] = v;
+      }
+    }
+  }
+  return out;
 }
