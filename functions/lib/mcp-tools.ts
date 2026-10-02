@@ -1,5 +1,5 @@
-﻿// MCP tool implementations for Whisk (phase 1 + phase 2 read tools).
-// Writes are add-only where applicable; never delete recipes or clear plans.
+﻿// MCP tool implementations for Whisk (phase 1–2 reads + v2 write/destructive).
+// Destructive tools require confirm===true AND matching confirmName or no-op 400.
 // Attribution: household owner via resolveMcpActor (see mcp-actor.ts).
 
 import { normalizeRecipeInput } from "./recipe-input";
@@ -260,6 +260,150 @@ export const TOOL_DEFS: ToolDef[] = [
       "Non-secret public settings only: capability flags, AI provider/model prefs (no keys), discover config flags/sources. Never returns APP_SECRET, WHISK_MCP_TOKEN, API keys, session or CF tokens.",
     inputSchema: { type: "object", properties: {} },
   },
+
+  {
+    name: "remove_from_favorites",
+    description:
+      "Remove household-owner userId from favoritedBy only (never wipe other users). Updates favorite flag + index.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Recipe id" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "set_want_to_make",
+    description: "Set wantToMake boolean on a recipe + update index.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Recipe id" },
+        wantToMake: { type: "boolean" },
+      },
+      required: ["id", "wantToMake"],
+    },
+  },
+  {
+    name: "remove_from_meal_plan",
+    description:
+      "Remove one PlannedMeal by exact mealId from plan:{week}. week defaults to current. Refuses if meal not found.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mealId: { type: "string" },
+        week: { type: "string", description: 'Default "current"' },
+      },
+      required: ["mealId"],
+    },
+  },
+  {
+    name: "clear_meal_plan",
+    description:
+      "DESTRUCTIVE: empty meals for plan:{week}. Requires confirm===true AND confirmName===week id (e.g. \"current\" or \"2026-W10\"). Else {error,status:400} isError with no mutation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        week: { type: "string", description: 'Default "current"' },
+        confirm: { type: "boolean", description: "Must be true" },
+        confirmName: {
+          type: "string",
+          description: "Must exactly equal the week id being cleared",
+        },
+      },
+      required: ["confirm", "confirmName"],
+    },
+  },
+  {
+    name: "delete_recipe",
+    description:
+      "DESTRUCTIVE: delete recipe by exact id (KV + index + Vectorize if available). Requires confirm===true AND confirmName===current title exactly. Else {error,status:400} isError with no mutation. Never deletes by title alone.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        confirm: { type: "boolean", description: "Must be true" },
+        confirmName: {
+          type: "string",
+          description: "Must exactly equal the recipe's current title",
+        },
+      },
+      required: ["id", "confirm", "confirmName"],
+    },
+  },
+  {
+    name: "shopping_add_item",
+    description:
+      "Append an item to shopping:current. Provide name or text; optional qty (→ amount) and notes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        text: { type: "string", description: "Alias for name" },
+        qty: { type: "string", description: "Optional quantity/amount" },
+        notes: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "shopping_set_checked",
+    description: "Set checked boolean on a shopping:current item by itemId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        itemId: { type: "string" },
+        checked: { type: "boolean" },
+      },
+      required: ["itemId", "checked"],
+    },
+  },
+  {
+    name: "shopping_remove_item",
+    description: "Remove one item from shopping:current by itemId.",
+    inputSchema: {
+      type: "object",
+      properties: { itemId: { type: "string" } },
+      required: ["itemId"],
+    },
+  },
+  {
+    name: "clear_shopping_list",
+    description:
+      "DESTRUCTIVE: clear all items on shopping:current. Requires confirm===true AND confirmName===\"current\". Else {error,status:400} isError with no mutation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        confirm: { type: "boolean", description: "Must be true" },
+        confirmName: {
+          type: "string",
+          description: 'Must equal \"current\"',
+        },
+      },
+      required: ["confirm", "confirmName"],
+    },
+  },
+  {
+    name: "update_recipe",
+    description:
+      "Partial update of safe recipe fields by exact id (title, description, ingredients, steps, tags, cuisine, prepTime, cookTime, servings, notes). Does not wipe favoritedBy or delete.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        ingredients: { type: "array" },
+        steps: { type: "array" },
+        tags: { type: "array", items: { type: "string" } },
+        cuisine: { type: "string" },
+        prepTime: { type: "number" },
+        cookTime: { type: "number" },
+        servings: { type: "number" },
+        notes: { type: "string" },
+      },
+      required: ["id"],
+    },
+  },
+
 ];
 
 function textResult(
@@ -408,6 +552,26 @@ export async function callTool(
         return await toolSearchSemantic(args, env);
       case "get_settings_public":
         return await toolGetSettingsPublic(env);
+      case "remove_from_favorites":
+        return await toolRemoveFromFavorites(args, env, actor);
+      case "set_want_to_make":
+        return await toolSetWantToMake(args, env, actor);
+      case "remove_from_meal_plan":
+        return await toolRemoveFromMealPlan(args, env, actor);
+      case "clear_meal_plan":
+        return await toolClearMealPlan(args, env, actor);
+      case "delete_recipe":
+        return await toolDeleteRecipe(args, env, actor);
+      case "shopping_add_item":
+        return await toolShoppingAddItem(args, env, actor);
+      case "shopping_set_checked":
+        return await toolShoppingSetChecked(args, env, actor);
+      case "shopping_remove_item":
+        return await toolShoppingRemoveItem(args, env, actor);
+      case "clear_shopping_list":
+        return await toolClearShoppingList(args, env, actor);
+      case "update_recipe":
+        return await toolUpdateRecipe(args, env, actor);
       default:
         return textResult({ error: `unknown tool: ${name}` }, true);
     }
@@ -957,4 +1121,517 @@ function sanitizePublicObject(obj: Record<string, unknown>): Record<string, unkn
     }
   }
   return out;
+}
+
+
+// ── v2 write / destructive tools ────────────────────────
+
+type ShoppingItem = {
+  id: string;
+  name: string;
+  amount?: string;
+  unit?: string;
+  category: string;
+  checked: boolean;
+  notes?: string;
+  addedBy?: string;
+  addedByUser?: string;
+};
+
+type ShoppingList = {
+  id: string;
+  items: ShoppingItem[];
+  updatedAt: string;
+};
+
+function actorMeta(actor: McpActor) {
+  return { actorUserId: actor.userId, actorSource: actor.source };
+}
+
+function confirmGate(
+  confirm: unknown,
+  confirmName: unknown,
+  expectedName: string,
+  actor: McpActor
+): { content: { type: "text"; text: string }[]; isError?: boolean } | null {
+  const nameOk =
+    typeof confirmName === "string" && confirmName === expectedName;
+  if (confirm === true && nameOk) return null;
+  return textResult(
+    {
+      error: "Confirmation required: confirm must be true and confirmName must match",
+      status: 400,
+      expectedConfirmName: expectedName,
+      ...actorMeta(actor),
+    },
+    true
+  );
+}
+
+async function loadShopping(env: McpToolEnv): Promise<ShoppingList> {
+  return (
+    ((await env.WHISK_KV.get("shopping:current", "json")) as ShoppingList | null) ?? {
+      id: "current",
+      items: [],
+      updatedAt: new Date().toISOString(),
+    }
+  );
+}
+
+async function toolRemoveFromFavorites(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+  if (!id) return textResult({ error: "id required", ...actorMeta(actor) }, true);
+
+  const existing = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<
+    string,
+    unknown
+  > | null;
+  if (!existing) return textResult({ error: "Recipe not found", id, ...actorMeta(actor) }, true);
+
+  const prev = Array.isArray(existing.favoritedBy)
+    ? (existing.favoritedBy as string[])
+    : [];
+  const favoritedBy = prev.filter((uid) => uid !== actor.userId);
+  const now = new Date().toISOString();
+  const favorite = favoritedBy.length > 0;
+  const updated = { ...existing, favoritedBy, favorite, updatedAt: now };
+  await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
+
+  const index = await loadIndex(env);
+  const newIndex = index.map((e) =>
+    e.id === id ? { ...e, favoritedBy, favorite, updatedAt: now } : e
+  );
+  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+
+  return textResult({
+    ok: true,
+    id,
+    ...actorMeta(actor),
+    removed: prev.includes(actor.userId),
+    favoritedBy,
+    favorite,
+  });
+}
+
+async function toolSetWantToMake(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+  if (!id) return textResult({ error: "id required", ...actorMeta(actor) }, true);
+  if (typeof args.wantToMake !== "boolean") {
+    return textResult({ error: "wantToMake boolean required", ...actorMeta(actor) }, true);
+  }
+  const wantToMake = args.wantToMake;
+
+  const existing = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<
+    string,
+    unknown
+  > | null;
+  if (!existing) return textResult({ error: "Recipe not found", id, ...actorMeta(actor) }, true);
+
+  const now = new Date().toISOString();
+  const updated = { ...existing, wantToMake, updatedAt: now };
+  await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
+
+  const index = await loadIndex(env);
+  const newIndex = index.map((e) =>
+    e.id === id ? { ...e, wantToMake, updatedAt: now } : e
+  );
+  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+
+  return textResult({
+    ok: true,
+    id,
+    wantToMake,
+    ...actorMeta(actor),
+  });
+}
+
+async function toolRemoveFromMealPlan(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const mealId = typeof args.mealId === "string" ? args.mealId.trim() : "";
+  if (!mealId) return textResult({ error: "mealId required", ...actorMeta(actor) }, true);
+  const week =
+    typeof args.week === "string" && args.week.trim() ? args.week.trim() : "current";
+  if (!VALID_PLAN_ID.test(week)) {
+    return textResult({ error: "Invalid week format", week, ...actorMeta(actor) }, true);
+  }
+
+  const existing =
+    ((await env.WHISK_KV.get(`plan:${week}`, "json")) as MealPlan | null) ?? {
+      id: week,
+      meals: [],
+      updatedAt: new Date().toISOString(),
+    };
+  const before = existing.meals ?? [];
+  const found = before.find((m) => m.id === mealId);
+  if (!found) {
+    return textResult(
+      { error: "Meal not found", mealId, week, ...actorMeta(actor) },
+      true
+    );
+  }
+  const meals = before.filter((m) => m.id !== mealId);
+  const plan: MealPlan = {
+    id: existing.id || week,
+    meals,
+    updatedAt: new Date().toISOString(),
+  };
+  await env.WHISK_KV.put(`plan:${week}`, JSON.stringify(plan));
+  return textResult({
+    ok: true,
+    week,
+    removedMealId: mealId,
+    mealCount: plan.meals.length,
+    ...actorMeta(actor),
+  });
+}
+
+async function toolClearMealPlan(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const week =
+    typeof args.week === "string" && args.week.trim() ? args.week.trim() : "current";
+  if (!VALID_PLAN_ID.test(week)) {
+    return textResult({ error: "Invalid week format", week, status: 400, ...actorMeta(actor) }, true);
+  }
+  const gate = confirmGate(args.confirm, args.confirmName, week, actor);
+  if (gate) return gate;
+
+  const existing =
+    ((await env.WHISK_KV.get(`plan:${week}`, "json")) as MealPlan | null) ?? {
+      id: week,
+      meals: [],
+      updatedAt: new Date().toISOString(),
+    };
+  const clearedCount = existing.meals?.length ?? 0;
+  const plan: MealPlan = {
+    id: existing.id || week,
+    meals: [],
+    updatedAt: new Date().toISOString(),
+  };
+  await env.WHISK_KV.put(`plan:${week}`, JSON.stringify(plan));
+  console.log(
+    `[mcp] clear_meal_plan week=${week} cleared=${clearedCount} actorUserId=${actor.userId}`
+  );
+  return textResult({
+    ok: true,
+    week,
+    clearedCount,
+    plan,
+    ...actorMeta(actor),
+  });
+}
+
+async function toolDeleteRecipe(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+  if (!id) return textResult({ error: "id required", status: 400, ...actorMeta(actor) }, true);
+
+  const existing = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<
+    string,
+    unknown
+  > | null;
+  if (!existing) {
+    return textResult({ error: "Recipe not found", id, status: 404, ...actorMeta(actor) }, true);
+  }
+  const title = typeof existing.title === "string" ? existing.title : "";
+  const gate = confirmGate(args.confirm, args.confirmName, title, actor);
+  if (gate) return gate;
+
+  await env.WHISK_KV.delete(`recipe:${id}`);
+  const index = await loadIndex(env);
+  const newIndex = index.filter((e) => e.id !== id);
+  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+
+  if (env.VECTORIZE) {
+    try {
+      await env.VECTORIZE.deleteByIds([id]);
+    } catch {
+      // best-effort, mirror API waitUntil(...).catch
+    }
+  }
+
+  console.log(
+    `[mcp] delete_recipe id=${id} title=${JSON.stringify(title)} actorUserId=${actor.userId}`
+  );
+  return textResult({
+    ok: true,
+    id,
+    title,
+    ...actorMeta(actor),
+  });
+}
+
+async function toolShoppingAddItem(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const nameRaw =
+    (typeof args.name === "string" && args.name.trim()) ||
+    (typeof args.text === "string" && args.text.trim()) ||
+    "";
+  if (!nameRaw) {
+    return textResult({ error: "name or text required", ...actorMeta(actor) }, true);
+  }
+  const qty =
+    typeof args.qty === "string" && args.qty.trim()
+      ? args.qty.trim()
+      : typeof args.qty === "number" && Number.isFinite(args.qty)
+        ? String(args.qty)
+        : undefined;
+  const notes =
+    typeof args.notes === "string" && args.notes.trim() ? args.notes.trim() : undefined;
+
+  const list = await loadShopping(env);
+  const item: ShoppingItem = {
+    id: `s_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`,
+    name: nameRaw,
+    ...(qty ? { amount: qty } : {}),
+    category: "other",
+    checked: false,
+    addedBy: "manual",
+    addedByUser: actor.name,
+    ...(notes ? { notes } : {}),
+  };
+  const updated: ShoppingList = {
+    id: list.id || "current",
+    items: [...(list.items ?? []), item],
+    updatedAt: new Date().toISOString(),
+  };
+  await env.WHISK_KV.put("shopping:current", JSON.stringify(updated));
+  return textResult({
+    ok: true,
+    item,
+    itemCount: updated.items.length,
+    ...actorMeta(actor),
+  });
+}
+
+async function toolShoppingSetChecked(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const itemId = typeof args.itemId === "string" ? args.itemId.trim() : "";
+  if (!itemId) return textResult({ error: "itemId required", ...actorMeta(actor) }, true);
+  if (typeof args.checked !== "boolean") {
+    return textResult({ error: "checked boolean required", ...actorMeta(actor) }, true);
+  }
+  const list = await loadShopping(env);
+  const idx = (list.items ?? []).findIndex((i) => i.id === itemId);
+  if (idx < 0) {
+    return textResult({ error: "Item not found", itemId, ...actorMeta(actor) }, true);
+  }
+  const items = list.items.map((i) =>
+    i.id === itemId ? { ...i, checked: args.checked as boolean } : i
+  );
+  const updated: ShoppingList = {
+    id: list.id || "current",
+    items,
+    updatedAt: new Date().toISOString(),
+  };
+  await env.WHISK_KV.put("shopping:current", JSON.stringify(updated));
+  return textResult({
+    ok: true,
+    itemId,
+    checked: args.checked,
+    ...actorMeta(actor),
+  });
+}
+
+async function toolShoppingRemoveItem(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const itemId = typeof args.itemId === "string" ? args.itemId.trim() : "";
+  if (!itemId) return textResult({ error: "itemId required", ...actorMeta(actor) }, true);
+  const list = await loadShopping(env);
+  const before = list.items ?? [];
+  if (!before.some((i) => i.id === itemId)) {
+    return textResult({ error: "Item not found", itemId, ...actorMeta(actor) }, true);
+  }
+  const updated: ShoppingList = {
+    id: list.id || "current",
+    items: before.filter((i) => i.id !== itemId),
+    updatedAt: new Date().toISOString(),
+  };
+  await env.WHISK_KV.put("shopping:current", JSON.stringify(updated));
+  return textResult({
+    ok: true,
+    itemId,
+    itemCount: updated.items.length,
+    ...actorMeta(actor),
+  });
+}
+
+async function toolClearShoppingList(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const gate = confirmGate(args.confirm, args.confirmName, "current", actor);
+  if (gate) return gate;
+
+  const list = await loadShopping(env);
+  const clearedCount = list.items?.length ?? 0;
+  const updated: ShoppingList = {
+    id: "current",
+    items: [],
+    updatedAt: new Date().toISOString(),
+  };
+  await env.WHISK_KV.put("shopping:current", JSON.stringify(updated));
+  console.log(
+    `[mcp] clear_shopping_list cleared=${clearedCount} actorUserId=${actor.userId}`
+  );
+  return textResult({
+    ok: true,
+    clearedCount,
+    list: updated,
+    ...actorMeta(actor),
+  });
+}
+
+const UPDATE_SAFE_FIELDS = new Set([
+  "title",
+  "description",
+  "ingredients",
+  "steps",
+  "tags",
+  "cuisine",
+  "prepTime",
+  "cookTime",
+  "servings",
+  "notes",
+]);
+
+async function toolUpdateRecipe(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+  if (!id) return textResult({ error: "id required", ...actorMeta(actor) }, true);
+
+  const existing = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<
+    string,
+    unknown
+  > | null;
+  if (!existing) return textResult({ error: "Recipe not found", id, ...actorMeta(actor) }, true);
+
+  const patch: Record<string, unknown> = {};
+  for (const key of UPDATE_SAFE_FIELDS) {
+    if (!(key in args)) continue;
+    const v = args[key];
+    if (key === "title") {
+      if (typeof v !== "string" || !v.trim()) {
+        return textResult({ error: "title must be a non-empty string", ...actorMeta(actor) }, true);
+      }
+      patch.title = v.trim();
+    } else if (key === "description" || key === "cuisine" || key === "notes") {
+      if (v === null) {
+        patch[key] = undefined;
+      } else if (typeof v === "string") {
+        patch[key] = v;
+      } else {
+        return textResult({ error: `${key} must be a string`, ...actorMeta(actor) }, true);
+      }
+    } else if (key === "prepTime" || key === "cookTime" || key === "servings") {
+      if (typeof v !== "number" || !Number.isFinite(v)) {
+        return textResult({ error: `${key} must be a number`, ...actorMeta(actor) }, true);
+      }
+      patch[key] = v;
+    } else if (key === "tags") {
+      if (!Array.isArray(v)) {
+        return textResult({ error: "tags must be an array", ...actorMeta(actor) }, true);
+      }
+      patch.tags = v.filter((t): t is string => typeof t === "string");
+    } else if (key === "ingredients" || key === "steps") {
+      if (!Array.isArray(v)) {
+        return textResult({ error: `${key} must be an array`, ...actorMeta(actor) }, true);
+      }
+      patch[key] = v;
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return textResult(
+      { error: "No safe fields to update", id, ...actorMeta(actor) },
+      true
+    );
+  }
+
+  // Never allow favoritedBy wipe / delete via this path.
+  const now = new Date().toISOString();
+  const updated: Record<string, unknown> = {
+    ...existing,
+    ...patch,
+    id: existing.id,
+    favoritedBy: existing.favoritedBy,
+    favorite: existing.favorite,
+    updatedAt: now,
+  };
+  await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
+
+  const index = await loadIndex(env);
+  const ingCount = Array.isArray(updated.ingredients)
+    ? (updated.ingredients as unknown[]).length
+    : undefined;
+  const stpCount = Array.isArray(updated.steps)
+    ? (updated.steps as unknown[]).length
+    : undefined;
+  const totalMin =
+    ((updated.prepTime as number) ?? 0) + ((updated.cookTime as number) ?? 0);
+  const newIndex = index.map((entry) => {
+    if (entry.id !== id) return entry;
+    return {
+      ...entry,
+      title: (updated.title as string) ?? entry.title,
+      tags: (updated.tags as string[]) ?? entry.tags,
+      cuisine: updated.cuisine as string | undefined,
+      wantToMake: (updated.wantToMake as boolean | undefined) ?? entry.wantToMake,
+      updatedAt: now,
+      prepTime: updated.prepTime as number | undefined,
+      cookTime: updated.cookTime as number | undefined,
+      servings: updated.servings as number | undefined,
+      description: updated.description as string | undefined,
+      ingredientCount: ingCount ?? entry.ingredientCount,
+      stepCount: stpCount ?? entry.stepCount,
+      difficulty:
+        ingCount !== undefined && stpCount !== undefined
+          ? computeDifficulty(totalMin, ingCount, stpCount)
+          : entry.difficulty,
+      ingredientNames: Array.isArray(updated.ingredients)
+        ? (updated.ingredients as { name?: string }[])
+            .map((i) => i.name)
+            .filter((n): n is string => !!n)
+            .slice(0, 30)
+        : entry.ingredientNames,
+    };
+  });
+  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+
+  return textResult({
+    ok: true,
+    id,
+    updatedFields: Object.keys(patch),
+    recipe: updated,
+    ...actorMeta(actor),
+  });
 }
