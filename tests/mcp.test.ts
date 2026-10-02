@@ -167,6 +167,9 @@ describe("handleMcp", () => {
         "add_recipe",
         "add_to_favorites",
         "add_to_meal_plan",
+        "clear_meal_plan",
+        "clear_shopping_list",
+        "delete_recipe",
         "get_discover_item",
         "get_recipe",
         "get_settings_public",
@@ -177,8 +180,15 @@ describe("handleMcp", () => {
         "list_shopping",
         "list_tags",
         "list_want_to_make",
+        "remove_from_favorites",
+        "remove_from_meal_plan",
         "search_recipes",
         "search_semantic",
+        "set_want_to_make",
+        "shopping_add_item",
+        "shopping_remove_item",
+        "shopping_set_checked",
+        "update_recipe",
       ].sort()
     );
   });
@@ -194,8 +204,8 @@ describe("handleMcp", () => {
 });
 
 describe("TOOL_DEFS", () => {
-  test("phase 1+2 has 15 tools", () => {
-    expect(TOOL_DEFS.length).toBe(15);
+  test("phase 1+2+v2 has 25 tools", () => {
+    expect(TOOL_DEFS.length).toBe(25);
   });
 });
 
@@ -544,3 +554,352 @@ describe("phase 2 read tools", () => {
     expect(payload.discover.sources[0].id).toBe("nyt");
   });
 });
+
+
+describe("v2 write / destructive tools", () => {
+  const index = [
+    {
+      id: "r_aaa",
+      title: "Garlic Pasta",
+      tags: ["italian", "pasta"],
+      cuisine: "Italian",
+      favorite: true,
+      favoritedBy: ["u_ryan", "u_erica"],
+      wantToMake: true,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      ingredientNames: ["garlic", "pasta"],
+    },
+    {
+      id: "r_bbb",
+      title: "Tofu Stir Fry",
+      tags: ["asian"],
+      cuisine: "Chinese",
+      favorite: false,
+      favoritedBy: [],
+      wantToMake: false,
+      updatedAt: "2026-01-02T00:00:00.000Z",
+      ingredientNames: ["tofu"],
+    },
+  ];
+
+  const household = {
+    members: [{ id: "u_ryan", name: "Ryan", isOwner: true, joinedAt: "2026-01-01" }],
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  function v2Env() {
+    return env(
+      {},
+      {
+        "recipes:index": JSON.stringify(index),
+        "recipe:r_aaa": JSON.stringify({
+          id: "r_aaa",
+          title: "Garlic Pasta",
+          ingredients: [{ name: "garlic" }],
+          steps: [{ text: "Cook" }],
+          tags: ["italian"],
+          favoritedBy: ["u_ryan", "u_erica"],
+          favorite: true,
+          wantToMake: true,
+          description: "Yummy",
+          cuisine: "Italian",
+          prepTime: 10,
+          cookTime: 15,
+          servings: 2,
+          notes: "old notes",
+        }),
+        "recipe:r_bbb": JSON.stringify({
+          id: "r_bbb",
+          title: "Tofu Stir Fry",
+          ingredients: [{ name: "tofu" }],
+          steps: [{ text: "Fry" }],
+          tags: ["asian"],
+          favoritedBy: [],
+          favorite: false,
+          wantToMake: false,
+        }),
+        household: JSON.stringify(household),
+        "plan:current": JSON.stringify({
+          id: "current",
+          meals: [
+            {
+              id: "m_old",
+              date: "2026-10-01",
+              slot: "dinner",
+              title: "Leftovers",
+            },
+            {
+              id: "m_keep",
+              date: "2026-10-02",
+              slot: "lunch",
+              title: "Salad",
+            },
+          ],
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }),
+        "shopping:current": JSON.stringify({
+          id: "current",
+          items: [
+            { id: "s1", name: "milk", category: "dairy", checked: false },
+            { id: "s2", name: "eggs", category: "dairy", checked: true },
+          ],
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }),
+      }
+    );
+  }
+
+  test("remove_from_favorites removes only actor", async () => {
+    const e = v2Env();
+    const result = await callTool("remove_from_favorites", { id: "r_aaa" }, e);
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.actorUserId).toBe("u_ryan");
+    expect(payload.favoritedBy).toEqual(["u_erica"]);
+    expect(payload.favoritedBy).not.toContain("u_ryan");
+    const stored = (await e.WHISK_KV.get("recipe:r_aaa", "json")) as {
+      favoritedBy: string[];
+      favorite: boolean;
+    };
+    expect(stored.favoritedBy).toEqual(["u_erica"]);
+    expect(stored.favorite).toBe(true);
+  });
+
+  test("set_want_to_make updates recipe + index", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "set_want_to_make",
+      { id: "r_aaa", wantToMake: false },
+      e
+    );
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.wantToMake).toBe(false);
+    expect(payload.actorUserId).toBe("u_ryan");
+    const stored = (await e.WHISK_KV.get("recipe:r_aaa", "json")) as {
+      wantToMake: boolean;
+    };
+    expect(stored.wantToMake).toBe(false);
+    const idx = (await e.WHISK_KV.get("recipes:index", "json")) as {
+      id: string;
+      wantToMake?: boolean;
+    }[];
+    expect(idx.find((x) => x.id === "r_aaa")!.wantToMake).toBe(false);
+  });
+
+  test("remove_from_meal_plan removes exact meal", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "remove_from_meal_plan",
+      { mealId: "m_old" },
+      e
+    );
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.mealCount).toBe(1);
+    expect(payload.actorUserId).toBe("u_ryan");
+    const plan = (await e.WHISK_KV.get("plan:current", "json")) as {
+      meals: { id: string }[];
+    };
+    expect(plan.meals.map((m) => m.id)).toEqual(["m_keep"]);
+  });
+
+  test("remove_from_meal_plan refuses missing meal", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "remove_from_meal_plan",
+      { mealId: "m_missing" },
+      e
+    );
+    expect(result.isError).toBe(true);
+    const plan = (await e.WHISK_KV.get("plan:current", "json")) as {
+      meals: unknown[];
+    };
+    expect(plan.meals.length).toBe(2);
+  });
+
+  test("clear_meal_plan rejects without confirm", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "clear_meal_plan",
+      { confirm: false, confirmName: "current" },
+      e
+    );
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.status).toBe(400);
+    expect(payload.actorUserId).toBe("u_ryan");
+    const plan = (await e.WHISK_KV.get("plan:current", "json")) as {
+      meals: unknown[];
+    };
+    expect(plan.meals.length).toBe(2);
+  });
+
+  test("clear_meal_plan rejects wrong confirmName", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "clear_meal_plan",
+      { confirm: true, confirmName: "wrong" },
+      e
+    );
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.status).toBe(400);
+    const plan = (await e.WHISK_KV.get("plan:current", "json")) as {
+      meals: unknown[];
+    };
+    expect(plan.meals.length).toBe(2);
+  });
+
+  test("clear_meal_plan succeeds with confirm", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "clear_meal_plan",
+      { confirm: true, confirmName: "current" },
+      e
+    );
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.clearedCount).toBe(2);
+    expect(payload.plan.meals).toEqual([]);
+    expect(payload.actorUserId).toBe("u_ryan");
+  });
+
+  test("delete_recipe rejects without confirm / wrong title", async () => {
+    const e = v2Env();
+    const noConfirm = await callTool(
+      "delete_recipe",
+      { id: "r_bbb", confirm: false, confirmName: "Tofu Stir Fry" },
+      e
+    );
+    expect(noConfirm.isError).toBe(true);
+    expect(JSON.parse(noConfirm.content[0]!.text).status).toBe(400);
+    expect(await e.WHISK_KV.get("recipe:r_bbb", "json")).not.toBeNull();
+
+    const wrongTitle = await callTool(
+      "delete_recipe",
+      { id: "r_bbb", confirm: true, confirmName: "Wrong Title" },
+      e
+    );
+    expect(wrongTitle.isError).toBe(true);
+    expect(JSON.parse(wrongTitle.content[0]!.text).status).toBe(400);
+    expect(await e.WHISK_KV.get("recipe:r_bbb", "json")).not.toBeNull();
+  });
+
+  test("delete_recipe succeeds with matching title", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "delete_recipe",
+      { id: "r_bbb", confirm: true, confirmName: "Tofu Stir Fry" },
+      e
+    );
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.actorUserId).toBe("u_ryan");
+    expect(await e.WHISK_KV.get("recipe:r_bbb", "json")).toBeNull();
+    const idx = (await e.WHISK_KV.get("recipes:index", "json")) as { id: string }[];
+    expect(idx.find((x) => x.id === "r_bbb")).toBeUndefined();
+  });
+
+  test("shopping_add_item / set_checked / remove_item", async () => {
+    const e = v2Env();
+    const add = await callTool(
+      "shopping_add_item",
+      { name: "butter", qty: "1 stick", notes: "salted" },
+      e
+    );
+    const addPayload = JSON.parse(add.content[0]!.text);
+    expect(addPayload.ok).toBe(true);
+    expect(addPayload.item.name).toBe("butter");
+    expect(addPayload.item.amount).toBe("1 stick");
+    expect(addPayload.item.notes).toBe("salted");
+    expect(addPayload.actorUserId).toBe("u_ryan");
+    expect(addPayload.itemCount).toBe(3);
+
+    const set = await callTool(
+      "shopping_set_checked",
+      { itemId: "s1", checked: true },
+      e
+    );
+    expect(JSON.parse(set.content[0]!.text).ok).toBe(true);
+    const list1 = (await e.WHISK_KV.get("shopping:current", "json")) as {
+      items: { id: string; checked: boolean }[];
+    };
+    expect(list1.items.find((i) => i.id === "s1")!.checked).toBe(true);
+
+    const rem = await callTool("shopping_remove_item", { itemId: "s2" }, e);
+    expect(JSON.parse(rem.content[0]!.text).ok).toBe(true);
+    const list2 = (await e.WHISK_KV.get("shopping:current", "json")) as {
+      items: { id: string }[];
+    };
+    expect(list2.items.find((i) => i.id === "s2")).toBeUndefined();
+    expect(list2.items.length).toBe(2);
+  });
+
+  test("clear_shopping_list rejects without confirm / wrong name", async () => {
+    const e = v2Env();
+    const a = await callTool(
+      "clear_shopping_list",
+      { confirm: true, confirmName: "shopping:current" },
+      e
+    );
+    expect(a.isError).toBe(true);
+    expect(JSON.parse(a.content[0]!.text).status).toBe(400);
+    const list = (await e.WHISK_KV.get("shopping:current", "json")) as {
+      items: unknown[];
+    };
+    expect(list.items.length).toBe(2);
+
+    const b = await callTool(
+      "clear_shopping_list",
+      { confirm: false, confirmName: "current" },
+      e
+    );
+    expect(b.isError).toBe(true);
+    expect(
+      ((await e.WHISK_KV.get("shopping:current", "json")) as { items: unknown[] })
+        .items.length
+    ).toBe(2);
+  });
+
+  test("clear_shopping_list succeeds with confirmName current", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "clear_shopping_list",
+      { confirm: true, confirmName: "current" },
+      e
+    );
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.clearedCount).toBe(2);
+    expect(payload.list.items).toEqual([]);
+    expect(payload.actorUserId).toBe("u_ryan");
+  });
+
+  test("update_recipe partial safe fields", async () => {
+    const e = v2Env();
+    const result = await callTool(
+      "update_recipe",
+      {
+        id: "r_aaa",
+        title: "Garlic Pasta Deluxe",
+        notes: "extra garlic",
+        prepTime: 12,
+      },
+      e
+    );
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.actorUserId).toBe("u_ryan");
+    expect(payload.updatedFields).toContain("title");
+    expect(payload.recipe.title).toBe("Garlic Pasta Deluxe");
+    expect(payload.recipe.notes).toBe("extra garlic");
+    expect(payload.recipe.favoritedBy).toEqual(["u_ryan", "u_erica"]);
+    const idx = (await e.WHISK_KV.get("recipes:index", "json")) as {
+      id: string;
+      title: string;
+    }[];
+    expect(idx.find((x) => x.id === "r_aaa")!.title).toBe("Garlic Pasta Deluxe");
+  });
+});
+
