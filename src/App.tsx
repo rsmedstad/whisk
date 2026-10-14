@@ -57,6 +57,7 @@ const AskChat = lazyRetry(() => import("./components/suggest/SuggestChat"), "Sug
 const Settings = lazyRetry(() => import("./components/Settings"), "Settings");
 const ImportRecipes = lazyRetry(() => import("./components/import/ImportRecipes"), "ImportRecipes");
 const ImportJsonLd = lazyRetry(() => import("./components/import/ImportJsonLd"), "ImportJsonLd");
+const ShortcutHelp = lazyRetry(() => import("./components/import/ShortcutHelp"), "ShortcutHelp");
 
 // Minimal skeleton for lazy-loaded routes — no layout shift
 function RouteSkeleton() {
@@ -384,6 +385,7 @@ function AppShell({
               />
             }
           />
+          <Route path="/shortcut" element={<ShortcutHelp />} />
           <Route
             path="/import"
             element={
