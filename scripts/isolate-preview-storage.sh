@@ -163,8 +163,8 @@ ensure_preview_kv() {
     wrangler_id="$(echo "$wrangler_out" | sed -n 's/.*"id": "\([a-f0-9]\{32\}\)".*/\1/p' | head -n1)"
   fi
   if [[ -z "$wrangler_id" ]]; then
-    echo "::error::Could not create KV namespace ${PREVIEW_KV_TITLE}" >&2
-    exit 1
+    echo "Could not create KV via REST/wrangler (token may be Pages-only). Will rely on wrangler pages deploy auto-provision." >&2
+    return 0
   fi
   echo "$wrangler_id"
 }
@@ -200,12 +200,15 @@ ensure_preview_r2() {
     echo "$PREVIEW_R2_NAME"
     return 0
   fi
-  echo "::error::Failed to create R2 bucket ${PREVIEW_R2_NAME}" >&2
-  exit 1
+  echo "Could not create R2 via REST/wrangler (token may be Pages-only). Will rely on wrangler pages deploy auto-provision." >&2
 }
 
 inject_wrangler_preview() {
   local kv_id="$1"
+  local kv_id_line=""
+  if [[ -n "$kv_id" ]]; then
+    kv_id_line="id = \"${kv_id}\""
+  fi
   local snippet
   snippet="$(cat <<EOF
 
@@ -214,7 +217,7 @@ inject_wrangler_preview() {
 # Production deploys keep using ${PROD_KV_ID} and ${PROD_R2_NAME}.
 [[env.preview.kv_namespaces]]
 binding = "WHISK_KV"
-id = "${kv_id}"
+${kv_id_line}
 
 [[env.preview.r2_buckets]]
 binding = "WHISK_R2"
@@ -313,13 +316,14 @@ phase_pre_deploy() {
 
   echo "Ensuring preview KV namespace ${PREVIEW_KV_TITLE}" >&2
   local preview_kv
-  preview_kv="$(ensure_preview_kv)"
-  echo "Preview KV id=${preview_kv}" >&2
+  preview_kv="$(ensure_preview_kv || true)"
+  echo "Preview KV id=${preview_kv:-<auto-provision>}" >&2
   echo "Ensuring preview R2 bucket ${PREVIEW_R2_NAME}" >&2
   local preview_r2
-  preview_r2="$(ensure_preview_r2)"
+  preview_r2="$(ensure_preview_r2 || true)"
+  preview_r2="${preview_r2:-$PREVIEW_R2_NAME}"
   echo "Preview R2 name=${preview_r2}" >&2
-  if [[ "$preview_kv" == "$PROD_KV_ID" ]]; then
+  if [[ -n "$preview_kv" && "$preview_kv" == "$PROD_KV_ID" ]]; then
     echo "::error::Preview KV resolved to production ID. Refusing to bind."
     exit 1
   fi
@@ -332,7 +336,7 @@ phase_pre_deploy() {
     preview_kv_id: $kv,
     preview_r2_name: $r2
   }' > "${STATE_DIR}/preview-bindings.json"
-  echo "Preview storage: KV ${preview_kv}  R2 ${preview_r2}"
+  echo "Preview storage: KV ${preview_kv:-auto}  R2 ${preview_r2}"
 
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     echo "preview_kv_id=${preview_kv}" >> "$GITHUB_OUTPUT"
@@ -343,10 +347,38 @@ phase_pre_deploy() {
   ensure_password
 }
 
+capture_preview_bindings() {
+  local raw="$1"
+  local preview_kv preview_r2
+  preview_kv="$(echo "$raw" | jq -r '.result.deployment_configs.preview.kv_namespaces.WHISK_KV.namespace_id // empty')"
+  preview_r2="$(echo "$raw" | jq -r '.result.deployment_configs.preview.r2_buckets.WHISK_R2.name // empty')"
+  if [[ -z "$preview_kv" || "$preview_kv" == "$PROD_KV_ID" ]]; then
+    echo "::error::Preview KV is still production ${PROD_KV_ID} after deploy. Auto-provision did not isolate storage." >&2
+    exit 1
+  fi
+  if [[ -z "$preview_r2" || "$preview_r2" == "$PROD_R2_NAME" ]]; then
+    echo "::error::Preview R2 is still production ${PROD_R2_NAME} after deploy." >&2
+    exit 1
+  fi
+  jq -n --arg kv "$preview_kv" --arg r2 "$preview_r2" '{
+    preview_kv_id: $kv,
+    preview_r2_name: $r2
+  }' > "${STATE_DIR}/preview-bindings.json"
+  echo "Captured preview bindings: KV ${preview_kv}  R2 ${preview_r2}" >&2
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    echo "preview_kv_id=${preview_kv}" >> "$GITHUB_OUTPUT"
+    echo "preview_r2_name=${preview_r2}" >> "$GITHUB_OUTPUT"
+  fi
+}
+
 bind_preview_storage() {
   local kv_id r2_name
-  kv_id="$(jq -r '.preview_kv_id' "${STATE_DIR}/preview-bindings.json")"
-  r2_name="$(jq -r '.preview_r2_name' "${STATE_DIR}/preview-bindings.json")"
+  kv_id="$(jq -r '.preview_kv_id // empty' "${STATE_DIR}/preview-bindings.json")"
+  r2_name="$(jq -r '.preview_r2_name // empty' "${STATE_DIR}/preview-bindings.json")"
+  if [[ -z "$kv_id" || "$kv_id" == "$PROD_KV_ID" ]]; then
+    echo "No isolated preview KV id yet; skipping PATCH bind (expect wrangler deploy to have provisioned)."
+    return 0
+  fi
   echo "PATCH preview bindings only (production omitted)"
   local body
   body="$(jq -nc --arg kv "$kv_id" --arg r2 "$r2_name" '{
@@ -470,6 +502,10 @@ phase_post_deploy() {
   ensure_password
   local password
   password="$(read_password)"
+  local raw
+  raw="$(get_project)"
+  require_success "$raw" "GET project after deploy"
+  capture_preview_bindings "$raw"
   bind_preview_storage
   set_preview_env "$password"
   assert_production_unchanged
