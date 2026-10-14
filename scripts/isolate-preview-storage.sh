@@ -342,6 +342,36 @@ ensure_password() {
   mask "$password"
 }
 
+discover_non_prod_kv() {
+  echo "Listing Pages projects for existing non-production KV IDs" >&2
+  local list
+  list="$(cf_get "/pages/projects?per_page=50")"
+  echo "$list" | jq '{
+    ok: .success,
+    errors: .errors,
+    projects: [
+      (.result // [])[]
+      | {
+          name,
+          prod_kv: .deployment_configs.production.kv_namespaces,
+          preview_kv: .deployment_configs.preview.kv_namespaces,
+          prod_r2: .deployment_configs.production.r2_buckets,
+          preview_r2: .deployment_configs.preview.r2_buckets
+        }
+    ]
+  }' >&2 || echo "$list" >&2
+  echo "$list" | jq -r --arg prod "$PROD_KV_ID" '
+    [.result[]?
+      | .deployment_configs
+      | (.production.kv_namespaces, .preview.kv_namespaces)
+      | .. | .namespace_id? // empty
+    ]
+    | unique
+    | map(select(. != $prod and . != "212ca20cb74b475da57767af91a23564" and . != ""))
+    | .[0] // empty
+  '
+}
+
 phase_pre_deploy() {
   echo "=== PHASE pre-deploy: snapshot production, create preview KV/R2 ==="
   local raw
@@ -372,13 +402,13 @@ phase_pre_deploy() {
     echo "REST/wrangler create unavailable; trying Worker auto-provision for both KV and R2" >&2
     preview_kv="$(provision_via_worker || true)"
   fi
+  if [[ -z "$preview_kv" ]]; then
+    preview_kv="$(discover_non_prod_kv || true)"
+    echo "Discovered non-prod KV: ${preview_kv:-<none>}" >&2
+  fi
   echo "Preview R2 name=${preview_r2}" >&2
   if [[ -n "$preview_kv" && "$preview_kv" == "$PROD_KV_ID" ]]; then
     echo "::error::Preview KV resolved to production ID. Refusing to bind."
-    exit 1
-  fi
-  if [[ "$preview_r2" == "$PROD_R2_NAME" ]]; then
-    echo "::error::Preview R2 resolved to production bucket. Refusing to bind."
     exit 1
   fi
 
@@ -386,15 +416,20 @@ phase_pre_deploy() {
     preview_kv_id: $kv,
     preview_r2_name: $r2
   }' > "${STATE_DIR}/preview-bindings.json"
-  echo "Preview storage: KV ${preview_kv:-auto}  R2 ${preview_r2}"
+  echo "Preview storage: KV ${preview_kv:-unavailable}  R2 ${preview_r2}"
 
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     echo "preview_kv_id=${preview_kv}" >> "$GITHUB_OUTPUT"
     echo "preview_r2_name=${preview_r2}" >> "$GITHUB_OUTPUT"
   fi
 
-  inject_wrangler_preview "$preview_kv"
-  ensure_password
+  if [[ -n "$preview_kv" ]]; then
+    inject_wrangler_preview "$preview_kv"
+    ensure_password
+  else
+    echo "::warning::No isolated preview KV id available. Not injecting [env.preview] and not setting APP_SECRET."
+    echo "Deploy token can edit Pages but cannot create Workers KV or R2 (HTTP 401/403)."
+  fi
 }
 
 capture_preview_bindings() {
@@ -549,13 +584,21 @@ phase_post_deploy() {
     echo "State from pre-deploy missing; taking a fresh snapshot and ensuring resources exist."
     PHASE=pre-deploy phase_pre_deploy
   fi
-  ensure_password
-  local password
-  password="$(read_password)"
   local raw
   raw="$(get_project)"
   require_success "$raw" "GET project after deploy"
+  print_binding_table "AFTER-DEPLOY" "$raw"
+  local preview_kv
+  preview_kv="$(echo "$raw" | jq -r '.result.deployment_configs.preview.kv_namespaces.WHISK_KV.namespace_id // empty')"
+  if [[ -z "$preview_kv" || "$preview_kv" == "$PROD_KV_ID" ]]; then
+    echo "::error::Preview still shares production KV ${PROD_KV_ID}. Token cannot create a new namespace. APP_SECRET was not set."
+    assert_production_unchanged
+    exit 1
+  fi
   capture_preview_bindings "$raw"
+  ensure_password
+  local password
+  password="$(read_password)"
   bind_preview_storage
   set_preview_env "$password"
   assert_production_unchanged
