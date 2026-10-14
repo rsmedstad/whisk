@@ -1,0 +1,23 @@
+# Maintenance: isolate Pages PREVIEW storage for project `whisk`.
+# Never writes production bindings, secrets, or data.
+# Prefer the pull_request path in deploy.yml (provision → deploy → bind/verify).
+# This workflow is dispatch-only so it cannot race a preview deploy.
+name: Isolate preview storage
+
+on:
+  workflow_dispatch:
+
+jobs:
+  isolate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record production, create preview KV/R2, bind preview only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'whisk' }}
+          PREVIEW_APP_SECRET: ${{ secrets.PREVIEW_APP_SECRET }}
+          PHASE: all
+        run: bash scripts/isolate-preview-storage.sh
