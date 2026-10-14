@@ -1,0 +1,89 @@
+# One-off: deploy this PR to whisk-demo PREVIEW (branch kitchn-test).
+# Does not deploy whisk-demo production (main) and does not commit demo bindings.
+name: Deploy PR to whisk-demo preview
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-demo-preview:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'cursor/kitchn-discover-hang-92c0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run build
+
+      - name: Check whisk-demo is not bound to whisk production storage
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PHASE: check
+        run: bash scripts/deploy-kitchn-test-to-demo.sh
+
+      - name: Use demo wrangler config on the runner only
+        env:
+          PHASE: prepare
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/deploy-kitchn-test-to-demo.sh
+
+      - id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.151.0"
+          command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch kitchn-test --commit-dirty=true
+
+      - name: Record deploy URL
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+        run: |
+          set -euo pipefail
+          url="${ALIAS_URL:-$DEPLOYMENT_URL}"
+          echo "deployment-url=${DEPLOYMENT_URL}"
+          echo "alias-url=${ALIAS_URL}"
+          if [[ -z "$url" ]]; then
+            url="https://kitchn-test.whisk-demo.pages.dev"
+          fi
+          mkdir -p .demo-preview
+          printf '%s\n' "$url" > .demo-preview/deploy-url.txt
+          echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Set preview-only APP_SECRET and verify
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PHASE: secret
+        run: bash scripts/deploy-kitchn-test-to-demo.sh
+
+      - name: Upload demo-preview artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-preview-verify
+          path: |
+            .demo-preview/whisk-prod-snapshot.json
+            .demo-preview/demo-canonical-id.txt
+            .demo-preview/deploy-url.txt
+            .demo-preview/capabilities.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload preview login (1 day)
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-test-login
+          path: .demo-preview/preview-secret.txt
+          if-no-files-found: error
+          retention-days: 1
