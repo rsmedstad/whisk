@@ -91,6 +91,13 @@ describe("bookmarklet transport helpers", () => {
     expect(href).toContain("ldz=");
     expect(href).toContain("CompressionStream");
   });
+
+  test("generated bookmarklet parses as JavaScript", () => {
+    const href = buildBookmarkletHref("https://6e46dcc2.whisk-demo.pages.dev");
+    expect(href.startsWith("javascript:")).toBe(true);
+    const source = decodeURIComponent(href.slice("javascript:".length));
+    expect(() => new Function(source)).not.toThrow();
+  });
 });
 
 describe("share-target URL extraction", () => {
