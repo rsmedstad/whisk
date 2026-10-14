@@ -2,6 +2,10 @@ name = "whisk"
 compatibility_date = "2024-12-01"
 pages_build_output_dir = "dist"
 
+# Production bindings. Do not add [env.production] — dashboard secrets stay in the Pages config.
+# Preview isolation: scripts/isolate-preview-storage.sh adds [env.preview] with its own
+# KV/R2 ids once CLOUDFLARE_API_TOKEN can create Workers KV + R2. Until then, preview
+# deploys keep using these top-level production ids.
 # KV Namespaces - create with: npx wrangler kv namespace create WHISK_KV
 [[kv_namespaces]]
 binding = "WHISK_KV"

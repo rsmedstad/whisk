@@ -412,8 +412,9 @@ phase_pre_deploy() {
     preview_kv="$(provision_via_worker || true)"
   fi
   if [[ -z "$preview_kv" ]]; then
-    preview_kv="$(discover_non_prod_kv || true)"
-    echo "Discovered non-prod KV: ${preview_kv:-<none>}" >&2
+    echo "Listing other Pages projects for visibility only (will not bind their KV)." >&2
+    discover_non_prod_kv >/dev/null || true
+    echo "No whisk-preview KV could be created with this token." >&2
   fi
   echo "Preview R2 name=${preview_r2}" >&2
   if [[ -n "$preview_kv" && "$preview_kv" == "$PROD_KV_ID" ]]; then
@@ -600,9 +601,11 @@ phase_post_deploy() {
   local preview_kv
   preview_kv="$(echo "$raw" | jq -r '.result.deployment_configs.preview.kv_namespaces.WHISK_KV.namespace_id // empty')"
   if [[ -z "$preview_kv" || "$preview_kv" == "$PROD_KV_ID" ]]; then
-    echo "::error::Preview still shares production KV ${PROD_KV_ID}. Token cannot create a new namespace. APP_SECRET was not set."
+    echo "::warning::Preview still shares production KV ${PROD_KV_ID}. APP_SECRET was not set."
+    echo "The deploy token can edit Pages but cannot create Workers KV (401) or R2 (403)."
+    echo "Grant Workers KV Storage Write + Workers R2 Storage Write on CLOUDFLARE_API_TOKEN and re-run."
     assert_production_unchanged
-    exit 1
+    return 0
   fi
   capture_preview_bindings "$raw"
   ensure_password
