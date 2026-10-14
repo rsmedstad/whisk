@@ -175,16 +175,12 @@ phase_prepare() {
     echo "::error::wrangler-demo.toml missing"
     exit 1
   fi
-  ensure_password
-  local password
-  password="$(sed -n '2p' "${STATE_DIR}/preview-secret.txt")"
   cp wrangler-demo.toml "$WRANGLER_TOML"
   cat >> "$WRANGLER_TOML" <<EOF
 
 # Runner-only preview override — not committed. Forces kitchn-test onto demo KV/R2.
-# APP_SECRET / OWNER_PASSWORD are injected so this deployment has them at publish
-# time (dashboard PATCH alone does not retrofit already-published Functions).
-# Same throwaway value for both: DEMO_MODE regular login cannot persist recipes.
+# Do not put APP_SECRET / OWNER_PASSWORD here: they are preview secret_text
+# bindings. Wrangler rejects the same name as a var ("already in use").
 [[env.preview.kv_namespaces]]
 binding = "WHISK_KV"
 id = "${DEMO_KV}"
@@ -196,10 +192,8 @@ bucket_name = "${DEMO_R2}"
 [env.preview.vars]
 ENVIRONMENT = "preview"
 DEMO_MODE = "true"
-APP_SECRET = "${password}"
-OWNER_PASSWORD = "${password}"
 EOF
-  echo "Prepared runner wrangler.toml from wrangler-demo.toml + [env.preview] (demo KV/R2 + preview secrets)."
+  echo "Prepared runner wrangler.toml from wrangler-demo.toml + [env.preview] (demo KV/R2)."
   grep -n 'kv_namespaces\|bucket_name\|env.preview\|ENVIRONMENT\|DEMO_MODE' "$WRANGLER_TOML" || true
 }
 
