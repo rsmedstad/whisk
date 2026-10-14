@@ -69,5 +69,5 @@ jobs:
         with:
           name: preview-test-login
           path: .isolate-preview/preview-secret.txt
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 1
