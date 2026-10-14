@@ -1,5 +1,6 @@
 import {
   decodeImportLdHash,
+  decodeImportLdHashAsync,
   IMPORT_LD_ACK,
   isImportLdPayload,
   type ImportLdPayload,
@@ -41,6 +42,9 @@ export function installImportLdBridge(): void {
     const existing = readStored();
     if (existing) cached = existing;
   }
+  void decodeImportLdHashAsync(window.location.hash).then((asyncHash) => {
+    if (asyncHash) store(asyncHash);
+  });
 
   window.addEventListener("message", (event: MessageEvent) => {
     if (!isImportLdPayload(event.data)) return;
@@ -57,15 +61,13 @@ export function installImportLdBridge(): void {
 }
 
 export function peekImportLdPayload(): ImportLdPayload | null {
-  if (cached !== undefined) return cached;
+  if (cached) return cached;
   const fromHash = typeof window !== "undefined" ? decodeImportLdHash(window.location.hash) : null;
   if (fromHash) {
-    cached = fromHash;
+    store(fromHash);
     return fromHash;
   }
-  const stored = readStored();
-  cached = stored;
-  return stored;
+  return readStored();
 }
 
 export function clearImportLdPayload(): void {
@@ -75,7 +77,7 @@ export function clearImportLdPayload(): void {
   } catch {
     // ignore
   }
-  if (typeof window !== "undefined" && window.location.hash.startsWith("#ld=")) {
+  if (typeof window !== "undefined" && /^#ldz?=/.test(window.location.hash)) {
     const url = `${window.location.pathname}${window.location.search}`;
     window.history.replaceState(null, "", url);
   }

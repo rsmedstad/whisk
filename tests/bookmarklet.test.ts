@@ -6,7 +6,9 @@ import {
   BOOKMARKLET_HASH_MAX,
   buildBookmarkletHref,
   decodeImportLdHash,
+  decodeImportLdHashAsync,
   encodeImportLdHash,
+  encodeImportLdHashGzip,
   extractLdScriptsFromHtml,
   extractRecipeFromLdScripts,
   firstHttpUrl,
@@ -66,7 +68,19 @@ describe("bookmarklet transport helpers", () => {
     expect((decoded?.jsonLd as { name?: string })?.name).toBe("Greek Meatballs (Keftedes)");
   });
 
-  test("buildBookmarkletHref bakes the origin and postMessage path", () => {
+  test("round-trips a gzip #ldz= hash (COOP-safe path)", async () => {
+    const jsonLd = extractRecipeFromLdScripts(extractLdScriptsFromHtml(kitchnHtml));
+    const encoded = await encodeImportLdHashGzip({
+      url: "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745",
+      jsonLd,
+    });
+    expect(encoded.length).toBeLessThan(BOOKMARKLET_HASH_MAX);
+    const decoded = await decodeImportLdHashAsync(`#ldz=${encoded}`);
+    expect(decoded?.url).toContain("thekitchn.com");
+    expect((decoded?.jsonLd as { name?: string })?.name).toBe("Greek Meatballs (Keftedes)");
+  });
+
+  test("buildBookmarkletHref bakes the origin, gzip hash, and postMessage", () => {
     const href = buildBookmarkletHref("https://whisk-15t.pages.dev");
     expect(href.startsWith("javascript:")).toBe(true);
     expect(href).toContain("https://whisk-15t.pages.dev");
@@ -74,6 +88,8 @@ describe("bookmarklet transport helpers", () => {
     expect(href).toContain("postMessage");
     expect(href).toContain("application/ld+json");
     expect(href).toContain("whisk-import-ld");
+    expect(href).toContain("ldz=");
+    expect(href).toContain("CompressionStream");
   });
 });
 
