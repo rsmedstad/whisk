@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { classNames, formatTime, formatTotalTime, normalizeSearch } from "../../lib/utils";
 import { TIME_RANGES } from "../../lib/tags";
 import { api, ApiRequestError, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
 import { detectSavePlatform, isBookmarkletInstalled } from "../../lib/platform";
+import { isBlockedDiscoverSource } from "../../lib/pending-import";
+import { useBlockedImport } from "../import/BlockedImportFlow";
 import { getLocal, setLocal } from "../../lib/cache";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -73,6 +75,8 @@ const LEGACY_SOURCE_LABELS: Record<string, string> = {
   nyt: "NYT Cooking",
   allrecipes: "AllRecipes",
   seriouseats: "Serious Eats",
+  thekitchn: "The Kitchn",
+  kitchn: "The Kitchn",
 };
 
 const TYPE_LABELS: Record<DiscoverCategory, string> = {
@@ -327,21 +331,8 @@ export function Discover({
   isDemoRestricted,
 }: DiscoverProps) {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const tags = useTags();
-
-  useEffect(() => {
-    if (searchParams.get("saveHint") !== "blocked") return;
-    setSelectedFeedItem({
-      title: "Greek Meatballs (Keftedes)",
-      url: "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745",
-      source: "thekitchn",
-      description: "The Kitchn blocked automated access.",
-    });
-    setImportError("The Kitchn blocked automated access. Open the original recipe to see ingredients and steps.");
-    setImportErrorCode("source_blocked");
-    setIsImporting(false);
-  }, [searchParams]);
+  const { openBlockedSheet } = useBlockedImport();
 
   // ── Filter/sort state ──
   const [searchOpen, setSearchOpen] = useState(false);
@@ -550,6 +541,17 @@ export function Discover({
         savedScrollPos.current = { vertical: el.scrollTop, carousels };
       }
       const source = item.source ?? "nyt";
+      if (isBlockedDiscoverSource(item.source, item.url)) {
+        openBlockedSheet({
+          url: item.url,
+          title: item.title,
+          timestamp: Date.now(),
+          imageUrl: item.imageUrl,
+          source,
+          sourceLabel: sourceLabel(source),
+        });
+        return;
+      }
       setSelectedFeedItem({ ...item, source });
       setImportedRecipe(null);
       setImportError(null);
@@ -628,13 +630,24 @@ export function Discover({
         const message = err instanceof Error && err.message
           ? err.message
           : "Could not load recipe. The site may be blocking access.";
+        const code = err instanceof ApiRequestError ? err.code ?? null : null;
         setImportError(message);
-        setImportErrorCode(err instanceof ApiRequestError ? err.code ?? null : null);
+        setImportErrorCode(code);
+        if (code === "source_blocked") {
+          openBlockedSheet({
+            url: item.url,
+            title: item.title,
+            timestamp: Date.now(),
+            imageUrl: item.imageUrl,
+            source,
+            sourceLabel: sourceLabel(source),
+          });
+        }
       } finally {
         setIsImporting(false);
       }
     },
-    [isDemoRestricted]
+    [isDemoRestricted, openBlockedSheet, sourceLabel]
   );
 
   const handleSaveFeedRecipe = useCallback(async () => {
@@ -710,6 +723,17 @@ export function Discover({
 
   // Quick-save a feed item directly from the card (imports + saves in one step)
   const handleQuickSave = useCallback(async (item: DiscoverFeedItem) => {
+    if (isBlockedDiscoverSource(item.source, item.url)) {
+      openBlockedSheet({
+        url: item.url,
+        title: item.title,
+        timestamp: Date.now(),
+        imageUrl: item.imageUrl,
+        source: item.source,
+        sourceLabel: sourceLabel(item.source),
+      });
+      return;
+    }
     if (!onSaveRecipe || savedUrls.has(item.url) || savingUrls.has(item.url)) return;
     setSavingUrls((prev) => new Set(prev).add(item.url));
     try {
@@ -771,7 +795,7 @@ export function Discover({
         return next;
       });
     }
-  }, [onSaveRecipe, savedUrls, savingUrls]);
+  }, [onSaveRecipe, savedUrls, savingUrls, openBlockedSheet, sourceLabel]);
 
   const handleFeedBack = () => {
     const pos = savedScrollPos.current;

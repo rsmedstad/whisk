@@ -18,6 +18,7 @@ import { RecipeList } from "./components/recipes/RecipeList";
 import { toDateString } from "./lib/utils";
 import { DemoBanner } from "./components/ui/DemoBanner";
 import { DemoPill, DemoInfoModal, DemoToastHost } from "./components/ui/Demo";
+import { BlockedImportProvider } from "./components/import/BlockedImportFlow";
 import type { Ingredient, AppSettings, AppStyle, UserPreferences } from "./types";
 
 /** Full-page placeholder shown when a demo-restricted route is accessed */
@@ -240,6 +241,7 @@ function AppShell({
         />
       )}
 
+      <BlockedImportProvider recipes={recipes.recipes}>
       <main>
       <Suspense fallback={<RouteSkeleton />}>
         <Routes>
@@ -381,6 +383,7 @@ function AppShell({
             element={
               <ImportJsonLd
                 onCreateRecipe={recipes.createRecipe}
+                existingRecipes={recipes.recipes}
                 isDemoRestricted={isDemoRestricted}
               />
             }
@@ -407,6 +410,7 @@ function AppShell({
         <Route path="/recipes/:id/cook" element={null} />
         <Route path="*" element={<BottomNav />} />
       </Routes>
+      </BlockedImportProvider>
       </div>
 
       {/* Demo UI — only rendered when viewing as non-owner in demo mode */}

@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { peekImportLdPayload, clearImportLdPayload } from "../../lib/import-ld-bridge";
+import { clearPendingImport } from "../../lib/pending-import";
+import { findRecipeIdBySourceUrl } from "../../lib/source-url";
 import type { ImportLdPayload } from "../../lib/bookmarklet";
-import type { Ingredient, Recipe, RecipePhoto, Step } from "../../types";
+import type { Ingredient, Recipe, RecipeIndexEntry, RecipePhoto, Step } from "../../types";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
@@ -27,6 +29,7 @@ interface ScrapedRecipe {
 
 interface ImportJsonLdProps {
   onCreateRecipe: (recipe: Omit<Recipe, "id" | "createdAt" | "updatedAt">) => Promise<Recipe>;
+  existingRecipes?: RecipeIndexEntry[];
   isDemoRestricted?: boolean;
 }
 
@@ -40,7 +43,11 @@ function sourceDomain(url: string): string | undefined {
   }
 }
 
-export function ImportJsonLd({ onCreateRecipe, isDemoRestricted = false }: ImportJsonLdProps) {
+export function ImportJsonLd({
+  onCreateRecipe,
+  existingRecipes = [],
+  isDemoRestricted = false,
+}: ImportJsonLdProps) {
   const navigate = useNavigate();
   const [payload, setPayload] = useState<ImportLdPayload | null>(null);
   const [status, setStatus] = useState<"waiting" | "saving" | "error">("waiting");
@@ -75,6 +82,15 @@ export function ImportJsonLd({ onCreateRecipe, isDemoRestricted = false }: Impor
     if (!payload) return;
     setStatus("saving");
     const run = async (): Promise<string> => {
+      const index = existingRecipes.length > 0
+        ? existingRecipes
+        : await api.get<RecipeIndexEntry[]>("/recipes").catch(() => [] as RecipeIndexEntry[]);
+      const existingId = findRecipeIdBySourceUrl(index, payload.url);
+      if (existingId) {
+        clearImportLdPayload();
+        clearPendingImport(payload.url);
+        return existingId;
+      }
       const scraped = await api.post<ScrapedRecipe>(
         "/import/url",
         {
@@ -107,6 +123,7 @@ export function ImportJsonLd({ onCreateRecipe, isDemoRestricted = false }: Impor
         },
       });
       clearImportLdPayload();
+      clearPendingImport(payload.url);
       return created.id;
     };
     if (!saveLock) saveLock = run();
@@ -119,7 +136,7 @@ export function ImportJsonLd({ onCreateRecipe, isDemoRestricted = false }: Impor
           ? err.message
           : "Could not save this recipe.");
       });
-  }, [payload, onCreateRecipe, isDemoRestricted, navigate]);
+  }, [payload, onCreateRecipe, existingRecipes, isDemoRestricted, navigate]);
 
   return (
     <div className="min-h-screen px-4 pt-[calc(var(--sat)+1rem)] pb-24">

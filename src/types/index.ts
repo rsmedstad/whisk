@@ -417,6 +417,16 @@ export interface ImportResult {
   recipeId?: string;
 }
 
+/** Discover → blocked source: remember the page we sent the user to. */
+export interface PendingImport {
+  url: string;
+  title: string;
+  timestamp: number;
+  imageUrl?: string;
+  source?: string;
+  sourceLabel?: string;
+}
+
 /** Structured error from /api/import/url when a source blocks or times out. */
 export type SourceFetchCode = "source_blocked" | "source_timeout" | "source_empty";
 
