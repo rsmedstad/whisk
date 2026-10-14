@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Discover / Import — The Kitchn fail-fast + per-source feed strategy
+
+- **Kitchn (and other WAF-blocked sources) no longer hang Discover**: Server-side recipe fetch is capped at 8s. A PerimeterX/WAF challenge or timeout returns `422` immediately with `{ code: source_blocked|source_timeout, sourceUrl, sourceLabel }` instead of spending 25s+ on Browser Rendering / Apify. Discover and URL import show the feed title plus a clear error and a button/link to the original recipe. Client requests to `/api/import/url` also abort at 12s so a spinner cannot spin forever.
+- **Per-source public-feed fallback**: When the page is blocked, import looks up the URL in the source's published RSS/Atom feed (The Kitchn → `main.rss`) and uses Recipe JSON-LD from `content:encoded` when the feed actually carries it. The Kitchn feed is teaser-only (title, image, categories — no ingredients/steps), so that path fails fast to the original-link state rather than inventing a recipe.
+- **No challenge evasion**: Honest browser-like headers only; we do not retry past a block, solve captchas, or use residential proxies. A 403 body that still includes Recipe JSON-LD (some Dotdash pages) is still parsed.
+
 ### Discover — Non-Recipe/Shopping Filtering & Meal Classification
 
 - **Shopping/product posts filtered out (Kitchn + global)**: Expanded title, URL, and RSS `<category>` heuristics reject product roundups and gear posts — "Best X of/for 20XX" (any word count), shopping CTAs ("order online", "on sale", "under $N", "% off", "deals"), and end-of-title kitchen-gear nouns ("The Best Milk Frothers"). URL slugs like `/best-coffee-mug-warmer-23845669`, `-deals-`, and `gift-guide` are rejected too. For feeds that annotate items (esp. The Kitchn), items with `shopping`/`product review`/`news`/`skills` categories are rejected unless a `Recipes` category vouches for them. Filters extracted to `functions/lib/discover-filters.ts` and unit-tested (`tests/discover-filters.test.ts`).

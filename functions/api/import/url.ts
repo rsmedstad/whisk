@@ -5,6 +5,11 @@ import {
   type ProviderEnv,
 } from "../../lib/ai-providers";
 import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
+import {
+  RECIPE_FETCH_TIMEOUT_MS,
+  resolveRecipeSource,
+  sourceFetchResponse,
+} from "../../lib/recipe-fetch";
 
 interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
@@ -171,161 +176,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // If NYT API failed, fall through to normal HTML-based extraction
     }
 
-    // ── Known-blocked domains → skip straight to Browser Rendering ──
-    const BLOCKED_DOMAINS = [
-      "foodnetwork.com",   // Akamai WAF
-      "food52.com",        // Vercel Security Checkpoint
-      "thekitchn.com",     // PerimeterX
-    ];
-    const urlHost = new URL(url).hostname.replace(/^www\./, "");
-    const isKnownBlocked = BLOCKED_DOMAINS.some(
-      (d) => urlHost === d || urlHost.endsWith(`.${d}`)
-    );
-
-    // Try regular fetch first (unless known-blocked)
-    let html: string | null = null;
-    let regularFetchFailed = false;
+    // One honest page fetch (8s). If the source blocks or times out, try the
+    // per-source public feed (e.g. The Kitchn main.rss) for Recipe JSON-LD,
+    // then fail fast — do not spend 25s+ on Browser Rendering / Apify.
+    const resolved = await resolveRecipeSource(url, RECIPE_FETCH_TIMEOUT_MS);
+    let html: string | null = resolved.html
+      ? (resolved.html.length > MAX_HTML_CHARS ? resolved.html.slice(0, MAX_HTML_CHARS) : resolved.html)
+      : null;
+    const failFastCode = resolved.failFastCode;
+    // BR/Apify are for JS-rendered pages we were allowed to read — not for
+    // walking a PerimeterX/WAF challenge.
+    const allowEscalation = failFastCode === null;
 
     // Cap total Browser Rendering invocations per request. Each BR call takes
     // ~25s, so we'd rather return partial data than fire three back-to-back.
     const MAX_BR_ATTEMPTS = 2;
     let brAttempts = 0;
 
-    if (!isKnownBlocked) {
-      const pageAbort = AbortSignal.timeout(15000);
-      const res = await fetch(url, {
-        signal: pageAbort,
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Cache-Control": "no-cache",
-          "Sec-Fetch-Dest": "document",
-          "Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Site": "none",
-          "Sec-Fetch-User": "?1",
-          "Upgrade-Insecure-Requests": "1",
-        },
-      });
-
-      regularFetchFailed = !res.ok;
-      // Read body even on non-200 — many recipe sites (Dotdash Meredith)
-      // return full HTML with JSON-LD even on 403 responses
-      const body = await res.text();
-      if (body.length > 200) {
-        html = body.length > MAX_HTML_CHARS ? body.slice(0, MAX_HTML_CHARS) : body;
-      }
-    } else {
-      regularFetchFailed = true; // Skip to Browser Rendering
+    if (failFastCode) {
+      return sourceFetchResponse(failFastCode, url);
     }
 
-    // If regular fetch failed, returned a small/challenge page, or is known-blocked → try Browser Rendering
-    const isChallengePage = html !== null && (
-      // Cloudflare
-      html.includes("<title>Just a moment...</title>") ||
-      html.includes("_cf_chl_opt") ||
-      html.includes("challenge-platform") ||
-      // PerimeterX
-      html.includes("px-captcha") ||
-      html.includes("_pxhd") ||
-      html.includes("perimeterx") ||
-      // Akamai
-      html.includes("ak_bmsc") ||
-      html.includes("akamaized") ||
-      // Datadome
-      html.includes("datadome") ||
-      // Imperva / Incapsula
-      html.includes("incapsula") ||
-      html.includes("_incap_") ||
-      // Sucuri
-      html.includes("sucuri") ||
-      // Generic bot detection patterns
-      html.includes("verify you are human") ||
-      html.includes("Please verify you are a human") ||
-      html.includes("Access Denied") ||
-      // Page has no recipe-related content — likely a challenge/wall
-      (!html.includes("recipeIngredient") && !html.includes("recipe-ingredient") &&
-       !html.includes("ingredient") && !html.includes("instruction") &&
-       html.length < 5000)
-    );
-    const needsBrowser = regularFetchFailed || (html !== null && html.length < 500) || isChallengePage;
-    if (needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
-      brAttempts++;
-      try {
-        const brRes = await fetch(
-          `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/content`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${env.CF_BR_TOKEN}`,
-            },
-            body: JSON.stringify({
-              url,
-              gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
-              // Allow all resource types — some WAFs check that images/scripts load
-              rejectResourceTypes: ["font", "media"],
-              setExtraHTTPHeaders: {
-                "Accept-Language": "en-US,en;q=0.9",
-              },
-            }),
-          }
-        );
-        if (brRes.ok) {
-          const brBody = await brRes.text();
-          // Check if BR returned actual content (not a challenge page)
-          const rawHtml = brBody.startsWith("{") ? (JSON.parse(brBody) as { result?: string }).result ?? "" : brBody;
-          const brHtml = rawHtml.length > MAX_HTML_CHARS ? rawHtml.slice(0, MAX_HTML_CHARS) : rawHtml;
-          if (brHtml.length > 500 && !brHtml.includes("<title>Just a moment...</title>")) {
-            html = brHtml;
-          }
-        }
-      } catch {
-        // Browser Rendering failed, continue with whatever we have
-      }
-    }
-
-    if (!html || html.length < 500) {
-      // Try Apify recipe scraper as last resort before giving up entirely
-      if (env.APIFY_API_TOKEN) {
-        const apifyData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
-        if (apifyData) {
-          const apifyIngredients = parseIngredients(apifyData.recipeIngredient ?? []);
-          const recipe = {
-            title: apifyData.name ?? "",
-            description: apifyData.description ?? "",
-            ingredients: apifyIngredients,
-            steps: parseSteps(apifyData.recipeInstructions ?? []),
-            prepTime: parseDuration(apifyData.prepTime) ?? parseDuration(apifyData.totalTime),
-            cookTime: parseDuration(apifyData.cookTime),
-            servings: parseServings(apifyData.recipeYield),
-            thumbnailUrl: extractImageUrl(apifyData.image),
-            photos: [] as { url: string; isPrimary: boolean }[],
-            tags: generateTags(apifyData, apifyIngredients),
-            lastCrawledAt: new Date().toISOString(),
-          };
-          return new Response(JSON.stringify(recipe), {
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-      }
-      const hasBR = !!(env.CF_ACCOUNT_ID && env.CF_BR_TOKEN);
-      const hasApify = !!env.APIFY_API_TOKEN;
-      let error = regularFetchFailed
-        ? "This site blocks automated access."
-        : "Received a very small response — site may be blocking automated requests.";
-      if (!hasBR && !hasApify) {
-        error += " Enable Browser Rendering (CF_ACCOUNT_ID + CF_BR_TOKEN) or Apify (APIFY_API_TOKEN) in your environment for better site support.";
-      } else if (!hasBR) {
-        error += " Enable Browser Rendering (CF_ACCOUNT_ID + CF_BR_TOKEN) for better blocked-site support.";
-      }
-      return new Response(
-        JSON.stringify({ error, browserRendering: hasBR }),
-        { status: 422, headers: { "Content-Type": "application/json" } }
-      );
+    if (!html || html.length < 200) {
+      return sourceFetchResponse("source_empty", url);
     }
 
     // Strategy 1: JSON-LD (most reliable when present)
@@ -346,15 +219,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       recipeData = extractBlogRecipe(html);
     }
 
-    // Strategy 5: Apify universal recipe scraper (last resort)
-    if (!recipeData && env.APIFY_API_TOKEN) {
+    // Strategy 5: Apify universal recipe scraper (last resort — never after a block)
+    if (!recipeData && allowEscalation && env.APIFY_API_TOKEN) {
       recipeData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
     }
 
     // If no recipe data found and we haven't tried Browser Rendering yet, try it now.
-    // This catches cases where the page returned 200 but was actually a challenge/wall
-    // page we didn't detect, or the site requires JS to render recipe content.
-    if (!recipeData && !needsBrowser && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
+    // Only for pages we were allowed to read that need JS to render the recipe.
+    if (!recipeData && allowEscalation && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
       brAttempts++;
       try {
         const brRes = await fetch(
@@ -390,10 +262,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     if (!recipeData) {
-      return new Response(
-        JSON.stringify({ error: "No structured recipe data found" }),
-        { status: 422, headers: { "Content-Type": "application/json" } }
-      );
+      return sourceFetchResponse("source_empty", url);
     }
 
     // Backfill: if we have a recipe name but empty ingredients or steps, try
@@ -435,7 +304,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Second try: if still missing data and Browser Rendering is available,
     // the recipe content may require JavaScript to render (common with WPRM,
     // cookie consent banners hiding content, or React-based sites)
-    if (recipeData.name && (!hasIngredients || !hasSteps) && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
+    if (recipeData.name && (!hasIngredients || !hasSteps) && allowEscalation && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
       brAttempts++;
       try {
         const brRes = await fetch(

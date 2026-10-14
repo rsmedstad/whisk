@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { Recipe, RecipePhoto, Ingredient, Step } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
-import { api } from "../../lib/api";
+import { api, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
 import { compressImage } from "../../lib/compress";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -516,6 +516,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
           Authorization: `Bearer ${localStorage.getItem("whisk_token")}`,
         },
         body: JSON.stringify({ url, downloadImage: true }),
+        signal: AbortSignal.timeout(IMPORT_URL_TIMEOUT_MS),
       });
       clearTimeout(stepTimer);
       clearTimeout(stepTimer2);
@@ -557,10 +558,15 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       // Import failed — switch to manual form with URL pre-filled as source
       setSourceText(importUrl);
       setShowManualForm(true);
-      const msg = err instanceof Error ? err.message : "Import failed";
+      const timedOut =
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (err instanceof Error && /aborted|timed? ?out/i.test(err.message));
+      const msg = timedOut
+        ? "The recipe site didn't respond in time."
+        : err instanceof Error ? err.message : "Import failed";
       alert(isInstagram
         ? `Could not import from Instagram: ${msg}`
-        : `Could not import automatically: ${msg}. You can paste the recipe details manually.`);
+        : `Could not import automatically: ${msg} Open the original (${url}) or paste the recipe details manually.`);
     } finally {
       setIsImporting(false);
       setImportStep("");
