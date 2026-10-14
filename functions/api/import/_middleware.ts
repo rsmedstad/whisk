@@ -29,7 +29,10 @@ export const onRequestPost: PagesFunction = async (context) => {
 
   let sourceUrl: string | undefined;
   try {
-    const body = (await reqClone.json()) as { url?: string };
+    const body = (await reqClone.json()) as { url?: string; jsonLd?: unknown };
+    // Client JSON-LD already has the recipe; a second page fetch would 403 on
+    // Kitchn and can only empty-out or delay a successful import.
+    if (body.jsonLd != null) return response;
     sourceUrl = typeof body.url === "string" ? body.url.trim() : undefined;
   } catch {
     return response;
@@ -39,7 +42,7 @@ export const onRequestPost: PagesFunction = async (context) => {
   let html = "";
   try {
     const pageRes = await fetch(sourceUrl, {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(8000),
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",

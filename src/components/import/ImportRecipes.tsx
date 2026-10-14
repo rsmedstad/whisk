@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { parseCsv, categoryToTags, isUrl, detectDelimiter } from "../../lib/csv";
-import { api } from "../../lib/api";
+import { api, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
 import { Button } from "../ui/Button";
 import type { CsvRow, ImportResult } from "../../types";
 import { ChevronLeft, Check, XMark, Sparkles } from "../ui/Icon";
@@ -173,7 +173,7 @@ export function ImportRecipes({ onImportComplete }: ImportRecipesProps) {
           const scraped = await api.post<ScrapedRecipe>("/import/url", {
             url: row.recipeLink,
             downloadImage: true,
-          });
+          }, { timeoutMs: IMPORT_URL_TIMEOUT_MS });
 
           await api.post("/recipes", {
             title: scraped.title || row.dishName,

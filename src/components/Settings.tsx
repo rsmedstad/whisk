@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry, DiscoverConfig, DiscoverSourceConfig } from "../types";
 import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 import { useAIConfig } from "../hooks/useAIConfig";
@@ -13,6 +13,7 @@ import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { AIConfigPanel } from "./AIConfigPanel";
 import { DemoLock } from "./ui/Demo";
+import { BookmarkletHelp } from "./import/BookmarkletHelp";
 import { classNames } from "../lib/utils";
 import {
   ChevronLeft, Trash, Globe, Share, Check, ChevronDown, XMark, Sun, Moon, ComputerDesktop, CalendarDays,
@@ -101,7 +102,14 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
   const aiConfig = useAIConfig();
   const hh = useHousehold();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "general" || tab === "account" || tab === "ai" || tab === "data" || tab === "about") {
+      return tab;
+    }
+    return "general";
+  });
   const [units, setUnits] = useState<"imperial" | "metric">(() => {
     return (localStorage.getItem("whisk_units") as "imperial" | "metric") ?? "imperial";
   });
@@ -398,7 +406,10 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSearchParams(tab.id === "general" ? {} : { tab: tab.id }, { replace: true });
+              }}
               className={classNames(
                 "px-3 py-2 text-sm font-medium border-b-2 transition-colors",
                 activeTab === tab.id
@@ -747,6 +758,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                     </label>
                     <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">
                       Recipe sites to browse in your Discover feed. Add any recipe site homepage URL.
+                      Sites that block Whisk (The Kitchn) need the Save to Whisk bookmarklet on the Data tab — Open original, then tap Save to Whisk.
                     </p>
                     <div className="space-y-3">
                       {discoverConfig.sources.map((src, idx) => (
@@ -1705,6 +1717,13 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
                 </div>
               </Card>
               </DemoLock>
+            </section>
+
+            <section>
+              <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
+                Save from your browser
+              </h2>
+              <BookmarkletHelp />
             </section>
 
             {/* Recipe Book Maintenance */}

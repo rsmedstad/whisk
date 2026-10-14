@@ -417,6 +417,16 @@ export interface ImportResult {
   recipeId?: string;
 }
 
+/** Structured error from /api/import/url when a source blocks or times out. */
+export type SourceFetchCode = "source_blocked" | "source_timeout" | "source_empty";
+
+export interface SourceFetchError {
+  error: string;
+  code: SourceFetchCode;
+  sourceUrl: string;
+  sourceLabel: string;
+}
+
 // ── Cloudflare Env ──────────────────────────────────────
 
 export interface Env {

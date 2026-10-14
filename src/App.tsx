@@ -56,6 +56,7 @@ const Discover = lazyRetry(() => import("./components/discover/Discover"), "Disc
 const AskChat = lazyRetry(() => import("./components/suggest/SuggestChat"), "SuggestChat");
 const Settings = lazyRetry(() => import("./components/Settings"), "Settings");
 const ImportRecipes = lazyRetry(() => import("./components/import/ImportRecipes"), "ImportRecipes");
+const ImportJsonLd = lazyRetry(() => import("./components/import/ImportJsonLd"), "ImportJsonLd");
 
 // Minimal skeleton for lazy-loaded routes — no layout shift
 function RouteSkeleton() {
@@ -371,6 +372,15 @@ function AppShell({
                 capabilities={capabilities}
                 isDemoRestricted={isDemoRestricted}
                 onOpenAdminLogin={() => setShowAdminLogin(true)}
+              />
+            }
+          />
+          <Route
+            path="/import/ld"
+            element={
+              <ImportJsonLd
+                onCreateRecipe={recipes.createRecipe}
+                isDemoRestricted={isDemoRestricted}
               />
             }
           />

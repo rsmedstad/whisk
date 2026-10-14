@@ -7,6 +7,16 @@
   "background_color": "#16a34a",
   "theme_color": "#16a34a",
   "orientation": "any",
+  "share_target": {
+    "action": "/recipes/new",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "icons": [
     {
       "src": "/icons/icon-192.png",

@@ -114,11 +114,18 @@ class DemoRestrictedError extends Error {
 
 // ── Request core ───────────────────────────────────────────
 
+type RequestOptions = RequestInit & { timeoutMs?: number };
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
-  const method = (options.method ?? "GET").toUpperCase();
+  const { timeoutMs, signal: userSignal, ...rest } = options;
+  const method = (rest.method ?? "GET").toUpperCase();
+  const signal =
+    timeoutMs && timeoutMs > 0
+      ? AbortSignal.timeout(timeoutMs)
+      : userSignal;
 
   // Demo-guest interception — short-circuit before any network call
   if (isDemoInterceptActive() && method !== "GET") {
@@ -149,10 +156,19 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...rest,
+      headers,
+      signal,
+    });
+  } catch (err) {
+    if (isAbortLike(err)) {
+      throw new Error("The recipe site didn't respond in time.");
+    }
+    throw err;
+  }
 
   if (res.status === 401 && path !== "/auth") {
     // Only react if this request actually carried a token. Otherwise the 401
@@ -206,13 +222,24 @@ function safeJsonParse(s: string): unknown {
   }
 }
 
+function isAbortLike(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = "name" in err ? String((err as { name?: unknown }).name) : "";
+  const message = err instanceof Error ? err.message : String(err);
+  return name === "AbortError" || name === "TimeoutError" || /aborted|timed? ?out/i.test(message);
+}
+
+/** Client-side cap for /api/import/url so Discover/import never spin past a block. */
+export const IMPORT_URL_TIMEOUT_MS = 12_000;
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
 
-  post: <T>(path: string, body?: unknown) =>
+  post: <T>(path: string, body?: unknown, opts?: { timeoutMs?: number }) =>
     request<T>(path, {
       method: "POST",
       body: body ? JSON.stringify(body) : undefined,
+      timeoutMs: opts?.timeoutMs,
     }),
 
   put: <T>(path: string, body?: unknown) =>

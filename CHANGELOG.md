@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Discover / Import — Save to Whisk bookmarklet (user-session capture)
+
+- **Bookmarklet**: A "Save to Whisk" bookmarklet reads every `application/ld+json` script on the open recipe page, finds the Recipe node (arrays, `@graph`, `mainEntity`), and opens a Whisk tab at `/import/ld`. CORS from the recipe site is not used: Whisk auth is a bearer token in `localStorage`, not cookies, and Kitchn sends no `Access-Control-Allow-Origin`. The payload rides in a gzip `#ldz=` hash (COOP-safe — Whisk sends `Cross-Origin-Opener-Policy: same-origin`, which severs `window.open` from a Kitchn tab so `postMessage` to that handle often fails). `postMessage` is still attempted when the opener relationship survives. Uncompressed `#ld=` is the fallback if `CompressionStream` is missing and the payload is small.
+- **Client JSON-LD on `/api/import/url`**: `POST` accepts `{ url, jsonLd }`. The server schema-checks it (must be a Recipe with a name and ingredients), strips HTML, caps size (256 KiB), drops unsafe image URLs, and requires the source URL host to match `url` / `mainEntityOfPage` when those are present. The sanitized node goes through the normal extract/save pipeline. The cooking-groups overlay does not refetch the source page when `jsonLd` is present.
+- **Web Share Target**: Installed Android PWAs can share a URL into `/recipes/new`. Share-target only supplies the URL, which The Kitchn still blocks server-side — the bookmarklet is the path that works.
+- **Settings / Discover**: Data tab has install instructions. A Kitchn (or any) blocked Discover card says "Open original, then tap Save to Whisk" and links to those instructions.
+
+### Discover / Import — The Kitchn fail-fast + per-source feed strategy
+
+- **Kitchn (and other WAF-blocked sources) no longer hang Discover**: Server-side recipe fetch is capped at 8s. A PerimeterX/WAF challenge or timeout returns `422` immediately with `{ code: source_blocked|source_timeout, sourceUrl, sourceLabel }` instead of spending 25s+ on Browser Rendering / Apify. Discover and URL import show the feed title plus a clear error and a button/link to the original recipe. Client requests to `/api/import/url` also abort at 12s so a spinner cannot spin forever.
+- **Per-source public-feed fallback**: When the page is blocked, import looks up the URL in the source's published RSS/Atom feed (The Kitchn → `main.rss`) and uses Recipe JSON-LD from `content:encoded` when the feed actually carries it. The Kitchn feed is teaser-only (title, image, categories — no ingredients/steps), so that path fails fast to the original-link state rather than inventing a recipe.
+- **No challenge evasion**: Honest browser-like headers only; we do not retry past a block, solve captchas, or use residential proxies. A 403 body that still includes Recipe JSON-LD (some Dotdash pages) is still parsed.
+
 ### Discover — Non-Recipe/Shopping Filtering & Meal Classification
 
 - **Shopping/product posts filtered out (Kitchn + global)**: Expanded title, URL, and RSS `<category>` heuristics reject product roundups and gear posts — "Best X of/for 20XX" (any word count), shopping CTAs ("order online", "on sale", "under $N", "% off", "deals"), and end-of-title kitchen-gear nouns ("The Best Milk Frothers"). URL slugs like `/best-coffee-mug-warmer-23845669`, `-deals-`, and `gift-guide` are rejected too. For feeds that annotate items (esp. The Kitchn), items with `shopping`/`product review`/`news`/`skills` categories are rejected unless a `Recipes` category vouches for them. Filters extracted to `functions/lib/discover-filters.ts` and unit-tested (`tests/discover-filters.test.ts`).

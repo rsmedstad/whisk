@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { classNames, formatTime, formatTotalTime, normalizeSearch } from "../../lib/utils";
 import { TIME_RANGES } from "../../lib/tags";
-import { api } from "../../lib/api";
+import { api, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
 import { getLocal, setLocal } from "../../lib/cache";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -30,6 +30,7 @@ import {
   Tag,
   EllipsisVertical,
   Trash,
+  ExternalLink,
 } from "../ui/Icon";
 import { useTags } from "../../hooks/useTags";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
@@ -560,7 +561,7 @@ export function Discover({
           data = await api.post<ImportedRecipe>("/import/url", {
             url: item.url,
             downloadImage: !isDemoRestricted, // skip R2 image download for demo guests
-          });
+          }, { timeoutMs: IMPORT_URL_TIMEOUT_MS });
         }
 
         if (data?.title) {
@@ -696,7 +697,7 @@ export function Discover({
       const data = await api.post<ImportedRecipe>("/import/url", {
         url: item.url,
         downloadImage: true,
-      });
+      }, { timeoutMs: IMPORT_URL_TIMEOUT_MS });
       if (!data?.title) return;
       const mergedTags = [...new Set([
         ...(data.tags ?? []),
@@ -1307,25 +1308,50 @@ export function Discover({
             </div>
           )}
 
+          {/* Title from the feed card so a blocked/timeout import isn't a blank page */}
+          {!importedRecipe && (
+            <div className="px-4 pt-4 space-y-1">
+              <h1 className="text-2xl font-bold dark:text-stone-100">
+                {selectedFeedItem.title}
+              </h1>
+              {selectedFeedItem.description && (
+                <p className="text-sm text-stone-500 dark:text-stone-400">
+                  {selectedFeedItem.description}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Loading state */}
           {isImporting && <LoadingSpinner className="py-12" size="lg" />}
 
-          {/* Error state */}
+          {/* Error state — fail-fast blocked/timeout, with a link to the original */}
           {importError && (
             <div className="px-4 py-4">
               <Card>
-                <p className="text-sm text-stone-500 dark:text-stone-400 text-center py-4">
+                <p className="text-sm text-stone-600 dark:text-stone-300 text-center pt-4 pb-2">
                   {importError}
                 </p>
-                <div className="flex justify-center pb-3">
+                <div className="flex flex-col items-center gap-2 pb-4 pt-1 px-2">
                   <a
                     href={selectedFeedItem.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-orange-500 hover:text-orange-600"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
                   >
-                    View on {sourceLabel(selectedFeedItem.source)}
+                    <ExternalLink className="w-4 h-4" />
+                    View original on {sourceLabel(selectedFeedItem.source)}
                   </a>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 text-center">
+                    Open original, then tap Save to Whisk.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/settings?tab=data")}
+                    className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+                  >
+                    How to install Save to Whisk
+                  </button>
                 </div>
               </Card>
             </div>
