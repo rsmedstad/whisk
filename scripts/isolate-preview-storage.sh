@@ -163,10 +163,56 @@ ensure_preview_kv() {
     wrangler_id="$(echo "$wrangler_out" | sed -n 's/.*"id": "\([a-f0-9]\{32\}\)".*/\1/p' | head -n1)"
   fi
   if [[ -z "$wrangler_id" ]]; then
-    echo "Could not create KV via REST/wrangler (token may be Pages-only). Will rely on wrangler pages deploy auto-provision." >&2
+    echo "Direct KV create failed. Trying Worker auto-provision." >&2
+    wrangler_id="$(provision_via_worker_kv || true)"
+  fi
+  if [[ -z "$wrangler_id" ]]; then
+    echo "Could not create KV namespace yet." >&2
     return 0
   fi
   echo "$wrangler_id"
+}
+
+provision_via_worker() {
+  # wrangler deploy of a throwaway Worker can auto-provision KV/R2 and
+  # write IDs back — Pages tokens sometimes have Workers edit, sometimes not.
+  local dir
+  dir="$(mktemp -d)"
+  cat > "${dir}/wrangler.toml" <<EOF
+name = "whisk-preview-provisioner"
+main = "index.js"
+compatibility_date = "2024-12-01"
+account_id = "${CLOUDFLARE_ACCOUNT_ID}"
+
+[[kv_namespaces]]
+binding = "WHISK_KV"
+
+[[r2_buckets]]
+binding = "WHISK_R2"
+bucket_name = "${PREVIEW_R2_NAME}"
+EOF
+  printf '%s\n' 'export default { fetch() { return new Response("ok"); } };' > "${dir}/index.js"
+  echo "Auto-provisioning via wrangler deploy ${dir}" >&2
+  if ! (cd "$dir" && bunx --bun wrangler deploy --name whisk-preview-provisioner 2>&1 | tee /tmp/provision-worker.log | sed 's/.*/provision: &/' >&2); then
+    echo "Worker auto-provision deploy failed" >&2
+    return 1
+  fi
+  local kv_id
+  kv_id="$(sed -n 's/.*id = "\([a-f0-9]\{32\}\)".*/\1/p' "${dir}/wrangler.toml" | head -n1)"
+  if [[ -z "$kv_id" ]]; then
+    kv_id="$(sed -n 's/.*"id": "\([a-f0-9]\{32\}\)".*/\1/p' /tmp/provision-worker.log | head -n1)"
+  fi
+  echo "Provisioner wrangler.toml:" >&2
+  grep -v -i secret "${dir}/wrangler.toml" >&2 || true
+  if [[ -z "$kv_id" ]]; then
+    return 1
+  fi
+  printf '%s' "$kv_id" > "${STATE_DIR}/provisioned-kv-id.txt"
+  echo "$kv_id"
+}
+
+provision_via_worker_kv() {
+  provision_via_worker
 }
 
 ensure_preview_r2() {
@@ -317,11 +363,15 @@ phase_pre_deploy() {
   echo "Ensuring preview KV namespace ${PREVIEW_KV_TITLE}" >&2
   local preview_kv
   preview_kv="$(ensure_preview_kv || true)"
-  echo "Preview KV id=${preview_kv:-<auto-provision>}" >&2
+  echo "Preview KV id=${preview_kv:-<none yet>}" >&2
   echo "Ensuring preview R2 bucket ${PREVIEW_R2_NAME}" >&2
   local preview_r2
   preview_r2="$(ensure_preview_r2 || true)"
   preview_r2="${preview_r2:-$PREVIEW_R2_NAME}"
+  if [[ -z "$preview_kv" ]]; then
+    echo "REST/wrangler create unavailable; trying Worker auto-provision for both KV and R2" >&2
+    preview_kv="$(provision_via_worker || true)"
+  fi
   echo "Preview R2 name=${preview_r2}" >&2
   if [[ -n "$preview_kv" && "$preview_kv" == "$PROD_KV_ID" ]]; then
     echo "::error::Preview KV resolved to production ID. Refusing to bind."
