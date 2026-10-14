@@ -55,9 +55,9 @@ cf_patch() {
 require_success() {
   local raw="$1"
   local ctx="$2"
-  if ! echo "$raw" | jq -e '.success == true' >/dev/null; then
-    echo "::error::Cloudflare API failed: ${ctx}"
-    echo "$raw" | jq '{success, errors, messages}'
+  if ! echo "$raw" | jq -e '.success == true' >/dev/null 2>&1; then
+    echo "::error::Cloudflare API failed: ${ctx}" >&2
+    echo "$raw" | jq '{success, errors, messages}' 2>/dev/null >&2 || echo "$raw" >&2
     exit 1
   fi
 }
@@ -85,7 +85,7 @@ snapshot_production() {
 print_binding_table() {
   local label="$1"
   local raw="$2"
-  echo "===== ${label} ====="
+  echo "===== ${label} =====" >&2
   echo "$raw" | jq '{
     project: .result.name,
     production: {
@@ -121,20 +121,25 @@ ensure_preview_kv() {
   while true; do
     local list
     list="$(cf_get "/storage/kv/namespaces?per_page=100&page=${page}")"
-    require_success "$list" "list KV namespaces page ${page}"
-    found="$(echo "$list" | jq -r --arg title "$PREVIEW_KV_TITLE" '.result[] | select(.title == $title) | .id' | head -n1)"
+    if ! echo "$list" | jq -e '.success == true' >/dev/null 2>&1; then
+      echo "KV list failed (will try create). Response:" >&2
+      echo "$list" | jq '{success, errors, messages}' 2>/dev/null >&2 || echo "$list" >&2
+      break
+    fi
+    found="$(echo "$list" | jq -r --arg title "$PREVIEW_KV_TITLE" '[.result[]? | select(.title == $title) | .id][0] // empty')"
     if [[ -n "$found" ]]; then
       echo "$found"
       return 0
     fi
     local count
-    count="$(echo "$list" | jq '.result | length')"
-    if [[ "$count" -lt 100 ]]; then
+    count="$(echo "$list" | jq '.result | length' 2>/dev/null || echo 0)"
+    if [[ "${count:-0}" -lt 100 ]]; then
       break
     fi
     page=$((page + 1))
   done
 
+  echo "Listing KV namespaces" >&2
   echo "Creating KV namespace ${PREVIEW_KV_TITLE}" >&2
   local created
   created="$(cf_post "/storage/kv/namespaces" "$(jq -nc --arg title "$PREVIEW_KV_TITLE" '{title: $title}')")"
@@ -144,9 +149,13 @@ ensure_preview_kv() {
 
 ensure_preview_r2() {
   local list
+  echo "Listing R2 buckets" >&2
   list="$(cf_get "/r2/buckets")"
-  require_success "$list" "list R2 buckets"
-  if echo "$list" | jq -e --arg name "$PREVIEW_R2_NAME" '.result.buckets[]? | select(.name == $name)' >/dev/null; then
+  if echo "$list" | jq -e --arg name "$PREVIEW_R2_NAME" '
+      (.result.buckets // .result // [])
+      | if type == "array" then .[] else empty end
+      | select((.name // .) == $name)
+    ' >/dev/null 2>&1; then
     echo "$PREVIEW_R2_NAME"
     return 0
   fi
@@ -154,17 +163,17 @@ ensure_preview_r2() {
   echo "Creating R2 bucket ${PREVIEW_R2_NAME}" >&2
   local created
   created="$(cf_post "/r2/buckets" "$(jq -nc --arg name "$PREVIEW_R2_NAME" '{name: $name}')")"
-  if echo "$created" | jq -e '.success == true' >/dev/null; then
+  if echo "$created" | jq -e '.success == true' >/dev/null 2>&1; then
     echo "$PREVIEW_R2_NAME"
     return 0
   fi
   # Already exists is fine (race or alternate list shape).
-  if echo "$created" | jq -e '.errors[]? | select(.code == 10004 or (.message | test("already exists"; "i")))' >/dev/null; then
+  if echo "$created" | jq -e '.errors[]? | select(.code == 10004 or (.message | test("already exists"; "i")))' >/dev/null 2>&1; then
     echo "$PREVIEW_R2_NAME"
     return 0
   fi
-  echo "::error::Failed to create R2 bucket ${PREVIEW_R2_NAME}"
-  echo "$created" | jq '{success, errors, messages}'
+  echo "::error::Failed to create R2 bucket ${PREVIEW_R2_NAME}" >&2
+  echo "$created" | jq '{success, errors, messages}' 2>/dev/null >&2 || echo "$created" >&2
   exit 1
 }
 
@@ -275,10 +284,14 @@ phase_pre_deploy() {
     exit 1
   fi
 
+  echo "Ensuring preview KV namespace ${PREVIEW_KV_TITLE}" >&2
   local preview_kv
   preview_kv="$(ensure_preview_kv)"
+  echo "Preview KV id=${preview_kv}" >&2
+  echo "Ensuring preview R2 bucket ${PREVIEW_R2_NAME}" >&2
   local preview_r2
   preview_r2="$(ensure_preview_r2)"
+  echo "Preview R2 name=${preview_r2}" >&2
   if [[ "$preview_kv" == "$PROD_KV_ID" ]]; then
     echo "::error::Preview KV resolved to production ID. Refusing to bind."
     exit 1
