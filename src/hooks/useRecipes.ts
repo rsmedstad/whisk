@@ -89,8 +89,10 @@ export function useRecipes() {
           cookTime: created.cookTime,
           servings: created.servings,
           description: created.description,
+          sourceUrl: created.source?.url,
         };
-        const updated = [entry, ...prev];
+        const without = prev.filter((r) => r.id !== created.id);
+        const updated = [entry, ...without];
         setLocal(CACHE_KEYS.RECIPE_INDEX, updated);
         return updated;
       });

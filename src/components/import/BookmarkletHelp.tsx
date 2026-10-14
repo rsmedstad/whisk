@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { buildBookmarkletHref } from "../../lib/bookmarklet";
+import { markBookmarkletInstalled } from "../../lib/platform";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 
 export function BookmarkletHelp() {
+  const navigate = useNavigate();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const href = origin ? buildBookmarkletHref(origin) : "javascript:void(0)";
   const [copied, setCopied] = useState(false);
@@ -11,6 +14,7 @@ export function BookmarkletHelp() {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(href);
+      markBookmarkletInstalled();
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -62,6 +66,13 @@ export function BookmarkletHelp() {
           Android &quot;Share to Whisk&quot; (if the PWA is installed) only sends the URL. The Kitchn
           still blocks that server fetch — the bookmarklet is the path that works.
         </p>
+        <button
+          type="button"
+          onClick={() => navigate("/shortcut")}
+          className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+        >
+          iOS: build a Share Sheet shortcut instead
+        </button>
       </div>
     </Card>
   );

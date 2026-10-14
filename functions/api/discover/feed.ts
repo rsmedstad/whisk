@@ -1240,8 +1240,10 @@ function parseStepsBasic(raw: unknown): { text: string }[] {
         const cleaned = obj.text.replace(/<[^>]*>/g, "").trim();
         if (cleaned) steps.push({ text: cleaned });
       }
-      // HowToSection with itemListElement
+      // HowToSection with itemListElement — skip Notes / Recipe Notes
       if (Array.isArray(obj.itemListElement)) {
+        const sectionName = typeof obj.name === "string" ? obj.name.trim() : "";
+        if (/^(recipe\s+)?notes$/i.test(sectionName)) continue;
         for (const sub of obj.itemListElement) {
           if (sub && typeof sub === "object" && typeof (sub as Record<string, unknown>).text === "string") {
             const cleaned = ((sub as Record<string, unknown>).text as string).replace(/<[^>]*>/g, "").trim();

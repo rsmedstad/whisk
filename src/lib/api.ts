@@ -112,6 +112,15 @@ class DemoRestrictedError extends Error {
   }
 }
 
+export class ApiRequestError extends Error {
+  readonly code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.code = code;
+  }
+}
+
 // ── Request core ───────────────────────────────────────────
 
 type RequestOptions = RequestInit & { timeoutMs?: number };
@@ -201,13 +210,15 @@ async function request<T>(
   if (!res.ok) {
     const text = await res.text();
     let message = text || `Request failed: ${res.status}`;
+    let code: string | undefined;
     try {
-      const json = JSON.parse(text) as { error?: string };
+      const json = JSON.parse(text) as { error?: string; code?: string };
       if (json.error) message = json.error;
+      if (typeof json.code === "string") code = json.code;
     } catch {
       // Not JSON, use raw text
     }
-    throw new Error(message);
+    throw new ApiRequestError(message, code);
   }
 
   if (res.status === 204) return undefined as T;

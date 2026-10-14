@@ -1,5 +1,6 @@
 import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../lib/embeddings";
 import { readJsonBody, normalizeRecipeInput } from "../lib/recipe-input";
+import { findRecipeIdBySourceUrl } from "../lib/source-url";
 
 interface Env {
   WHISK_KV: KVNamespace;
@@ -76,6 +77,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, wa
       });
     }
 
+    const sourceUrl = (normalized.source as { url?: string } | undefined)?.url;
+    const index =
+      ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
+    if (sourceUrl) {
+      const existingId = findRecipeIdBySourceUrl(index, sourceUrl);
+      if (existingId) {
+        const existing = await env.WHISK_KV.get(`recipe:${existingId}`, "json");
+        if (existing) {
+          return new Response(JSON.stringify(existing), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     const id = `r_${crypto.randomUUID().split("-")[0]}`;
     const now = new Date().toISOString();
     const userId = (data as Record<string, string>).userId;
@@ -93,11 +110,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, wa
     };
 
     await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(recipe));
-
-    // Update index
-    const index =
-      ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ??
-      [];
 
     const ingredientCount = recipe.ingredients.length;
     const stepCount = recipe.steps.length;

@@ -8,6 +8,8 @@ on:
 
 jobs:
   deploy:
+    # This PR deploys only to whisk-demo preview. whisk Pages preview shares prod KV.
+    if: github.event_name != 'pull_request' || github.head_ref != 'cursor/kitchn-one-tap-92c0'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
