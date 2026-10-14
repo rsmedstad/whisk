@@ -1199,11 +1199,14 @@ function findRecipeObject(data: unknown): Record<string, unknown> | null {
 }
 
 /** Parse ISO 8601 duration to minutes */
-function parseDurationToMin(val: unknown): number | undefined {
+export function parseDurationToMin(val: unknown): number | undefined {
   if (typeof val !== "string") return undefined;
-  const m = val.match(/^PT(?:(\d+)H)?(?:(\d+)M)?/i);
+  const m = val.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i);
   if (!m) return undefined;
-  const total = (parseInt(m[1] ?? "0", 10)) * 60 + parseInt(m[2] ?? "0", 10);
+  const total =
+    parseInt(m[1] ?? "0", 10) * 60 +
+    parseInt(m[2] ?? "0", 10) +
+    Math.round(parseInt(m[3] ?? "0", 10) / 60);
   return total > 0 ? total : undefined;
 }
 

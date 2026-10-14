@@ -2106,19 +2106,20 @@ function parseServings(yield_: string | string[] | undefined): number | undefine
   return undefined;
 }
 
-function parseDuration(iso: unknown): number | undefined {
+export function parseDuration(iso: unknown): number | undefined {
   if (!iso) return undefined;
   // Already a number (e.g. from pre-parsed data)
   if (typeof iso === "number") return iso > 0 ? iso : undefined;
   if (typeof iso !== "string") return undefined;
 
-  // ISO 8601 duration: PT30M, PT1H30M, PT45M, P0DT0H30M
-  const isoMatch = iso.match(/PT?(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?/);
-  if (isoMatch && (isoMatch[1] || isoMatch[2] || isoMatch[3])) {
+  // ISO 8601 duration: PT30M, PT1H30M, PT45M, PT1500S, P0DT0H30M
+  const isoMatch = iso.match(/PT?(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (isoMatch && (isoMatch[1] || isoMatch[2] || isoMatch[3] || isoMatch[4])) {
     const days = parseInt(isoMatch[1] ?? "0");
     const hours = parseInt(isoMatch[2] ?? "0");
     const minutes = parseInt(isoMatch[3] ?? "0");
-    return days * 1440 + hours * 60 + minutes || undefined;
+    const seconds = parseInt(isoMatch[4] ?? "0");
+    return days * 1440 + hours * 60 + minutes + Math.round(seconds / 60) || undefined;
   }
 
   // Free text: "30 minutes", "1 hour 30 minutes", "2 hours plus cooling"
