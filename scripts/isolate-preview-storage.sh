@@ -345,7 +345,16 @@ ensure_password() {
 discover_non_prod_kv() {
   echo "Listing Pages projects for existing non-production KV IDs" >&2
   local list
-  list="$(cf_get "/pages/projects?per_page=50")"
+  list="$(cf_get "/pages/projects")"
+  echo "Also fetching whisk-demo if present" >&2
+  cf_get "/pages/projects/whisk-demo" | jq '{
+    ok: .success,
+    name: .result.name,
+    prod_kv: .result.deployment_configs.production.kv_namespaces,
+    preview_kv: .result.deployment_configs.preview.kv_namespaces,
+    prod_r2: .result.deployment_configs.production.r2_buckets,
+    preview_r2: .result.deployment_configs.preview.r2_buckets
+  }' >&2 || true
   echo "$list" | jq '{
     ok: .success,
     errors: .errors,
