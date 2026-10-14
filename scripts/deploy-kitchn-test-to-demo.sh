@@ -2,9 +2,10 @@
 # Deploy this PR to whisk-demo PREVIEW only (branch kitchn-test).
 # Never writes whisk production bindings/secrets, and never deploys whisk-demo main.
 #
-# PHASE=check   snapshot whisk + whisk-demo; STOP if any whisk-prod storage is bound
-# PHASE=prepare copy wrangler-demo.toml onto runner wrangler.toml + [env.preview]
-# PHASE=secret  set preview-only APP_SECRET (+ DEMO_MODE=true) and verify
+# PHASE=check      snapshot whisk + whisk-demo; STOP if any whisk-prod storage is bound
+# PHASE=prepare    copy wrangler-demo.toml onto runner wrangler.toml + [env.preview]
+# PHASE=put-secret set preview-only APP_SECRET + OWNER_PASSWORD (+ DEMO_MODE)
+# PHASE=verify     assert production untouched; token + recipe save with throwaway
 set -euo pipefail
 
 PHASE="${PHASE:-check}"
@@ -174,10 +175,16 @@ phase_prepare() {
     echo "::error::wrangler-demo.toml missing"
     exit 1
   fi
+  ensure_password
+  local password
+  password="$(sed -n '2p' "${STATE_DIR}/preview-secret.txt")"
   cp wrangler-demo.toml "$WRANGLER_TOML"
   cat >> "$WRANGLER_TOML" <<EOF
 
 # Runner-only preview override — not committed. Forces kitchn-test onto demo KV/R2.
+# APP_SECRET / OWNER_PASSWORD are injected so this deployment has them at publish
+# time (dashboard PATCH alone does not retrofit already-published Functions).
+# Same throwaway value for both: DEMO_MODE regular login cannot persist recipes.
 [[env.preview.kv_namespaces]]
 binding = "WHISK_KV"
 id = "${DEMO_KV}"
@@ -189,8 +196,10 @@ bucket_name = "${DEMO_R2}"
 [env.preview.vars]
 ENVIRONMENT = "preview"
 DEMO_MODE = "true"
+APP_SECRET = "${password}"
+OWNER_PASSWORD = "${password}"
 EOF
-  echo "Prepared runner wrangler.toml from wrangler-demo.toml + [env.preview] (demo KV/R2)."
+  echo "Prepared runner wrangler.toml from wrangler-demo.toml + [env.preview] (demo KV/R2 + preview secrets)."
   grep -n 'kv_namespaces\|bucket_name\|env.preview\|ENVIRONMENT\|DEMO_MODE' "$WRANGLER_TOML" || true
 }
 
@@ -211,8 +220,40 @@ ensure_password() {
   write_secret_file "$password" "${PREVIEW_URL:-pending}"
 }
 
-phase_secret() {
-  echo "=== Set whisk-demo PREVIEW APP_SECRET and verify ==="
+phase_put_secret() {
+  echo "=== PATCH whisk-demo PREVIEW APP_SECRET (before/after deploy) ==="
+  ensure_password
+  local password
+  password="$(sed -n '2p' "${STATE_DIR}/preview-secret.txt")"
+  local preview_url="${PREVIEW_URL:-}"
+  if [[ -z "$preview_url" && -f "${STATE_DIR}/deploy-url.txt" ]]; then
+    preview_url="$(cat "${STATE_DIR}/deploy-url.txt")"
+  fi
+  if [[ -n "$preview_url" ]]; then
+    write_secret_file "$password" "$preview_url"
+  fi
+  echo "PATCH ${DEMO_PROJECT} preview env only (production omitted)"
+  local body patched
+  body="$(jq -nc --arg secret "$password" '{
+    deployment_configs: {
+      preview: {
+        env_vars: {
+          APP_SECRET: {type: "secret_text", value: $secret},
+          OWNER_PASSWORD: {type: "secret_text", value: $secret},
+          ENVIRONMENT: {type: "plain_text", value: "preview"},
+          DEMO_MODE: {type: "plain_text", value: "true"}
+        }
+      }
+    }
+  }')"
+  patched="$(cf_patch "/pages/projects/${DEMO_PROJECT}" "$body")"
+  require_success "$patched" "PATCH ${DEMO_PROJECT} preview APP_SECRET"
+  echo "Set on whisk-demo preview: APP_SECRET (secret), OWNER_PASSWORD (secret, same throwaway), ENVIRONMENT=preview, DEMO_MODE=true"
+  echo "Did not copy production secrets. Did not write whisk-demo production env."
+}
+
+phase_verify() {
+  echo "=== Verify whisk-demo preview auth and production untouched ==="
   if [[ ! -f "${STATE_DIR}/whisk-prod-snapshot.json" ]]; then
     phase_check
   fi
@@ -228,25 +269,6 @@ phase_secret() {
     preview_url="https://${DEMO_BRANCH}.${DEMO_PROJECT}.pages.dev"
   fi
   write_secret_file "$password" "$preview_url"
-
-  echo "PATCH ${DEMO_PROJECT} preview env only (production omitted)"
-  local body
-  body="$(jq -nc --arg secret "$password" '{
-    deployment_configs: {
-      preview: {
-        env_vars: {
-          APP_SECRET: {type: "secret_text", value: $secret},
-          ENVIRONMENT: {type: "plain_text", value: "preview"},
-          DEMO_MODE: {type: "plain_text", value: "true"}
-        }
-      }
-    }
-  }')"
-  local patched
-  patched="$(cf_patch "/pages/projects/${DEMO_PROJECT}" "$body")"
-  require_success "$patched" "PATCH ${DEMO_PROJECT} preview APP_SECRET"
-  echo "Set on whisk-demo preview: APP_SECRET (secret), ENVIRONMENT=preview, DEMO_MODE=true"
-  echo "Did not copy production secrets."
 
   local demo whisk
   demo="$(cf_get "/pages/projects/${DEMO_PROJECT}")"
@@ -291,23 +313,72 @@ phase_secret() {
   fi
   echo "whisk production snapshot unchanged."
 
-  echo "GET ${preview_url}/api/capabilities"
-  local caps
-  caps="$(curl -sS "${preview_url}/api/capabilities" || true)"
+  local caps auth payload attempt
+  caps=""
+  for attempt in 1 2 3 4 5 6 7 8 9; do
+    echo "GET ${preview_url}/api/capabilities (attempt ${attempt})"
+    caps="$(curl -sS --max-time 20 "${preview_url}/api/capabilities" || true)"
+    if echo "$caps" | jq -e '.demoMode | type == "boolean"' >/dev/null 2>&1; then
+      break
+    fi
+    echo "preview not ready yet ($(echo "$caps" | head -c 80))"
+    sleep 8
+  done
   echo "capabilities: ${caps}"
   echo "$caps" > "${STATE_DIR}/capabilities.json"
+  if ! echo "$caps" | jq -e '.demoMode | type == "boolean"' >/dev/null 2>&1; then
+    echo "::error::Preview never returned JSON capabilities at ${preview_url}"
+    exit 1
+  fi
+  local demo_mode
+  demo_mode="$(echo "$caps" | jq -r '.demoMode')"
+  echo "DEMO_MODE runtime: ${demo_mode}"
 
   echo "POST ${preview_url}/api/auth (password masked)"
-  local auth payload
-  payload="$(jq -nc --arg password "$password" --arg name KitchnTest '{password: $password, name: $name}')"
-  auth="$(curl -sS -X POST "${preview_url}/api/auth" \
-    -H "Content-Type: application/json" \
-    --data-binary "$payload")"
-  if echo "$auth" | jq -e '.token | type == "string" and length > 0' >/dev/null; then
-    echo "$auth" | jq '{userId, name, isOwner, demoMode, isDemoOwner, hasToken: (.token != null)}'
-  else
+  payload="$(jq -nc --arg password "$password" --arg name KitchnPreview '{password: $password, name: $name}')"
+  auth=""
+  for attempt in 1 2 3 4 5 6; do
+    auth="$(curl -sS --max-time 20 -X POST "${preview_url}/api/auth" \
+      -H "Content-Type: application/json" \
+      --data-binary "$payload" || true)"
+    if echo "$auth" | jq -e '.token | type == "string" and length > 0' >/dev/null 2>&1; then
+      break
+    fi
+    echo "auth not ready ($(echo "$auth" | jq -c '{error, demoMode}' 2>/dev/null || echo "$auth" | head -c 80))"
+    sleep 8
+  done
+  if ! echo "$auth" | jq -e '.token | type == "string" and length > 0' >/dev/null; then
     echo "::error::POST /api/auth did not return a token"
     echo "$auth" | jq '{error, demoMode}' || echo "$auth"
+    exit 1
+  fi
+  echo "$auth" | jq '{userId, name, isOwner, demoMode, isDemoOwner, hasToken: (.token != null)}'
+  echo "$auth" | jq '{userId, name, isOwner, demoMode, isDemoOwner, hasToken: (.token != null)}' \
+    > "${STATE_DIR}/auth-summary.json"
+
+  local token is_demo_owner
+  token="$(echo "$auth" | jq -r '.token')"
+  is_demo_owner="$(echo "$auth" | jq -r '.isDemoOwner')"
+  if [[ "$demo_mode" == "true" && "$is_demo_owner" != "true" ]]; then
+    echo "::error::DEMO_MODE is on but throwaway login is not demo owner — recipe writes would be guest-locked."
+    exit 1
+  fi
+
+  echo "POST ${preview_url}/api/recipes (probe, then delete)"
+  local created recipe_id
+  created="$(curl -sS --max-time 30 -X POST "${preview_url}/api/recipes" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${token}" \
+    --data-binary '{"title":"Kitchn preview probe","ingredients":[{"name":"salt"}],"steps":[{"text":"probe"}]}')"
+  if echo "$created" | jq -e '.id | type == "string" and length > 0' >/dev/null 2>&1; then
+    recipe_id="$(echo "$created" | jq -r '.id')"
+    echo "recipe save ok id=${recipe_id}"
+    curl -sS --max-time 20 -o /dev/null -w "DELETE /api/recipes/${recipe_id} -> %{http_code}\n" \
+      -X DELETE "${preview_url}/api/recipes/${recipe_id}" \
+      -H "Authorization: Bearer ${token}" || true
+  else
+    echo "::error::Throwaway login could not save a recipe"
+    echo "$created" | jq '{error, demoRestricted}' || echo "$created"
     exit 1
   fi
 
@@ -320,7 +391,8 @@ phase_secret() {
 case "$PHASE" in
   check) phase_check ;;
   prepare) phase_prepare ;;
-  secret) phase_secret ;;
+  put-secret) phase_put_secret ;;
+  verify) phase_verify ;;
   *)
     echo "::error::Unknown PHASE=${PHASE}"
     exit 1

@@ -26,6 +26,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .wrangler
 .dev.vars
 
+# Preview-isolation / demo-preview runner state (may contain throwaway secrets)
+.isolate-preview
+.demo-preview
+
 # caches
 .eslintcache
 .cache

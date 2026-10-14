@@ -29,6 +29,13 @@ jobs:
           PHASE: check
         run: bash scripts/deploy-kitchn-test-to-demo.sh
 
+      - name: Set preview-only APP_SECRET before publish
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PHASE: put-secret
+        run: bash scripts/deploy-kitchn-test-to-demo.sh
+
       - name: Use demo wrangler config on the runner only
         env:
           PHASE: prepare
@@ -44,27 +51,27 @@ jobs:
           wranglerVersion: "4.151.0"
           command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch kitchn-test --commit-dirty=true
 
-      - name: Record deploy URL
+      - name: Record unique deploy URL
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
         run: |
           set -euo pipefail
-          url="${ALIAS_URL:-$DEPLOYMENT_URL}"
           echo "deployment-url=${DEPLOYMENT_URL}"
           echo "alias-url=${ALIAS_URL}"
+          url="${DEPLOYMENT_URL}"
           if [[ -z "$url" ]]; then
-            url="https://kitchn-test.whisk-demo.pages.dev"
+            url="${ALIAS_URL:-https://kitchn-test.whisk-demo.pages.dev}"
           fi
           mkdir -p .demo-preview
           printf '%s\n' "$url" > .demo-preview/deploy-url.txt
           echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
 
-      - name: Set preview-only APP_SECRET and verify
+      - name: Verify auth and production untouched
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PHASE: secret
+          PHASE: verify
         run: bash scripts/deploy-kitchn-test-to-demo.sh
 
       - name: Upload demo-preview artifacts
@@ -77,13 +84,15 @@ jobs:
             .demo-preview/demo-canonical-id.txt
             .demo-preview/deploy-url.txt
             .demo-preview/capabilities.json
+            .demo-preview/auth-summary.json
           if-no-files-found: warn
           retention-days: 7
 
       - name: Upload preview login (1 day)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: preview-test-login
           path: .demo-preview/preview-secret.txt
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 1
