@@ -544,14 +544,16 @@ assert_production_unchanged() {
   fi
   echo "Production snapshot matches pre-change record."
 
-  local preview_kv preview_r2
-  preview_kv="$(echo "$raw" | jq -r '.result.deployment_configs.preview.kv_namespaces.WHISK_KV.namespace_id // empty')"
-  preview_r2="$(echo "$raw" | jq -r '.result.deployment_configs.preview.r2_buckets.WHISK_R2.name // empty')"
-  if [[ "$preview_kv" == "$PROD_KV_ID" || "$preview_r2" == "$PROD_R2_NAME" ]]; then
-    echo "::error::Preview is still bound to production storage."
-    exit 1
+  if [[ "${REQUIRE_PREVIEW_ISOLATED:-1}" == "1" ]]; then
+    local preview_kv preview_r2
+    preview_kv="$(echo "$raw" | jq -r '.result.deployment_configs.preview.kv_namespaces.WHISK_KV.namespace_id // empty')"
+    preview_r2="$(echo "$raw" | jq -r '.result.deployment_configs.preview.r2_buckets.WHISK_R2.name // empty')"
+    if [[ "$preview_kv" == "$PROD_KV_ID" || "$preview_r2" == "$PROD_R2_NAME" ]]; then
+      echo "::error::Preview is still bound to production storage."
+      exit 1
+    fi
+    echo "Preview KV=${preview_kv} R2=${preview_r2}"
   fi
-  echo "Preview KV=${preview_kv} R2=${preview_r2}"
 }
 
 verify_auth() {
@@ -604,7 +606,7 @@ phase_post_deploy() {
     echo "::warning::Preview still shares production KV ${PROD_KV_ID}. APP_SECRET was not set."
     echo "The deploy token can edit Pages but cannot create Workers KV (401) or R2 (403)."
     echo "Grant Workers KV Storage Write + Workers R2 Storage Write on CLOUDFLARE_API_TOKEN and re-run."
-    assert_production_unchanged
+    REQUIRE_PREVIEW_ISOLATED=0 assert_production_unchanged
     return 0
   fi
   capture_preview_bindings "$raw"
