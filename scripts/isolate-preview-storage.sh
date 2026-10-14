@@ -35,22 +35,30 @@ mask() {
   fi
 }
 
-cf_get() {
-  local path="$1"
-  curl -sS "${AUTH[@]}" "${API}${path}"
+cf_request() {
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+  local tmp code
+  tmp="$(mktemp)"
+  if [[ -n "$body" ]]; then
+    code="$(curl -sS -o "$tmp" -w '%{http_code}' -X "$method" "${AUTH[@]}" --data "$body" "${API}${path}")" || true
+  else
+    code="$(curl -sS -o "$tmp" -w '%{http_code}' -X "$method" "${AUTH[@]}" "${API}${path}")" || true
+  fi
+  echo "CF ${method} ${path} -> HTTP ${code} ($(wc -c < "$tmp") bytes)" >&2
+  if [[ ! "$code" =~ ^2 ]]; then
+    echo "CF error body:" >&2
+    head -c 2000 "$tmp" >&2
+    echo >&2
+  fi
+  cat "$tmp"
+  rm -f "$tmp"
 }
 
-cf_post() {
-  local path="$1"
-  local body="$2"
-  curl -sS -X POST "${AUTH[@]}" --data "$body" "${API}${path}"
-}
-
-cf_patch() {
-  local path="$1"
-  local body="$2"
-  curl -sS -X PATCH "${AUTH[@]}" --data "$body" "${API}${path}"
-}
+cf_get() { cf_request GET "$1"; }
+cf_post() { cf_request POST "$1" "$2"; }
+cf_patch() { cf_request PATCH "$1" "$2"; }
 
 require_success() {
   local raw="$1"
@@ -139,12 +147,26 @@ ensure_preview_kv() {
     page=$((page + 1))
   done
 
-  echo "Listing KV namespaces" >&2
   echo "Creating KV namespace ${PREVIEW_KV_TITLE}" >&2
   local created
   created="$(cf_post "/storage/kv/namespaces" "$(jq -nc --arg title "$PREVIEW_KV_TITLE" '{title: $title}')")"
-  require_success "$created" "create KV ${PREVIEW_KV_TITLE}"
-  echo "$created" | jq -r '.result.id'
+  if echo "$created" | jq -e '.success == true and .result.id' >/dev/null 2>&1; then
+    echo "$created" | jq -r '.result.id'
+    return 0
+  fi
+  echo "REST create failed; trying wrangler kv namespace create" >&2
+  echo "$created" | jq '{success, errors, messages}' 2>/dev/null >&2 || echo "$created" >&2
+  local wrangler_out wrangler_id
+  wrangler_out="$(bunx --bun wrangler kv namespace create "$PREVIEW_KV_TITLE" 2>&1 | tee /dev/stderr || true)"
+  wrangler_id="$(echo "$wrangler_out" | sed -n 's/.*id = "\([a-f0-9]\{32\}\)".*/\1/p' | head -n1)"
+  if [[ -z "$wrangler_id" ]]; then
+    wrangler_id="$(echo "$wrangler_out" | sed -n 's/.*"id": "\([a-f0-9]\{32\}\)".*/\1/p' | head -n1)"
+  fi
+  if [[ -z "$wrangler_id" ]]; then
+    echo "::error::Could not create KV namespace ${PREVIEW_KV_TITLE}" >&2
+    exit 1
+  fi
+  echo "$wrangler_id"
 }
 
 ensure_preview_r2() {
@@ -172,8 +194,13 @@ ensure_preview_r2() {
     echo "$PREVIEW_R2_NAME"
     return 0
   fi
-  echo "::error::Failed to create R2 bucket ${PREVIEW_R2_NAME}" >&2
+  echo "REST create failed; trying wrangler r2 bucket create" >&2
   echo "$created" | jq '{success, errors, messages}' 2>/dev/null >&2 || echo "$created" >&2
+  if bunx --bun wrangler r2 bucket create "$PREVIEW_R2_NAME" >&2; then
+    echo "$PREVIEW_R2_NAME"
+    return 0
+  fi
+  echo "::error::Failed to create R2 bucket ${PREVIEW_R2_NAME}" >&2
   exit 1
 }
 
