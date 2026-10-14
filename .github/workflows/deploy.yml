@@ -25,37 +25,3 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_PROJECT_NAME || 'whisk' }} --branch ${{ github.head_ref || 'main' }}
-
-      # Read-only: print preview vs production binding IDs (never secret values).
-      - name: Compare preview vs production bindings
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PROJECT: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'whisk-15t' }}
-        run: |
-          set -euo pipefail
-          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
-          dump() {
-            local name="$1"
-            echo "===== project: ${name} ====="
-            curl -sS "${auth[@]}" \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${name}" \
-            | jq '{
-                ok: .success,
-                errors: .errors,
-                name: .result.name,
-                production: {
-                  kv: .result.deployment_configs.production.kv_namespaces,
-                  d1: .result.deployment_configs.production.d1_databases,
-                  r2: .result.deployment_configs.production.r2_buckets
-                },
-                preview: {
-                  kv: .result.deployment_configs.preview.kv_namespaces,
-                  d1: .result.deployment_configs.preview.d1_databases,
-                  r2: .result.deployment_configs.preview.r2_buckets
-                }
-              }'
-          }
-          dump "$PROJECT"
-          if [ "$PROJECT" != "whisk-15t" ]; then dump "whisk-15t"; fi
-          if [ "$PROJECT" != "whisk" ]; then dump "whisk"; fi
