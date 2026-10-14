@@ -7,9 +7,12 @@ import {
 import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
 import {
   RECIPE_FETCH_TIMEOUT_MS,
+  jsonLdAsHtml,
   resolveRecipeSource,
   sourceFetchResponse,
+  type SourceFetchCode,
 } from "../../lib/recipe-fetch";
+import { validateClientJsonLd } from "../../lib/recipe-jsonld";
 
 interface Env extends ProviderEnv {
   WHISK_KV: KVNamespace;
@@ -131,9 +134,10 @@ async function hashUrl(url: string): Promise<string> {
 // POST /api/import/url - Scrape recipe from URL
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    const { url: rawUrl, downloadImage } = (await request.json()) as {
+    const { url: rawUrl, downloadImage, jsonLd } = (await request.json()) as {
       url: string;
       downloadImage?: boolean;
+      jsonLd?: unknown;
     };
 
     if (!rawUrl) {
@@ -176,28 +180,51 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // If NYT API failed, fall through to normal HTML-based extraction
     }
 
-    // One honest page fetch (8s). If the source blocks or times out, try the
-    // per-source public feed (e.g. The Kitchn main.rss) for Recipe JSON-LD,
-    // then fail fast — do not spend 25s+ on Browser Rendering / Apify.
-    const resolved = await resolveRecipeSource(url, RECIPE_FETCH_TIMEOUT_MS);
-    let html: string | null = resolved.html
-      ? (resolved.html.length > MAX_HTML_CHARS ? resolved.html.slice(0, MAX_HTML_CHARS) : resolved.html)
-      : null;
-    const failFastCode = resolved.failFastCode;
+    // Client-supplied JSON-LD (bookmarklet / user-session capture). Validate
+    // and sanitize, then reuse the existing extractJsonLd pipeline. Skip the
+    // page fetch — that is what Kitchn blocks.
+    let html: string | null = null;
+    let failFastCode: SourceFetchCode | null = null;
+    let fromClientJsonLd = false;
+
+    if (jsonLd !== undefined && jsonLd !== null) {
+      const validated = validateClientJsonLd(jsonLd, url);
+      if (!validated.ok) {
+        return new Response(JSON.stringify({ error: validated.error, code: validated.code }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      html = jsonLdAsHtml(validated.recipe);
+      fromClientJsonLd = true;
+    } else {
+      // One honest page fetch (8s). If the source blocks or times out, try the
+      // per-source public feed (e.g. The Kitchn main.rss) for Recipe JSON-LD,
+      // then fail fast — do not spend 25s+ on Browser Rendering / Apify.
+      const resolved = await resolveRecipeSource(url, RECIPE_FETCH_TIMEOUT_MS);
+      html = resolved.html
+        ? (resolved.html.length > MAX_HTML_CHARS ? resolved.html.slice(0, MAX_HTML_CHARS) : resolved.html)
+        : null;
+      failFastCode = resolved.failFastCode;
+    }
+
     // BR/Apify are for JS-rendered pages we were allowed to read — not for
-    // walking a PerimeterX/WAF challenge.
-    const allowEscalation = failFastCode === null;
+    // walking a PerimeterX/WAF challenge, and not when the client already sent JSON-LD.
+    const allowEscalation = !fromClientJsonLd && failFastCode === null;
 
     // Cap total Browser Rendering invocations per request. Each BR call takes
     // ~25s, so we'd rather return partial data than fire three back-to-back.
     const MAX_BR_ATTEMPTS = 2;
     let brAttempts = 0;
 
-    if (failFastCode) {
+    if (!fromClientJsonLd && failFastCode) {
       return sourceFetchResponse(failFastCode, url);
     }
 
-    if (!html || html.length < 200) {
+    if (!fromClientJsonLd && (!html || html.length < 200)) {
+      return sourceFetchResponse("source_empty", url);
+    }
+    if (!html) {
       return sourceFetchResponse("source_empty", url);
     }
 
@@ -380,7 +407,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // strategies, use an AI provider to extract steps from the page text
     hasSteps = (recipeData.recipeInstructions?.length ?? 0) > 0;
     hasIngredients = (recipeData.recipeIngredient?.length ?? 0) > 0;
-    if (recipeData.name && !hasSteps) {
+    if (!fromClientJsonLd && recipeData.name && !hasSteps) {
       const aiExtracted = await tryAIStepExtraction(html, recipeData.name, env);
       if (aiExtracted) {
         if (aiExtracted.steps.length > 0) {

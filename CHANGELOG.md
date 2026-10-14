@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Discover / Import — Save to Whisk bookmarklet (user-session capture)
+
+- **Bookmarklet**: A "Save to Whisk" bookmarklet reads every `application/ld+json` script on the open recipe page, finds the Recipe node (arrays, `@graph`, `mainEntity`), and opens a Whisk tab at `/import/ld`. The payload is delivered with `postMessage` (primary — no URL-length cap, existing `localStorage` auth applies). A `#ld=` hash is attached only when the encoded payload is small enough for mobile browsers. CORS from the recipe site is not used: Whisk auth is a bearer token in `localStorage`, not cookies, and Kitchn sends no `Access-Control-Allow-Origin`.
+- **Client JSON-LD on `/api/import/url`**: `POST` accepts `{ url, jsonLd }`. The server schema-checks it (must be a Recipe with a name and ingredients), strips HTML, caps size (256 KiB), drops unsafe image URLs, and requires the source URL host to match `url` / `mainEntityOfPage` when those are present. The sanitized node goes through the normal extract/save pipeline. The cooking-groups overlay does not refetch the source page when `jsonLd` is present.
+- **Web Share Target**: Installed Android PWAs can share a URL into `/recipes/new`. Share-target only supplies the URL, which The Kitchn still blocks server-side — the bookmarklet is the path that works.
+- **Settings / Discover**: Data tab has install instructions. A Kitchn (or any) blocked Discover card says "Open original, then tap Save to Whisk" and links to those instructions.
+
 ### Discover / Import — The Kitchn fail-fast + per-source feed strategy
 
 - **Kitchn (and other WAF-blocked sources) no longer hang Discover**: Server-side recipe fetch is capped at 8s. A PerimeterX/WAF challenge or timeout returns `422` immediately with `{ code: source_blocked|source_timeout, sourceUrl, sourceLabel }` instead of spending 25s+ on Browser Rendering / Apify. Discover and URL import show the feed title plus a clear error and a button/link to the original recipe. Client requests to `/api/import/url` also abort at 12s so a spinner cannot spin forever.

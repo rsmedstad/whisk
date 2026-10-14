@@ -1,0 +1,70 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.thekitchn.com/#organization",
+      "name": "Kitchn",
+      "url": "https://www.thekitchn.com"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.thekitchn.com/#website",
+      "url": "https://www.thekitchn.com",
+      "name": "Kitchn",
+      "publisher": { "@id": "https://www.thekitchn.com/#organization" }
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745",
+      "url": "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745",
+      "name": "Greek Meatballs (Keftedes)",
+      "isPartOf": { "@id": "https://www.thekitchn.com/#website" },
+      "primaryImageOfPage": {
+        "@id": "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745#primaryimage"
+      }
+    },
+    {
+      "@type": "ImageObject",
+      "@id": "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745#primaryimage",
+      "url": "https://cdn.apartmenttherapy.info/image/upload/f_auto,q_auto:eco/sample-keftedes"
+    },
+    {
+      "@type": "Recipe",
+      "name": "Greek Meatballs (Keftedes)",
+      "description": "Weeknight-friendly Greek meatballs with herbs.",
+      "url": "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745",
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745"
+      },
+      "image": [
+        "https://cdn.apartmenttherapy.info/image/upload/f_auto,q_auto:eco/sample-keftedes"
+      ],
+      "author": { "@type": "Person", "name": "Kitchn Staff" },
+      "prepTime": "PT20M",
+      "cookTime": "PT25M",
+      "totalTime": "PT45M",
+      "recipeYield": "4 servings",
+      "recipeCategory": "Dinner",
+      "recipeCuisine": "Greek",
+      "keywords": "meatballs, greek, weeknight",
+      "recipeIngredient": [
+        "1 pound ground lamb or beef",
+        "1/2 cup finely chopped onion",
+        "1/4 cup chopped fresh mint",
+        "1 large egg",
+        "1/3 cup breadcrumbs"
+      ],
+      "recipeInstructions": [
+        { "@type": "HowToStep", "text": "Mix the meat, onion, mint, egg, and breadcrumbs." },
+        { "@type": "HowToStep", "text": "Form into meatballs and pan-fry until browned." }
+      ],
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.7",
+        "ratingCount": 128
+      }
+    }
+  ]
+}

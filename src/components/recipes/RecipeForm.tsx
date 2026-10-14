@@ -4,6 +4,7 @@ import type { Recipe, RecipePhoto, Ingredient, Step } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { api, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
+import { firstHttpUrl } from "../../lib/bookmarklet";
 import { compressImage } from "../../lib/compress";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -37,7 +38,11 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const [isLoading, setIsLoading] = useState(isEditing && !cachedRecipe);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [showManualForm, setShowManualForm] = useState(isEditing || !!searchParams.get("url"));
+  const [showManualForm, setShowManualForm] = useState(
+    isEditing
+    || !!searchParams.get("url")
+    || !!firstHttpUrl(searchParams.get("text"))
+  );
 
   // Form state — pre-populate from cache if editing
   const [title, setTitle] = useState(cachedRecipe?.title ?? "");
@@ -167,7 +172,10 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
 
   // Auto-import from ?url= query param (e.g. from Suggest page)
   useEffect(() => {
-    let urlParam = searchParams.get("url")?.trim();
+    let urlParam =
+      searchParams.get("url")?.trim()
+      || firstHttpUrl(searchParams.get("text"))
+      || firstHttpUrl(searchParams.get("title"));
     if (!urlParam || isEditing || importTriggered.current) return;
     // Auto-add https:// if no protocol
     if (!/^https?:\/\//i.test(urlParam)) urlParam = `https://${urlParam}`;
@@ -564,9 +572,12 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       const msg = timedOut
         ? "The recipe site didn't respond in time."
         : err instanceof Error ? err.message : "Import failed";
+      const blocked = /blocked/i.test(msg);
       alert(isInstagram
         ? `Could not import from Instagram: ${msg}`
-        : `Could not import automatically: ${msg} Open the original (${url}) or paste the recipe details manually.`);
+        : blocked
+          ? `Could not import automatically: ${msg} Open original, then tap Save to Whisk.`
+          : `Could not import automatically: ${msg} Open the original (${url}) or paste the recipe details manually.`);
     } finally {
       setIsImporting(false);
       setImportStep("");

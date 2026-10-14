@@ -1332,7 +1332,7 @@ export function Discover({
                 <p className="text-sm text-stone-600 dark:text-stone-300 text-center pt-4 pb-2">
                   {importError}
                 </p>
-                <div className="flex justify-center pb-4 pt-1">
+                <div className="flex flex-col items-center gap-2 pb-4 pt-1 px-2">
                   <a
                     href={selectedFeedItem.url}
                     target="_blank"
@@ -1342,6 +1342,16 @@ export function Discover({
                     <ExternalLink className="w-4 h-4" />
                     View original on {sourceLabel(selectedFeedItem.source)}
                   </a>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 text-center">
+                    Open original, then tap Save to Whisk.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/settings?tab=data")}
+                    className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+                  >
+                    How to install Save to Whisk
+                  </button>
                 </div>
               </Card>
             </div>
