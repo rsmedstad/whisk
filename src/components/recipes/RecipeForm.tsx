@@ -64,7 +64,13 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const [videoUrl, setVideoUrl] = useState(cachedRecipe?.videoUrl ?? "");
   const [importUrl, setImportUrl] = useState("");
   const [importStep, setImportStep] = useState("");
-  const [sourceText, setSourceText] = useState(cachedRecipe?.source?.type === "manual" ? "" : "");
+  const [sourceText, setSourceText] = useState(() => {
+    const s = cachedRecipe?.source;
+    if (!s) return "";
+    if (s.url) return s.url;
+    if (s.attribution) return s.attribution;
+    return "";
+  });
   const [newTag, setNewTag] = useState("");
   const [photos, setPhotos] = useState<RecipePhoto[]>(cachedRecipe?.photos ?? []);
   const [isUploading, setIsUploading] = useState(false);
@@ -164,6 +170,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         setCuisine(r.cuisine ?? "");
         setNotes(r.notes ?? "");
         setVideoUrl(r.videoUrl ?? "");
+        setSourceText(r.source?.url ?? r.source?.attribution ?? "");
         setPhotos(r.photos ?? []);
       })
       .catch(() => { if (!cachedRecipe) navigate("/"); })
@@ -1140,9 +1147,9 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
         />
 
         {/* Source */}
-        {!isEditing && !importUrl && (
+        {!importUrl && (
           <Input
-            label="Source (optional)"
+            label={isEditing ? "Source URL (enables Update from Source)" : "Source (optional)"}
             value={sourceText}
             onChange={(e) => setSourceText(e.target.value)}
             placeholder="URL, cookbook name, grandma's recipe..."
