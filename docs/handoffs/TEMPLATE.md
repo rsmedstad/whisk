@@ -2,7 +2,7 @@
 
 Tier: light | standard | heavy
 Repo / branch base: <owner/repo>, from <branch>
-Owner sign-off needed for: merge, deploy (always)
+Owner sign-off needed for: merge and deploy only if very risky or needs testing (see AGENTS.md merge policy); otherwise merge when CI is green
 
 ## Goal
 <one paragraph: what and why>
@@ -19,6 +19,6 @@ Owner sign-off needed for: merge, deploy (always)
 
 ## Finish line
 - [ ] <specific checks/tests pass>
-- [ ] PR opened against <branch> (not merged)
+- [ ] PR opened against <branch>, then merged when CI is green unless the merge policy says hold
 - [ ] docs/handoffs/<this-name>/REPORT.md written (changed, tested with counts, left, blockers)
 Run to the end; record blockers in the report instead of stopping.
