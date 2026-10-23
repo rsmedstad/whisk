@@ -17,9 +17,8 @@ Plan on heavy, build on standard when a job needs both: write the plan as a hand
 - Run to the end. Do not stop early to ask; note blockers in the report and continue with the rest.
 
 ## Hard rules
-- Merge policy: merge your own PR yourself once checks pass. GitHub Actions minutes often run out, so run the repo's tests, lint and typecheck locally (and CI where it exists) before merging. Do not wait for Ryan on low-risk work (typos, copy, docs, small fixes, dependency patches). Hold the merge and ask only when the change is very risky or needs testing or trailing first: schema or data migrations, auth, security, payments, large behavior changes, or anything touching real user data.
-- Blast radius sets the bar. Cue, Whisk and Health are used only by Ryan and his wife, so merge freely. REM and ryansmedstad.com can have outside users, so be more careful there and verify the preview or CI first.
-- Deploys that run automatically on merge are fine under the same policy. Ask first before a manual production deploy of risky work, a remote database migration, or anything irreversible on real data. Preview deploys are always fine.
+- Agents (Claude, Grok Bot or any other) may merge and deploy without asking for minor or low-risk changes: copy, docs, small fixes, styling, dependency patches. Cue, Whisk and Health are used only by Ryan and his wife, so deploy freely. On ryansmedstad.com and REM, verify the preview or local build first. Stop and ask before anything major or risky: schema or data migrations, auth, security, payments, large behavior changes, anything irreversible on real data, or a big visible change to the site.
+- Before merging, run the repo's tests, lint and typecheck locally (and CI where it exists); GitHub Actions minutes often run out.
 - No destructive git (force-push, rebasing pushed commits, reset --hard on shared branches) without Ryan's confirmation.
 - Never print, log, commit or echo secrets, tokens, PINs, cookies or credential files. Use env vars.
 - No surprise spend: no paid API/model calls beyond what the handoff budgets.
@@ -41,7 +40,7 @@ Plan on heavy, build on standard when a job needs both: write the plan as a hand
 
 **Tests and checks**: `bun test` (tests in `tests/`), `bun run build` (`tsc && vite build`), `npx tsc --noEmit`.
 
-**Deploy**: `bun run deploy` (build + `wrangler pages deploy`, Pages project `whisk`); GitHub Actions in `.github/workflows/` (deploy, demo, discover refresh). Production URL is whisk-15t.pages.dev. No production deploy without Ryan's sign-off.
+**Deploy**: `bun run deploy` (build + `wrangler pages deploy`, Pages project `whisk`); GitHub Actions in `.github/workflows/` (deploy, demo, discover refresh). Production URL is whisk-15t.pages.dev. Deploys follow the deploy rule in Hard rules.
 
 **Gotchas**:
 - The carried-over "What NOT to Do" says not to add test files, but `tests/` and `bun test` now exist. Adding tests there is fine; the rest of that list still holds.
