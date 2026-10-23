@@ -12,12 +12,14 @@ Rules for any coding agent working in this repo. Owner: Ryan Smedstad (rsmedstad
 Plan on heavy, build on standard when a job needs both: write the plan as a handoff, then run the build as a separate standard-tier job.
 
 ## Finish line (every job)
-- Done means: tests pass (or failures are proven environmental and noted), work is on a branch with a PR open, and `docs/handoffs/<task>/REPORT.md` is written.
+- Done means: tests pass (or failures are proven environmental and noted), work is on a branch with a PR open (merged per the merge policy), and `docs/handoffs/<task>/REPORT.md` is written.
 - REPORT.md: what changed, what was tested (commands + counts), what is left, blockers, follow-ups. Also paste its summary into the PR body.
 - Run to the end. Do not stop early to ask; note blockers in the report and continue with the rest.
 
 ## Hard rules
-- Never merge to main or deploy to production without Ryan's explicit sign-off. Preview deploys are fine.
+- Merge policy: merge your own PR yourself once CI is green. Do not wait for Ryan on low-risk work (typos, copy, docs, small fixes, dependency patches). Hold the merge and ask only when the change is very risky or needs testing or trailing first: schema or data migrations, auth, security, payments, large behavior changes, or anything touching real user data.
+- Blast radius sets the bar. Cue, Whisk and Health are used only by Ryan and his wife, so merge freely. REM and ryansmedstad.com can have outside users, so be more careful there and verify the preview or CI first.
+- Deploys that run automatically on merge are fine under the same policy. Ask first before a manual production deploy of risky work, a remote database migration, or anything irreversible on real data. Preview deploys are always fine.
 - No destructive git (force-push, rebasing pushed commits, reset --hard on shared branches) without Ryan's confirmation.
 - Never print, log, commit or echo secrets, tokens, PINs, cookies or credential files. Use env vars.
 - No surprise spend: no paid API/model calls beyond what the handoff budgets.
