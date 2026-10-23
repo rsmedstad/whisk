@@ -48,6 +48,11 @@ Plan on heavy, build on standard when a job needs both: write the plan as a hand
 - R2 photo keys need the `photos/` prefix; run `scripts/rebuild-index.ts` after bulk KV recipe edits (details below).
 - Discover feed sources AllRecipes and Serious Eats block Cloudflare IPs, so the feed can silently become NYT-only.
 
+**Skills** (in `.claude/skills/`, currently untracked locally):
+- `/verify`: build, launch, and drive the app end-to-end (bearer-token auth, recipes, Discover feed).
+- `/reindex-vectorize`: rebuild or backfill the Vectorize semantic index and check per-source Discover feed health.
+- No `/add-migration` here: Whisk uses KV/R2/Vectorize, not D1.
+
 The section below was carried over unchanged (headings demoted) from the repo's previous `CLAUDE.md`.
 
 ### Previous CLAUDE.md (carried over)

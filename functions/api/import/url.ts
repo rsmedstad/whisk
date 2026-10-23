@@ -419,6 +419,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
+    // Prefer WPRM HTML section groups over flat JSON-LD ingredient lists
+    {
+      const groupedWprm = extractDirectWprm(html);
+      if (groupedWprm) backfillRecipeData(recipeData, groupedWprm);
+      const groupedPlugin = extractRecipePluginHtml(html);
+      if (groupedPlugin) backfillRecipeData(recipeData, groupedPlugin);
+    }
+
     // Collect all image URLs: primary + additional from the page
     const allImageUrls = extractAllImageUrls(recipeData, html);
     let thumbnailUrl = allImageUrls[0];
@@ -505,9 +513,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
 // ── Backfill helper ─────────────────────────────────────────
 
-/** Merge missing fields from a secondary extraction into the primary recipe data */
+function rawIngredientsHaveGroupHeaders(list: unknown[] | undefined): boolean {
+  if (!list?.length) return false;
+  return list.some((item) => {
+    if (typeof item !== "string") return false;
+    const t = item.trim();
+    return t.endsWith(":") || /^for\s+(the\s+)?/i.test(t);
+  });
+}
+
+/** Merge missing fields from a secondary extraction into the primary recipe data.
+ *  Also prefer secondary ingredients when they carry section headers and primary is flat
+ *  (JSON-LD is usually flat; WPRM HTML often has Chicken Kebabs / Sauce / Salad groups). */
 function backfillRecipeData(primary: RecipeData, secondary: RecipeData): void {
-  if ((primary.recipeIngredient?.length ?? 0) === 0 && (secondary.recipeIngredient?.length ?? 0) > 0) {
+  const secondaryHasGroups = rawIngredientsHaveGroupHeaders(secondary.recipeIngredient);
+  const primaryHasGroups = rawIngredientsHaveGroupHeaders(primary.recipeIngredient);
+  if (
+    (secondary.recipeIngredient?.length ?? 0) > 0 &&
+    ((primary.recipeIngredient?.length ?? 0) === 0 || (secondaryHasGroups && !primaryHasGroups))
+  ) {
     primary.recipeIngredient = secondary.recipeIngredient;
   }
   if ((primary.recipeInstructions?.length ?? 0) === 0 && (secondary.recipeInstructions?.length ?? 0) > 0) {
@@ -941,10 +965,10 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
   // WPRM: parse ingredient groups for section names, then individual ingredients
   // Allow flexible closing — some themes have extra wrappers between </ul> and </div>
   const wprmIngredientGroups = block.match(
-    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)<\/ul>[\s\S]*?<\/div>/gi
+    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group(?!-name)[^"]*"[^>]*>([\s\S]*?)<\/ul>[\s\S]*?<\/div>/gi
   ) ?? block.match(
     // Broader fallback: match each group up to the next group or end of ingredients section
-    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-ingredient-group|<div[^>]*class="[^"]*wprm-recipe-instructions|$)/gi
+    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group(?!-name)[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-ingredient-group(?!-name)|<div[^>]*class="[^"]*wprm-recipe-instructions|$)/gi
   );
   if (wprmIngredientGroups && wprmIngredientGroups.length > 0) {
     for (const groupBlock of wprmIngredientGroups) {
@@ -1045,10 +1069,10 @@ function extractRecipePluginHtml(html: string): RecipeData | null {
   // WPRM: parse instruction groups for section names
   // Allow flexible closing — some themes have extra wrappers between </ol> and </div>
   const wprmInstructionGroups = block.match(
-    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)<\/ol>[\s\S]*?<\/div>/gi
+    /<div[^>]*class="[^"]*wprm-recipe-instruction-group(?!-name)[^"]*"[^>]*>([\s\S]*?)<\/ol>[\s\S]*?<\/div>/gi
   ) ?? block.match(
     // Broader fallback: match each group up to the next group or end of recipe
-    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-instruction-group|<div[^>]*class="[^"]*wprm-recipe-notes|<div[^>]*class="[^"]*wprm-recipe-nutrition|$)/gi
+    /<div[^>]*class="[^"]*wprm-recipe-instruction-group(?!-name)[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-instruction-group(?!-name)|<div[^>]*class="[^"]*wprm-recipe-notes|<div[^>]*class="[^"]*wprm-recipe-nutrition|$)/gi
   );
   if (wprmInstructionGroups && wprmInstructionGroups.length > 0) {
     for (const groupBlock of wprmInstructionGroups) {
@@ -1271,7 +1295,7 @@ function extractDirectWprm(html: string): RecipeData | null {
 
   // ── Extract ingredients with group support
   const ingredientGroups = html.match(
-    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-ingredient-group|<div[^>]*class="[^"]*wprm-recipe-instruction|<div[^>]*class="[^"]*wprm-recipe-notes|$)/gi
+    /<div[^>]*class="[^"]*wprm-recipe-ingredient-group(?!-name)[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-ingredient-group(?!-name)|<div[^>]*class="[^"]*wprm-recipe-instruction|<div[^>]*class="[^"]*wprm-recipe-notes|$)/gi
   );
 
   if (ingredientGroups && ingredientGroups.length > 0) {
@@ -1309,7 +1333,7 @@ function extractDirectWprm(html: string): RecipeData | null {
 
   // ── Extract instructions with group support
   const instructionGroups = html.match(
-    /<div[^>]*class="[^"]*wprm-recipe-instruction-group[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-instruction-group|<div[^>]*class="[^"]*wprm-recipe-notes|<div[^>]*class="[^"]*wprm-recipe-nutrition|<div[^>]*class="[^"]*wprm-recipe-video|$)/gi
+    /<div[^>]*class="[^"]*wprm-recipe-instruction-group(?!-name)[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*wprm-recipe-instruction-group(?!-name)|<div[^>]*class="[^"]*wprm-recipe-notes|<div[^>]*class="[^"]*wprm-recipe-nutrition|<div[^>]*class="[^"]*wprm-recipe-video|$)/gi
   );
 
   if (instructionGroups && instructionGroups.length > 0) {
@@ -1787,6 +1811,9 @@ function stripHtml(str: string): string {
   const input = str.length > MAX_STRIP_HTML_CHARS ? str.slice(0, MAX_STRIP_HTML_CHARS) : str;
   return decodeHtmlEntities(
     input
+      // Drop WPRM interactive checkboxes so they don't become a second □ in text
+      .replace(/<span[^>]*class="[^"]*wprm-checkbox[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
+      .replace(/<input[^>]*class="[^"]*wprm-checkbox[^"]*"[^>]*>/gi, "")
       // Block-level and line-breaking tags → space (must come first)
       .replace(/<\/?(p|br|div|li|ul|ol|tr|td|th|h[1-6]|blockquote|section|article|header|footer|dt|dd)\b[^>]*\/?>/gi, " ")
       // Inline tags → zero-width space (allows adjacent text to merge)
@@ -1798,7 +1825,9 @@ function stripHtml(str: string): string {
     // Replace remaining zero-width spaces with actual spaces
     .replace(/\u200B/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    // Strip leftover ballot-box glyphs (WPRM screen-reader checkbox text)
+    .replace(/^[\u2610\u2611\u2612\u25A1\u25A2\u25FB\u25FC\u2B1C\u25AB\u25AA]+\s*/u, "");
 }
 
 /** Known ingredient/cooking words for re-joining split text artifacts */
