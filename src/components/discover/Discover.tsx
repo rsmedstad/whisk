@@ -3,7 +3,10 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { classNames, formatTime, formatTotalTime, normalizeSearch } from "../../lib/utils";
 import { TIME_RANGES } from "../../lib/tags";
-import { api, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
+import { api, ApiRequestError, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
+import { detectSavePlatform, isBookmarkletInstalled } from "../../lib/platform";
+import { isBlockedDiscoverSource } from "../../lib/pending-import";
+import { useBlockedImport } from "../import/BlockedImportFlow";
 import { getLocal, setLocal } from "../../lib/cache";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -72,6 +75,8 @@ const LEGACY_SOURCE_LABELS: Record<string, string> = {
   nyt: "NYT Cooking",
   allrecipes: "AllRecipes",
   seriouseats: "Serious Eats",
+  thekitchn: "The Kitchn",
+  kitchn: "The Kitchn",
 };
 
 const TYPE_LABELS: Record<DiscoverCategory, string> = {
@@ -327,6 +332,7 @@ export function Discover({
 }: DiscoverProps) {
   const navigate = useNavigate();
   const tags = useTags();
+  const { openBlockedSheet } = useBlockedImport();
 
   // ── Filter/sort state ──
   const [searchOpen, setSearchOpen] = useState(false);
@@ -361,6 +367,7 @@ export function Discover({
   );
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importErrorCode, setImportErrorCode] = useState<string | null>(null);
   const [isSavingFeed, setIsSavingFeed] = useState(false);
   const [savedFeedRecipeId, setSavedFeedRecipeId] = useState<string | null>(
     null
@@ -534,9 +541,21 @@ export function Discover({
         savedScrollPos.current = { vertical: el.scrollTop, carousels };
       }
       const source = item.source ?? "nyt";
+      if (isBlockedDiscoverSource(item.source, item.url)) {
+        openBlockedSheet({
+          url: item.url,
+          title: item.title,
+          timestamp: Date.now(),
+          imageUrl: item.imageUrl,
+          source,
+          sourceLabel: sourceLabel(source),
+        });
+        return;
+      }
       setSelectedFeedItem({ ...item, source });
       setImportedRecipe(null);
       setImportError(null);
+      setImportErrorCode(null);
       setSavedFeedRecipeId(null);
       setPhotoIndex(0);
       setGroupedSteps(null);
@@ -605,17 +624,30 @@ export function Discover({
           }
         } else {
           setImportError("Could not parse recipe from this page.");
+          setImportErrorCode(null);
         }
       } catch (err) {
         const message = err instanceof Error && err.message
           ? err.message
           : "Could not load recipe. The site may be blocking access.";
+        const code = err instanceof ApiRequestError ? err.code ?? null : null;
         setImportError(message);
+        setImportErrorCode(code);
+        if (code === "source_blocked") {
+          openBlockedSheet({
+            url: item.url,
+            title: item.title,
+            timestamp: Date.now(),
+            imageUrl: item.imageUrl,
+            source,
+            sourceLabel: sourceLabel(source),
+          });
+        }
       } finally {
         setIsImporting(false);
       }
     },
-    [isDemoRestricted]
+    [isDemoRestricted, openBlockedSheet, sourceLabel]
   );
 
   const handleSaveFeedRecipe = useCallback(async () => {
@@ -691,6 +723,17 @@ export function Discover({
 
   // Quick-save a feed item directly from the card (imports + saves in one step)
   const handleQuickSave = useCallback(async (item: DiscoverFeedItem) => {
+    if (isBlockedDiscoverSource(item.source, item.url)) {
+      openBlockedSheet({
+        url: item.url,
+        title: item.title,
+        timestamp: Date.now(),
+        imageUrl: item.imageUrl,
+        source: item.source,
+        sourceLabel: sourceLabel(item.source),
+      });
+      return;
+    }
     if (!onSaveRecipe || savedUrls.has(item.url) || savingUrls.has(item.url)) return;
     setSavingUrls((prev) => new Set(prev).add(item.url));
     try {
@@ -752,13 +795,14 @@ export function Discover({
         return next;
       });
     }
-  }, [onSaveRecipe, savedUrls, savingUrls]);
+  }, [onSaveRecipe, savedUrls, savingUrls, openBlockedSheet, sourceLabel]);
 
   const handleFeedBack = () => {
     const pos = savedScrollPos.current;
     setSelectedFeedItem(null);
     setImportedRecipe(null);
     setImportError(null);
+    setImportErrorCode(null);
     setSavedFeedRecipeId(null);
     setPhotoIndex(0);
     setGroupedSteps(null);
@@ -1342,16 +1386,25 @@ export function Discover({
                     <ExternalLink className="w-4 h-4" />
                     View original on {sourceLabel(selectedFeedItem.source)}
                   </a>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 text-center">
-                    Open original, then tap Save to Whisk.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => navigate("/settings?tab=data")}
-                    className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
-                  >
-                    How to install Save to Whisk
-                  </button>
+                  {importErrorCode === "source_blocked" ? (
+                    <BlockedSaveHint
+                      onInstallBookmarklet={() => navigate("/settings?tab=data")}
+                      onOpenShortcut={() => navigate("/shortcut")}
+                    />
+                  ) : (
+                    <>
+                      <p className="text-xs text-stone-500 dark:text-stone-400 text-center">
+                        Open original, then tap Save to Whisk.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/settings?tab=data")}
+                        className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+                      >
+                        How to install Save to Whisk
+                      </button>
+                    </>
+                  )}
                 </div>
               </Card>
             </div>
@@ -2472,6 +2525,65 @@ function FeedCard({
         </div>
       </div>
     </button>
+  );
+}
+
+function BlockedSaveHint({
+  onInstallBookmarklet,
+  onOpenShortcut,
+}: {
+  onInstallBookmarklet: () => void;
+  onOpenShortcut: () => void;
+}) {
+  const [platform, setPlatform] = useState(() =>
+    typeof navigator === "undefined" ? "desktop" : detectSavePlatform(),
+  );
+  const [hasBookmarklet, setHasBookmarklet] = useState(false);
+
+  useEffect(() => {
+    setPlatform(detectSavePlatform());
+    setHasBookmarklet(isBookmarkletInstalled());
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center gap-2 text-center">
+      {platform === "android" ? (
+        <p className="text-sm font-medium text-stone-700 dark:text-stone-200">
+          Share → Whisk
+        </p>
+      ) : (
+        <p className="text-sm font-medium text-stone-700 dark:text-stone-200">
+          Tap your Save to Whisk bookmark
+        </p>
+      )}
+      {!hasBookmarklet && platform !== "android" && (
+        <button
+          type="button"
+          onClick={onInstallBookmarklet}
+          className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+        >
+          Install the Save to Whisk bookmarklet
+        </button>
+      )}
+      {platform === "ios" && (
+        <button
+          type="button"
+          onClick={onOpenShortcut}
+          className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+        >
+          Or build the iOS Shortcut
+        </button>
+      )}
+      {platform === "android" && (
+        <button
+          type="button"
+          onClick={onInstallBookmarklet}
+          className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+        >
+          How to install Save to Whisk
+        </button>
+      )}
+    </div>
   );
 }
 
