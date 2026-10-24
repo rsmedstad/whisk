@@ -63,3 +63,22 @@ export function isSafeFetchUrl(raw: string): boolean {
     return false;
   }
 }
+
+/** fetch() that follows redirects manually, re-checking every hop with
+ *  isSafeFetchUrl so a public URL can't bounce to an internal host. */
+export async function safeFetch(
+  url: string,
+  init: RequestInit = {},
+  maxHops = 5,
+): Promise<Response> {
+  let current = url;
+  for (let hop = 0; hop <= maxHops; hop++) {
+    if (!isSafeFetchUrl(current)) throw new Error("Blocked URL");
+    const res = await fetch(current, { ...init, redirect: "manual" });
+    if (res.status < 300 || res.status >= 400) return res;
+    const loc = res.headers.get("Location");
+    if (!loc) return res;
+    current = new URL(loc, current).toString();
+  }
+  throw new Error("Too many redirects");
+}

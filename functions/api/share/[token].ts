@@ -78,3 +78,27 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
     headers: { "Content-Type": "application/json" },
   });
 };
+
+// DELETE /api/share/:token - Revoke a share link (auth required by middleware)
+export const onRequestDelete: PagesFunction<Env> = async ({ params, env }) => {
+  const token = params.token as string;
+  const share = (await env.WHISK_KV.get(`share:${token}`, "json")) as { recipeId: string } | null;
+  if (!share) {
+    return new Response(JSON.stringify({ error: "Share link not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  await env.WHISK_KV.delete(`share:${token}`);
+
+  const recipe = (await env.WHISK_KV.get(`recipe:${share.recipeId}`, "json")) as Recipe | null;
+  if (recipe && recipe.shareToken === token) {
+    delete recipe.shareToken;
+    await env.WHISK_KV.put(`recipe:${share.recipeId}`, JSON.stringify(recipe));
+  }
+
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { "Content-Type": "application/json" },
+  });
+};

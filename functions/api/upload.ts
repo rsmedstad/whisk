@@ -1,3 +1,5 @@
+import { sniffImageType } from "../lib/image-sniff";
+
 interface Env {
   WHISK_R2: R2Bucket;
 }
@@ -45,23 +47,33 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
-    // Generate a unique hash-based filename to avoid collisions
+    // Trust the file's bytes, not the client-declared type
     const buffer = await file.arrayBuffer();
+    const sniffed = sniffImageType(buffer);
+    if (!sniffed) {
+      return new Response(JSON.stringify({ error: "File is not a valid image." }), {
+        status: 415,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const storedType = sniffed;
+
+    // Generate a unique hash-based filename to avoid collisions
     const hashBuf = await crypto.subtle.digest("SHA-256", buffer);
     const hashHex = [...new Uint8Array(hashBuf)]
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
       .slice(0, 16);
 
-    const ext = contentType.includes("png")
+    const ext = storedType.includes("png")
       ? "png"
-      : contentType.includes("webp")
+      : storedType.includes("webp")
         ? "webp"
         : "jpg";
 
     const key = `photos/${hashHex}.${ext}`;
     await env.WHISK_R2.put(key, buffer, {
-      httpMetadata: { contentType },
+      httpMetadata: { contentType: storedType },
     });
 
     return new Response(

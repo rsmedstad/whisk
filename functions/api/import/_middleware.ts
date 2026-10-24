@@ -1,3 +1,4 @@
+import { isSafeFetchUrl, safeFetch } from "../../lib/ssrf";
 import { overlayImportedRecipe } from "../../lib/cooking-groups-overlay";
 
 /**
@@ -37,11 +38,11 @@ export const onRequestPost: PagesFunction = async (context) => {
   } catch {
     return response;
   }
-  if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) return response;
+  if (!sourceUrl || !isSafeFetchUrl(sourceUrl)) return response;
 
   let html = "";
   try {
-    const pageRes = await fetch(sourceUrl, {
+    const pageRes = await safeFetch(sourceUrl, {
       signal: AbortSignal.timeout(8000),
       headers: {
         "User-Agent":

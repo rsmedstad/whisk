@@ -1,6 +1,8 @@
 // GET /api/image-proxy?url=<encoded-url>
 // Proxies external images to avoid hotlinking blocks (e.g. Dotdash Meredith sites)
 
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
 export const onRequestGet: PagesFunction = async ({ request }) => {
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get("url");
@@ -64,8 +66,23 @@ export const onRequestGet: PagesFunction = async ({ request }) => {
       return new Response("Image fetch failed", { status: 502 });
     }
 
+    const finalHost = new URL(res.url || imageUrl).hostname;
+    if (!ALLOWED_DOMAINS.some((d) => finalHost === d || finalHost.endsWith(`.${d}`))) {
+      return new Response("Domain not allowed", { status: 403 });
+    }
+
     const contentType = res.headers.get("Content-Type") ?? "image/jpeg";
+    if (!contentType.toLowerCase().startsWith("image/")) {
+      return new Response("Not an image", { status: 415 });
+    }
+    const declared = Number(res.headers.get("Content-Length") ?? 0);
+    if (declared > MAX_IMAGE_BYTES) {
+      return new Response("Image too large", { status: 413 });
+    }
     const body = await res.arrayBuffer();
+    if (body.byteLength > MAX_IMAGE_BYTES) {
+      return new Response("Image too large", { status: 413 });
+    }
 
     return new Response(body, {
       headers: {
