@@ -1,3 +1,4 @@
+import { safeFetch } from "./ssrf";
 import { DEFAULT_DISCOVER_CONFIG } from "./discover-config";
 
 /** Hard cap on the server-side recipe page fetch. Challenge pages (e.g. The
@@ -53,10 +54,9 @@ export async function fetchRecipePage(
 ): Promise<RecipePageFetch> {
   const t0 = Date.now();
   try {
-    const res = await fetch(url, {
+    const res = await safeFetch(url, {
       signal: AbortSignal.timeout(timeoutMs),
       headers: RECIPE_PAGE_HEADERS,
-      redirect: "follow",
     });
     const html = await res.text();
     return {
