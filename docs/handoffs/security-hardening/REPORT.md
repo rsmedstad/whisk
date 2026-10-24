@@ -11,8 +11,9 @@
 - `bun test`, `npx tsc --noEmit`, `bun run build` (see PR).
 
 ## Left / follow-ups
-- UI button for share revoke; optional share TTL.
+- Share links: no UI in the app creates them, so no revoke UI was added. Optional share TTL.
 - WAF rate-limit rule on `/api/auth` (dashboard).
-- `bun audit fix` for dev-only advisories (lighthouse chain).
+- Remaining 30 dev-only advisories need major bumps (`bun audit fix --latest`).
 - Split `recipes:index` KV key if the book grows past a few thousand recipes.
 - Preview deploys still share production KV/R2.
+- `bun audit fix` applied (lockfile only): 70 -> 30 advisories, all dev tooling.
