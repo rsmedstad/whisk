@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Keep the GitHub Actions used by the workflows patched. Quiet and safe.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+  # Patch and minor bumps only, grouped into one weekly PR per directory.
+  # Major bumps are left for manual review.
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "chore"
