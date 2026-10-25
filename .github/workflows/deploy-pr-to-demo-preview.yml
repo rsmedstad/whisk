@@ -12,7 +12,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'cursor/kitchn-discover-hang-92c0'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
