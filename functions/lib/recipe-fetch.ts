@@ -209,8 +209,14 @@ export function buildSourceFetchError(code: SourceFetchCode, sourceUrl: string):
   return { error, code, sourceUrl, sourceLabel };
 }
 
-export function sourceFetchResponse(code: SourceFetchCode, sourceUrl: string): Response {
-  return new Response(JSON.stringify(buildSourceFetchError(code, sourceUrl)), {
+export function sourceFetchResponse(
+  code: SourceFetchCode,
+  sourceUrl: string,
+  detail?: string,
+): Response {
+  const body = buildSourceFetchError(code, sourceUrl);
+  if (detail) body.error = `${body.error} (${detail})`;
+  return new Response(JSON.stringify(body), {
     status: 422,
     headers: { "Content-Type": "application/json" },
   });

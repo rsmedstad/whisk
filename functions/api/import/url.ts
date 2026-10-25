@@ -82,6 +82,10 @@ function normalizeUrl(raw: string): string | null {
 }
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB per image
+// The client gives up at 12s (IMPORT_URL_TIMEOUT_MS), so slow fallbacks must
+// fit inside this budget or be skipped; otherwise the user sees a generic timeout.
+const IMPORT_BUDGET_MS = 10_500;
+const MIN_ESCALATION_MS = 4_000;
 const MAX_HTML_CHARS = 10 * 1024 * 1024; // 10 MB of HTML is plenty for any recipe page
 const MAX_JSON_LD_CHARS = 1 * 1024 * 1024; // 1 MB per JSON-LD block
 const MAX_STRIP_HTML_CHARS = 500 * 1024; // 500 KB for any single stripHtml input
@@ -134,6 +138,8 @@ async function hashUrl(url: string): Promise<string> {
 // POST /api/import/url - Scrape recipe from URL
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    const startedAt = Date.now();
+    const budgetLeft = () => IMPORT_BUDGET_MS - (Date.now() - startedAt);
     const { url: rawUrl, downloadImage, jsonLd } = (await request.json()) as {
       url: string;
       downloadImage?: boolean;
@@ -247,13 +253,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     // Strategy 5: Apify universal recipe scraper (last resort — never after a block)
-    if (!recipeData && allowEscalation && env.APIFY_API_TOKEN) {
-      recipeData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN);
+    if (!recipeData && allowEscalation && env.APIFY_API_TOKEN && budgetLeft() > MIN_ESCALATION_MS) {
+      recipeData = await tryApifyRecipeScraper(url, env.APIFY_API_TOKEN, budgetLeft() - 500);
     }
 
     // If no recipe data found and we haven't tried Browser Rendering yet, try it now.
     // Only for pages we were allowed to read that need JS to render the recipe.
-    if (!recipeData && allowEscalation && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
+    if (!recipeData && allowEscalation && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS && budgetLeft() > MIN_ESCALATION_MS) {
       brAttempts++;
       try {
         const brRes = await fetch(
@@ -266,10 +272,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             },
             body: JSON.stringify({
               url,
-              gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+              gotoOptions: { waitUntil: "networkidle2", timeout: Math.min(25000, budgetLeft() - 500) },
               rejectResourceTypes: ["font", "media"],
               setExtraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
             }),
+            signal: AbortSignal.timeout(Math.max(1000, budgetLeft() - 500)),
           }
         );
         if (brRes.ok) {
@@ -289,7 +296,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     if (!recipeData) {
-      return sourceFetchResponse("source_empty", url);
+      return sourceFetchResponse("source_empty", url, `page read, ${html.length} chars, no recipe markup found`);
     }
 
     // Backfill: if we have a recipe name but empty ingredients or steps, try
@@ -331,7 +338,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Second try: if still missing data and Browser Rendering is available,
     // the recipe content may require JavaScript to render (common with WPRM,
     // cookie consent banners hiding content, or React-based sites)
-    if (recipeData.name && (!hasIngredients || !hasSteps) && allowEscalation && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS) {
+    if (recipeData.name && (!hasIngredients || !hasSteps) && allowEscalation && env.CF_ACCOUNT_ID && env.CF_BR_TOKEN && brAttempts < MAX_BR_ATTEMPTS && budgetLeft() > MIN_ESCALATION_MS) {
       brAttempts++;
       try {
         const brRes = await fetch(
@@ -344,10 +351,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             },
             body: JSON.stringify({
               url,
-              gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+              gotoOptions: { waitUntil: "networkidle2", timeout: Math.min(25000, budgetLeft() - 500) },
               rejectResourceTypes: ["font", "media"],
               setExtraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
             }),
+            signal: AbortSignal.timeout(Math.max(1000, budgetLeft() - 500)),
           }
         );
         if (brRes.ok) {
@@ -2799,7 +2807,8 @@ interface ApifyRecipeResult {
 
 async function tryApifyRecipeScraper(
   url: string,
-  apiToken: string
+  apiToken: string,
+  timeoutMs = 45000,
 ): Promise<RecipeData | null> {
   try {
     const res = await fetch(
@@ -2811,7 +2820,7 @@ async function tryApifyRecipeScraper(
           startUrls: [{ url }],
           maxItems: 1,
         }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(timeoutMs),
       }
     );
 
