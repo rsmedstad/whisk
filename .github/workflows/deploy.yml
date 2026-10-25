@@ -52,7 +52,7 @@ jobs:
 
       - name: Upload preview binding IDs
         if: github.event_name == 'pull_request' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: preview-bindings
           path: |
@@ -65,7 +65,7 @@ jobs:
 
       - name: Upload preview login (1 day)
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: preview-test-login
           path: .isolate-preview/preview-secret.txt

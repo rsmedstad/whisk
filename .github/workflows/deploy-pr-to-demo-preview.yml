@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload demo-preview artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: demo-preview-verify
           path: |
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload preview login (1 day)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: preview-test-login
           path: .demo-preview/preview-secret.txt
