@@ -1,6 +1,10 @@
 import { isSafeFetchUrl, safeFetch } from "../../lib/ssrf";
 import { overlayImportedRecipe } from "../../lib/cooking-groups-overlay";
 
+// Optional enhancement on top of a finished import; keep it short so it never
+// pushes the response past the client timeout.
+const OVERLAY_FETCH_TIMEOUT_MS = 3000;
+
 /**
  * URL import prefers JSON-LD, which flattens cooking groups.
  * After the existing importer returns, overlay headings / HowToStep names
@@ -43,7 +47,7 @@ export const onRequestPost: PagesFunction = async (context) => {
   let html = "";
   try {
     const pageRes = await safeFetch(sourceUrl, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(OVERLAY_FETCH_TIMEOUT_MS),
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",

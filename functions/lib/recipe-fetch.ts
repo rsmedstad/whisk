@@ -384,18 +384,21 @@ export async function resolveRecipeSource(
   pageUrl: string,
   timeoutMs: number = RECIPE_FETCH_TIMEOUT_MS,
 ): Promise<ResolvedRecipeSource> {
+  // Start the feed lookup alongside the page fetch so a slow or blocked page
+  // costs one timeout window, not two (the client gives up at 12s).
+  const feedUrl = feedUrlForPage(pageUrl);
+  const feedPromise = feedUrl
+    ? tryExtractRecipeFromSourceFeed(feedUrl, pageUrl, timeoutMs)
+    : Promise.resolve(null);
   const page = await fetchRecipePage(pageUrl, timeoutMs);
   let html = page.html;
   let fromFeed = false;
 
   if (!hasRecipeJsonLd(html ?? "") && classifyPageFetch(page)) {
-    const feedUrl = feedUrlForPage(pageUrl);
-    if (feedUrl) {
-      const fromRss = await tryExtractRecipeFromSourceFeed(feedUrl, pageUrl, timeoutMs);
-      if (fromRss) {
-        html = jsonLdAsHtml(fromRss);
-        fromFeed = true;
-      }
+    const fromRss = await feedPromise;
+    if (fromRss) {
+      html = jsonLdAsHtml(fromRss);
+      fromFeed = true;
     }
   }
 
