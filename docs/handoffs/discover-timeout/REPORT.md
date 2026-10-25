@@ -13,3 +13,7 @@
 ## Left
 - If Love and Lemons blocks or throttles Cloudflare IPs, the page itself will still fail; Save to Whisk bookmarklet remains the fallback.
 - Check `discover_cache` precache failures for this source.
+
+## Follow-up (same task)
+- Import now has a 10.5s server budget (client limit is 12s). Apify (was 45s) and Browser Rendering (was ~25s) are skipped or capped to the remaining budget, so a readable page with no recognized recipe markup can no longer hang past the client timeout.
+- "No recipe data" errors now include a short detail (chars read) to show whether the page was fetched or blocked.
