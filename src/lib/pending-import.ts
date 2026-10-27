@@ -87,6 +87,35 @@ export function sourceLabelFromPending(item: Pick<PendingImport, "sourceLabel" |
   return "the original site";
 }
 
+/** Readable title from a recipe page URL slug; falls back to the host name. */
+export function titleFromRecipeUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  const host = parsed.hostname.replace(/^www\./i, "");
+  const slug = parsed.pathname.split("/").filter(Boolean).pop() ?? "";
+  const words = slug
+    .replace(/\.[a-z0-9]{2,5}$/i, "")
+    .replace(/[-_]?\d{5,}$/, "")
+    .split(/[-_]+/)
+    .filter((w) => w && !/^\d+$/.test(w));
+  if (words.length < 2) return host;
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** Sheet content for a URL pasted on the Add screen, where no recipe title is known yet. */
+export function pendingImportFromUrl(url: string, sourceLabel?: string, now: number = Date.now()): PendingImport {
+  return {
+    url,
+    title: titleFromRecipeUrl(url),
+    timestamp: now,
+    ...(sourceLabel ? { sourceLabel } : {}),
+  };
+}
+
 export function blockedSheetFrameLimitCopy(sourceLabel: string): string {
   return `Whisk can't show ${sourceLabel} inside this app. Browsers block framing other sites (X-Frame-Options), so you'll leave Whisk and see their page — then save it back here.`;
 }
