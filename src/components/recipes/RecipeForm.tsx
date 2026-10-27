@@ -5,6 +5,8 @@ import { useRecipes } from "../../hooks/useRecipes";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { api, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
 import { firstHttpUrl } from "../../lib/bookmarklet";
+import { pendingImportFromUrl } from "../../lib/pending-import";
+import { useBlockedImport } from "../import/BlockedImportFlow";
 import { compressImage } from "../../lib/compress";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -28,6 +30,7 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { openBlockedSheet } = useBlockedImport();
   const { getRecipe, createRecipe, updateRecipe } = useRecipes();
   const isEditing = !!id && id !== "new";
   const importTriggered = useRef(false);
@@ -537,7 +540,18 @@ export function RecipeForm({ allTags, onAddTag, chatEnabled }: RecipeFormProps) 
       clearTimeout(stepTimer2);
       clearTimeout(stepTimer3);
       if (!res.ok) {
-        const errData = (await res.json().catch(() => null)) as { error?: string } | null;
+        const errData = (await res.json().catch(() => null)) as {
+          error?: string;
+          code?: string;
+          sourceLabel?: string;
+        } | null;
+        if (errData?.code === "source_blocked") {
+          // Sites like The Kitchn refuse server fetches; guide the user to save from the original page.
+          setSourceText(url);
+          setShowManualForm(true);
+          openBlockedSheet(pendingImportFromUrl(url, errData.sourceLabel));
+          return;
+        }
         throw new Error(errData?.error ?? "Import failed");
       }
       setImportStep("Populating recipe fields...");
