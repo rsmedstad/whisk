@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import {
   BOOKMARKLET_HASH_MAX,
   buildBookmarkletHref,
+  buildImportLdHref,
+  buildShortcutJavaScript,
   decodeImportLdHash,
   decodeImportLdHashAsync,
   encodeImportLdHash,
@@ -97,6 +99,28 @@ describe("bookmarklet transport helpers", () => {
     expect(href.startsWith("javascript:")).toBe(true);
     const source = decodeURIComponent(href.slice("javascript:".length));
     expect(() => new Function(source)).not.toThrow();
+  });
+
+  test("uncompressed #ld= href is the iOS Shortcut path", () => {
+    const jsonLd = extractRecipeFromLdScripts(extractLdScriptsFromHtml(kitchnHtml));
+    const href = buildImportLdHref("https://kitchn-one-tap.whisk-demo.pages.dev", {
+      url: "https://www.thekitchn.com/greek-meatballs-keftedes-recipe-23847745",
+      jsonLd,
+    });
+    expect(href.startsWith("https://kitchn-one-tap.whisk-demo.pages.dev/import/ld#ld=")).toBe(true);
+    expect(href).not.toContain("#ldz=");
+    const hash = href.slice(href.indexOf("#"));
+    const decoded = decodeImportLdHash(hash);
+    expect(decoded?.url).toContain("thekitchn.com");
+    expect((decoded?.jsonLd as { name?: string })?.name).toBe("Greek Meatballs (Keftedes)");
+  });
+
+  test("Shortcut JavaScript parses and completion builds an #ld= URL", () => {
+    const src = buildShortcutJavaScript("https://kitchn-one-tap.whisk-demo.pages.dev");
+    expect(() => new Function("completion", src)).not.toThrow();
+    expect(src).toContain("#ld=");
+    expect(src).not.toContain("CompressionStream");
+    expect(src).toContain("https://kitchn-one-tap.whisk-demo.pages.dev");
   });
 });
 

@@ -9,7 +9,7 @@ on:
 
 jobs:
   deploy-demo-preview:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'cursor/kitchn-discover-hang-92c0'
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'cursor/kitchn-one-tap-92c0'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -49,7 +49,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.151.0"
-          command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch kitchn-test --commit-dirty=true
+          command: pages deploy dist --project-name ${{ vars.CLOUDFLARE_DEMO_PROJECT_NAME || 'whisk-demo' }} --branch kitchn-one-tap --commit-dirty=true
 
       - name: Record unique deploy URL
         env:
@@ -61,7 +61,7 @@ jobs:
           echo "alias-url=${ALIAS_URL}"
           url="${DEPLOYMENT_URL}"
           if [[ -z "$url" ]]; then
-            url="${ALIAS_URL:-https://kitchn-test.whisk-demo.pages.dev}"
+            url="${ALIAS_URL:-https://kitchn-one-tap.whisk-demo.pages.dev}"
           fi
           mkdir -p .demo-preview
           printf '%s\n' "$url" > .demo-preview/deploy-url.txt

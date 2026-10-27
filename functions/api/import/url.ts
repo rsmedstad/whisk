@@ -483,12 +483,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const parsedIngredients = parseIngredients(recipeData.recipeIngredient ?? []);
     const tags = generateTags(recipeData, parsedIngredients);
     const rating = parseAggregateRating(recipeData.aggregateRating);
+    const { steps, notes } = parseInstructions(recipeData.recipeInstructions ?? []);
 
     const recipe = {
       title: recipeData.name ?? "",
       description: recipeData.description ?? "",
       ingredients: parsedIngredients,
-      steps: parseSteps(recipeData.recipeInstructions ?? []),
+      steps,
+      notes,
       prepTime:
         parseDuration(recipeData.prepTime) ??
         parseDuration(recipeData.totalTime),
@@ -2059,7 +2061,49 @@ function parseIngredients(
   return results;
 }
 
-function parseSteps(raw: unknown[], sectionGroup?: string): { text: string; group?: string }[] {
+const NOTES_SECTION_NAME = /^(recipe\s+)?notes$/i;
+
+function isNotesSectionName(name: string | undefined): boolean {
+  return !!name && NOTES_SECTION_NAME.test(name.trim());
+}
+
+function collectSectionText(items: unknown[]): string {
+  const parts: string[] = [];
+  for (const item of items) {
+    if (typeof item === "string") {
+      const text = stripHtml(item).trim();
+      if (text) parts.push(text);
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    if (Array.isArray(o.itemListElement)) {
+      const nested = collectSectionText(o.itemListElement);
+      if (nested) parts.push(nested);
+      continue;
+    }
+    const text = stripHtml((o.text as string) ?? (o.name as string) ?? "").trim();
+    if (text) parts.push(text);
+  }
+  return parts.join("\n\n");
+}
+
+/** HowToSection named "Notes" / "Recipe Notes" becomes recipe.notes, not steps. */
+export function parseInstructions(raw: unknown[]): {
+  steps: { text: string; group?: string }[];
+  notes?: string;
+} {
+  const notesParts: string[] = [];
+  const steps = parseSteps(raw, undefined, notesParts);
+  const notes = notesParts.join("\n\n").trim() || undefined;
+  return { steps, notes };
+}
+
+function parseSteps(
+  raw: unknown[],
+  sectionGroup?: string,
+  notesOut?: string[],
+): { text: string; group?: string }[] {
   const steps: { text: string; group?: string }[] = [];
   for (const step of raw) {
     if (typeof step === "string") {
@@ -2068,15 +2112,19 @@ function parseSteps(raw: unknown[], sectionGroup?: string): { text: string; grou
       const s = step as Record<string, unknown>;
       const type = s["@type"] as string | undefined;
 
-      // Handle HowToSection — flatten nested itemListElement, preserving section name as group
-      if (
-        type === "HowToSection" &&
-        Array.isArray(s.itemListElement)
-      ) {
+      // HowToSection — Notes/Recipe Notes become recipe.notes; others flatten as groups
+      if (Array.isArray(s.itemListElement)) {
         const groupName = (s.name as string | undefined)?.trim() || sectionGroup;
-        const nested = parseSteps(s.itemListElement as unknown[], groupName);
-        steps.push(...nested);
-        continue;
+        if (isNotesSectionName(s.name as string | undefined) || isNotesSectionName(groupName)) {
+          const text = collectSectionText(s.itemListElement);
+          if (text) notesOut?.push(text);
+          continue;
+        }
+        if (type === "HowToSection") {
+          const nested = parseSteps(s.itemListElement as unknown[], groupName, notesOut);
+          steps.push(...nested);
+          continue;
+        }
       }
 
       // Handle HowToStep or plain object
@@ -2282,7 +2330,7 @@ async function tryFetchExternalRecipeFromCaption(
     const recipeData = extractJsonLd(pageHtml) ?? extractMicrodata(pageHtml);
     if (!recipeData) return null;
     const ingredients = parseIngredients(recipeData.recipeIngredient ?? []);
-    const steps = parseSteps(recipeData.recipeInstructions ?? []);
+    const { steps, notes } = parseInstructions(recipeData.recipeInstructions ?? []);
     if (!recipeData.name && ingredients.length === 0 && steps.length === 0) return null;
     const allImageUrls = extractAllImageUrls(recipeData, pageHtml);
     return {
@@ -2290,6 +2338,7 @@ async function tryFetchExternalRecipeFromCaption(
       description: recipeData.description ?? "",
       ingredients,
       steps,
+      notes,
       prepTime: parseDuration(recipeData.prepTime) ?? parseDuration(recipeData.totalTime),
       cookTime: parseDuration(recipeData.cookTime),
       servings: parseServings(recipeData.recipeYield),
@@ -3044,7 +3093,7 @@ async function tryNytCookingApi(
       title: raw.name,
       description,
       ingredients: parsedIngredients,
-      steps: parseSteps(rawSteps),
+      steps: parseInstructions(rawSteps).steps,
       prepTime: undefined, // NYT API doesn't separate prep/cook
       cookTime: cookTimeMinutes || undefined,
       servings: parseServings(raw.yield),
