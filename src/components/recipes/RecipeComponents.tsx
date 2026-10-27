@@ -13,9 +13,7 @@ export function IngredientRow({ ingredient, hideGroup, showGrams, checked, onTog
   checked: boolean;
   onToggle: () => void;
 }) {
-  const display = decodeEntities(
-    [ingredient.amount, ingredient.unit, ingredient.name].filter(Boolean).join(" ")
-  );
+  const display = decodeEntities([ingredient.amount, ingredient.unit, ingredient.name].filter(Boolean).join(" ")).replace(/^[\u2610\u2611\u2612\u25A1\u25A2\u25FB\u25FC\u2B1C\u25AB\u25AA]+\s*/u, "");
 
   let gramDisplay: string | null = null;
   if (showGrams && ingredient.amount && ingredient.unit) {
