@@ -19,22 +19,22 @@
   },
   "dependencies": {
     "nanoid": "^5.1.7",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.1"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260317.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
     "@resvg/resvg-js": "^2.6.2",
-    "@tailwindcss/vite": "^4.2.2",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "autoprefixer": "^10.4.27",
-    "lighthouse": "^13.0.3",
-    "sharp": "^0.34.5",
-    "tailwindcss": "^4.2.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "autoprefixer": "^10.6.1",
+    "lighthouse": "^13.5.0",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
-    "vite": "^8.0.5"
+    "vite": "^8.3.5"
   }
 }
