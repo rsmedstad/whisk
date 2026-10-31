@@ -21,7 +21,7 @@
     "nanoid": "^5.1.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
@@ -30,8 +30,8 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
-    "autoprefixer": "^10.6.1",
-    "lighthouse": "^13.5.0",
+    "autoprefixer": "^10.6.2",
+    "lighthouse": "^13.6.0",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
