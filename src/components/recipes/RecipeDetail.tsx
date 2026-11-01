@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { Recipe, Ingredient, Step, MealSlot } from "../../types";
 import { useRecipes } from "../../hooks/useRecipes";
+import { ApiRequestError } from "../../lib/api";
 import { getLocal, CACHE_KEYS } from "../../lib/cache";
 import { useTags } from "../../hooks/useTags";
 import {
@@ -91,9 +92,16 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         setRecipe(r);
         if (!cachedRecipe) setScaledServings(r.servings ?? null);
       })
-      .catch(() => { if (!cachedRecipe) navigate("/"); })
+      .catch((err: unknown) => {
+        // The index can list a recipe whose record is gone (a ghost entry).
+        // Only a genuine 404 clears it; offline or server errors never delete.
+        if (err instanceof ApiRequestError && err.status === 404) {
+          deleteRecipe(id).catch(() => {});
+        }
+        if (!cachedRecipe) navigate("/");
+      })
       .finally(() => setIsLoading(false));
-  }, [id, getRecipe, navigate]);
+  }, [id, getRecipe, deleteRecipe, navigate]);
 
   const handleDelete = useCallback(async () => {
     if (!recipe || !confirm("Delete this recipe?")) return;
