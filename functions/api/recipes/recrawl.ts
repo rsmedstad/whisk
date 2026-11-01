@@ -1,3 +1,5 @@
+import { patchRecipeIndex } from "../../lib/recipe-index";
+
 interface Env {
   WHISK_KV: KVNamespace;
   WHISK_R2: R2Bucket;
@@ -108,6 +110,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
     }
 
     let updated = 0;
+    const patches: Record<string, Record<string, unknown>> = {};
     const errors: string[] = [];
 
     // Process up to 10 recipes per request to stay within CF time limits
@@ -129,7 +132,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
           const local = await downloadPhoto(recipe.thumbnailUrl, env.WHISK_R2);
           if (local) {
             recipe.thumbnailUrl = local;
-            entry.thumbnailUrl = local;
+            patches[entry.id] = { thumbnailUrl: local };
             await env.WHISK_KV.put(`recipe:${entry.id}`, JSON.stringify(recipe));
             updated++;
             continue;
@@ -168,10 +171,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
       }
     }
 
-    // Save updated index
-    if (updated > 0) {
-      await env.WHISK_KV.put("recipes:index", JSON.stringify(index));
-    }
+    // Save updated index entries onto a fresh copy of the index
+    await patchRecipeIndex(env.WHISK_KV, patches);
 
     return new Response(
       JSON.stringify({

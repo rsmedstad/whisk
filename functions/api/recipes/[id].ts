@@ -1,4 +1,5 @@
 import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../../lib/embeddings";
+import { mutateRecipeIndex, updateIndexEntry, type IndexEntryBase } from "../../lib/recipe-index";
 import { readJsonBody } from "../../lib/recipe-input";
 
 interface Env {
@@ -142,12 +143,9 @@ export const onRequestPut: PagesFunction<Env> = async ({
 
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
 
-  // Update index entry
-  const index =
-    ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
-
-  const newIndex = index.map((entry) => {
-    if (entry.id !== id) return entry;
+  // Update index entry on a fresh copy of the index
+  await updateIndexEntry(env.WHISK_KV, id, (current) => {
+    const entry = current as unknown as RecipeIndexEntry;
     const ingCount = Array.isArray(updated.ingredients) ? (updated.ingredients as unknown[]).length : entry.ingredientCount ?? 0;
     const stpCount = Array.isArray(updated.steps) ? (updated.steps as unknown[]).length : entry.stepCount ?? 0;
     const totalMin = ((updated.prepTime as number) ?? 0) + ((updated.cookTime as number) ?? 0);
@@ -178,10 +176,8 @@ export const onRequestPut: PagesFunction<Env> = async ({
       sourceUrl: (updated.source as { url?: string } | undefined)?.url ?? entry.sourceUrl,
       sourceRating: (updated.sourceRating as number | undefined) ?? entry.sourceRating,
       sourceRatingCount: (updated.sourceRatingCount as number | undefined) ?? entry.sourceRatingCount,
-    };
+    } as unknown as IndexEntryBase;
   });
-
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
 
   // Re-embed in Vectorize if title, tags, ingredients, or description changed
   if (env.AI && env.VECTORIZE && ("title" in updates || "tags" in updates || "ingredients" in updates || "description" in updates || "cuisine" in updates)) {
@@ -204,11 +200,12 @@ export const onRequestDelete: PagesFunction<Env> = async ({ params, env, waitUnt
   const id = params.id as string;
   await env.WHISK_KV.delete(`recipe:${id}`);
 
-  // Remove from index
-  const index =
-    ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
-  const newIndex = index.filter((entry) => entry.id !== id);
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+  // Remove from index, confirming a concurrent write did not bring it back
+  await mutateRecipeIndex(
+    env.WHISK_KV,
+    (current) => current.filter((entry) => entry.id !== id),
+    (current) => !current.some((entry) => entry.id === id)
+  );
 
   // Remove from Vectorize
   if (env.VECTORIZE) {
