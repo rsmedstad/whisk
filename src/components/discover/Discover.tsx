@@ -2433,7 +2433,7 @@ function FeedCard({
   return (
     <button
       onClick={onClick}
-      className="shrink-0 w-[40vw] max-w-[200px] snap-start text-left rounded-[var(--wk-radius-card)] border border-stone-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
+      className="shrink-0 w-[40vw] max-w-[200px] snap-start flex flex-col text-left rounded-[var(--wk-radius-card)] border border-stone-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
     >
       <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
         {item.imageUrl ? (
@@ -2487,11 +2487,11 @@ function FeedCard({
           </div>
         )}
       </div>
-      <div className="p-2.5">
-        <h4 className="text-xs font-medium line-clamp-2 dark:text-stone-100 leading-snug">
+      <div className="flex flex-1 flex-col justify-between gap-1 p-2.5">
+        <h4 className="text-[13px] font-semibold line-clamp-3 min-h-[2.05rem] dark:text-stone-100 leading-tight">
           {item.title}
         </h4>
-        <div className="flex items-center justify-between mt-1 text-[10px] text-stone-400 dark:text-stone-500">
+        <div className="flex items-center justify-between text-[10px] text-stone-400 dark:text-stone-500">
           <span className="flex items-center gap-0.5">
             {item.totalTime && item.totalTime > 0 ? (
               <><Clock className="w-3 h-3" /> {formatTime(item.totalTime)}</>
