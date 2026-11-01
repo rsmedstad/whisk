@@ -2488,7 +2488,7 @@ function FeedCard({
         )}
       </div>
       <div className="flex flex-1 flex-col justify-between gap-1 p-2.5">
-        <h4 className="text-[13px] font-semibold line-clamp-3 min-h-[2.05rem] dark:text-stone-100 leading-tight">
+        <h4 className="text-xs font-medium line-clamp-3 min-h-[1.9rem] dark:text-stone-100 leading-tight">
           {item.title}
         </h4>
         <div className="flex items-center justify-between text-[10px] text-stone-400 dark:text-stone-500">
