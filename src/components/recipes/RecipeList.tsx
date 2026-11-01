@@ -796,9 +796,9 @@ function RecipeCard({
       </div>
 
       {/* Info — flex-grow fills remaining card height, justify-between pins metadata to bottom */}
-      <div className="flex flex-1 flex-col justify-between p-3">
+      <div className="flex flex-1 flex-col justify-between p-2.5">
         <div>
-          <h3 className="font-semibold text-sm line-clamp-2 min-h-10 dark:text-stone-100">
+          <h3 className="font-semibold text-[13px] leading-tight line-clamp-3 min-h-[2.05rem] dark:text-stone-100">
             {recipe.title}
           </h3>
           <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
