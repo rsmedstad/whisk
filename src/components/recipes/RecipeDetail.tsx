@@ -96,7 +96,9 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
         // The index can list a recipe whose record is gone (a ghost entry).
         // Only a genuine 404 clears it; offline or server errors never delete.
         if (err instanceof ApiRequestError && err.status === 404) {
-          deleteRecipe(id).catch(() => {});
+          deleteRecipe(id)
+            .catch(() => {})
+            .finally(() => window.dispatchEvent(new Event("whisk:recipes-changed")));
         }
         if (!cachedRecipe) navigate("/");
       })
