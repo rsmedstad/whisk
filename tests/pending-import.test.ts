@@ -31,7 +31,7 @@ describe("blocked Discover sources", () => {
 
   test("next-step copy is Save to Whisk on iOS/desktop and Share on Android", () => {
     expect(blockedSheetNextStepCopy("The Kitchn", "ios")).toContain("tap Save to Whisk");
-    expect(blockedSheetNextStepCopy("The Kitchn", "desktop")).toContain("tap Save to Whisk");
+    expect(blockedSheetNextStepCopy("The Kitchn", "desktop")).toContain("click your Save to Whisk");
     expect(blockedSheetNextStepCopy("The Kitchn", "android")).toContain("Share to Whisk");
   });
 

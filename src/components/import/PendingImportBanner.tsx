@@ -1,3 +1,4 @@
+import { useKeyboard } from "../../hooks/useKeyboard";
 import { XMark } from "../ui/Icon";
 import type { PendingImport } from "../../types";
 
@@ -8,9 +9,11 @@ interface PendingImportBannerProps {
 }
 
 export function PendingImportBanner({ pending, onFinish, onDismiss }: PendingImportBannerProps) {
+  const { isKeyboardOpen } = useKeyboard();
+  if (isKeyboardOpen) return null;
   return (
     <div
-      className="fixed inset-x-0 bottom-[calc(var(--sab)+4.75rem)] z-40 px-3 pointer-events-none"
+      className="no-print fixed inset-x-0 bottom-[calc(var(--sab)+5.25rem)] z-40 px-3 pointer-events-none"
       role="status"
     >
       <div className="pointer-events-auto flex items-center gap-2 max-w-md mx-auto rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 shadow-lg dark:border-orange-900 dark:bg-stone-900">
