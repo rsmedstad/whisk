@@ -23,17 +23,16 @@ describe("blocked Discover sources", () => {
     expect(isBlockedDiscoverSource("nyt", "https://cooking.nytimes.com/recipes/1")).toBe(false);
   });
 
-  test("honest sheet copy names the source and X-Frame-Options", () => {
+  test("sheet copy names the source and stays short", () => {
     const copy = blockedSheetFrameLimitCopy("The Kitchn");
     expect(copy).toContain("The Kitchn");
-    expect(copy).toContain("X-Frame-Options");
-    expect(copy).toContain("framing");
+    expect(copy).not.toContain("X-Frame-Options");
   });
 
-  test("next-step copy is bookmark/Shortcut on iOS/desktop and Share on Android", () => {
+  test("next-step copy is Save to Whisk on iOS/desktop and Share on Android", () => {
     expect(blockedSheetNextStepCopy("The Kitchn", "ios")).toContain("tap Save to Whisk");
-    expect(blockedSheetNextStepCopy("The Kitchn", "desktop")).toContain("bookmark, or Shortcut");
-    expect(blockedSheetNextStepCopy("The Kitchn", "android")).toBe("Open on The Kitchn → then Share → Whisk.");
+    expect(blockedSheetNextStepCopy("The Kitchn", "desktop")).toContain("tap Save to Whisk");
+    expect(blockedSheetNextStepCopy("The Kitchn", "android")).toContain("Share to Whisk");
   });
 
   test("mobile prefers the same tab so Back returns to Whisk", () => {
