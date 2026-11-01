@@ -10,10 +10,10 @@ interface PendingImportBannerProps {
 export function PendingImportBanner({ pending, onFinish, onDismiss }: PendingImportBannerProps) {
   return (
     <div
-      className="sticky top-0 z-40 border-b border-orange-200 bg-orange-50 px-3 py-2 dark:border-orange-900 dark:bg-orange-950/50"
+      className="fixed inset-x-0 bottom-[calc(var(--sab)+4.75rem)] z-40 px-3 pointer-events-none"
       role="status"
     >
-      <div className="flex items-center gap-2 max-w-6xl mx-auto">
+      <div className="pointer-events-auto flex items-center gap-2 max-w-md mx-auto rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 shadow-lg dark:border-orange-900 dark:bg-stone-900">
         <button
           type="button"
           onClick={onFinish}
