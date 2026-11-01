@@ -99,42 +99,16 @@ export function BlockedSourceSheet({ item, onClose }: BlockedSourceSheetProps) {
             </p>
           </div>
 
-          {platform !== "android" && !hasBookmarklet && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                navigate("/settings?tab=data");
-              }}
-              className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
-            >
-              Install the Save to Whisk bookmarklet
-            </button>
-          )}
-          {platform === "ios" && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                navigate("/shortcut");
-              }}
-              className="block text-xs font-medium text-orange-600 dark:text-orange-400 underline"
-            >
-              Or build the iOS Shortcut
-            </button>
-          )}
-          {platform === "android" && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                navigate("/settings?tab=data");
-              }}
-              className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
-            >
-              How to install Save to Whisk
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              navigate(platform === "ios" && !hasBookmarklet ? "/shortcut" : "/settings?tab=data");
+            }}
+            className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+          >
+            Set up one-tap Save to Whisk
+          </button>
 
           <div className="flex flex-col gap-2 pt-1">
             <Button fullWidth onClick={openSource}>

@@ -5,7 +5,7 @@ import { classNames, formatTime, formatTotalTime, normalizeSearch } from "../../
 import { TIME_RANGES } from "../../lib/tags";
 import { api, ApiRequestError, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
 import { detectSavePlatform, isBookmarkletInstalled } from "../../lib/platform";
-import { isBlockedDiscoverSource } from "../../lib/pending-import";
+import { openSourcePage, setPendingImport } from "../../lib/pending-import";
 import { useBlockedImport } from "../import/BlockedImportFlow";
 import { getLocal, setLocal } from "../../lib/cache";
 import { Card } from "../ui/Card";
@@ -541,17 +541,6 @@ export function Discover({
         savedScrollPos.current = { vertical: el.scrollTop, carousels };
       }
       const source = item.source ?? "nyt";
-      if (isBlockedDiscoverSource(item.source, item.url)) {
-        openBlockedSheet({
-          url: item.url,
-          title: item.title,
-          timestamp: Date.now(),
-          imageUrl: item.imageUrl,
-          source,
-          sourceLabel: sourceLabel(source),
-        });
-        return;
-      }
       setSelectedFeedItem({ ...item, source });
       setImportedRecipe(null);
       setImportError(null);
@@ -633,21 +622,11 @@ export function Discover({
         const code = err instanceof ApiRequestError ? err.code ?? null : null;
         setImportError(message);
         setImportErrorCode(code);
-        if (code === "source_blocked") {
-          openBlockedSheet({
-            url: item.url,
-            title: item.title,
-            timestamp: Date.now(),
-            imageUrl: item.imageUrl,
-            source,
-            sourceLabel: sourceLabel(source),
-          });
-        }
       } finally {
         setIsImporting(false);
       }
     },
-    [isDemoRestricted, openBlockedSheet, sourceLabel]
+    [isDemoRestricted]
   );
 
   const handleSaveFeedRecipe = useCallback(async () => {
@@ -723,17 +702,6 @@ export function Discover({
 
   // Quick-save a feed item directly from the card (imports + saves in one step)
   const handleQuickSave = useCallback(async (item: DiscoverFeedItem) => {
-    if (isBlockedDiscoverSource(item.source, item.url)) {
-      openBlockedSheet({
-        url: item.url,
-        title: item.title,
-        timestamp: Date.now(),
-        imageUrl: item.imageUrl,
-        source: item.source,
-        sourceLabel: sourceLabel(item.source),
-      });
-      return;
-    }
     if (!onSaveRecipe || savedUrls.has(item.url) || savingUrls.has(item.url)) return;
     setSavingUrls((prev) => new Set(prev).add(item.url));
     try {
@@ -786,8 +754,18 @@ export function Discover({
         });
         api.patch("/discover/feed", { url: item.url, imageUrl: importedImage }).catch(() => {});
       }
-    } catch {
-      // Import failed — button stays as +
+    } catch (err) {
+      // Only offer the original site once the import itself could not read the page.
+      if (err instanceof ApiRequestError && err.code === "source_blocked") {
+        openBlockedSheet({
+          url: item.url,
+          title: item.title,
+          timestamp: Date.now(),
+          imageUrl: item.imageUrl,
+          source: item.source,
+          sourceLabel: sourceLabel(item.source),
+        });
+      }
     } finally {
       setSavingUrls((prev) => {
         const next = new Set(prev);
@@ -1374,37 +1352,36 @@ export function Discover({
             <div className="px-4 py-4">
               <Card>
                 <p className="text-sm text-stone-600 dark:text-stone-300 text-center pt-4 pb-2">
-                  {importError}
+                  {importErrorCode === "source_blocked"
+                    ? `Whisk couldn't read this recipe from ${sourceLabel(selectedFeedItem.source)}. Open it there and save it with Save to Whisk.`
+                    : importError}
                 </p>
                 <div className="flex flex-col items-center gap-2 pb-4 pt-1 px-2">
-                  <a
-                    href={selectedFeedItem.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingImport({
+                        url: selectedFeedItem.url,
+                        title: selectedFeedItem.title,
+                        timestamp: Date.now(),
+                        imageUrl: selectedFeedItem.imageUrl,
+                        source: selectedFeedItem.source,
+                        sourceLabel: sourceLabel(selectedFeedItem.source),
+                      });
+                      openSourcePage(selectedFeedItem.url);
+                    }}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    View original on {sourceLabel(selectedFeedItem.source)}
-                  </a>
-                  {importErrorCode === "source_blocked" ? (
-                    <BlockedSaveHint
-                      onInstallBookmarklet={() => navigate("/settings?tab=data")}
-                      onOpenShortcut={() => navigate("/shortcut")}
-                    />
-                  ) : (
-                    <>
-                      <p className="text-xs text-stone-500 dark:text-stone-400 text-center">
-                        Open original, then tap Save to Whisk.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => navigate("/settings?tab=data")}
-                        className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
-                      >
-                        How to install Save to Whisk
-                      </button>
-                    </>
-                  )}
+                    Open on {sourceLabel(selectedFeedItem.source)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/settings?tab=data")}
+                    className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+                  >
+                    Set up one-tap Save to Whisk
+                  </button>
                 </div>
               </Card>
             </div>

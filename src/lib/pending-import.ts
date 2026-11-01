@@ -117,7 +117,7 @@ export function pendingImportFromUrl(url: string, sourceLabel?: string, now: num
 }
 
 export function blockedSheetFrameLimitCopy(sourceLabel: string): string {
-  return `Whisk can't show ${sourceLabel} inside this app. Browsers block framing other sites (X-Frame-Options), so you'll leave Whisk and see their page — then save it back here.`;
+  return `Whisk couldn't read this recipe from ${sourceLabel}.`;
 }
 
 export function blockedSheetNextStepCopy(
@@ -125,9 +125,9 @@ export function blockedSheetNextStepCopy(
   platform: SavePlatform = detectSavePlatform(),
 ): string {
   if (platform === "android") {
-    return `Open on ${sourceLabel} → then Share → Whisk.`;
+    return `Open it on ${sourceLabel}, then Share to Whisk.`;
   }
-  return `Open on ${sourceLabel} → then tap Save to Whisk (iOS/desktop bookmark, or Shortcut).`;
+  return `Open it on ${sourceLabel}, then tap Save to Whisk.`;
 }
 
 export function preferSameTabOpen(platform: SavePlatform = detectSavePlatform()): boolean {
