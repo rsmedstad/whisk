@@ -127,6 +127,9 @@ export function blockedSheetNextStepCopy(
   if (platform === "android") {
     return `Open it on ${sourceLabel}, then Share to Whisk.`;
   }
+  if (platform === "desktop") {
+    return `Open it on ${sourceLabel}, then click your Save to Whisk bookmark.`;
+  }
   return `Open it on ${sourceLabel}, then tap Save to Whisk.`;
 }
 
