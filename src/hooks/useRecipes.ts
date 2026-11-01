@@ -38,6 +38,13 @@ export function useRecipes() {
     fetchRecipes();
   }, [fetchRecipes]);
 
+  // Other screens (e.g. recipe detail clearing a ghost entry) ask for a refresh
+  useEffect(() => {
+    const onChanged = () => { fetchRecipes(); };
+    window.addEventListener("whisk:recipes-changed", onChanged);
+    return () => window.removeEventListener("whisk:recipes-changed", onChanged);
+  }, [fetchRecipes]);
+
   // Refetch when the app resumes (iOS PWA suspends the page, so changes made
   // on another device otherwise stay hidden until a full restart)
   const lastFetchAtRef = useRef(Date.now());
