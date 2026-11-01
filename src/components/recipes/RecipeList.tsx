@@ -11,6 +11,7 @@ import { LoadingSpinner } from "../ui/LoadingSpinner";
 import { Button } from "../ui/Button";
 
 import { FirstRunGuide } from "./FirstRunGuide";
+import { CarouselRow } from "../ui/CarouselRow";
 import { WhiskLogo, Cog, ArrowUpDown, Plus, Heart, HeartFilled, Clock, Check, XMark, ChevronDown, MagnifyingGlass, CalendarDays } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
 
@@ -635,7 +636,7 @@ export function RecipeList({
                 {recipeLayout === "horizontal" && !search && selectedTags.length === 0 && !favoritesOnly ? (
                   <CarouselRow category={group.label}>
                     {group.recipes.map((recipe) => (
-                      <div key={recipe.id} className="snap-start shrink-0 w-[42vw] max-w-[200px]">
+                      <div key={recipe.id} className="snap-start shrink-0 w-[40vw] max-w-[200px]">
                         <RecipeCard
                           recipe={recipe}
                           isPlanned={plannedRecipeIds?.has(recipe.id)}
@@ -679,16 +680,6 @@ export function RecipeList({
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function CarouselRow({ children, category }: { children: React.ReactNode; category?: string }) {
-  return (
-    <div className="overflow-hidden">
-      <div data-carousel={category} className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 scroll-pl-4 pl-4">
-        {children}
       </div>
     </div>
   );
