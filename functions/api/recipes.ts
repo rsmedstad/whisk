@@ -1,6 +1,7 @@
 import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../lib/embeddings";
 import { readJsonBody, normalizeRecipeInput } from "../lib/recipe-input";
 import { findRecipeIdBySourceUrl } from "../lib/source-url";
+import { maybeReconcileRecipeIndex, mutateRecipeIndex, type IndexEntryBase } from "../lib/recipe-index";
 
 interface Env {
   WHISK_KV: KVNamespace;
@@ -40,7 +41,9 @@ function computeDifficulty(totalMinutes: number, ingredientCount: number, stepCo
 }
 
 // GET /api/recipes - List all recipes (returns index with per-user favorites)
-export const onRequestGet: PagesFunction<Env> = async ({ env, data }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ env, data, waitUntil }) => {
+  // Self-heal ghost/orphan index entries in the background (throttled).
+  waitUntil(maybeReconcileRecipeIndex(env.WHISK_KV));
   const index =
     ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
 
@@ -138,8 +141,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, data, wa
       sourceRatingCount: recipe.sourceRatingCount,
     };
 
-    index.unshift(entry);
-    await env.WHISK_KV.put("recipes:index", JSON.stringify(index));
+    await mutateRecipeIndex(
+      env.WHISK_KV,
+      (current) => [entry as unknown as IndexEntryBase, ...current.filter((e) => e.id !== id)],
+      (current) => current.some((e) => e.id === id)
+    );
 
     // Upsert embedding into Vectorize (fire-and-forget)
     if (env.AI && env.VECTORIZE) {

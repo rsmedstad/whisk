@@ -1,4 +1,5 @@
 import { upsertRecipeEmbedding, recipeToEmbeddingInput } from "../../lib/embeddings";
+import { mutateRecipeIndex } from "../../lib/recipe-index";
 import { readJsonBody } from "../../lib/recipe-input";
 
 interface Env {
@@ -204,11 +205,12 @@ export const onRequestDelete: PagesFunction<Env> = async ({ params, env, waitUnt
   const id = params.id as string;
   await env.WHISK_KV.delete(`recipe:${id}`);
 
-  // Remove from index
-  const index =
-    ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[]) ?? [];
-  const newIndex = index.filter((entry) => entry.id !== id);
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+  // Remove from index, confirming a concurrent write did not bring it back
+  await mutateRecipeIndex(
+    env.WHISK_KV,
+    (current) => current.filter((entry) => entry.id !== id),
+    (current) => !current.some((entry) => entry.id === id)
+  );
 
   // Remove from Vectorize
   if (env.VECTORIZE) {

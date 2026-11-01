@@ -6,6 +6,7 @@ import { normalizeRecipeInput } from "./recipe-input";
 import { resolveMcpActor, type McpActor } from "./mcp-actor";
 import { onRequestPost as importUrlPost } from "../api/import/url";
 import { queryRecipes } from "./embeddings";
+import { mutateRecipeIndex, type IndexEntryBase } from "./recipe-index";
 import { DEFAULT_DISCOVER_CONFIG } from "./discover-config";
 
 export type ToolDef = {
@@ -483,7 +484,6 @@ async function persistNewRecipe(
 
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(recipe));
 
-  const index = await loadIndex(env);
   const ingredientCount = normalized.ingredients.length;
   const stepCount = normalized.steps.length;
   const totalMinutes = (normalized.prepTime ?? 0) + (normalized.cookTime ?? 0);
@@ -509,8 +509,11 @@ async function persistNewRecipe(
     sourceRating: normalized.sourceRating,
     sourceRatingCount: normalized.sourceRatingCount,
   };
-  index.unshift(entry);
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(index));
+  await mutateRecipeIndex(
+    env.WHISK_KV,
+    (current) => [entry as unknown as IndexEntryBase, ...current.filter((e) => e.id !== id)],
+    (current) => current.some((e) => e.id === id)
+  );
   return { recipe, entry };
 }
 
@@ -1354,9 +1357,11 @@ async function toolDeleteRecipe(
   if (gate) return gate;
 
   await env.WHISK_KV.delete(`recipe:${id}`);
-  const index = await loadIndex(env);
-  const newIndex = index.filter((e) => e.id !== id);
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+  await mutateRecipeIndex(
+    env.WHISK_KV,
+    (current) => current.filter((e) => e.id !== id),
+    (current) => !current.some((e) => e.id === id)
+  );
 
   if (env.VECTORIZE) {
     try {
