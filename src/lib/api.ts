@@ -114,10 +114,12 @@ class DemoRestrictedError extends Error {
 
 export class ApiRequestError extends Error {
   readonly code?: string;
-  constructor(message: string, code?: string) {
+  readonly status?: number;
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.name = "ApiRequestError";
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -218,7 +220,7 @@ async function request<T>(
     } catch {
       // Not JSON, use raw text
     }
-    throw new ApiRequestError(message, code);
+    throw new ApiRequestError(message, code, res.status);
   }
 
   if (res.status === 204) return undefined as T;
