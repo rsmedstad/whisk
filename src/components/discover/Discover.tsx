@@ -5,6 +5,7 @@ import { classNames, formatTime, formatTotalTime, normalizeSearch } from "../../
 import { TIME_RANGES } from "../../lib/tags";
 import { api, ApiRequestError, IMPORT_URL_TIMEOUT_MS } from "../../lib/api";
 import { detectSavePlatform, isBookmarkletInstalled } from "../../lib/platform";
+import { CarouselRow } from "../ui/CarouselRow";
 import { openSourcePage, setPendingImport } from "../../lib/pending-import";
 import { useBlockedImport } from "../import/BlockedImportFlow";
 import { getLocal, setLocal } from "../../lib/cache";
@@ -2300,7 +2301,7 @@ export function Discover({
                       </div>
                     )}
                   </div>
-                  <div data-carousel={category} className="flex gap-3 overflow-x-auto carousel-scroll snap-x snap-mandatory pb-1 px-4 scroll-pl-4">
+                  <CarouselRow category={category}>
                     {items.map((item, i) => (
                       <FeedCard
                         key={`${category}-${i}`}
@@ -2315,7 +2316,7 @@ export function Discover({
                         expirationEnabled={expirationEnabled}
                       />
                     ))}
-                  </div>
+                  </CarouselRow>
                 </div>
               );
             })}
@@ -2432,7 +2433,7 @@ function FeedCard({
   return (
     <button
       onClick={onClick}
-      className="shrink-0 w-44 snap-start text-left rounded-[var(--wk-radius-card)] border border-stone-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
+      className="shrink-0 w-[40vw] max-w-[200px] snap-start text-left rounded-[var(--wk-radius-card)] border border-stone-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md active:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:active:bg-stone-800 dark:hover:border-orange-500/30"
     >
       <div className="relative aspect-3/2 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
         {item.imageUrl ? (
