@@ -45,7 +45,7 @@ export function CarouselRow({ children, category }: CarouselRowProps) {
     el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
   };
 
-  const fade = "pointer-events-none absolute inset-y-0 w-8 z-10 transition-opacity duration-200";
+  const fade = "pointer-events-none absolute inset-y-0 w-5 z-10 transition-opacity duration-200";
   const arrow =
     "hidden pointer-fine:flex absolute top-1/2 -translate-y-1/2 z-20 h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white/95 text-stone-600 shadow-md hover:bg-white hover:text-orange-600 dark:border-stone-700 dark:bg-stone-900/95 dark:text-stone-300 dark:hover:text-orange-400";
 
@@ -60,11 +60,11 @@ export function CarouselRow({ children, category }: CarouselRowProps) {
       </div>
       <div
         aria-hidden
-        className={`${fade} left-0 bg-gradient-to-r from-white to-transparent dark:from-stone-950 ${canLeft ? "opacity-100" : "opacity-0"}`}
+        className={`${fade} left-0 bg-gradient-to-r from-white/60 to-transparent dark:from-stone-950/60 ${canLeft ? "opacity-100" : "opacity-0"}`}
       />
       <div
         aria-hidden
-        className={`${fade} right-0 bg-gradient-to-l from-white to-transparent dark:from-stone-950 ${canRight ? "opacity-100" : "opacity-0"}`}
+        className={`${fade} right-0 bg-gradient-to-l from-white/60 to-transparent dark:from-stone-950/60 ${canRight ? "opacity-100" : "opacity-0"}`}
       />
       {canLeft && (
         <button type="button" onClick={() => scrollByPage(-1)} aria-label="Scroll left" className={`${arrow} left-2`}>
