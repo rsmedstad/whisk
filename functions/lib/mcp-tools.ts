@@ -6,7 +6,7 @@ import { normalizeRecipeInput } from "./recipe-input";
 import { resolveMcpActor, type McpActor } from "./mcp-actor";
 import { onRequestPost as importUrlPost } from "../api/import/url";
 import { queryRecipes } from "./embeddings";
-import { mutateRecipeIndex, type IndexEntryBase } from "./recipe-index";
+import { mutateRecipeIndex, patchRecipeIndex, updateIndexEntry, type IndexEntryBase } from "./recipe-index";
 import { DEFAULT_DISCOVER_CONFIG } from "./discover-config";
 
 export type ToolDef = {
@@ -688,11 +688,7 @@ async function toolAddToFavorites(
   };
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
 
-  const index = await loadIndex(env);
-  const newIndex = index.map((e) =>
-    e.id === id ? { ...e, favoritedBy, favorite: true, updatedAt: now } : e
-  );
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+  await patchRecipeIndex(env.WHISK_KV, { [id]: { favoritedBy, favorite: true, updatedAt: now } });
 
   return textResult({
     ok: true,
@@ -1204,11 +1200,7 @@ async function toolRemoveFromFavorites(
   const updated = { ...existing, favoritedBy, favorite, updatedAt: now };
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
 
-  const index = await loadIndex(env);
-  const newIndex = index.map((e) =>
-    e.id === id ? { ...e, favoritedBy, favorite, updatedAt: now } : e
-  );
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+  await patchRecipeIndex(env.WHISK_KV, { [id]: { favoritedBy, favorite, updatedAt: now } });
 
   return textResult({
     ok: true,
@@ -1242,11 +1234,7 @@ async function toolSetWantToMake(
   const updated = { ...existing, wantToMake, updatedAt: now };
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
 
-  const index = await loadIndex(env);
-  const newIndex = index.map((e) =>
-    e.id === id ? { ...e, wantToMake, updatedAt: now } : e
-  );
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
+  await patchRecipeIndex(env.WHISK_KV, { [id]: { wantToMake, updatedAt: now } });
 
   return textResult({
     ok: true,
@@ -1594,7 +1582,6 @@ async function toolUpdateRecipe(
   };
   await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
 
-  const index = await loadIndex(env);
   const ingCount = Array.isArray(updated.ingredients)
     ? (updated.ingredients as unknown[]).length
     : undefined;
@@ -1603,8 +1590,8 @@ async function toolUpdateRecipe(
     : undefined;
   const totalMin =
     ((updated.prepTime as number) ?? 0) + ((updated.cookTime as number) ?? 0);
-  const newIndex = index.map((entry) => {
-    if (entry.id !== id) return entry;
+  await updateIndexEntry(env.WHISK_KV, id, (current) => {
+    const entry = current as unknown as RecipeIndexEntry;
     return {
       ...entry,
       title: (updated.title as string) ?? entry.title,
@@ -1628,9 +1615,8 @@ async function toolUpdateRecipe(
             .filter((n): n is string => !!n)
             .slice(0, 30)
         : entry.ingredientNames,
-    };
+    } as unknown as IndexEntryBase;
   });
-  await env.WHISK_KV.put("recipes:index", JSON.stringify(newIndex));
 
   return textResult({
     ok: true,

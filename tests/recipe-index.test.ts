@@ -3,7 +3,9 @@ import {
   buildIndexEntry,
   maybeReconcileRecipeIndex,
   mutateRecipeIndex,
+  patchRecipeIndex,
   reconcileRecipeIndex,
+  updateIndexEntry,
   RECIPE_INDEX_KEY,
 } from "../functions/lib/recipe-index";
 
@@ -119,5 +121,31 @@ describe("buildIndexEntry", () => {
     expect(e.ingredientCount).toBe(1);
     expect(e.avgRating).toBe(4.5);
     expect(e.difficulty).toBe("easy");
+  });
+});
+
+describe("patchRecipeIndex / updateIndexEntry", () => {
+  test("patches apply to a fresh index and never resurrect a deleted entry", async () => {
+    // The job loaded [a, b]; b was deleted while it ran, so the live index is [a].
+    const kv = fakeKv({ [RECIPE_INDEX_KEY]: JSON.stringify([entry("a")]) });
+    const ok = await patchRecipeIndex(kv, { a: { tags: ["x"] }, b: { tags: ["y"] } });
+    expect(ok).toBe(true);
+    const index = JSON.parse(kv.store.get(RECIPE_INDEX_KEY)!) as { id: string; tags: string[] }[];
+    expect(index.map((e) => e.id)).toEqual(["a"]);
+    expect(index[0]!.tags).toEqual(["x"]);
+  });
+
+  test("updateIndexEntry replaces one entry and leaves the rest", async () => {
+    const kv = fakeKv({ [RECIPE_INDEX_KEY]: JSON.stringify([entry("a"), entry("b")]) });
+    await updateIndexEntry(kv, "b", (e) => ({ ...e, title: "Renamed" }));
+    const index = JSON.parse(kv.store.get(RECIPE_INDEX_KEY)!) as { id: string; title: string }[];
+    expect(index.find((e) => e.id === "b")?.title).toBe("Renamed");
+    expect(index.find((e) => e.id === "a")?.title).toBe("Recipe a");
+  });
+
+  test("updateIndexEntry on a missing id changes nothing", async () => {
+    const kv = fakeKv({ [RECIPE_INDEX_KEY]: JSON.stringify([entry("a")]) });
+    await updateIndexEntry(kv, "gone", (e) => ({ ...e, title: "x" }));
+    expect((JSON.parse(kv.store.get(RECIPE_INDEX_KEY)!) as unknown[]).length).toBe(1);
   });
 });

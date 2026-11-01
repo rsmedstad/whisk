@@ -175,3 +175,49 @@ export async function mutateRecipeIndex(
   }
   return false;
 }
+
+/**
+ * Apply per-entry field patches to a fresh copy of the index. Patches for ids
+ * that are no longer listed are dropped, so a long-running job can never bring
+ * back an entry that was deleted while it ran.
+ */
+export async function patchRecipeIndex(
+  kv: KvLike,
+  patches: Record<string, Record<string, unknown>>
+): Promise<boolean> {
+  const ids = Object.keys(patches);
+  if (ids.length === 0) return true;
+  const matches = (entry: IndexEntryBase, patch: Record<string, unknown>) =>
+    Object.entries(patch).every(([k, v]) => JSON.stringify(entry[k]) === JSON.stringify(v));
+  return mutateRecipeIndex(
+    kv,
+    (index) => index.map((e) => (patches[e.id] ? { ...e, ...patches[e.id] } : e)),
+    (index) => ids.every((id) => {
+      const entry = index.find((e) => e.id === id);
+      return !entry || matches(entry, patches[id]!);
+    })
+  );
+}
+
+/** Replace one entry via `fn` on a fresh copy of the index. No-op if it is no longer listed. */
+export async function updateIndexEntry(
+  kv: KvLike,
+  id: string,
+  fn: (entry: IndexEntryBase) => IndexEntryBase
+): Promise<boolean> {
+  let expected: string | undefined;
+  return mutateRecipeIndex(
+    kv,
+    (index) =>
+      index.map((e) => {
+        if (e.id !== id) return e;
+        const next = fn(e);
+        expected = JSON.stringify(next);
+        return next;
+      }),
+    (index) => {
+      const entry = index.find((e) => e.id === id);
+      return !entry || expected === undefined || JSON.stringify(entry) === expected;
+    }
+  );
+}

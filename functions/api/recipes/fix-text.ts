@@ -1,3 +1,5 @@
+import { patchRecipeIndex } from "../../lib/recipe-index";
+
 interface Env {
   WHISK_KV: KVNamespace;
 }
@@ -39,6 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
     ((await env.WHISK_KV.get("recipes:index", "json")) as RecipeIndexEntry[] | null) ?? [];
 
   let updated = 0;
+  const patches: Record<string, Record<string, unknown>> = {};
 
   for (const entry of index) {
     const raw = await env.WHISK_KV.get(`recipe:${entry.id}`, "text");
@@ -74,14 +77,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
       await env.WHISK_KV.put(`recipe:${entry.id}`, JSON.stringify(recipe));
       // Update index entry title if it changed
       const fixedTitle = fixText(entry.title);
-      if (fixedTitle !== entry.title) entry.title = fixedTitle;
+      if (fixedTitle !== entry.title) patches[entry.id] = { title: fixedTitle };
       updated++;
     }
   }
 
-  if (updated > 0) {
-    await env.WHISK_KV.put("recipes:index", JSON.stringify(index));
-  }
+  await patchRecipeIndex(env.WHISK_KV, patches);
 
   return new Response(
     JSON.stringify({ updated, total: index.length }),

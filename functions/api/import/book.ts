@@ -1,3 +1,4 @@
+import { mutateRecipeIndex, type IndexEntryBase } from "../../lib/recipe-index";
 import { readJsonBody, normalizeRecipeInput } from "../../lib/recipe-input";
 import { isSafeFetchUrl } from "../../lib/ssrf";
 
@@ -107,6 +108,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const existingIdx = index.findIndex((e) => slugifyTitle(e.title) === incomingSlug);
     const existingEntry = existingIdx >= 0 ? index[existingIdx] : undefined;
 
+    let replacedId: string | undefined;
+
     // Handle duplicate based on mode
     if (existingEntry) {
       if (mode === "skip") {
@@ -118,6 +121,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // mode === "overwrite": delete the old recipe, then continue to create new
       if (mode === "overwrite") {
         await env.WHISK_KV.delete(`recipe:${existingEntry.id}`);
+        replacedId = existingEntry.id;
         index.splice(existingIdx, 1);
       }
       // mode === "add": fall through and create a new entry regardless
@@ -177,7 +181,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(newRecipe));
 
     // Update index
-    index.unshift({
+    const newEntry = {
       id,
       title: newRecipe.title,
       tags: newRecipe.tags,
@@ -191,9 +195,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       servings: newRecipe.servings,
       description: newRecipe.description,
       sourceUrl: (newRecipe.source as { url?: string } | undefined)?.url,
-    });
+    };
 
-    await env.WHISK_KV.put("recipes:index", JSON.stringify(index));
+    await mutateRecipeIndex(
+      env.WHISK_KV,
+      (current) => [
+        newEntry as unknown as IndexEntryBase,
+        ...current.filter((e) => e.id !== id && e.id !== replacedId),
+      ],
+      (current) => current.some((e) => e.id === id) && !(replacedId && current.some((e) => e.id === replacedId))
+    );
 
     return new Response(JSON.stringify({ id, title: newRecipe.title }), {
       status: 201,

@@ -15,11 +15,14 @@ No storage format change and no migration. The `recipe:{id}` records are the sou
 - Create and delete (REST and MCP) use `mutateRecipeIndex`, so a clobbered write is detected and retried.
 - Earlier PR #143 already makes the app clear a ghost on a genuine 404.
 
+## Also moved onto fresh-copy writes (no raw index writes remain)
+- `PUT /api/recipes/:id`, `retag`, `recrawl`, `fix-text`, `import/book`, and the MCP favorite, unfavorite, want-to-make and update tools.
+- Bulk jobs collect per-entry patches and apply them to a fresh index at the end (`patchRecipeIndex`), so a long run can no longer write back a stale copy or resurrect an entry deleted while it ran. Single-entry edits use `updateIndexEntry`.
+
 ## Tested
-- `npx tsc --noEmit` clean, `bun test` 182 pass / 0 fail (8 new in `tests/recipe-index.test.ts`: ghost removal, orphan add, fresh entry spared, list-lag spared, non-record keys ignored, throttle, clobber retry, entry build), `bun run build` ok.
+- `npx tsc --noEmit` clean, `bun test` 185 pass / 0 fail (11 new in `tests/recipe-index.test.ts`), `bun run build` ok.
 - Not run against live KV (no credentials here).
 
-## Left / follow-ups
-- Update paths (`[id].ts` PUT, retag, recrawl, fix-text, book import, other MCP tools) still use plain read-modify-write. A stale write there can reintroduce a ghost, which reconcile then clears within ~10 min of the next list call. Moving them onto `mutateRecipeIndex` is a mechanical follow-up.
+## Left
 - Reconcile cost: one KV list per 1000 records plus one get per ghost candidate or orphan, at most every 10 minutes.
-- If the index ever needs a hard reset: `bun scripts/rebuild-index.ts`.
+- Hard reset if ever needed: `bun scripts/rebuild-index.ts`.
