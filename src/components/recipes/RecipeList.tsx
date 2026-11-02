@@ -775,9 +775,10 @@ function RecipeCard({
       {/* Info — flex-grow fills remaining card height, justify-between pins metadata to bottom */}
       <div className="flex flex-1 flex-col justify-between p-2.5">
         <div>
-          <h3 className="font-medium text-xs leading-tight line-clamp-3 min-h-[1.9rem] dark:text-stone-100">
+          {/* h4, not h3: the global h1-h3 heading rule would override this weight and font */}
+          <h4 className="text-xs font-medium line-clamp-3 min-h-[1.9rem] dark:text-stone-100 leading-tight">
             {recipe.title}
-          </h3>
+          </h4>
           {drinkLabel && (
             <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">{drinkLabel}</p>
           )}
