@@ -776,7 +776,7 @@ function RecipeCard({
       <div className="flex flex-1 flex-col justify-between p-2.5">
         <div>
           {/* h4, not h3: the global h1-h3 heading rule would override this weight and font */}
-          <h4 className="text-xs font-medium line-clamp-3 min-h-[1.9rem] dark:text-stone-100 leading-tight">
+          <h4 className="text-xs font-normal line-clamp-3 min-h-[1.9rem] text-stone-800 dark:text-stone-100 leading-tight">
             {recipe.title}
           </h4>
           {drinkLabel && (
