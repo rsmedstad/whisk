@@ -685,22 +685,6 @@ export function RecipeList({
   );
 }
 
-// Tags to exclude from card preview — meal types are redundant with the category section
-// header, and time/speed tags are redundant with the cook time shown on each card
-const CARD_HIDDEN_TAGS = new Set([
-  // Meal types (shown as section headers)
-  "breakfast", "brunch", "dinner", "salad", "soup", "dessert", "appetizer", "snack", "side dish", "drinks",
-  // Time/speed (shown as cook time on card)
-  "quick", "under 30 min", "under 30 minutes", "30 min", "meal prep",
-]);
-
-// Additional tags to hide for drink recipes — food-oriented labels that don't apply
-const DRINK_HIDDEN_TAGS = new Set([
-  "weeknight", "quick", "under 30 min", "under 30 minutes", "30 min",
-  "meal prep", "one-pot", "sheet pan", "healthy", "low-carb", "keto",
-  "grilling", "baking", "slow cook", "instant pot", "air fryer", "stir-fry",
-]);
-
 const ALCOHOLIC_KEYWORDS = /\b(?:cocktail|margarita|sangria|spritz|mojito|martini|daiquiri|whiskey|whisky|bourbon|vodka|rum|gin|tequila|mezcal|wine|champagne|prosecco|beer|ale|stout|aperol|negroni|mimosa|bellini|paloma|old fashioned|manhattan|cosmopolitan|sour|highball|julep|toddy|mule|collins|fizz|sling|punch|eggnog|grog|amaretto|kahlua|baileys|vermouth|bitters|liqueur|amaro|pisco|sake|soju|hard (?:cider|seltzer|lemonade))\b/i;
 
 /** Image that handles hotlink-blocked external URLs (e.g. Serious Eats / Dotdash Meredith) */
@@ -745,16 +729,9 @@ function RecipeCard({
 }) {
   const isDrinks = recipe.tags.includes("drinks");
   const totalTime = isDrinks ? null : formatTotalTime(recipe.prepTime, recipe.cookTime);
-  // Show cuisine, diet, method, season tags — skip meal type (already in section header)
-  // For drinks, also hide food-oriented tags (weeknight, cooking methods, etc.)
-  const displayTags = recipe.tags.filter((t) =>
-    !CARD_HIDDEN_TAGS.has(t) && (!isDrinks || !DRINK_HIDDEN_TAGS.has(t))
-  );
   const isAlcoholic = isDrinks && (ALCOHOLIC_KEYWORDS.test(recipe.title) || (recipe.spirits && recipe.spirits.length > 0));
-  // For drinks, prepend Alcoholic/Non-Alcoholic as a display tag instead of badge
-  const finalTags = isDrinks
-    ? [isAlcoholic ? "Alcoholic" : "Non-Alcoholic", ...displayTags]
-    : displayTags;
+  // Food cards show no tag line (matches Discover); drinks keep a one-word label.
+  const drinkLabel = isDrinks ? (isAlcoholic ? "Alcoholic" : "Non-Alcoholic") : null;
 
   return (
     <button
@@ -801,9 +778,9 @@ function RecipeCard({
           <h3 className="font-medium text-xs leading-tight line-clamp-3 min-h-[1.9rem] dark:text-stone-100">
             {recipe.title}
           </h3>
-          <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
-            {finalTags.length > 0 ? finalTags.slice(0, 3).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ") : "\u00A0"}
-          </p>
+          {drinkLabel && (
+            <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">{drinkLabel}</p>
+          )}
         </div>
 
         <div className="flex items-center gap-3 mt-1.5 text-xs text-stone-500 dark:text-stone-400">
