@@ -47,15 +47,22 @@ export async function getOAuthToken(): Promise<string> {
     `${process.env.XDG_CONFIG_HOME ?? `${process.env.HOME}/.config`}/.wrangler/config/default.toml`,
   ].filter(Boolean);
 
+  // Wrangler versions save the login in different places, so a stale token can
+  // sit beside a fresh one. Use the one that expires last.
+  let best: { token: string; expires: number } | undefined;
   for (const configPath of paths) {
     try {
       const config = await Bun.file(configPath).text();
       const tokenMatch = config.match(/oauth_token\s*=\s*"([^"]+)"/);
-      if (tokenMatch?.[1]) return tokenMatch[1];
+      if (!tokenMatch?.[1]) continue;
+      const expiresMatch = config.match(/expiration_time\s*=\s*"([^"]+)"/);
+      const expires = expiresMatch?.[1] ? Date.parse(expiresMatch[1]) || 0 : 0;
+      if (!best || expires > best.expires) best = { token: tokenMatch[1], expires };
     } catch {
       // Try next path
     }
   }
+  if (best) return best.token;
 
   console.error("No wrangler OAuth token found. Run 'npx wrangler whoami' to authenticate.");
   process.exit(1);
