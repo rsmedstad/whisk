@@ -22,6 +22,7 @@ const DEMO_GUEST_POST_ALLOWED = [
   "/api/ai/suggest",
   "/api/identify/",
   "/api/shopping/scan",
+  "/api/import/photo", // reads the photo only, doesn't save
   "/api/import/url", // scrapes only, doesn't save
 ];
 
