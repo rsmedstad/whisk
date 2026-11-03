@@ -5,28 +5,7 @@ import { getWeekDates, formatDateShort, toDateString, classNames } from "../../l
 import { getSeasonalContext } from "../../lib/seasonal";
 import { ChevronLeft, ChevronRight, XMark, ShoppingCart, CalendarDays, CalendarPlus, ClipboardList, WhiskLogo, EllipsisVertical, Clock, Sparkles, Dice } from "../ui/Icon";
 import { SeasonalBrandIcon } from "../ui/SeasonalBrandIcon";
-
-const PANTRY_STAPLES = new Set([
-  "salt", "pepper", "black pepper", "kosher salt", "sea salt", "table salt",
-  "salt & pepper", "salt and pepper", "freshly ground black pepper", "ground pepper",
-  "olive oil", "vegetable oil", "canola oil", "extra virgin olive oil", "extra-virgin olive oil",
-  "cooking spray", "nonstick spray", "oil", "ice",
-]);
-
-/** Check if an ingredient name is a pantry staple that should be excluded */
-function isPantryStaple(name: string): boolean {
-  const lower = name.toLowerCase().trim();
-  // Exact match
-  if (PANTRY_STAPLES.has(lower)) return true;
-  // "water" — exclude plain water but keep sparkling, flavored, etc.
-  if (/^water$/.test(lower) || /^\d+.*\btap water\b/.test(lower) || /^\d+[\s-]*(tbsp|tsp|cup|ml|oz)?\s*water$/i.test(lower)) return true;
-  // Grouped items like "salt & pepper", "salt, pepper" split check
-  if (lower.includes("&") || lower.includes(" and ") || lower.includes(",")) {
-    const parts = lower.split(/[&,]|\band\b/).map((s) => s.trim()).filter(Boolean);
-    if (parts.length > 0 && parts.every((p) => PANTRY_STAPLES.has(p))) return true;
-  }
-  return false;
-}
+import { isStapleIngredient } from "../../lib/grocery";
 
 // Tags that signal a recipe fits a particular meal slot
 const SLOT_TAGS: Record<MealSlot, string[]> = {
@@ -352,7 +331,7 @@ export function MealPlan({
         if (!fullRecipe.ingredients?.length) continue;
 
         const ings = essentialsOnly
-          ? fullRecipe.ingredients.filter((i) => !isPantryStaple(i.name))
+          ? fullRecipe.ingredients.filter((i) => !isStapleIngredient(i))
           : fullRecipe.ingredients;
 
         const result = await onGenerateShoppingList(ings, recipeId);

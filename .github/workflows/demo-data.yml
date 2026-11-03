@@ -1,0 +1,38 @@
+name: Refresh demo data
+
+# Re-parses the public demo's recipe ingredients and tidies its seeded shopping
+# list with the current parser and grocery rules. Demo namespace only
+# (wrangler-demo.toml); the personal book is never touched from here.
+# Run from the Actions tab. "apply" off = dry run that prints the changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write changes (off = dry run)"
+        type: boolean
+        default: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Re-parse recipe ingredients
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun scripts/reparse-ingredients.ts --config wrangler-demo.toml ${{ inputs.apply && '--apply' || '' }}
+
+      - name: Tidy seeded shopping list
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun scripts/tidy-shopping-list.ts --config wrangler-demo.toml --drop-staples ${{ inputs.apply && '--apply' || '' }}

@@ -35,7 +35,7 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
     "pecorino", "pepper jack", "provolone", "queso", "ricotta",
     "sharp cheddar", "sour cream", "swiss", "whipping cream",
     "whipped cream", "yogurt", "almond milk", "soy milk", "coconut milk",
-    "brie", "camembert", "manchego", "asiago", "romano",
+    "brie", "camembert", "manchego", "asiago", "romano", "tzatziki",
   ],
   meat: [
     "anchovy", "bacon", "bass", "beef", "bratwurst", "brisket", "catfish",
@@ -80,6 +80,9 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
     "teriyaki", "tomato paste", "tomato sauce", "tortilla chip",
     "turmeric", "vanilla", "vegetable oil", "vinegar", "walnut",
     "wasabi", "white rice", "wild rice", "worcestershire", "yeast",
+    "chile crisp", "chili crisp", "chili oil", "gochujang", "harissa",
+    "fusilli", "rigatoni", "linguine", "fettuccine", "macaroni", "ziti", "farfalle",
+    "tortellini", "ravioli", "lasagna", "molasses",
     "kidney bean", "pinto bean", "navy bean", "cannellini", "white bean",
     "refried bean", "lima bean", "olive", "kalamata", "castelvetrano",
     "canned", "dried", "seed",
@@ -132,8 +135,10 @@ const CATEGORY_KEYWORDS: Record<ShoppingCategory, string[]> = {
 function normalizeForMatch(name: string): string {
   let lower = name.toLowerCase().trim();
   // Strip leading numbers & units like "2 cups", "1/2 lb", "1 can"
-  lower = lower.replace(/^[\d\/.\s]+(oz|lb|cup|tbsp|tsp|g|kg|ml|l|pt|qt|gal|bunch|head|can|pkg|bag|box|jar|bottle|ct|count|stick|clove|sprig|slice|piece|each)s?\b\s*/i, "");
+  lower = lower.replace(/^[\d\/.\s]+(oz|lb|cup|tbsp|tsp|g|kg|ml|l|pt|qt|gal|bunch|head|can|pkg|bag|box|jar|bottle|ct|count|stick|clove|sprig|slice|piece|each|rib|stalk)s?\b\s*/i, "");
   lower = lower.replace(/^[\d\/.\s]+/, "").trim();
+  // A leading count word is a measure, not the item: "ribs celery", "stalks celery"
+  lower = lower.replace(/^(ribs?|stalks?)\s+(?=[a-z])/, "");
   // Strip parenthetical amounts: "(15 oz)", "(15 oz_", "(about 2 cups)"
   lower = lower.replace(/\([\d\s.\/oz_lbgkgmlcup]*\)?/gi, "").trim();
   // Strip trailing junk: ", and", trailing commas, semicolons
@@ -221,6 +226,16 @@ export function categorizeIngredient(name: string): ShoppingCategory {
     if (baseVariants.some((v) => AMBIGUOUS_PRODUCE.has(v))) {
       return "pantry";
     }
+  }
+
+  // Priority rule: broth and stock are shelf-stable cartons, even "chicken broth"
+  if (/\b(broth|stock|bouillon|consomm[eé])\b/.test(normalized)) {
+    return "pantry";
+  }
+
+  // Priority rule: ground pepper and chilli spices are pantry, not fresh peppers
+  if (/\b(black|white|ground|cracked|lemon)\s+pepper\b|\bpeppercorns?\b|\bchill?i\s+(powder|flakes?)\b|\bpepper\s+flakes?\b/.test(normalized)) {
+    return "pantry";
   }
 
   // Priority rule: "canned X" or "X, canned" → pantry

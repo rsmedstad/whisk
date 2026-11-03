@@ -28,7 +28,7 @@ export async function loadWranglerConfig(configFile = "wrangler.toml") {
 
 /** Read the Cloudflare account ID from environment or wrangler config */
 export function getAccountId(): string {
-  const fromEnv = process.env.CF_ACCOUNT_ID;
+  const fromEnv = process.env.CF_ACCOUNT_ID ?? process.env.CLOUDFLARE_ACCOUNT_ID;
   if (fromEnv) return fromEnv;
 
   console.error("Set CF_ACCOUNT_ID environment variable (your Cloudflare account ID)");
@@ -37,6 +37,9 @@ export function getAccountId(): string {
 
 /** Read the wrangler OAuth token from the local config file */
 export async function getOAuthToken(): Promise<string> {
+  // CI (GitHub Actions) passes an API token instead of a wrangler login
+  if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
+
   // Try standard wrangler config locations
   const paths = [
     `${process.env.APPDATA}/xdg.config/.wrangler/config/default.toml`,

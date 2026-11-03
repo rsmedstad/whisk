@@ -19,6 +19,7 @@ import { ChevronLeft, HeartFilled, Heart, EllipsisVertical, PlayCircle, Clock, U
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { GroupedIngredients, StepsList } from "./RecipeComponents";
 import { categorizeIngredientForDrink } from "../../lib/categories";
+import { isStapleIngredient } from "../../lib/grocery";
 
 interface RecipeDetailProps {
   onStartTimer: (label: string, minutes: number, recipeId: string, stepIndex: number) => void;
@@ -27,12 +28,6 @@ interface RecipeDetailProps {
   onAddMeal?: (date: Date, slot: MealSlot, title: string, recipeId?: string) => Promise<void>;
   isDemoRestricted?: boolean;
 }
-
-// Common pantry staples to skip with "Add Essentials"
-const PANTRY_STAPLES = new Set([
-  "salt", "pepper", "black pepper", "olive oil", "vegetable oil", "canola oil",
-  "cooking spray", "water", "ice", "nonstick spray", "oil",
-]);
 
 // For drinks, "essentials" means the main spirits/liquors/wine/beer —
 // skip garnishes, bitters, modifiers, ice, water, and other extras
@@ -143,7 +138,7 @@ export function RecipeDetail({ onStartTimer, onAddToShoppingList, onUndoShopping
     const ings = essentialsOnly
       ? isDrink
         ? recipe.ingredients.filter((i) => !DRINK_NON_ESSENTIALS.has(categorizeIngredientForDrink(i.name)))
-        : recipe.ingredients.filter((i) => !PANTRY_STAPLES.has(i.name.toLowerCase().trim()))
+        : recipe.ingredients.filter((i) => !isStapleIngredient(i))
       : recipe.ingredients;
     const result = await onAddToShoppingList(ings, recipe.id);
     if (result.added > 0) {
