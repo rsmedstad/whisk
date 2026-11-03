@@ -62,12 +62,10 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     textModels: [
       { id: "openai/gpt-oss-120b", name: "GPT OSS 120B" },
       { id: "openai/gpt-oss-20b", name: "GPT OSS 20B (Fast)" },
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
-      { id: "qwen/qwen3-32b", name: "Qwen3 32B" },
-      { id: "meta-llama/llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout" },
+      { id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B" },
     ],
     visionModels: [
-      { id: "meta-llama/llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout" },
+      { id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B" },
     ],
   },
   gemini: {
@@ -164,6 +162,12 @@ export function getAvailableProviders(env: ProviderEnv): AvailableProvider[] {
 }
 
 /** Resolve which provider+model to use for a given AI function. */
+// A saved model the provider has since retired falls back to the provider's first model.
+function listedModel(models: ModelInfo[], saved: string | undefined): string | undefined {
+  if (saved && models.some((m) => m.id === saved)) return saved;
+  return models[0]?.id;
+}
+
 export function resolveConfig(
   config: AIConfig | null,
   fn: "chat" | "suggestions" | "vision" | "ocr",
@@ -174,7 +178,8 @@ export function resolveConfig(
   // Advanced mode: use per-function override if available
   if (config?.mode === "advanced") {
     const override = config[fn];
-    if (override && getApiKey(env, override.provider)) {
+    const models = override && PROVIDERS[override.provider]?.[isVisionFn ? "visionModels" : "textModels"];
+    if (override && getApiKey(env, override.provider) && models?.some((m) => m.id === override.model)) {
       return override;
     }
   }
@@ -184,10 +189,10 @@ export function resolveConfig(
     const provider = PROVIDERS[config.defaultProvider];
     if (provider) {
       if (isVisionFn) {
-        const model = config.defaultVisionModel ?? provider.visionModels[0]?.id;
+        const model = listedModel(provider.visionModels, config.defaultVisionModel);
         if (model) return { provider: config.defaultProvider, model };
       } else {
-        const model = config.defaultTextModel ?? provider.textModels[0]?.id;
+        const model = listedModel(provider.textModels, config.defaultTextModel);
         if (model) return { provider: config.defaultProvider, model };
       }
     }
