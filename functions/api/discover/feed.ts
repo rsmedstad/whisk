@@ -4,6 +4,7 @@ import {
   resolveConfig,
   callTextAI,
 } from "../../lib/ai-providers";
+import { parseIngredientLine } from "../../../src/lib/ingredient-parse";
 import { DEFAULT_DISCOVER_CONFIG } from "../../lib/discover-config";
 import {
   classifyRecipe,
@@ -1213,16 +1214,13 @@ export function parseDurationToMin(val: unknown): number | undefined {
 /** Parse recipeIngredient array into structured ingredients */
 function parseIngredientsBasic(raw: unknown): { name: string; amount?: string; unit?: string }[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter((i): i is string => typeof i === "string" && i.trim().length > 0)
-    .map((text) => {
-      const cleaned = text.replace(/<[^>]*>/g, "").trim();
-      // Try to extract amount + unit + name from common patterns
-      const m = cleaned.match(/^([\d\u00BC-\u00BE\u2150-\u215E./\s-]+)\s*(?:(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|liters?|cloves?|pinch|dash|bunch|large|medium|small|whole)\b)?\s*(.+)/i);
-      if (m) {
-        return { amount: m[1]?.trim(), unit: m[2]?.trim(), name: m[3]?.trim() ?? cleaned };
-      }
-      return { name: cleaned };
-    });
+  const lines = raw
+    .filter((i): i is string => typeof i === "string" && i.trim().length > 0)
+    .map((text) => text.replace(/<[^>]*>/g, "").trim());
+  return lines
+    .map((line) => parseIngredientLine(line))
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+    .map(({ name, amount, unit }) => ({ name, amount, unit }));
 }
 
 /** Parse recipeInstructions into step objects */

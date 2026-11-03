@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { ShoppingList as ShoppingListType, ShoppingCategory, ShoppingItem, RecipeIndexEntry, Ingredient } from "../../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER, CATEGORY_EMOJI } from "../../lib/categories";
 import { abbreviateName, abbreviateUnit } from "../../lib/abbreviate";
+import { combineAmounts, isStapleIngredient, pluralizeForAmount } from "../../lib/grocery";
 import { classNames, decodeEntities } from "../../lib/utils";
 import { EmptyState } from "../ui/EmptyState";
 import { Check, XMark, ShoppingCart, ArrowUpDown, Sparkles, Trash, Camera, MagnifyingGlass, SquareCheck, ClipboardList, RefreshCw, ChevronDown, ChevronUp, EllipsisVertical } from "../ui/Icon";
@@ -23,7 +24,7 @@ interface ShoppingListProps {
   onClearAll: () => void;
   onUpdateItem: (id: string, updates: Partial<Pick<ShoppingItem, "category" | "name">>) => void;
   onClearCategory: (category: ShoppingCategory) => void;
-  onClassifyUncategorized: () => Promise<void>;
+  onClassifyUncategorized: () => Promise<ShoppingItem[]>;
   recipeIndex?: RecipeIndexEntry[];
   visionEnabled?: boolean;
   chatEnabled?: boolean;
@@ -83,51 +84,6 @@ export function ShoppingList({
   const [smartItems, setSmartItems] = useState<Array<{ name: string; amount: string | null; unit: string | null; category: string; sourceItemIds: string[] }>>([]);
   const [smartStats, setSmartStats] = useState<{ originalCount: number; smartCount: number; combinedCount: number } | null>(null);
 
-  const PANTRY_STAPLES = useMemo(() => new Set([
-    // Salt & pepper
-    "salt", "pepper", "black pepper", "kosher salt", "sea salt", "table salt",
-    "salt & pepper", "salt and pepper", "freshly ground black pepper", "ground pepper",
-    "freshly ground pepper", "coarse salt", "flaky salt", "finishing salt",
-    // Oils & sprays
-    "olive oil", "vegetable oil", "canola oil", "extra virgin olive oil", "extra-virgin olive oil",
-    "cooking spray", "nonstick spray", "oil", "sesame oil", "avocado oil", "coconut oil",
-    // Dried herbs & spices (common pantry items most kitchens have)
-    "oregano", "dried oregano", "basil", "dried basil", "thyme", "dried thyme",
-    "rosemary", "dried rosemary", "bay leaf", "bay leaves", "paprika", "smoked paprika",
-    "cumin", "ground cumin", "chili powder", "cayenne", "cayenne pepper",
-    "cinnamon", "ground cinnamon", "nutmeg", "ground nutmeg",
-    "garlic powder", "onion powder", "turmeric", "ground turmeric",
-    "red pepper flakes", "crushed red pepper", "red pepper flake",
-    "italian seasoning", "dried parsley", "coriander", "ground coriander",
-    "ginger", "ground ginger", "allspice", "cloves", "ground cloves",
-    "curry powder", "garam masala", "taco seasoning",
-    // Basics
-    "sugar", "granulated sugar", "brown sugar", "flour", "all-purpose flour",
-    "baking powder", "baking soda", "vanilla", "vanilla extract",
-    "cornstarch", "ice", "water",
-    // Vinegars & sauces most kitchens have
-    "soy sauce", "vinegar", "white vinegar", "apple cider vinegar",
-  ]), []);
-
-  const isPantryStaple = useCallback((name: string): boolean => {
-    // Strip leading amounts/units for matching: "1/4 tsp red pepper" → "red pepper"
-    let lower = name.toLowerCase().trim();
-    lower = lower.replace(/^[\d\/.\s]+(oz|lb|cup|tbsp|tsp|g|kg|ml|l|can|bunch|clove|sprig|pinch|dash)s?\b\s*/i, "");
-    lower = lower.replace(/^[\d\/.\s]+/, "").trim();
-    // Strip trailing commas, "and", parenthetical junk
-    lower = lower.replace(/[,;]\s*(and\s*)?$/, "").replace(/\s+and\s*$/, "").trim();
-
-    if (PANTRY_STAPLES.has(lower)) return true;
-    if (/^water$/.test(lower) || /\btap water\b/.test(lower)) return true;
-    // Any kind of salt is a staple (kosher salt, sea salt, flaky salt, etc.)
-    if (/\bsalt\b/.test(lower)) return true;
-    // Try splitting compound items: "dried oregano, salt & pepper"
-    if (lower.includes("&") || lower.includes(" and ") || lower.includes(",")) {
-      const parts = lower.split(/[&,]|\band\b/).map((s) => s.trim()).filter(Boolean);
-      if (parts.length > 0 && parts.every((p) => PANTRY_STAPLES.has(p))) return true;
-    }
-    return false;
-  }, [PANTRY_STAPLES]);
 
   const handleAddFromPlan = useCallback(async (includeStaples: boolean) => {
     if (!onAddFromPlan || plannedRecipeIds.length === 0) return;
@@ -147,7 +103,7 @@ export function ShoppingList({
 
         const ings = includeStaples
           ? fullRecipe.ingredients
-          : fullRecipe.ingredients.filter((i) => !isPantryStaple(i.name));
+          : fullRecipe.ingredients.filter((i) => !isStapleIngredient(i));
 
         const result = await onAddFromPlan(ings, recipeId);
         totalAdded += result.added;
@@ -168,7 +124,7 @@ export function ShoppingList({
     } finally {
       setIsPlanAdding(false);
     }
-  }, [onAddFromPlan, plannedRecipeIds, isPantryStaple]);
+  }, [onAddFromPlan, plannedRecipeIds]);
 
   // Count stale recipe items (from recipes no longer in the plan)
   const staleRecipeItemCount = useMemo(() => {
@@ -203,7 +159,7 @@ export function ShoppingList({
           if (!res.ok) continue;
           const fullRecipe = (await res.json()) as { ingredients: Ingredient[] };
           if (!fullRecipe.ingredients?.length) continue;
-          const ings = fullRecipe.ingredients.filter((i) => !isPantryStaple(i.name));
+          const ings = fullRecipe.ingredients.filter((i) => !isStapleIngredient(i));
           const addResult = await onAddFromPlan(ings, recipeId);
           totalAdded += addResult.added;
         }
@@ -218,7 +174,7 @@ export function ShoppingList({
     } finally {
       setIsSyncing(false);
     }
-  }, [onSyncWithPlan, onAddFromPlan, plannedRecipeIds, isPantryStaple]);
+  }, [onSyncWithPlan, onAddFromPlan, plannedRecipeIds]);
 
   // Combine duplicate items by normalized name + unit
   const combinedItems = useMemo(() => {
@@ -240,25 +196,14 @@ export function ShoppingList({
       }
       // Try to combine amounts
       const first = items[0]!;
-      const allNumeric = items.every((i) => {
-        if (!i.amount) return true;
-        return !isNaN(parseFloat(i.amount));
-      });
-      if (allNumeric) {
-        let totalAmount = 0;
-        let hasAmount = false;
-        for (const i of items) {
-          if (i.amount) {
-            totalAmount += parseFloat(i.amount);
-            hasAmount = true;
-          }
-        }
+      const combined = combineAmounts(items.map((i) => i.amount), first.unit);
+      if (combined !== null) {
         // Collect all source recipe IDs for the combined item
         const sourceIds = items.map((i) => i.sourceRecipeId).filter(Boolean);
         const allChecked = items.every((i) => i.checked);
         result.push({
           ...first,
-          amount: hasAmount ? (Number.isInteger(totalAmount) ? totalAmount.toString() : totalAmount.toFixed(2).replace(/\.?0+$/, "")) : first.amount,
+          amount: combined ?? first.amount,
           checked: allChecked,
           // Store sub-item IDs in a custom field for toggling
           _mergedIds: items.map((i) => i.id),
@@ -352,8 +297,8 @@ export function ShoppingList({
     setNewItemQty("");
   };
 
-  const fetchSmartList = useCallback(async () => {
-    const unchecked = list.items.filter((i) => !i.checked);
+  const fetchSmartList = useCallback(async (items: ShoppingItem[] = list.items) => {
+    const unchecked = items.filter((i) => !i.checked);
     if (unchecked.length < 2) {
       setSmartItems([]);
       setSmartStats(null);
@@ -399,19 +344,17 @@ export function ShoppingList({
     }
   }, [onClassifyUncategorized]);
 
-  /** Single "Organize" action: classify uncategorized items, then consolidate duplicates */
+  /** Single "Organize" action: tidy recipe items into store form, classify, then consolidate duplicates */
   const handleCleanUp = useCallback(async () => {
-    const needsClassification = list.items.some((i) => i.category === "other" || !i.subcategory);
-    if (needsClassification) {
-      setIsClassifying(true);
-      try {
-        await onClassifyUncategorized();
-      } finally {
-        setIsClassifying(false);
-      }
+    setIsClassifying(true);
+    let items: ShoppingItem[];
+    try {
+      items = await onClassifyUncategorized();
+    } finally {
+      setIsClassifying(false);
     }
-    await fetchSmartList();
-  }, [list.items, onClassifyUncategorized, fetchSmartList]);
+    await fetchSmartList(items);
+  }, [onClassifyUncategorized, fetchSmartList]);
 
   const handleListScan = () => {
     const input = document.createElement("input");
@@ -484,8 +427,9 @@ export function ShoppingList({
   };
 
   const renderItem = (item: ShoppingItem & { _mergedIds?: string[]; _mergedSources?: string[] }) => {
-    const displayText = abbreviateName(decodeEntities(item.name));
-    const shortUnit = abbreviateUnit(item.unit);
+    const plural = pluralizeForAmount(item.amount, item.unit, item.name);
+    const displayText = abbreviateName(decodeEntities(plural.name));
+    const shortUnit = abbreviateUnit(plural.unit);
     const fullLabel = decodeEntities([item.amount, shortUnit, displayText].filter(Boolean).join(" "));
     const mergedIds = item._mergedIds;
 
@@ -1017,7 +961,7 @@ export function ShoppingList({
                           {smartStats.originalCount} items → {smartStats.smartCount} ({smartStats.combinedCount} combined)
                         </p>
                         <button
-                          onClick={fetchSmartList}
+                          onClick={() => fetchSmartList()}
                           className="text-violet-500 hover:text-violet-700 dark:hover:text-violet-300"
                           title="Refresh"
                         >

@@ -4,6 +4,7 @@ import { getLocal, setLocal, CACHE_KEYS } from "../lib/cache";
 import { nanoid } from "nanoid";
 import type { ShoppingList, ShoppingItem, ShoppingCategory } from "../types";
 import { categorizeIngredient } from "../lib/categories";
+import { buildRecipeItems, tidyRecipeItems } from "../lib/grocery";
 
 const VALID_CATEGORIES = new Set<ShoppingCategory>([
   "produce", "dairy", "meat", "pantry", "snacks", "frozen", "bakery", "beverages", "other",
@@ -135,35 +136,38 @@ export function useShoppingList() {
       // Use ref to get latest list state (avoids stale closure when called in a loop)
       const currentList = listRef.current;
 
-      // Check against ALL existing items on the list (not just same recipe)
-      // to avoid duplicating manually-added items or items from other recipes
-      const existingNames = new Set(
-        currentList.items.map((i) => i.name.toLowerCase().trim())
+      // Recipe measures become store items ("1/2 cup onion" -> 1 onion). The same
+      // item from another recipe is still added so the list shows both recipe
+      // names on one combined row; skip only what this recipe (or a manual entry)
+      // already put there.
+      const covered = new Set(
+        currentList.items
+          .filter((i) => !i.sourceRecipeId || i.sourceRecipeId === recipeId)
+          .map((i) => i.name.toLowerCase().trim())
       );
+      const categoryByName = new Map<string, ShoppingCategory>();
+      for (const ing of ingredients) {
+        const recipeCategory = ing.category?.toLowerCase() as ShoppingCategory | undefined;
+        if (recipeCategory && recipeCategory !== "other" && VALID_CATEGORIES.has(recipeCategory)) {
+          categoryByName.set(ing.name.toLowerCase(), recipeCategory);
+        }
+      }
 
       const userName = localStorage.getItem("whisk_display_name") ?? undefined;
-      const newItems: ShoppingItem[] = ingredients
-        .filter((ing) => !existingNames.has(cleanIngredientName(ing.name).toLowerCase()))
-        .map((ing) => {
-          const name = cleanIngredientName(ing.name);
-          // Use recipe's category if it's a valid, meaningful ShoppingCategory;
-          // "other" means uncategorized, so always re-categorize those
-          const recipeCategory = ing.category?.toLowerCase() as ShoppingCategory | undefined;
-          const category = (recipeCategory && recipeCategory !== "other" && VALID_CATEGORIES.has(recipeCategory))
-            ? recipeCategory
-            : categorizeIngredient(name);
-          return {
-            id: nanoid(10),
-            name,
-            amount: ing.amount,
-            unit: ing.unit,
-            category,
-            checked: false,
-            sourceRecipeId: recipeId,
-            addedBy: "recipe" as const,
-            addedByUser: userName,
-          };
-        });
+      const buyable = buildRecipeItems(ingredients);
+      const newItems: ShoppingItem[] = buyable
+        .filter((b) => !covered.has(b.name.toLowerCase()))
+        .map((b) => ({
+          id: nanoid(10),
+          name: b.name,
+          amount: b.amount,
+          unit: b.unit,
+          category: categoryByName.get(b.name.toLowerCase()) ?? categorizeIngredient(b.name),
+          checked: false,
+          sourceRecipeId: recipeId,
+          addedBy: "recipe" as const,
+          addedByUser: userName,
+        }));
 
       if (newItems.length > 0) {
         await saveList({ ...currentList, items: [...currentList.items, ...newItems] });
@@ -171,7 +175,7 @@ export function useShoppingList() {
 
       return {
         added: newItems.length,
-        skippedDuplicates: ingredients.length - newItems.length,
+        skippedDuplicates: buyable.length - newItems.length,
       };
     },
     [saveList]
@@ -229,12 +233,27 @@ export function useShoppingList() {
     [list, saveList]
   );
 
-  const classifyUncategorized = useCallback(async () => {
+  const classifyUncategorized = useCallback(async (): Promise<ShoppingItem[]> => {
+    // Deterministic pass first: rewrite recipe items into buyable form and fix
+    // their aisles, so lists built before the conversion existed get cleaned up.
+    let current = listRef.current;
+    const tidied = tidyRecipeItems(current.items, () => nanoid(10));
+    if (tidied.changed) {
+      const before = new Map(current.items.map((i) => [i.id, i.name]));
+      const items = tidied.items.map((i) =>
+        i.addedBy === "recipe" && before.get(i.id) !== i.name
+          ? { ...i, category: categorizeIngredient(i.name), subcategory: undefined }
+          : i
+      );
+      current = { ...current, items };
+      await saveList(current);
+    }
+
     // Send items that need classification: "other" category OR missing subcategory
-    const needsClassification = list.items.filter(
+    const needsClassification = current.items.filter(
       (i) => i.category === "other" || !i.subcategory
     );
-    if (needsClassification.length === 0) return;
+    if (needsClassification.length === 0) return current.items;
 
     // Build a map from item ID to its index in the needsClassification array
     const idToIndex = new Map<string, number>();
@@ -247,7 +266,7 @@ export function useShoppingList() {
       );
 
       if (result?.items) {
-        const updatedItems = list.items.map((item) => {
+        const updatedItems = current.items.map((item) => {
           const idx = idToIndex.get(item.id);
           if (idx === undefined) return item;
           const classified = result.items[idx];
@@ -270,12 +289,14 @@ export function useShoppingList() {
           return Object.keys(updates).length > 0 ? { ...item, ...updates } : item;
         });
 
-        await saveList({ ...list, items: updatedItems });
+        await saveList({ ...current, items: updatedItems });
+        return updatedItems;
       }
     } catch {
       // AI classification failed silently
     }
-  }, [list, saveList]);
+    return current.items;
+  }, [saveList]);
 
   return {
     list,
