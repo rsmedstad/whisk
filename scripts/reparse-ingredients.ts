@@ -38,7 +38,16 @@ const keys: string[] = [];
 let cursor: string | undefined;
 do {
   const res = await fetch(`${baseUrl}/keys?prefix=recipe:&limit=1000${cursor ? `&cursor=${cursor}` : ""}`, { headers });
-  const data = (await res.json()) as { result: { name: string }[]; result_info?: { cursor?: string } };
+  const data = (await res.json()) as {
+    result: { name: string }[] | null;
+    result_info?: { cursor?: string };
+    errors?: { code: number; message: string }[];
+  };
+  if (!data.result) {
+    // e.g. 10000 Authentication error: the token lacks Workers KV Storage permission
+    console.error(`KV list failed (${res.status}): ${(data.errors ?? []).map((e) => `${e.code} ${e.message}`).join("; ")}`);
+    process.exit(1);
+  }
   keys.push(...data.result.map((k) => k.name).filter((k) => k.startsWith("recipe:")));
   cursor = data.result_info?.cursor || undefined;
 } while (cursor);

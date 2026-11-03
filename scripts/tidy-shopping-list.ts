@@ -27,6 +27,11 @@ if (res.status === 404) {
   console.log("No shopping list saved.");
   process.exit(0);
 }
+if (!res.ok) {
+  const body = (await res.json().catch(() => ({}))) as { errors?: { code: number; message: string }[] };
+  console.error(`KV read failed (${res.status}): ${(body.errors ?? []).map((e) => `${e.code} ${e.message}`).join("; ")}`);
+  process.exit(1);
+}
 const list = (await res.json()) as ShoppingList;
 const show = (i: { amount?: string; unit?: string; name: string }) => [i.amount, i.unit, i.name].filter(Boolean).join(" ");
 
