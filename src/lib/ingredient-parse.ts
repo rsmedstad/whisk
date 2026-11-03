@@ -187,8 +187,9 @@ const LINE_RE = new RegExp(
   String.raw`^(${QTY}(?:${RANGE_SEP}${QTY})?)\s*(\([^)]*\))?\s*(?:(${UNITS})\b\.?)?\s*(.+)`,
   "i",
 );
-// Second measure after the first: "1 cup plus 1 tablespoon sugar", "2/3 cup / 2½ ounces parmesan"
-const EXTRA_MEASURE_RE = new RegExp(String.raw`^(?:plus\s+|\+\s*|/\s*)${QTY}\s*(?:(?:${UNITS})\b\.?)?\s*`, "i");
+// Second measure at the start of a name: "plus 1 tablespoon sugar", "/2½ ounces parmesan".
+// Kept in recipe text (it's part of the amount); the shopping list strips it.
+export const EXTRA_MEASURE_RE =new RegExp(String.raw`^(?:plus\s+|\+\s*|/\s*)${QTY}\s*(?:(?:${UNITS})\b\.?)?\s*`, "i");
 
 /** Normalize a captured amount: "1 or 2" -> "1-2", "1 1/2" -> "1 ½". */
 function normalizeAmountRange(raw: string): string {
@@ -203,18 +204,20 @@ export function parseIngredientLine(line: string): ParsedIngredient | null {
     // "2-1/4" and "1 -3/4" are mixed numbers, not ranges
     .replace(/(\d)\s*-\s*(\d+\s*\/\s*\d+)/g, "$1 $2")
     // "1 .5 tablespoons" is 1.5
-    .replace(/(\d)\s+\.(\d)/g, "$1.$2");
+    .replace(/(\d)\s+\.(\d)/g, "$1.$2")
+    // "28 -ounce can" (split by older saves) is "28-ounce can"
+    .replace(/(\d)\s+-(ounce|oz|inch|pound|lb|gram|quart|pint)/gi, "$1-$2");
   if (!cleaned) return null;
   const match = cleaned.match(LINE_RE);
   if (!match) return { name: cleaned };
   const size = match[2]?.trim();
-  const rest = (match[4] ?? "").replace(EXTRA_MEASURE_RE, "").trim();
+  const rest = (match[4] ?? "").trim();
   // "1 to taste" style lines: no real name after the amount
   if (!rest) return { name: cleaned };
   return {
     amount: normalizeAmountRange(match[1] ?? ""),
     unit: match[3]?.trim(),
-    name: size ? `${rest} ${size}` : rest,
+    name: size ? `${size} ${rest}` : rest,
   };
 }
 

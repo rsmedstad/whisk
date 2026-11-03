@@ -3,7 +3,7 @@
  * "6 garlic cloves, minced" -> 1 head garlic, "2 large eggs" -> eggs.
  * Pure and deterministic; the AI smart list can refine on top.
  */
-import { parseIngredientLine } from "./ingredient-parse";
+import { EXTRA_MEASURE_RE, parseIngredientLine } from "./ingredient-parse";
 
 export interface IngredientInput {
   name: string;
@@ -223,7 +223,7 @@ const PURCHASE_UNITS = new Set([
 ]);
 
 /** Parse "2", "1 ½", "1/2", "1-2" (takes the high end) into a number. */
-function parseQuantity(amount: string | undefined): number | null {
+export function parseQuantity(amount: string | undefined): number | null {
   if (!amount) return null;
   const s = amount.trim();
   const range = s.split(/\s*-\s*/);
@@ -374,7 +374,9 @@ function convertOne(amount: string | undefined, unit: string | undefined, rawNam
 /** Re-parse a stored ingredient's text with the current parser. */
 function reparse(ing: IngredientInput): { name: string; amount?: string; unit?: string } {
   const line = [ing.amount, ing.unit, ing.name].filter((s) => s && s.trim()).join(" ");
-  return parseIngredientLine(line) ?? { name: ing.name };
+  const parsed = parseIngredientLine(line) ?? { name: ing.name };
+  // "1 cup plus 1 tablespoon sugar": the second measure doesn't matter for shopping
+  return { ...parsed, name: parsed.name.replace(EXTRA_MEASURE_RE, "").trim() || parsed.name };
 }
 
 /** isPantryStaple for a stored ingredient, re-parsed so older data matches too. */

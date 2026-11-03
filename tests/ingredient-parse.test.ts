@@ -33,7 +33,7 @@ describe("parseIngredientLine", () => {
     expect(parseIngredientLine("2 (15-ounce) cans chickpeas, drained")).toMatchObject({
       amount: "2",
       unit: "cans",
-      name: "chickpeas, drained (15-ounce)",
+      name: "(15-ounce) chickpeas, drained",
     });
   });
 
@@ -47,8 +47,10 @@ describe("parseIngredientLine", () => {
   });
 
   test("second measures and spaced decimals", () => {
-    expect(parseIngredientLine("1 cup plus 1 tablespoon sugar")).toMatchObject({ amount: "1", unit: "cup", name: "sugar" });
-    expect(parseIngredientLine("2/3 cup /2½ ounces finely grated Parmesan")).toMatchObject({ amount: "⅔", unit: "cup", name: "finely grated Parmesan" });
+    // Kept in recipe text; the shopping list drops the second measure
+    expect(parseIngredientLine("1 cup plus 1 tablespoon sugar")).toMatchObject({ amount: "1", unit: "cup", name: "plus 1 tablespoon sugar" });
+    expect(parseIngredientLine("2/3 cup /2½ ounces finely grated Parmesan")).toMatchObject({ amount: "⅔", unit: "cup", name: "/2½ ounces finely grated Parmesan" });
+    expect(parseIngredientLine("1 28 -ounce can tomato puree")).toMatchObject({ amount: "1", name: "28-ounce can tomato puree" });
     expect(parseIngredientLine("1 .5 tablespoons mayonnaise")).toMatchObject({ amount: "1 ½", unit: "tablespoons", name: "mayonnaise" });
     expect(parseIngredientLine("3 packets instant yeast")).toMatchObject({ amount: "3", unit: "packets", name: "instant yeast" });
   });

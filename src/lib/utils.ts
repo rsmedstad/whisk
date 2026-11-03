@@ -36,19 +36,35 @@ export function scaleIngredient(
     return ingredient;
   }
 
+  const scale = (n: number) => formatFraction((n / originalServings) * targetServings);
+
+  // Range: "1-2" scales both ends
+  const range = ingredient.amount.split(/\s*[-–]\s*/);
+  if (range.length === 2) {
+    const lo = parseFraction(range[0]!);
+    const hi = parseFraction(range[1]!);
+    if (lo === null || hi === null) return ingredient;
+    return { ...ingredient, amount: `${scale(lo)}-${scale(hi)}` };
+  }
+
   const parsed = parseFraction(ingredient.amount);
   if (parsed === null) return ingredient;
-
-  const scaled = (parsed / originalServings) * targetServings;
-  return {
-    ...ingredient,
-    amount: formatFraction(scaled),
-  };
+  return { ...ingredient, amount: scale(parsed) };
 }
+
+const UNICODE_FRACTIONS: Record<string, number> = {
+  "½": 0.5, "⅓": 1 / 3, "⅔": 2 / 3, "¼": 0.25, "¾": 0.75, "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875,
+};
 
 export function parseFraction(str: string): number | null {
   if (typeof str !== "string") return null;
   str = str.trim();
+
+  // Unicode fraction, optionally after a whole number: "½", "1½", "1 ½"
+  const uni = str.match(/^(?:(\d+)\s*)?([½⅓⅔¼¾⅛⅜⅝⅞])$/);
+  if (uni) {
+    return (uni[1] ? parseInt(uni[1]) : 0) + (UNICODE_FRACTIONS[uni[2]!] ?? 0);
+  }
 
   // Mixed number: "1 1/2"
   const mixed = str.match(/^(\d+)\s+(\d+)\/(\d+)$/);

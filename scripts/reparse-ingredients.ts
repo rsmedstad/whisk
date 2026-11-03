@@ -9,6 +9,7 @@
 
 import { getKVClient } from "./lib/cloudflare";
 import { parseIngredientLine } from "../src/lib/ingredient-parse";
+import { parseQuantity } from "../src/lib/grocery";
 
 const apply = process.argv.includes("--apply");
 const configIdx = process.argv.indexOf("--config");
@@ -73,8 +74,12 @@ for (const key of keys) {
     const line = [ing.amount, ing.unit, ing.name].filter((s) => typeof s === "string" && s.trim()).join(" ");
     const parsed = parseIngredientLine(line);
     if (!parsed) return ing;
-    const same =
-      parsed.name === ing.name && (parsed.amount ?? "") === (ing.amount ?? "") && (parsed.unit ?? "") === (ing.unit ?? "");
+    // "1/2" vs "½" is only notation; leave those lines alone
+    const sameAmount =
+      (parsed.amount ?? "") === (ing.amount ?? "") ||
+      (parseQuantity(parsed.amount) !== null && parseQuantity(parsed.amount) === parseQuantity(ing.amount));
+    // Unit only gained a size note's position or case: also notation
+    const same = parsed.name === ing.name && sameAmount && (parsed.unit ?? "").toLowerCase() === (ing.unit ?? "").toLowerCase();
     if (same) return ing;
     changes.push(`  ${show(ing)}  ->  ${show(parsed)}`);
     const next: Ingredient = { ...ing, name: parsed.name };
