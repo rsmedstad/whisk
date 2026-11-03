@@ -31,7 +31,11 @@
 - Ran the demo's live seeded list (102 items, fetched read-only) through the conversion: 72 display rows, every example above converts as listed.
 - Not driven end to end in a browser.
 
-## Left / blockers
-- Demo KV refresh: local wrangler login is expired, so the demo data refresh runs from GitHub: Actions > "Refresh demo data" (dry run first, then apply). Needs the existing `CLOUDFLARE_API_TOKEN` secret to have Workers KV edit.
-- Ryan's production recipes were not touched. To fix his stale ingredients: `CF_ACCOUNT_ID=... bun scripts/reparse-ingredients.ts` (dry run), then `--apply`, after `npx wrangler login`.
+## Data fixed (2026-11-02, with Ryan's OK)
+- Personal book: `reparse-ingredients --apply` updated 92 ingredient lines in 52 recipes (garlic/large/green splits, "cup s", ranges, "1 .5"). A follow-up dry run shows 0 changes.
+- Demo: recipes re-parsed the same way; seeded shopping list tidied with `--drop-staples` (102 items -> 69).
+- Follow-ups in rsmedstad/whisk#153: recipe text keeps "plus 2 tablespoons" and package sizes; serving scaling handles "1-2" and "1 ½".
+
+## Left
+- The GitHub `CLOUDFLARE_API_TOKEN` gets 401 on KV, so the "Refresh demo data" workflow can't run until that token gets Workers KV Storage: Edit. Local scripts work with `npx wrangler login`.
 - `scripts/local-scrape.ts` still has its own older parser.
