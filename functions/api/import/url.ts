@@ -7,6 +7,7 @@ import {
 import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
 import {
   RECIPE_FETCH_TIMEOUT_MS,
+  fetchWpRestPost,
   fetchWpRestPostHtml,
   isWpRestHost,
   jsonLdAsHtml,
@@ -197,6 +198,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let failFastCode: SourceFetchCode | null = null;
     let fromClientJsonLd = false;
     let wpRestTried = false;
+    let diag = "";
     let fromWpRest = false;
 
     if (jsonLd !== undefined && jsonLd !== null) {
@@ -218,12 +220,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ? (resolved.html.length > MAX_HTML_CHARS ? resolved.html.slice(0, MAX_HTML_CHARS) : resolved.html)
         : null;
       failFastCode = resolved.failFastCode;
+      diag = `page HTTP ${resolved.page.status ?? (resolved.page.timedOut ? "timeout" : "none")}`;
 
       // WordPress sites flagged `wpRest`: if the page was blocked/empty/timed
       // out, one public REST request may still have the post. Single try.
       if (failFastCode && isWpRestHost(url)) {
         wpRestTried = true;
-        const restHtml = await fetchWpRestPostHtml(url, RECIPE_FETCH_TIMEOUT_MS);
+        const rest = await fetchWpRestPost(url, RECIPE_FETCH_TIMEOUT_MS);
+        diag += `, REST HTTP ${rest.status ?? "none"}`;
+        const restHtml = rest.html;
         if (restHtml) {
           html = restHtml.length > MAX_HTML_CHARS ? restHtml.slice(0, MAX_HTML_CHARS) : restHtml;
           failFastCode = null;
@@ -242,7 +247,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let brAttempts = 0;
 
     if (!fromClientJsonLd && failFastCode) {
-      return sourceFetchResponse(failFastCode, url);
+      return sourceFetchResponse(failFastCode, url, wpRestTried ? diag : undefined);
     }
 
     if (!fromClientJsonLd && (!html || html.length < 200)) {

@@ -457,14 +457,20 @@ export function wpRestPostToHtml(
   return `<h1>${title}</h1><div class="entry-content">${content}</div><footer></footer>`;
 }
 
+export interface WpRestFetch {
+  html: string | null;
+  status: number | null;
+}
+
 /** One honest request to the site's public WordPress REST API for the post
- *  matching the page URL. Returns wrapped HTML, or null on any mismatch. */
-export async function fetchWpRestPostHtml(
+ *  matching the page URL. `html` is the wrapped post, or null on any mismatch;
+ *  `status` is the HTTP status (null on network error/timeout) for diagnostics. */
+export async function fetchWpRestPost(
   pageUrl: string,
   timeoutMs: number = RECIPE_FETCH_TIMEOUT_MS,
-): Promise<string | null> {
+): Promise<WpRestFetch> {
   const slug = slugFromUrl(pageUrl);
-  if (!slug) return null;
+  if (!slug) return { html: null, status: null };
   try {
     const origin = new URL(pageUrl).origin;
     const res = await safeFetch(
@@ -474,9 +480,16 @@ export async function fetchWpRestPostHtml(
         headers: { ...RECIPE_PAGE_HEADERS, Accept: "application/json" },
       },
     );
-    if (!res.ok) return null;
-    return wpRestPostToHtml(await res.json(), pageUrl);
+    if (!res.ok) return { html: null, status: res.status };
+    return { html: wpRestPostToHtml(await res.json(), pageUrl), status: res.status };
   } catch {
-    return null;
+    return { html: null, status: null };
   }
+}
+
+export async function fetchWpRestPostHtml(
+  pageUrl: string,
+  timeoutMs: number = RECIPE_FETCH_TIMEOUT_MS,
+): Promise<string | null> {
+  return (await fetchWpRestPost(pageUrl, timeoutMs)).html;
 }
