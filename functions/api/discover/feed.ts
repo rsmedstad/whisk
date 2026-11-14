@@ -5,7 +5,7 @@ import {
   callTextAI,
 } from "../../lib/ai-providers";
 import { parseIngredientLine } from "../../../src/lib/ingredient-parse";
-import { DEFAULT_DISCOVER_CONFIG } from "../../lib/discover-config";
+import { DEFAULT_DISCOVER_CONFIG, migrateDiscoverConfig } from "../../lib/discover-config";
 import {
   classifyRecipe,
   isCollectionTitle,
@@ -29,7 +29,13 @@ const DEFAULT_CONFIG = DEFAULT_DISCOVER_CONFIG;
 
 async function loadConfig(env: Env): Promise<DiscoverConfig> {
   const config = await env.WHISK_KV.get<DiscoverConfig>(CONFIG_KEY, "json");
-  return config ?? DEFAULT_CONFIG;
+  if (!config) return DEFAULT_CONFIG;
+  const migrated = migrateDiscoverConfig(config);
+  if (migrated !== config) {
+    // Persist once so the saved config stops carrying the dead feed URL.
+    await env.WHISK_KV.put(CONFIG_KEY, JSON.stringify(migrated)).catch(() => {});
+  }
+  return migrated;
 }
 
 const BROWSER_HEADERS: Record<string, string> = {
@@ -1827,6 +1833,8 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
     // no file extension, so the <img> and g:image_link fallbacks must not require one.
     const contentHtml = block.match(/<content:encoded(?:\s[^>]*)?>([\s\S]*?)<\/content:encoded>/i)?.[1]
       ?? block.match(/<description(?:\s[^>]*)?>([\s\S]*?)<\/description>/i)?.[1]
+      ?? block.match(/<summary(?:\s[^>]*)?>([\s\S]*?)<\/summary>/i)?.[1]
+      ?? block.match(/<content(?:\s[^>]*)?>([\s\S]*?)<\/content>/i)?.[1]
       ?? "";
     const decodedContent = decodeXml(contentHtml);
     const imageUrl = sanitizeImageUrl(

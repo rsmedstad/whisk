@@ -371,6 +371,63 @@ export async function tryExtractRecipeFromSourceFeed(
   }
 }
 
+/** True when the page's host is a configured source flagged `wpRest`. */
+export function isWpRestHost(pageUrl: string): boolean {
+  try {
+    const host = new URL(pageUrl).hostname.replace(/^www\./, "");
+    return DEFAULT_DISCOVER_CONFIG.sources.some((s) => {
+      if (!s.wpRest) return false;
+      try {
+        return new URL(s.url).hostname.replace(/^www\./, "") === host;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
+/** Parse a WordPress REST `posts?slug=` response. Accepts only when the first
+ *  post's `link` matches the requested page URL; returns HTML shaped like a
+ *  theme page so the existing extractors apply. */
+export function wpRestPostToHtml(json: unknown, pageUrl: string): string | null {
+  if (!Array.isArray(json) || json.length === 0) return null;
+  const post = json[0] as {
+    link?: unknown;
+    title?: { rendered?: unknown };
+    content?: { rendered?: unknown };
+  } | null;
+  if (!post || typeof post.link !== "string") return null;
+  if (normalizeRecipeUrl(post.link) !== normalizeRecipeUrl(pageUrl)) return null;
+  const content = post.content?.rendered;
+  if (typeof content !== "string" || content.length < 50) return null;
+  const title = typeof post.title?.rendered === "string" ? post.title.rendered : "";
+  return `<h1>${title}</h1><div class="entry-content">${content}</div><footer></footer>`;
+}
+
+/** One honest GET to the site's public WordPress REST API for the post behind
+ *  `pageUrl`. Returns theme-like HTML, or null on any mismatch/failure. */
+export async function fetchWpRestPostHtml(
+  pageUrl: string,
+  timeoutMs: number = RECIPE_FETCH_TIMEOUT_MS,
+): Promise<string | null> {
+  try {
+    const u = new URL(pageUrl);
+    const slug = u.pathname.split("/").filter(Boolean).pop();
+    if (!slug || !/^[a-z0-9-_%]+$/i.test(slug)) return null;
+    const apiUrl = `${u.origin}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_fields=link,title,content`;
+    const res = await safeFetch(apiUrl, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { ...RECIPE_PAGE_HEADERS, Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    return wpRestPostToHtml(await res.json(), pageUrl);
+  } catch {
+    return null;
+  }
+}
+
 /** Wrap extracted JSON-LD so the existing HTML extractors can read it. */
 export function jsonLdAsHtml(recipe: Record<string, unknown>): string {
   return `<script type="application/ld+json">${JSON.stringify(recipe)}</script>`;

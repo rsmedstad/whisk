@@ -363,6 +363,7 @@ export interface DiscoverSourceConfig {
   url: string;       // homepage URL to scrape (e.g. "https://cooking.nytimes.com/")
   enabled: boolean;  // whether this source is active
   feedUrl?: string;  // optional RSS/Atom feed URL — when set, the feed is scraped instead of the HTML page (more stable)
+  wpRest?: boolean;  // WordPress site with a public REST API; import may read the post via /wp-json/wp/v2/posts when the page yields no recipe
 }
 
 export interface DiscoverConfig {

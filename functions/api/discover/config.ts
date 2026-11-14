@@ -1,5 +1,5 @@
 import type { Env, DiscoverConfig, DiscoverRefreshStats } from "../../../src/types";
-import { DEFAULT_DISCOVER_CONFIG as DEFAULT_CONFIG } from "../../lib/discover-config";
+import { DEFAULT_DISCOVER_CONFIG as DEFAULT_CONFIG, migrateDiscoverConfig } from "../../lib/discover-config";
 
 const KV_KEY = "discover_config";
 
@@ -10,7 +10,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     env.WHISK_KV.get<DiscoverRefreshStats[]>("discover_refresh_log", "json"),
   ]);
   return Response.json({
-    ...(config ?? DEFAULT_CONFIG),
+    ...(config ? migrateDiscoverConfig(config) : DEFAULT_CONFIG),
     ...(archive?.sourceHealth ? { sourceHealth: archive.sourceHealth } : {}),
     ...(refreshLog && refreshLog.length > 0 ? { refreshLog } : {}),
   });
@@ -20,7 +20,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json()) as Partial<DiscoverConfig>;
 
   // Merge with existing config (or defaults)
-  const existing = await env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json") ?? DEFAULT_CONFIG;
+  const stored = await env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json");
+  const existing = stored ? migrateDiscoverConfig(stored) : DEFAULT_CONFIG;
 
   const updated: DiscoverConfig = {
     sources: body.sources ?? existing.sources,

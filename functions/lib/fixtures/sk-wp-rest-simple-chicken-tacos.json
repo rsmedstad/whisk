@@ -1,0 +1,9 @@
+[
+  {
+    "link": "https://smittenkitchen.com/2026/09/simple-chicken-tacos/",
+    "title": { "rendered": "simple chicken tacos" },
+    "content": {
+      "rendered": "<p>Intro paragraph about weeknight tacos that is long enough to count as content.</p><div class=\"jetpack-recipe hrecipe\" itemscope itemtype=\"https://schema.org/Recipe\"><h3 class=\"jetpack-recipe-title fn\" itemprop=\"name\">Simple Chicken Tacos</h3><ul class=\"jetpack-recipe-ingredients\"><li itemprop=\"recipeIngredient\">1 1/2 pounds chicken thighs</li><li itemprop=\"recipeIngredient\">2 tablespoons olive oil</li><li itemprop=\"recipeIngredient\">1 teaspoon cumin</li></ul><div class=\"jetpack-recipe-directions e-instructions\" itemprop=\"recipeInstructions\"><p>Heat the oil in a large skillet over medium-high heat.</p><p>Season the chicken and cook until browned, about 6 minutes per side.</p><p>Shred the chicken and serve warm in tortillas.</p></div></div>"
+    }
+  }
+]

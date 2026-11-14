@@ -7,6 +7,8 @@ import {
 import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
 import {
   RECIPE_FETCH_TIMEOUT_MS,
+  fetchWpRestPostHtml,
+  isWpRestHost,
   jsonLdAsHtml,
   resolveRecipeSource,
   sourceFetchResponse,
@@ -194,6 +196,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let html: string | null = null;
     let failFastCode: SourceFetchCode | null = null;
     let fromClientJsonLd = false;
+    let triedWpRest = false;
 
     if (jsonLd !== undefined && jsonLd !== null) {
       const validated = validateClientJsonLd(jsonLd, url);
@@ -214,6 +217,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ? (resolved.html.length > MAX_HTML_CHARS ? resolved.html.slice(0, MAX_HTML_CHARS) : resolved.html)
         : null;
       failFastCode = resolved.failFastCode;
+
+      // WordPress hosts flagged `wpRest` (Smitten Kitchen): if the page fetch
+      // was empty/blocked/timed out, try the public REST post once before
+      // giving up. Single honest request, no retries.
+      if (failFastCode && isWpRestHost(url)) {
+        const restHtml = await fetchWpRestPostHtml(url, RECIPE_FETCH_TIMEOUT_MS);
+        if (restHtml) {
+          html = restHtml;
+          failFastCode = null;
+          triedWpRest = true;
+        }
+      }
     }
 
     // BR/Apify are for JS-rendered pages we were allowed to read — not for
@@ -236,22 +251,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return sourceFetchResponse("source_empty", url);
     }
 
-    // Strategy 1: JSON-LD (most reliable when present)
-    let recipeData = extractJsonLd(html);
+    // Strategies 1-4: JSON-LD, Microdata / Jetpack hrecipe, recipe plugin
+    // HTML classes, plain-text blog recipe.
+    let recipeData = runHtmlStrategies(html);
 
-    // Strategy 2: Microdata / Jetpack hrecipe (common on WordPress)
-    if (!recipeData) {
-      recipeData = extractMicrodata(html);
-    }
-
-    // Strategy 3: WP Recipe Maker / Tasty Recipes / recipe plugin HTML classes
-    if (!recipeData) {
-      recipeData = extractRecipePluginHtml(html);
-    }
-
-    // Strategy 4: Plain text blog recipe (e.g. smittenkitchen)
-    if (!recipeData) {
-      recipeData = extractBlogRecipe(html);
+    // Page was readable but held no recipe markup: for `wpRest` hosts, the
+    // public REST post often carries the full rendered recipe. One request.
+    if (!recipeData && !fromClientJsonLd && !triedWpRest && isWpRestHost(url)) {
+      triedWpRest = true;
+      const restHtml = await fetchWpRestPostHtml(url, RECIPE_FETCH_TIMEOUT_MS);
+      if (restHtml) {
+        recipeData = runHtmlStrategies(restHtml);
+        if (recipeData) html = restHtml;
+      }
     }
 
     // Strategy 5: Apify universal recipe scraper (last resort — never after a block)
@@ -751,9 +763,35 @@ function findRecipeInLd(data: unknown): unknown | null {
   return null;
 }
 
+/** Strategies 1-4 in order; first hit wins. */
+export function runHtmlStrategies(html: string): RecipeData | null {
+  return (
+    extractJsonLd(html) ??
+    extractMicrodata(html) ??
+    extractRecipePluginHtml(html) ??
+    extractBlogRecipe(html)
+  );
+}
+
+/** Jetpack recipe directions are `<p>`/`<li>` blocks inside one
+ *  `jetpack-recipe-directions` element; one step per block. */
+export function splitJetpackDirections(block: string): string[] {
+  const m = block.match(
+    /class="[^"]*jetpack-recipe-directions[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+  );
+  const inner = m?.[1];
+  if (!inner) return [];
+  const pieces = /<li[\s>]/i.test(inner)
+    ? [...inner.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)].map((x) => x[1] ?? "")
+    : /<p[\s>]/i.test(inner)
+      ? [...inner.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map((x) => x[1] ?? "")
+      : inner.split(/<br\s*\/?>/gi);
+  return pieces.map((p) => stripHtml(p).trim()).filter((p) => p.length > 0);
+}
+
 // ── Strategy 2: Microdata / hrecipe ─────────────────────────
 
-function extractMicrodata(html: string): RecipeData | null {
+export function extractMicrodata(html: string): RecipeData | null {
   // Find the Recipe microdata block (itemscope itemtype="schema.org/Recipe")
   // Use multiple end anchors for different WordPress themes
   const recipeBlockMatch = html.match(
@@ -806,6 +844,14 @@ function extractMicrodata(html: string): RecipeData | null {
   const instructions: unknown[] = [];
   const stepTexts = extractAllItemprop(block, "recipeInstructions")
     .concat(extractAllItemprop(block, "step"));
+
+  // extractAllItemprop stops at the first </p>, so a Jetpack directions div
+  // holding several <p> blocks collapses to one step. Prefer the block split.
+  const jetpackSteps = splitJetpackDirections(block);
+  if (jetpackSteps.length > stepTexts.length) {
+    stepTexts.length = 0;
+    stepTexts.push(...jetpackSteps);
+  }
 
   if (stepTexts.length > 0) {
     instructions.push(...stepTexts);
