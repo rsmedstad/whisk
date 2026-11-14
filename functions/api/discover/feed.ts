@@ -1764,6 +1764,7 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
   const domain = new URL(source.url).hostname.replace(/^www\./, "");
 
   let xml: string | null = null;
+  let blockedStatus: number | null = null;
   try {
     const res = await fetch(feedUrl, {
       signal: AbortSignal.timeout(12000),
@@ -1771,10 +1772,17 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
     });
     const body = await res.text();
     if (res.ok && body.length > 200) xml = body;
+    else if (res.status === 401 || res.status === 403 || res.status === 429) blockedStatus = res.status;
   } catch {
     // fall through to Browser Rendering
   }
-  // Some hosts bot-block plain fetches but allow headless — try BR as a fallback
+  // An explicit 401/403/429 is a block, not a rendering problem. Browser
+  // Rendering is always identified as a bot, so do not escalate after one.
+  if (!xml && blockedStatus !== null) {
+    brWarnings.push(`${source.label} blocked the feed request (HTTP ${blockedStatus}).`);
+    return [];
+  }
+  // Other failures (5xx, empty, network): some hosts still allow headless — try BR
   if (!xml) xml = await fetchWithBrowserRendering(feedUrl, env);
   if (!xml) {
     brWarnings.push(`Couldn't load the feed for ${source.label}.`);
