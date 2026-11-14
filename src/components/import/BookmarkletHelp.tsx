@@ -36,10 +36,15 @@ export function BookmarkletHelp() {
           </p>
         </div>
 
+        {/* React 19 rewrites javascript: hrefs into a throwing stub, so set the
+            attribute on the DOM node directly. Without this, dragging the
+            button installs a broken bookmark. */}
         <a
-          href={href}
+          ref={(el) => {
+            if (el) el.setAttribute("href", href);
+          }}
           onClick={(e) => e.preventDefault()}
-          className="flex items-center justify-center gap-2 rounded-[var(--wk-radius-btn)] bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+          className="cursor-pointer flex items-center justify-center gap-2 rounded-[var(--wk-radius-btn)] bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
         >
           Save to Whisk
         </a>
