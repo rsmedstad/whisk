@@ -5,7 +5,7 @@ import {
   callTextAI,
 } from "../../lib/ai-providers";
 import { parseIngredientLine } from "../../../src/lib/ingredient-parse";
-import { DEFAULT_DISCOVER_CONFIG } from "../../lib/discover-config";
+import { DEFAULT_DISCOVER_CONFIG, migrateDiscoverConfig } from "../../lib/discover-config";
 import {
   classifyRecipe,
   isCollectionTitle,
@@ -29,7 +29,10 @@ const DEFAULT_CONFIG = DEFAULT_DISCOVER_CONFIG;
 
 async function loadConfig(env: Env): Promise<DiscoverConfig> {
   const config = await env.WHISK_KV.get<DiscoverConfig>(CONFIG_KEY, "json");
-  return config ?? DEFAULT_CONFIG;
+  if (!config) return DEFAULT_CONFIG;
+  const migrated = migrateDiscoverConfig(config);
+  if (migrated.changed) await env.WHISK_KV.put(CONFIG_KEY, JSON.stringify(migrated.config)).catch(() => {});
+  return migrated.config;
 }
 
 const BROWSER_HEADERS: Record<string, string> = {

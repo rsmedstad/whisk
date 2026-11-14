@@ -1,5 +1,5 @@
 import type { Env, DiscoverConfig, DiscoverRefreshStats } from "../../../src/types";
-import { DEFAULT_DISCOVER_CONFIG as DEFAULT_CONFIG } from "../../lib/discover-config";
+import { DEFAULT_DISCOVER_CONFIG as DEFAULT_CONFIG, migrateDiscoverConfig } from "../../lib/discover-config";
 
 const KV_KEY = "discover_config";
 
@@ -9,8 +9,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     env.WHISK_KV.get<{ sourceHealth?: DiscoverConfig["sourceHealth"] }>("discover_archive", "json"),
     env.WHISK_KV.get<DiscoverRefreshStats[]>("discover_refresh_log", "json"),
   ]);
+  let current: DiscoverConfig = config ?? DEFAULT_CONFIG;
+  if (config) {
+    const migrated = migrateDiscoverConfig(config);
+    current = migrated.config;
+    if (migrated.changed) await env.WHISK_KV.put(KV_KEY, JSON.stringify(current)).catch(() => {});
+  }
   return Response.json({
-    ...(config ?? DEFAULT_CONFIG),
+    ...current,
     ...(archive?.sourceHealth ? { sourceHealth: archive.sourceHealth } : {}),
     ...(refreshLog && refreshLog.length > 0 ? { refreshLog } : {}),
   });
@@ -20,7 +26,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json()) as Partial<DiscoverConfig>;
 
   // Merge with existing config (or defaults)
-  const existing = await env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json") ?? DEFAULT_CONFIG;
+  const stored = await env.WHISK_KV.get<DiscoverConfig>(KV_KEY, "json");
+  const existing = stored ? migrateDiscoverConfig(stored).config : DEFAULT_CONFIG;
 
   const updated: DiscoverConfig = {
     sources: body.sources ?? existing.sources,
@@ -29,6 +36,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
     itemLifetimeDays: body.itemLifetimeDays ?? existing.itemLifetimeDays,
     refreshIntervalDays: body.refreshIntervalDays ?? existing.refreshIntervalDays,
   };
+
+  updated.sources = migrateDiscoverConfig(updated).config.sources;
 
   // Cap at 10 sources
   if (updated.sources.length > 10) {
