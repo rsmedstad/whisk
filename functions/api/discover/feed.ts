@@ -5,7 +5,7 @@ import {
   callTextAI,
 } from "../../lib/ai-providers";
 import { parseIngredientLine } from "../../../src/lib/ingredient-parse";
-import { DEFAULT_DISCOVER_CONFIG } from "../../lib/discover-config";
+import { DEFAULT_DISCOVER_CONFIG, migrateDiscoverConfig } from "../../lib/discover-config";
 import {
   classifyRecipe,
   isCollectionTitle,
@@ -29,7 +29,10 @@ const DEFAULT_CONFIG = DEFAULT_DISCOVER_CONFIG;
 
 async function loadConfig(env: Env): Promise<DiscoverConfig> {
   const config = await env.WHISK_KV.get<DiscoverConfig>(CONFIG_KEY, "json");
-  return config ?? DEFAULT_CONFIG;
+  if (!config) return DEFAULT_CONFIG;
+  const migrated = migrateDiscoverConfig(config);
+  if (migrated.changed) await env.WHISK_KV.put(CONFIG_KEY, JSON.stringify(migrated.config)).catch(() => {});
+  return migrated.config;
 }
 
 const BROWSER_HEADERS: Record<string, string> = {
@@ -1761,6 +1764,7 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
   const domain = new URL(source.url).hostname.replace(/^www\./, "");
 
   let xml: string | null = null;
+  let blockedStatus: number | null = null;
   try {
     const res = await fetch(feedUrl, {
       signal: AbortSignal.timeout(12000),
@@ -1768,10 +1772,17 @@ async function scrapeRssFeed(source: DiscoverSourceConfig, env: Env): Promise<Fe
     });
     const body = await res.text();
     if (res.ok && body.length > 200) xml = body;
+    else if (res.status === 401 || res.status === 403 || res.status === 429) blockedStatus = res.status;
   } catch {
     // fall through to Browser Rendering
   }
-  // Some hosts bot-block plain fetches but allow headless — try BR as a fallback
+  // An explicit 401/403/429 is a block, not a rendering problem. Browser
+  // Rendering is always identified as a bot, so do not escalate after one.
+  if (!xml && blockedStatus !== null) {
+    brWarnings.push(`${source.label} blocked the feed request (HTTP ${blockedStatus}).`);
+    return [];
+  }
+  // Other failures (5xx, empty, network): some hosts still allow headless — try BR
   if (!xml) xml = await fetchWithBrowserRendering(feedUrl, env);
   if (!xml) {
     brWarnings.push(`Couldn't load the feed for ${source.label}.`);

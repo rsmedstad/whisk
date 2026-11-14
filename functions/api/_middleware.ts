@@ -23,6 +23,7 @@ const DEMO_GUEST_POST_ALLOWED = [
   "/api/identify/",
   "/api/shopping/scan",
   "/api/import/url", // scrapes only, doesn't save
+  "/api/import/text", // parses pasted text only, doesn't save
 ];
 
 // Per-IP rate limit for demo-guest ephemeral POSTs (AI + scraping)

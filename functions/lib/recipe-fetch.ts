@@ -411,3 +411,85 @@ export async function resolveRecipeSource(
   const failFastCode = hasRecipeJsonLd(html ?? "") ? null : classifyPageFetch(page);
   return { html, page, failFastCode, fromFeed };
 }
+
+/** True for hosts flagged `wpRest` in the Discover source list. */
+export function isWpRestHost(pageUrl: string): boolean {
+  try {
+    const host = new URL(pageUrl).hostname.replace(/^www\./, "");
+    return DEFAULT_DISCOVER_CONFIG.sources.some((s) => {
+      if (!s.wpRest) return false;
+      try {
+        return new URL(s.url).hostname.replace(/^www\./, "") === host;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
+/** Last non-empty path segment of a URL, or null. */
+export function slugFromUrl(pageUrl: string): string | null {
+  try {
+    const parts = new URL(pageUrl).pathname.split("/").filter(Boolean);
+    const slug = parts[parts.length - 1];
+    return slug && /^[A-Za-z0-9._~%-]+$/.test(slug) ? slug : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Wrap a WP REST post so the existing HTML extractors see familiar markup. */
+export function wpRestPostToHtml(
+  posts: unknown,
+  pageUrl: string,
+): string | null {
+  if (!Array.isArray(posts)) return null;
+  const post = posts[0] as
+    | { link?: unknown; title?: { rendered?: unknown }; content?: { rendered?: unknown } }
+    | undefined;
+  if (!post || typeof post.link !== "string") return null;
+  if (normalizeRecipeUrl(post.link) !== normalizeRecipeUrl(pageUrl)) return null;
+  const content = post.content?.rendered;
+  if (typeof content !== "string" || content.length === 0) return null;
+  const title = typeof post.title?.rendered === "string" ? post.title.rendered : "";
+  return `<h1>${title}</h1><div class="entry-content">${content}</div><footer></footer>`;
+}
+
+export interface WpRestFetch {
+  html: string | null;
+  status: number | null;
+}
+
+/** One honest request to the site's public WordPress REST API for the post
+ *  matching the page URL. `html` is the wrapped post, or null on any mismatch;
+ *  `status` is the HTTP status (null on network error/timeout) for diagnostics. */
+export async function fetchWpRestPost(
+  pageUrl: string,
+  timeoutMs: number = RECIPE_FETCH_TIMEOUT_MS,
+): Promise<WpRestFetch> {
+  const slug = slugFromUrl(pageUrl);
+  if (!slug) return { html: null, status: null };
+  try {
+    const origin = new URL(pageUrl).origin;
+    const res = await safeFetch(
+      `${origin}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_fields=link,title,content`,
+      {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { ...RECIPE_PAGE_HEADERS, Accept: "application/json" },
+      },
+    );
+    if (!res.ok) return { html: null, status: res.status };
+    return { html: wpRestPostToHtml(await res.json(), pageUrl), status: res.status };
+  } catch {
+    return { html: null, status: null };
+  }
+}
+
+export async function fetchWpRestPostHtml(
+  pageUrl: string,
+  timeoutMs: number = RECIPE_FETCH_TIMEOUT_MS,
+): Promise<string | null> {
+  return (await fetchWpRestPost(pageUrl, timeoutMs)).html;
+}

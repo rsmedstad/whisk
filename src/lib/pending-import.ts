@@ -145,3 +145,7 @@ export function openSourcePage(url: string, platform: SavePlatform = detectSaveP
   const opened = window.open(url, "_blank", "noopener,noreferrer");
   if (!opened) window.location.assign(url);
 }
+
+export function blockedSheetPasteCopy(): string {
+  return "No bookmark set up? Copy the recipe text from the page and paste it here.";
+}

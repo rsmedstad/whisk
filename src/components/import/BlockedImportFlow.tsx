@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import type { PendingImport, RecipeIndexEntry } from "../../types";
+import type { PendingImport, Recipe, RecipeIndexEntry } from "../../types";
 import {
   BLOCKED_SHEET_FIXTURE,
   clearPendingImport,
@@ -25,10 +25,11 @@ export function useBlockedImport(): BlockedImportContextValue {
 
 interface BlockedImportProviderProps {
   recipes: RecipeIndexEntry[];
+  onCreateRecipe?: (recipe: Omit<Recipe, "id" | "createdAt" | "updatedAt">) => Promise<Recipe>;
   children: React.ReactNode;
 }
 
-export function BlockedImportProvider({ recipes, children }: BlockedImportProviderProps) {
+export function BlockedImportProvider({ recipes, onCreateRecipe, children }: BlockedImportProviderProps) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [sheetItem, setSheetItem] = useState<PendingImport | null>(null);
@@ -105,7 +106,7 @@ export function BlockedImportProvider({ recipes, children }: BlockedImportProvid
         />
       )}
       {children}
-      {sheetItem && <BlockedSourceSheet item={sheetItem} onClose={closeSheet} />}
+      {sheetItem && <BlockedSourceSheet item={sheetItem} onClose={closeSheet} onCreateRecipe={onCreateRecipe} />}
     </BlockedImportContext.Provider>
   );
 }

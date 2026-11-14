@@ -38,6 +38,7 @@ const DEMO_PASSTHROUGH_POST = [
   "/shopping/scan",
   "/shopping/classify",
   "/import/url",
+  "/import/text",
   "/auth", // admin login modal
 ];
 

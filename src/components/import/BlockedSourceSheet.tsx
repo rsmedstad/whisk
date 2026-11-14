@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { PendingImport } from "../../types";
+import type { Ingredient, PendingImport, Recipe, Step } from "../../types";
+import { api } from "../../lib/api";
 import {
   blockedSheetFrameLimitCopy,
+  blockedSheetPasteCopy,
+  clearPendingImport,
   blockedSheetNextStepCopy,
   openSourcePage,
   setPendingImport,
@@ -15,15 +18,38 @@ import { WhiskLogo, XMark } from "../ui/Icon";
 interface BlockedSourceSheetProps {
   item: PendingImport;
   onClose: () => void;
+  onCreateRecipe?: (recipe: Omit<Recipe, "id" | "createdAt" | "updatedAt">) => Promise<Recipe>;
 }
 
-export function BlockedSourceSheet({ item, onClose }: BlockedSourceSheetProps) {
+interface TextRecipe {
+  title: string;
+  description?: string;
+  ingredients: Ingredient[];
+  steps: Step[];
+  prepTime?: number;
+  cookTime?: number;
+  servings?: number;
+}
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
+
+export function BlockedSourceSheet({ item, onClose, onCreateRecipe }: BlockedSourceSheetProps) {
   const navigate = useNavigate();
   const [platform, setPlatform] = useState(() =>
     typeof navigator === "undefined" ? "desktop" : detectSavePlatform(),
   );
   const [hasBookmarklet, setHasBookmarklet] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasted, setPasted] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [pasteError, setPasteError] = useState<string | null>(null);
 
   useEffect(() => {
     setPlatform(detectSavePlatform());
@@ -41,6 +67,35 @@ export function BlockedSourceSheet({ item, onClose }: BlockedSourceSheetProps) {
       sourceLabel,
     });
     openSourcePage(item.url, platform);
+  };
+
+  const importPasted = async () => {
+    if (!onCreateRecipe || importing) return;
+    setImporting(true);
+    setPasteError(null);
+    try {
+      const parsed = await api.post<TextRecipe>("/import/text", { text: pasted }, { timeoutMs: 45_000 });
+      if (!parsed?.title) throw new Error("Couldn't find a recipe in that text.");
+      const created = await onCreateRecipe({
+        title: parsed.title,
+        description: parsed.description,
+        ingredients: parsed.ingredients ?? [],
+        steps: parsed.steps ?? [],
+        favorite: false,
+        photos: [],
+        tags: [],
+        prepTime: parsed.prepTime,
+        cookTime: parsed.cookTime,
+        servings: parsed.servings,
+        source: { type: "url", url: item.url, domain: hostOf(item.url) },
+      });
+      clearPendingImport(item.url);
+      onClose();
+      navigate(`/recipes/${created.id}`);
+    } catch (err) {
+      setPasteError(err instanceof Error && err.message ? err.message : "Could not import that text.");
+      setImporting(false);
+    }
   };
 
   return (
@@ -109,6 +164,36 @@ export function BlockedSourceSheet({ item, onClose }: BlockedSourceSheetProps) {
           >
             Set up one-tap Save to Whisk
           </button>
+
+          {onCreateRecipe && (
+            <div className="space-y-2">
+              {!pasteOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setPasteOpen(true)}
+                  className="text-xs font-medium text-orange-600 dark:text-orange-400 underline"
+                >
+                  Paste recipe text instead
+                </button>
+              ) : (
+                <>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">{blockedSheetPasteCopy()}</p>
+                  <textarea
+                    value={pasted}
+                    onChange={(e) => setPasted(e.target.value)}
+                    rows={6}
+                    maxLength={12000}
+                    placeholder="Paste the ingredients and steps here"
+                    className="w-full rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 p-2 text-sm dark:text-stone-100"
+                  />
+                  {pasteError && <p className="text-xs text-red-600 dark:text-red-400">{pasteError}</p>}
+                  <Button fullWidth variant="secondary" disabled={importing || pasted.trim().length < 40} onClick={importPasted}>
+                    {importing ? "Importing…" : "Import"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col gap-2 pt-1">
             <Button fullWidth onClick={openSource}>

@@ -7,6 +7,9 @@ import {
 import { isBlockedHost, isSafeFetchUrl } from "../../lib/ssrf";
 import {
   RECIPE_FETCH_TIMEOUT_MS,
+  fetchWpRestPost,
+  fetchWpRestPostHtml,
+  isWpRestHost,
   jsonLdAsHtml,
   resolveRecipeSource,
   sourceFetchResponse,
@@ -194,6 +197,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let html: string | null = null;
     let failFastCode: SourceFetchCode | null = null;
     let fromClientJsonLd = false;
+    let wpRestTried = false;
+    let diag = "";
+    let fromWpRest = false;
 
     if (jsonLd !== undefined && jsonLd !== null) {
       const validated = validateClientJsonLd(jsonLd, url);
@@ -214,11 +220,26 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ? (resolved.html.length > MAX_HTML_CHARS ? resolved.html.slice(0, MAX_HTML_CHARS) : resolved.html)
         : null;
       failFastCode = resolved.failFastCode;
+      diag = `page HTTP ${resolved.page.status ?? (resolved.page.timedOut ? "timeout" : "none")}`;
+
+      // WordPress sites flagged `wpRest`: if the page was blocked/empty/timed
+      // out, one public REST request may still have the post. Single try.
+      if (failFastCode && isWpRestHost(url)) {
+        wpRestTried = true;
+        const rest = await fetchWpRestPost(url, RECIPE_FETCH_TIMEOUT_MS);
+        diag += `, REST HTTP ${rest.status ?? "none"}`;
+        const restHtml = rest.html;
+        if (restHtml) {
+          html = restHtml.length > MAX_HTML_CHARS ? restHtml.slice(0, MAX_HTML_CHARS) : restHtml;
+          failFastCode = null;
+          fromWpRest = true;
+        }
+      }
     }
 
     // BR/Apify are for JS-rendered pages we were allowed to read — not for
     // walking a PerimeterX/WAF challenge, and not when the client already sent JSON-LD.
-    const allowEscalation = !fromClientJsonLd && failFastCode === null;
+    const allowEscalation = !fromClientJsonLd && failFastCode === null && !fromWpRest;
 
     // Cap total Browser Rendering invocations per request. Each BR call takes
     // ~25s, so we'd rather return partial data than fire three back-to-back.
@@ -226,7 +247,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let brAttempts = 0;
 
     if (!fromClientJsonLd && failFastCode) {
-      return sourceFetchResponse(failFastCode, url);
+      return sourceFetchResponse(failFastCode, url, wpRestTried ? diag : undefined);
     }
 
     if (!fromClientJsonLd && (!html || html.length < 200)) {
@@ -236,22 +257,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return sourceFetchResponse("source_empty", url);
     }
 
-    // Strategy 1: JSON-LD (most reliable when present)
-    let recipeData = extractJsonLd(html);
+    // Strategies 1-4: JSON-LD, microdata / Jetpack hrecipe, recipe plugin
+    // HTML, plain text blog recipe (e.g. smittenkitchen)
+    const runStrategies = (h: string): RecipeData | null =>
+      extractJsonLd(h) ?? extractMicrodata(h) ?? extractRecipePluginHtml(h) ?? extractBlogRecipe(h);
+    let recipeData = runStrategies(html);
 
-    // Strategy 2: Microdata / Jetpack hrecipe (common on WordPress)
-    if (!recipeData) {
-      recipeData = extractMicrodata(html);
-    }
-
-    // Strategy 3: WP Recipe Maker / Tasty Recipes / recipe plugin HTML classes
-    if (!recipeData) {
-      recipeData = extractRecipePluginHtml(html);
-    }
-
-    // Strategy 4: Plain text blog recipe (e.g. smittenkitchen)
-    if (!recipeData) {
-      recipeData = extractBlogRecipe(html);
+    // WordPress REST fallback: the page was readable but had no usable markup.
+    if (!recipeData && !fromClientJsonLd && !fromWpRest && !wpRestTried && isWpRestHost(url)) {
+      wpRestTried = true;
+      const restHtml = await fetchWpRestPostHtml(url, RECIPE_FETCH_TIMEOUT_MS);
+      if (restHtml) {
+        const restCapped = restHtml.length > MAX_HTML_CHARS ? restHtml.slice(0, MAX_HTML_CHARS) : restHtml;
+        recipeData = runStrategies(restCapped);
+        if (!recipeData) {
+          // Old plain-text posts: build a recipe from the stripped text with AI.
+          const title = stripHtml(restCapped.match(/<h1>([\s\S]*?)<\/h1>/i)?.[1] ?? "");
+          const ai = title ? await tryAIStepExtraction(restCapped, title, env) : null;
+          if (ai && ai.ingredients.length >= 3 && ai.steps.length >= 2) {
+            recipeData = {
+              name: title,
+              recipeIngredient: ai.ingredients,
+              recipeInstructions: ai.steps.map((s) => s.text),
+            };
+          }
+        }
+        if (recipeData) {
+          html = restCapped;
+          fromWpRest = true;
+        }
+      }
     }
 
     // Strategy 5: Apify universal recipe scraper (last resort — never after a block)
@@ -753,7 +788,7 @@ function findRecipeInLd(data: unknown): unknown | null {
 
 // ── Strategy 2: Microdata / hrecipe ─────────────────────────
 
-function extractMicrodata(html: string): RecipeData | null {
+export function extractMicrodata(html: string): RecipeData | null {
   // Find the Recipe microdata block (itemscope itemtype="schema.org/Recipe")
   // Use multiple end anchors for different WordPress themes
   const recipeBlockMatch = html.match(
@@ -807,8 +842,12 @@ function extractMicrodata(html: string): RecipeData | null {
   const stepTexts = extractAllItemprop(block, "recipeInstructions")
     .concat(extractAllItemprop(block, "step"));
 
+  const jetpackSteps = stepTexts.length === 0 ? extractJetpackDirections(block) : [];
+
   if (stepTexts.length > 0) {
     instructions.push(...stepTexts);
+  } else if (jetpackSteps.length > 0) {
+    instructions.push(...jetpackSteps);
   } else {
     // Try extracting from instruction/direction sections
     const instructionBlock = extractTextBlock(block, "instruction|direction|step");
@@ -866,6 +905,28 @@ function extractMicrodata(html: string): RecipeData | null {
     totalTime: totalTime ?? undefined,
     recipeYield: recipeYield ? [recipeYield] : undefined,
   };
+}
+
+/**
+ * Jetpack recipe directions are a run of <p> blocks inside
+ * `jetpack-recipe-directions` (the first <p> is often unopened). Split on
+ * paragraph/list boundaries and stop at a "Notes" heading.
+ */
+export function extractJetpackDirections(block: string): string[] {
+  const start = block.search(/class="[^"]*jetpack-recipe-directions[^"]*"[^>]*>/i);
+  if (start === -1) return [];
+  const open = block.slice(start).match(/^[^>]*>/)![0].length;
+  const afterOpen = block.slice(start + open);
+  const rest = afterOpen.split(/<\/div>/i)[0] ?? afterOpen;
+  const parts = rest.split(/<\/p>|<p[^>]*>|<\/li>|<li[^>]*>|<br\s*\/?>\s*<br\s*\/?>/i);
+  const steps: string[] = [];
+  for (const part of parts) {
+    const text = stripHtml(part);
+    if (!text) continue;
+    if (/^(?:notes?|note|tips?)\s*:?$/i.test(text)) break;
+    if (text.length > 10) steps.push(text);
+  }
+  return steps;
 }
 
 function extractItemprop(html: string, prop: string): string | null {
