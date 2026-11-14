@@ -33,6 +33,12 @@ Tier: standard. Branch: claude/kitchn-smitten-kitchen-sources-abys10, from main 
 - Not worked around: no UA spoofing, proxies or Browser Rendering after a block (AGENTS.md crawl rules).
 - Open question: the Discover atom feed is likely blocked from Cloudflare the same way (not verifiable without a refresh run on the preview).
 
+## Headless-browser check on the isolated demo preview
+- Blocked sheet opens with the paste link; textarea enables Import at >= 40 chars; Import POSTs /api/import/text (503 "No AI provider configured" on the demo, shown in the sheet).
+- Bug found and fixed: the Settings "Save to Whisk" drag link was a `javascript:` href that React 19 rewrites into a throwing stub, so dragging it installed a broken bookmark (the Copy button was unaffected). The href is now set on the DOM node (BookmarkletHelp.tsx).
+- Bookmarklet end to end: ran the real bookmarklet code on a Kitchn-like JSON-LD FIXTURE (tests/fixtures/kitchn-like-graph.json) served for a thekitchn.com URL; it opened the demo and saved a recipe with 5 ingredients and 2 steps. Not a real Kitchn page.
+- Discover feed: no Browser Rendering after a 401/403/429 on a feed; a "blocked the feed request (HTTP n)" warning instead.
+
 ## Left / not verified
 - AI path for plain-text posts not run live (no provider key here). Unit-level only via the shared `tryAIStepExtraction`.
 - No live Discover refresh run (needs KV and deploy); the feed URL and migration are unit-tested, and the Atom URL returned 200 / 71 KB from curl.
