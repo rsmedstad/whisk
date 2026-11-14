@@ -1,4 +1,4 @@
-# Report: whisk-recipe-import, Part 1 (Smitten Kitchen reliability)
+# Report: whisk-recipe-import (Part 1 Smitten Kitchen, Part 2 Kitchn paste fallback)
 
 Tier: standard. Branch: claude/kitchn-smitten-kitchen-sources-abys10, from main @ 03b4e36.
 
@@ -21,6 +21,13 @@ Tier: standard. Branch: claude/kitchn-smitten-kitchen-sources-abys10, from main 
   - 2013 green-bean-casserole: 422 `source_empty` in ~0.7 s (no AI key in this environment, so the AI path was not exercised live)
   - The Kitchn x3: 422 `source_blocked` in 170-460 ms, no BR/Apify.
 
+## Part 2 (same branch / PR #160: the session's branch rule allowed only one branch)
+- New `POST /api/import/text` (functions/api/import/text.ts, helpers in functions/lib/recipe-text.ts): behind the normal auth middleware, uses the configured chat provider, wraps the text with `wrapUntrusted("PAGE_TEXT")`, no page fetch. Output is validated (title, >= 2 ingredients, >= 1 step) or `422`; no provider is `503`.
+- BlockedSourceSheet: "Paste recipe text instead" link, textarea, Import button, and one line: "No bookmark set up? Copy the recipe text from the page and paste it here." The recipe is saved with the blocked URL as `source.url`, then opens. `BlockedImportProvider` now takes `onCreateRecipe` (wired in App.tsx).
+- Covers The Kitchn, old plain-text Smitten Kitchen posts and any other blocked site.
+- Server import for The Kitchn is unchanged: still `422 source_blocked`, no Browser Rendering / Apify / proxy.
+- Tests: tests/recipe-text.test.ts (parse, reject, clean, copy). Totals: 239 pass, 0 fail; tsc and build clean.
+
 ## Left / not verified
 - AI path for plain-text posts not run live (no provider key here). Unit-level only via the shared `tryAIStepExtraction`.
 - No live Discover refresh run (needs KV and deploy); the feed URL and migration are unit-tested, and the Atom URL returned 200 / 71 KB from curl.
@@ -28,7 +35,8 @@ Tier: standard. Branch: claude/kitchn-smitten-kitchen-sources-abys10, from main 
 
 ## Blockers
 - GitHub MCP failed to connect in this session, so no PR was opened or preview verified from here.
-- Part 2 (Kitchn bookmarklet check on a real browser, "Paste recipe text" in BlockedSourceSheet) not started: it requires Part 1 on preview, a real-browser pass on Kitchn pages (Kitchn blocks this environment), and Ryan seeing the preview first.
+- NOT verified: bookmarklet / iOS Shortcut end to end on a real Kitchn page. The Kitchn blocks this environment and challenge evasion is out of bounds, so this must be done by Ryan in his own browser on the preview. Only the fixture-based test (kitchn-like JSON-LD slims under BOOKMARKLET_HASH_MAX 16000) covers it. Also unverified: the paste import against a real AI provider (no key here), and the sheet UI in a browser.
+- Merge/deploy held: acceptance needs Ryan to see the preview.
 
 ## Follow-ups
 - Part 2 as a second PR once Ryan has seen the Part 1 preview.

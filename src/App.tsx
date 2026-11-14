@@ -241,7 +241,7 @@ function AppShell({
         />
       )}
 
-      <BlockedImportProvider recipes={recipes.recipes}>
+      <BlockedImportProvider recipes={recipes.recipes} onCreateRecipe={recipes.createRecipe}>
       <main>
       <Suspense fallback={<RouteSkeleton />}>
         <Routes>
