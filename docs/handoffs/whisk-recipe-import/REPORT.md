@@ -28,6 +28,11 @@ Tier: standard. Branch: claude/kitchn-smitten-kitchen-sources-abys10, from main 
 - Server import for The Kitchn is unchanged: still `422 source_blocked`, no Browser Rendering / Apify / proxy.
 - Tests: tests/recipe-text.test.ts (parse, reject, clean, copy). Totals: 239 pass, 0 fail; tsc and build clean.
 
+## Finding on the demo preview (Cloudflare edge)
+- From Cloudflare's network, smittenkitchen.com answers 403 to both the page fetch and the WP REST request (error detail: "page HTTP 403, REST HTTP 403"). The import therefore returns `422 source_blocked` and the blocked sheet opens, with the bookmarklet / paste fallback. The same URL imports fine from a non-Cloudflare IP (local harness), so the Part 1 import gains do not apply to the deployed app while this block stands.
+- Not worked around: no UA spoofing, proxies or Browser Rendering after a block (AGENTS.md crawl rules).
+- Open question: the Discover atom feed is likely blocked from Cloudflare the same way (not verifiable without a refresh run on the preview).
+
 ## Left / not verified
 - AI path for plain-text posts not run live (no provider key here). Unit-level only via the shared `tryAIStepExtraction`.
 - No live Discover refresh run (needs KV and deploy); the feed URL and migration are unit-tested, and the Atom URL returned 200 / 71 KB from curl.
