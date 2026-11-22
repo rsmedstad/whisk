@@ -185,6 +185,20 @@ Share your app URL and password with family members. Each person picks their own
 
 ---
 
+## Optional: MCP Server
+
+Whisk exposes a Model Context Protocol endpoint at `/mcp` (JSON-RPC over Streamable HTTP) so an AI assistant can read and edit your recipe book. Set a `WHISK_MCP_TOKEN` secret in Cloudflare and send it as `Authorization: Bearer <token>`. The endpoint stays closed when the token is unset.
+
+| Group | Tools |
+|---|---|
+| Read | `search_recipes`, `get_recipe`, `list_favorites`, `list_want_to_make`, `list_meal_plan`, `list_shopping`, `list_tags`, `list_discover_feed`, `get_discover_item`, `search_semantic`, `get_settings_public` |
+| Write | `add_recipe`, `update_recipe`, `add_recipe_photo`, `import_recipe_url`, `add_to_favorites`, `remove_from_favorites`, `set_want_to_make`, `add_to_meal_plan`, `remove_from_meal_plan`, `shopping_add_item`, `shopping_set_checked`, `shopping_remove_item` |
+| Destructive (need `confirm: true` and a matching `confirmName`) | `delete_recipe`, `clear_meal_plan`, `clear_shopping_list` |
+
+`add_recipe_photo` attaches your own picture to a recipe: pass `id` plus either `imageBase64` with `contentType` (`jpeg`, `png`, `webp`, `heic`, `heif`) or a public `https` `imageUrl`. Optional `makePrimary` (defaults to true when the recipe has no photos) makes it the thumbnail. Photos are add-only, capped at 10 MB, and stored in R2 like app uploads.
+
+---
+
 ## Updating Your App
 
 1. Go to your fork on GitHub

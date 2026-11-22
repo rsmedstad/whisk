@@ -8,6 +8,8 @@ import { onRequestPost as importUrlPost } from "../api/import/url";
 import { queryRecipes } from "./embeddings";
 import { mutateRecipeIndex, patchRecipeIndex, updateIndexEntry, type IndexEntryBase } from "./recipe-index";
 import { DEFAULT_DISCOVER_CONFIG } from "./discover-config";
+import { MAX_PHOTO_BYTES, normalizePhotoType, storePhoto } from "./photo-store";
+import { isSafeFetchUrl, safeFetch } from "./ssrf";
 
 export type ToolDef = {
   name: string;
@@ -404,7 +406,35 @@ export const TOOL_DEFS: ToolDef[] = [
       required: ["id"],
     },
   },
-
+  {
+    name: "add_recipe_photo",
+    description:
+      "Attach a photo to a recipe by exact id. Pass exactly one of imageBase64 (with contentType) or imageUrl (https). Add-only: existing photos are kept. makePrimary defaults to true when the recipe has no photos yet; a primary photo becomes the recipe thumbnail. Max 10 MB; JPEG, PNG, WebP or HEIC/HEIF (prefer JPEG: HEIC only displays in Safari).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Recipe id, e.g. r_795c10d5" },
+        imageBase64: {
+          type: "string",
+          description: "Base64 image bytes (a data: URL prefix is accepted). Requires contentType.",
+        },
+        contentType: {
+          type: "string",
+          enum: ["jpeg", "png", "webp", "heic", "heif"],
+          description: "Image type for imageBase64 (image/jpeg style values are also accepted).",
+        },
+        imageUrl: {
+          type: "string",
+          description: "Public https URL of the image to fetch and store.",
+        },
+        makePrimary: {
+          type: "boolean",
+          description: "Make this the primary photo and thumbnail. Default: true only when the recipe has no photos.",
+        },
+      },
+      required: ["id"],
+    },
+  },
 ];
 
 function textResult(
@@ -575,6 +605,8 @@ export async function callTool(
         return await toolClearShoppingList(args, env, actor);
       case "update_recipe":
         return await toolUpdateRecipe(args, env, actor);
+      case "add_recipe_photo":
+        return await toolAddRecipePhoto(args, env, actor);
       default:
         return textResult({ error: `unknown tool: ${name}` }, true);
     }
@@ -1623,6 +1655,203 @@ async function toolUpdateRecipe(
     id,
     updatedFields: Object.keys(patch),
     recipe: updated,
+    ...actorMeta(actor),
+  });
+}
+
+// ── add_recipe_photo ─────────────────────────────────────────────
+
+const PHOTO_FETCH_TIMEOUT_MS = 15_000;
+// Base64 is 4 chars per 3 bytes; anything longer than this decodes past the cap.
+const MAX_PHOTO_BASE64_CHARS = Math.ceil(MAX_PHOTO_BYTES / 3) * 4 + 4;
+const PHOTO_FETCH_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+};
+
+type RecipePhotoEntry = { url: string; caption?: string; isPrimary: boolean };
+
+type PhotoBytes =
+  | { ok: true; buffer: ArrayBuffer }
+  | { ok: false; status: number; error: string };
+
+/** Decode standard or URL-safe base64 (optionally a data: URL) to bytes. */
+function decodeBase64(raw: string): ArrayBuffer | null {
+  const cleaned = raw.replace(/^data:[^,]*;base64,/i, "").replace(/\s+/g, "");
+  if (!cleaned || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(cleaned)) return null;
+  try {
+    const bin = atob(cleaned.replace(/-/g, "+").replace(/_/g, "/"));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  } catch {
+    return null;
+  }
+}
+
+/** Read a response body, giving up as soon as it passes `max` bytes. */
+async function readBodyCapped(res: Response, max: number): Promise<ArrayBuffer | null> {
+  const declared = Number(res.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > max) return null;
+  if (!res.body) {
+    const buf = await res.arrayBuffer();
+    return buf.byteLength > max ? null : buf;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out.buffer;
+}
+
+function photoBytesFromBase64(imageBase64: string, contentType: unknown): PhotoBytes {
+  const dataUrlType = /^data:([^;,]+)[;,]/i.exec(imageBase64)?.[1];
+  const declared =
+    typeof contentType === "string" && contentType.trim() ? contentType : dataUrlType;
+  if (!declared) {
+    return { ok: false, status: 400, error: "contentType required with imageBase64 (jpeg, png, webp, heic or heif)" };
+  }
+  if (!normalizePhotoType(declared)) {
+    return { ok: false, status: 415, error: "Invalid contentType. Use jpeg, png, webp, heic or heif." };
+  }
+  if (imageBase64.length > MAX_PHOTO_BASE64_CHARS + 128) {
+    return { ok: false, status: 413, error: "File too large. Maximum size is 10 MB." };
+  }
+  const buffer = decodeBase64(imageBase64);
+  if (!buffer) return { ok: false, status: 400, error: "imageBase64 is not valid base64" };
+  return { ok: true, buffer };
+}
+
+async function photoBytesFromUrl(imageUrl: string): Promise<PhotoBytes> {
+  let parsed: URL;
+  try {
+    parsed = new URL(imageUrl);
+  } catch {
+    return { ok: false, status: 400, error: "imageUrl is not a valid URL" };
+  }
+  if (parsed.protocol !== "https:" || !isSafeFetchUrl(imageUrl)) {
+    return { ok: false, status: 400, error: "imageUrl must be a public https URL" };
+  }
+
+  let res: Response;
+  try {
+    res = await safeFetch(imageUrl, {
+      headers: PHOTO_FETCH_HEADERS,
+      signal: AbortSignal.timeout(PHOTO_FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "Blocked URL") {
+      return { ok: false, status: 400, error: "imageUrl redirected to a blocked host" };
+    }
+    return { ok: false, status: 502, error: "Could not fetch imageUrl" };
+  }
+  if (!res.ok) {
+    return { ok: false, status: 502, error: `imageUrl returned HTTP ${res.status}` };
+  }
+
+  // A declared image/* type must be an allowed one; other types (octet-stream
+  // from some CDNs) fall through to byte sniffing in storePhoto.
+  const declared = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (declared.startsWith("image/") && !normalizePhotoType(declared)) {
+    await res.body?.cancel().catch(() => {});
+    return { ok: false, status: 415, error: "Invalid image type. Only JPEG, PNG, WebP, and HEIC images are allowed." };
+  }
+
+  const buffer = await readBodyCapped(res, MAX_PHOTO_BYTES);
+  if (!buffer) return { ok: false, status: 413, error: "File too large. Maximum size is 10 MB." };
+  return { ok: true, buffer };
+}
+
+async function toolAddRecipePhoto(
+  args: Record<string, unknown>,
+  env: McpToolEnv,
+  actor: McpActor
+) {
+  const fail = (error: string, extra: Record<string, unknown> = {}) =>
+    textResult({ error, ...extra, ...actorMeta(actor) }, true);
+
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+  if (!id) return fail("id required");
+
+  const hasBase64 = typeof args.imageBase64 === "string" && args.imageBase64.trim() !== "";
+  const hasUrl = typeof args.imageUrl === "string" && args.imageUrl.trim() !== "";
+  if (hasBase64 === hasUrl) {
+    return fail("Pass exactly one of imageBase64 (with contentType) or imageUrl", { id });
+  }
+  if (args.makePrimary !== undefined && typeof args.makePrimary !== "boolean") {
+    return fail("makePrimary must be a boolean", { id });
+  }
+
+  const existing = (await env.WHISK_KV.get(`recipe:${id}`, "json")) as Record<
+    string,
+    unknown
+  > | null;
+  if (!existing) return fail("Recipe not found", { id });
+  if (!env.WHISK_R2) return fail("Photo storage (WHISK_R2) is not configured", { id });
+
+  const bytes = hasBase64
+    ? photoBytesFromBase64((args.imageBase64 as string).trim(), args.contentType)
+    : await photoBytesFromUrl((args.imageUrl as string).trim());
+  if (!bytes.ok) return fail(bytes.error, { id, status: bytes.status });
+
+  const stored = await storePhoto(env.WHISK_R2, bytes.buffer);
+  if (!stored.ok) return fail(stored.error, { id, status: stored.status });
+
+  // Add-only: keep every existing photo (even odd-shaped ones), never replace or delete.
+  const rawPhotos: unknown[] = Array.isArray(existing.photos) ? existing.photos : [];
+  const isPhoto = (p: unknown): p is RecipePhotoEntry =>
+    !!p && typeof p === "object" && typeof (p as { url?: unknown }).url === "string";
+  const makePrimary =
+    typeof args.makePrimary === "boolean" ? args.makePrimary : rawPhotos.length === 0;
+  const alreadyAttached = rawPhotos.some((p) => isPhoto(p) && p.url === stored.url);
+
+  let photos: unknown[] = alreadyAttached
+    ? rawPhotos
+    : [...rawPhotos, { url: stored.url, isPrimary: false } satisfies RecipePhotoEntry];
+  if (makePrimary) {
+    photos = photos.map((p) => (isPhoto(p) ? { ...p, isPrimary: p.url === stored.url } : p));
+  }
+
+  const now = new Date().toISOString();
+  const updated: Record<string, unknown> = {
+    ...existing,
+    photos,
+    ...(makePrimary ? { thumbnailUrl: stored.url } : {}),
+    updatedAt: now,
+  };
+  await env.WHISK_KV.put(`recipe:${id}`, JSON.stringify(updated));
+
+  await updateIndexEntry(env.WHISK_KV, id, (entry) => ({
+    ...entry,
+    ...(makePrimary ? { thumbnailUrl: stored.url } : {}),
+    updatedAt: now,
+  }));
+
+  return textResult({
+    ok: true,
+    id,
+    url: stored.url,
+    key: stored.key,
+    isPrimary: makePrimary,
+    alreadyAttached,
+    photos,
     ...actorMeta(actor),
   });
 }

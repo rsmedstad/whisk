@@ -1,4 +1,4 @@
-﻿import { describe, expect, test, beforeEach } from "bun:test";
+﻿import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import {
   authorizeMcp,
   resetMcpAuthLimiter,
@@ -165,6 +165,7 @@ describe("handleMcp", () => {
     expect(names).toEqual(
       [
         "add_recipe",
+        "add_recipe_photo",
         "add_to_favorites",
         "add_to_meal_plan",
         "clear_meal_plan",
@@ -204,8 +205,8 @@ describe("handleMcp", () => {
 });
 
 describe("TOOL_DEFS", () => {
-  test("phase 1+2+v2 has 25 tools", () => {
-    expect(TOOL_DEFS.length).toBe(25);
+  test("phase 1+2+v2 has 26 tools", () => {
+    expect(TOOL_DEFS.length).toBe(26);
   });
 });
 
@@ -903,3 +904,292 @@ describe("v2 write / destructive tools", () => {
   });
 });
 
+
+describe("add_recipe_photo", () => {
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]);
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 1, 2, 3, 4]);
+  const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
+  const TEN_MB = 10 * 1024 * 1024;
+
+  function oversizedJpeg(): Uint8Array {
+    const big = new Uint8Array(TEN_MB + 1);
+    big.set(JPEG, 0);
+    return big;
+  }
+
+  function r2Mock() {
+    const puts: { key: string; value: unknown; opts: { httpMetadata?: { contentType?: string } } }[] = [];
+    return {
+      puts,
+      async put(key: string, value: unknown, opts: { httpMetadata?: { contentType?: string } }) {
+        puts.push({ key, value, opts });
+      },
+    };
+  }
+
+  type Photo = { url: string; isPrimary: boolean; caption?: string };
+
+  function photoEnv(recipe: Record<string, unknown> = {}) {
+    const r2 = r2Mock();
+    const e = env(
+      { WHISK_R2: r2 as unknown as R2Bucket } as Partial<McpEnv>,
+      {
+        "recipe:r_p1": JSON.stringify({
+          id: "r_p1",
+          title: "Photo Soup",
+          ingredients: [{ name: "water" }],
+          steps: [{ text: "Boil" }],
+          ...recipe,
+        }),
+        "recipes:index": JSON.stringify([
+          {
+            id: "r_p1",
+            title: "Photo Soup",
+            thumbnailUrl: recipe.thumbnailUrl,
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          { id: "r_other", title: "Other", updatedAt: "2026-01-01T00:00:00.000Z" },
+        ]),
+      }
+    );
+    return { e, r2 };
+  }
+
+  async function call(args: Record<string, unknown>, e: McpEnv) {
+    const res = await callTool("add_recipe_photo", args, e);
+    return { res, body: JSON.parse(res.content[0]!.text) as Record<string, any> };
+  }
+
+  async function readRecipe(e: McpEnv) {
+    return (await e.WHISK_KV.get("recipe:r_p1", "json")) as Record<string, any>;
+  }
+  async function readIndexEntry(e: McpEnv, id = "r_p1") {
+    const idx = (await e.WHISK_KV.get("recipes:index", "json")) as Record<string, any>[];
+    return idx.find((x) => x.id === id)!;
+  }
+
+  const realFetch = globalThis.fetch;
+  let fetchCalls: string[] = [];
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    fetchCalls = [];
+  });
+  function mockFetch(handler: (url: string) => Response | Promise<Response>) {
+    fetchCalls = [];
+    globalThis.fetch = (async (input: unknown) => {
+      const url = typeof input === "string" ? input : String((input as { url?: string }).url ?? input);
+      fetchCalls.push(url);
+      return handler(url);
+    }) as unknown as typeof fetch;
+  }
+
+  test("base64: first photo becomes primary and thumbnail, index updated", async () => {
+    const { e, r2 } = photoEnv();
+    const { res, body } = await call({ id: "r_p1", imageBase64: b64(JPEG), contentType: "jpeg" }, e);
+    expect(res.isError).toBeUndefined();
+    expect(body.ok).toBe(true);
+    expect(body.key).toMatch(/^photos\/[0-9a-f]{16}\.jpg$/);
+    expect(body.url).toBe("/" + body.key);
+    expect(r2.puts.length).toBe(1);
+    expect(r2.puts[0]!.key).toBe(body.key);
+    expect(r2.puts[0]!.opts.httpMetadata?.contentType).toBe("image/jpeg");
+
+    const recipe = await readRecipe(e);
+    expect(recipe.photos).toEqual([{ url: body.url, isPrimary: true }]);
+    expect(recipe.thumbnailUrl).toBe(body.url);
+    expect((await readIndexEntry(e)).thumbnailUrl).toBe(body.url);
+    expect((await readIndexEntry(e, "r_other")).thumbnailUrl).toBeUndefined();
+  });
+
+  test("url: fetches https PNG and stores .png", async () => {
+    mockFetch(() => new Response(PNG, { status: 200, headers: { "content-type": "image/png" } }));
+    const { e, r2 } = photoEnv();
+    const { res, body } = await call({ id: "r_p1", imageUrl: "https://images.example.com/a.png" }, e);
+    expect(res.isError).toBeUndefined();
+    expect(body.key).toMatch(/^photos\/[0-9a-f]{16}\.png$/);
+    expect(fetchCalls).toEqual(["https://images.example.com/a.png"]);
+    expect(r2.puts[0]!.opts.httpMetadata?.contentType).toBe("image/png");
+  });
+
+  test("url: http, localhost and private IP rejected without fetching", async () => {
+    mockFetch(() => new Response(PNG, { status: 200, headers: { "content-type": "image/png" } }));
+    for (const u of [
+      "http://images.example.com/a.png",
+      "https://127.0.0.1/a.png",
+      "https://localhost/a.png",
+    ]) {
+      const { e, r2 } = photoEnv();
+      const { res } = await call({ id: "r_p1", imageUrl: u }, e);
+      expect(res.isError).toBe(true);
+      expect(r2.puts.length).toBe(0);
+    }
+    expect(fetchCalls.length).toBe(0);
+  });
+
+  test("url: redirect to metadata host rejected", async () => {
+    mockFetch(
+      () => new Response(null, { status: 302, headers: { Location: "http://169.254.169.254/latest/meta-data" } })
+    );
+    const { e, r2 } = photoEnv();
+    const { res } = await call({ id: "r_p1", imageUrl: "https://images.example.com/a.png" }, e);
+    expect(res.isError).toBe(true);
+    expect(r2.puts.length).toBe(0);
+    expect(fetchCalls).toEqual(["https://images.example.com/a.png"]);
+  });
+
+  test("url: non-ok response is an error", async () => {
+    mockFetch(() => new Response("nope", { status: 404 }));
+    const { e, r2 } = photoEnv();
+    const { res, body } = await call({ id: "r_p1", imageUrl: "https://images.example.com/a.png" }, e);
+    expect(res.isError).toBe(true);
+    expect(body.error).toContain("404");
+    expect(r2.puts.length).toBe(0);
+  });
+
+  test("rejects bad contentType", async () => {
+    const { e, r2 } = photoEnv();
+    const { res } = await call({ id: "r_p1", imageBase64: b64(JPEG), contentType: "gif" }, e);
+    expect(res.isError).toBe(true);
+    expect(r2.puts.length).toBe(0);
+  });
+
+  test("rejects non-image bytes declared as jpeg", async () => {
+    const { e, r2 } = photoEnv();
+    const text = new TextEncoder().encode("this is definitely not an image");
+    const { res } = await call({ id: "r_p1", imageBase64: b64(text), contentType: "jpeg" }, e);
+    expect(res.isError).toBe(true);
+    expect(r2.puts.length).toBe(0);
+    expect((await readRecipe(e)).photos).toBeUndefined();
+  });
+
+  test("rejects oversized base64 payload", async () => {
+    const { e, r2 } = photoEnv();
+    const { res, body } = await call({ id: "r_p1", imageBase64: b64(oversizedJpeg()), contentType: "jpeg" }, e);
+    expect(res.isError).toBe(true);
+    expect(String(body.error).toLowerCase()).toContain("too large");
+    expect(r2.puts.length).toBe(0);
+  });
+
+  test("rejects oversized url response via content-length", async () => {
+    mockFetch(
+      () =>
+        new Response(JPEG, {
+          status: 200,
+          headers: { "content-type": "image/jpeg", "content-length": String(TEN_MB + 1) },
+        })
+    );
+    const { e, r2 } = photoEnv();
+    const { res, body } = await call({ id: "r_p1", imageUrl: "https://images.example.com/a.jpg" }, e);
+    expect(res.isError).toBe(true);
+    expect(String(body.error).toLowerCase()).toContain("too large");
+    expect(r2.puts.length).toBe(0);
+  });
+
+  test("rejects oversized url response body without content-length", async () => {
+    mockFetch(() => {
+      const big = oversizedJpeg();
+      const stream = new ReadableStream<Uint8Array>({
+        start(c) {
+          const step = 1024 * 1024;
+          for (let i = 0; i < big.length; i += step) c.enqueue(big.slice(i, i + step));
+          c.close();
+        },
+      });
+      return new Response(stream, { status: 200, headers: { "content-type": "image/jpeg" } });
+    });
+    const { e, r2 } = photoEnv();
+    const { res, body } = await call({ id: "r_p1", imageUrl: "https://images.example.com/a.jpg" }, e);
+    expect(res.isError).toBe(true);
+    expect(String(body.error).toLowerCase()).toContain("too large");
+    expect(r2.puts.length).toBe(0);
+  });
+
+  test("id and argument validation", async () => {
+    const { e, r2 } = photoEnv();
+    let out = await call({ imageBase64: b64(JPEG), contentType: "jpeg" }, e);
+    expect(out.res.isError).toBe(true);
+    expect(out.body.error).toBe("id required");
+
+    out = await call({ id: "r_missing", imageBase64: b64(JPEG), contentType: "jpeg" }, e);
+    expect(out.res.isError).toBe(true);
+    expect(out.body.error).toBe("Recipe not found");
+
+    out = await call(
+      { id: "r_p1", imageBase64: b64(JPEG), contentType: "jpeg", imageUrl: "https://images.example.com/a.jpg" },
+      e
+    );
+    expect(out.res.isError).toBe(true);
+
+    out = await call({ id: "r_p1" }, e);
+    expect(out.res.isError).toBe(true);
+    expect(r2.puts.length).toBe(0);
+  });
+
+  test("existing photos are kept; non-primary add leaves primary and thumbnail alone", async () => {
+    const existing: Photo[] = [
+      { url: "/photos/aaaaaaaaaaaaaaaa.jpg", isPrimary: true },
+      { url: "/photos/bbbbbbbbbbbbbbbb.jpg", isPrimary: false, caption: "side" },
+    ];
+    const { e } = photoEnv({ photos: existing, thumbnailUrl: "/photos/aaaaaaaaaaaaaaaa.jpg" });
+    const { res, body } = await call({ id: "r_p1", imageBase64: b64(JPEG), contentType: "image/jpeg" }, e);
+    expect(res.isError).toBeUndefined();
+    expect(body.isPrimary).toBe(false);
+
+    const recipe = await readRecipe(e);
+    expect(recipe.photos.length).toBe(3);
+    expect(recipe.photos[0]).toEqual(existing[0]!);
+    expect(recipe.photos[1]).toEqual(existing[1]!);
+    expect(recipe.photos[2]).toEqual({ url: body.url, isPrimary: false });
+    expect(recipe.thumbnailUrl).toBe("/photos/aaaaaaaaaaaaaaaa.jpg");
+    expect((await readIndexEntry(e)).thumbnailUrl).toBe("/photos/aaaaaaaaaaaaaaaa.jpg");
+  });
+
+  test("makePrimary true keeps prior photos and moves primary and thumbnail", async () => {
+    const existing: Photo[] = [
+      { url: "/photos/aaaaaaaaaaaaaaaa.jpg", isPrimary: true },
+      { url: "/photos/bbbbbbbbbbbbbbbb.jpg", isPrimary: false },
+    ];
+    const { e } = photoEnv({ photos: existing, thumbnailUrl: "/photos/aaaaaaaaaaaaaaaa.jpg" });
+    const { body } = await call(
+      { id: "r_p1", imageBase64: b64(PNG), contentType: "png", makePrimary: true },
+      e
+    );
+    expect(body.ok).toBe(true);
+    expect(body.isPrimary).toBe(true);
+
+    const recipe = await readRecipe(e);
+    expect(recipe.photos.map((p: Photo) => p.url)).toEqual([
+      "/photos/aaaaaaaaaaaaaaaa.jpg",
+      "/photos/bbbbbbbbbbbbbbbb.jpg",
+      body.url,
+    ]);
+    expect(recipe.photos.map((p: Photo) => p.isPrimary)).toEqual([false, false, true]);
+    expect(recipe.thumbnailUrl).toBe(body.url);
+    expect((await readIndexEntry(e)).thumbnailUrl).toBe(body.url);
+  });
+
+  test("same image twice is not duplicated", async () => {
+    const { e } = photoEnv();
+    const args = { id: "r_p1", imageBase64: b64(JPEG), contentType: "jpeg" };
+    const first = await call(args, e);
+    expect(first.body.alreadyAttached).toBe(false);
+    const second = await call(args, e);
+    expect(second.res.isError).toBeUndefined();
+    expect(second.body.alreadyAttached).toBe(true);
+    expect(second.body.url).toBe(first.body.url);
+    expect((await readRecipe(e)).photos.length).toBe(1);
+  });
+
+  test("tool is registered in TOOL_DEFS and tools/list", async () => {
+    const def = TOOL_DEFS.find((t) => t.name === "add_recipe_photo");
+    expect(def).toBeDefined();
+    expect(def!.inputSchema.required).toContain("id");
+
+    const res = await handleMcp(
+      mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list" }, bearer(TEST_TOKEN)),
+      env()
+    );
+    const body = (await res.json()) as { result: { tools: { name: string }[] } };
+    expect(body.result.tools.map((t) => t.name)).toContain("add_recipe_photo");
+  });
+});
