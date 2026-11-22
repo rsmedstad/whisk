@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { AppSettings, AppStyle, AICapabilities, Recipe, RecipeIndexEntry, DiscoverConfig, DiscoverSourceConfig } from "../types";
+import type { AppSettings, AppStyle, ThemePalette, AICapabilities, Recipe, RecipeIndexEntry, DiscoverConfig, DiscoverSourceConfig } from "../types";
 import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 import { useAIConfig } from "../hooks/useAIConfig";
 import { useHousehold } from "../hooks/useHousehold";
@@ -16,7 +16,7 @@ import { DemoLock } from "./ui/Demo";
 import { BookmarkletHelp } from "./import/BookmarkletHelp";
 import { classNames } from "../lib/utils";
 import {
-  ChevronLeft, Trash, Globe, Share, Check, ChevronDown, XMark, Sun, Moon, ComputerDesktop, CalendarDays,
+  ChevronLeft, Trash, Globe, Share, Check, ChevronDown, XMark, Sun, Moon, ComputerDesktop, CalendarDays, Sparkles,
   Pumpkin, ChristmasTree, Snowflake, HeartArrow, Shamrock, EasterEgg, Firework, TurkeyLeg,
   RefreshCw, Flower, Leaf, ExternalLink,
 } from "./ui/Icon";
@@ -24,6 +24,8 @@ import {
 interface SettingsProps {
   theme: AppSettings["theme"];
   onSetTheme: (theme: AppSettings["theme"]) => void;
+  palette: ThemePalette;
+  onSetPalette: (palette: ThemePalette) => void;
   accentOverride: "auto" | SeasonalAccent;
   onSetAccent: (accent: "auto" | SeasonalAccent) => void;
   style: AppStyle;
@@ -98,7 +100,7 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities, isDemoRestricted = false, onOpenAdminLogin }: SettingsProps) {
+export function Settings({ theme, onSetTheme, palette, onSetPalette, accentOverride, onSetAccent, style, onSetStyle, onLogout, capabilities, isDemoRestricted = false, onOpenAdminLogin }: SettingsProps) {
   const aiConfig = useAIConfig();
   const hh = useHousehold();
   const navigate = useNavigate();
@@ -430,36 +432,60 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
             {/* Theme */}
             <section>
               <h2 className="text-sm font-semibold text-stone-500 dark:text-orange-300/50 uppercase tracking-wide mb-3">
-                Theme
+                Appearance
               </h2>
               <Card>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {([
-                      { id: "system" as const, label: "System", IconComp: ComputerDesktop },
-                      { id: "light" as const, label: "Light", IconComp: Sun },
-                      { id: "dark" as const, label: "Dark", IconComp: Moon },
-                      { id: "seasonal" as const, label: "Seasonal", IconComp: CalendarDays },
-                    ] as const).map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => {
-                          onSetTheme(t.id);
-                          if (t.id === "seasonal" && !showAccentPicker) setShowAccentPicker(true);
-                        }}
-                        className={classNames(
-                          "flex flex-col items-center gap-1 py-2.5 px-1 rounded-[var(--wk-radius-btn)] text-xs font-medium border transition-all",
-                          theme === t.id ? activeClass : inactiveClass
-                        )}
-                      >
-                        <t.IconComp className="w-5 h-5" />
-                        <span>{t.label}</span>
-                      </button>
-                    ))}
+                  <div>
+                    <div className="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5">Mode</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {([
+                        { id: "system" as const, label: "System", IconComp: ComputerDesktop },
+                        { id: "light" as const, label: "Light", IconComp: Sun },
+                        { id: "dark" as const, label: "Dark", IconComp: Moon },
+                      ] as const).map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => onSetTheme(t.id)}
+                          className={classNames(
+                            "flex flex-col items-center gap-1 py-2.5 px-1 rounded-[var(--wk-radius-btn)] text-xs font-medium border transition-all",
+                            theme === t.id ? activeClass : inactiveClass
+                          )}
+                        >
+                          <t.IconComp className="w-5 h-5" />
+                          <span>{t.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5">Colors</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {([
+                        { id: "classic" as const, label: "Classic", IconComp: Sparkles },
+                        { id: "seasonal" as const, label: "Seasonal", IconComp: CalendarDays },
+                      ] as const).map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            onSetPalette(p.id);
+                            if (p.id === "seasonal" && !showAccentPicker) setShowAccentPicker(true);
+                          }}
+                          className={classNames(
+                            "flex flex-col items-center gap-1 py-2.5 px-1 rounded-[var(--wk-radius-btn)] text-xs font-medium border transition-all",
+                            palette === p.id ? activeClass : inactiveClass
+                          )}
+                        >
+                          <p.IconComp className="w-5 h-5" />
+                          <span>{p.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Seasonal accent picker */}
-                  {theme === "seasonal" && (
+                  {palette === "seasonal" && (
                     <div>
                       {(() => {
                         const resolvedAccent = accentOverride === "auto" ? getSeasonalAccent() : accentOverride;
@@ -527,7 +553,7 @@ export function Settings({ theme, onSetTheme, accentOverride, onSetAccent, style
 
                       <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
                         {accentOverride === "auto"
-                          ? `Colors shift automatically with the calendar — currently showing ${ACCENT_OPTIONS.find((o) => o.value === getSeasonalAccent())?.label ?? "seasonal"}`
+                          ? `Colors shift with the calendar. Currently showing ${ACCENT_OPTIONS.find((o) => o.value === getSeasonalAccent())?.label ?? "seasonal"}`
                           : `Locked to ${ACCENT_OPTIONS.find((o) => o.value === accentOverride)?.label ?? accentOverride} colors`}
                       </p>
                     </div>

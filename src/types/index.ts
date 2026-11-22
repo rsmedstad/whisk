@@ -227,8 +227,11 @@ export interface CookingTimer {
 
 export type AppStyle = "modern" | "editorial" | "soft" | "glass";
 
+export type ThemePalette = "classic" | "seasonal";
+
 export interface AppSettings {
-  theme: "system" | "light" | "dark" | "seasonal";
+  theme: "system" | "light" | "dark";
+  palette: ThemePalette;
   style: AppStyle;
   units: "imperial" | "metric";
   temperatureUnit: "F" | "C";
