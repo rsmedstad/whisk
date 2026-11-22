@@ -19,7 +19,7 @@ import { toDateString } from "./lib/utils";
 import { DemoBanner } from "./components/ui/DemoBanner";
 import { DemoPill, DemoInfoModal, DemoToastHost } from "./components/ui/Demo";
 import { BlockedImportProvider } from "./components/import/BlockedImportFlow";
-import type { Ingredient, AppSettings, AppStyle, UserPreferences } from "./types";
+import type { Ingredient, AppSettings, AppStyle, ThemePalette, UserPreferences } from "./types";
 
 /** Full-page placeholder shown when a demo-restricted route is accessed */
 function DemoRestrictedPage({ feature }: { feature: string }) {
@@ -83,7 +83,7 @@ function BootLoader() {
 export function App() {
   const auth = useAuth();
   const capabilities = useCapabilities();
-  const { theme, setTheme, accentOverride, setAccentOverride } = useTheme();
+  const { theme, setTheme, palette, setPalette, accentOverride, setAccentOverride } = useTheme();
   const { style, setStyle } = useStyle();
 
   // Auto-enter demo guest mode when the backend reports demo mode and no one
@@ -135,6 +135,8 @@ export function App() {
       <AppShell
         theme={theme}
         onSetTheme={setTheme}
+        palette={palette}
+        onSetPalette={setPalette}
         accentOverride={accentOverride}
         onSetAccent={setAccentOverride}
         style={style}
@@ -149,6 +151,8 @@ export function App() {
 function AppShell({
   theme,
   onSetTheme,
+  palette,
+  onSetPalette,
   accentOverride,
   onSetAccent,
   style,
@@ -158,6 +162,8 @@ function AppShell({
 }: {
   theme: AppSettings["theme"];
   onSetTheme: (t: AppSettings["theme"]) => void;
+  palette: ThemePalette;
+  onSetPalette: (p: ThemePalette) => void;
   accentOverride: "auto" | import("./lib/seasonal").SeasonalAccent;
   onSetAccent: (a: "auto" | import("./lib/seasonal").SeasonalAccent) => void;
   style: AppStyle;
@@ -367,6 +373,8 @@ function AppShell({
               <Settings
                 theme={theme}
                 onSetTheme={onSetTheme}
+                palette={palette}
+                onSetPalette={onSetPalette}
                 accentOverride={accentOverride}
                 onSetAccent={onSetAccent}
                 style={style}

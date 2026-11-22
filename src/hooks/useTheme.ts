@@ -1,12 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import type { AppSettings } from "../types";
+import type { AppSettings, ThemePalette } from "../types";
 import { getSeasonalAccent, type SeasonalAccent } from "../lib/seasonal";
 
 type Theme = AppSettings["theme"];
-
-// Accents whose CSS palettes use dark backgrounds (e.g. --color-white is a dark value)
-// These need the `.dark` class so dark: Tailwind variants activate for text contrast
-const DARK_ACCENTS: ReadonlySet<SeasonalAccent> = new Set(["halloween"]);
 
 function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -41,32 +37,51 @@ export const ACCENT_OPTIONS: { value: "auto" | SeasonalAccent; label: string }[]
   { value: "christmas", label: "Christmas" },
 ];
 
+function readPrefs(): { theme: Theme; palette: ThemePalette } {
+  let theme: Theme = "system";
+  let palette: ThemePalette = "classic";
+  try {
+    const storedTheme = localStorage.getItem("whisk_theme");
+    const storedPalette = localStorage.getItem("whisk_palette");
+    if (storedTheme === "seasonal") {
+      // Migrate legacy "seasonal" theme to system mode + seasonal palette
+      palette = "seasonal";
+      localStorage.setItem("whisk_theme", "system");
+      localStorage.setItem("whisk_palette", "seasonal");
+    } else {
+      if (storedTheme === "light" || storedTheme === "dark" || storedTheme === "system") {
+        theme = storedTheme;
+      }
+      if (storedPalette === "seasonal" || storedPalette === "classic") {
+        palette = storedPalette;
+      }
+    }
+  } catch {
+    // localStorage unavailable
+  }
+  return { theme, palette };
+}
+
 export function useTheme() {
-  const [preference, setPreference] = useState<Theme>(() => {
-    return (localStorage.getItem("whisk_theme") as Theme) ?? "system";
-  });
+  const [prefs] = useState(readPrefs);
+  const [preference, setPreference] = useState<Theme>(prefs.theme);
+  const [palette, setPaletteState] = useState<ThemePalette>(prefs.palette);
+  const [systemDark, setSystemDark] = useState<boolean>(() => getSystemTheme() === "dark");
 
   const [accentOverride, setAccentOverrideState] = useState<"auto" | SeasonalAccent>(() => {
     return (localStorage.getItem("whisk_accent") as SeasonalAccent) || "auto";
   });
 
-  // Resolve dark/light mode
-  // Seasonal themes use their own palettes — dark class only for dark-palette accents
-  const activeAccent = accentOverride !== "auto" ? accentOverride : getSeasonalAccent();
-  const resolved =
-    preference === "system"
-      ? getSystemTheme()
-      : preference === "seasonal"
-        ? (DARK_ACCENTS.has(activeAccent) ? "dark" : "light")
-        : preference;
+  const resolved: "light" | "dark" =
+    preference === "system" ? (systemDark ? "dark" : "light") : preference;
 
   useEffect(() => {
     applyTheme(resolved);
   }, [resolved]);
 
-  // Apply seasonal accent when theme is "seasonal"
+  // Apply seasonal accent when palette is "seasonal"
   useEffect(() => {
-    if (preference === "seasonal") {
+    if (palette === "seasonal") {
       const accent = accentOverride !== "auto" ? accentOverride : getSeasonalAccent();
       applyAccent(accent);
 
@@ -86,21 +101,33 @@ export function useTheme() {
     } else {
       applyAccent(null);
     }
-  }, [preference, accentOverride]);
+  }, [palette, accentOverride]);
 
-  // Listen for system theme changes (for system mode only)
+  // Track system color scheme changes (used when mode is "system")
   useEffect(() => {
-    if (preference !== "system") return;
-
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => applyTheme(getSystemTheme());
+    const handler = () => setSystemDark(mq.matches);
+    handler();
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, [preference]);
+  }, []);
 
   const setTheme = useCallback((theme: Theme) => {
     setPreference(theme);
-    localStorage.setItem("whisk_theme", theme);
+    try {
+      localStorage.setItem("whisk_theme", theme);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const setPalette = useCallback((next: ThemePalette) => {
+    setPaletteState(next);
+    try {
+      localStorage.setItem("whisk_palette", next);
+    } catch {
+      // ignore
+    }
   }, []);
 
   const setAccentOverride = useCallback((accent: "auto" | SeasonalAccent) => {
@@ -112,5 +139,13 @@ export function useTheme() {
     }
   }, []);
 
-  return { theme: preference, resolved, setTheme, accentOverride, setAccentOverride };
+  return {
+    theme: preference,
+    resolved,
+    setTheme,
+    palette,
+    setPalette,
+    accentOverride,
+    setAccentOverride,
+  };
 }

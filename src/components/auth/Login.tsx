@@ -5,7 +5,7 @@ import { Card } from "../ui/Card";
 import { ChevronLeft, Eye, EyeSlash } from "../ui/Icon";
 import { InstallPrompt } from "../InstallPrompt";
 import { getSeasonalAccent } from "../../lib/seasonal";
-import type { AppSettings, OnboardingPrefs } from "../../types";
+import type { AppSettings, OnboardingPrefs, ThemePalette } from "../../types";
 
 interface LoginProps {
   onLogin: (password: string, name?: string) => Promise<void>;
@@ -15,6 +15,8 @@ interface LoginProps {
   userName?: string;
   currentTheme?: AppSettings["theme"];
   onSetTheme?: (theme: AppSettings["theme"]) => void;
+  currentPalette?: ThemePalette;
+  onSetPalette?: (palette: ThemePalette) => void;
   onCompleteOnboarding?: (prefs: OnboardingPrefs) => void;
 }
 
@@ -47,6 +49,8 @@ export function Login({
   userName,
   currentTheme,
   onSetTheme,
+  currentPalette,
+  onSetPalette,
   onCompleteOnboarding,
 }: LoginProps) {
   const [screen, setScreen] = useState<Screen>("welcome");
@@ -79,6 +83,8 @@ export function Login({
         userName={userName}
         currentTheme={currentTheme ?? "system"}
         onSetTheme={onSetTheme}
+        currentPalette={currentPalette ?? "classic"}
+        onSetPalette={onSetPalette}
         onComplete={onCompleteOnboarding}
       />
     );
@@ -297,11 +303,15 @@ function OnboardingScreen({
   userName,
   currentTheme,
   onSetTheme,
+  currentPalette,
+  onSetPalette,
   onComplete,
 }: {
   userName: string;
   currentTheme: AppSettings["theme"];
   onSetTheme?: (theme: AppSettings["theme"]) => void;
+  currentPalette: ThemePalette;
+  onSetPalette?: (palette: ThemePalette) => void;
   onComplete: (prefs: OnboardingPrefs) => void;
 }) {
   const [units, setUnits] = useState<OnboardingPrefs["units"]>("imperial");
@@ -329,8 +339,8 @@ function OnboardingScreen({
               <label className="text-sm font-medium text-stone-700 dark:text-stone-200 block mb-2">
                 Theme
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["system", "light", "dark", "seasonal"] as const).map((t) => (
+              <div className="grid grid-cols-3 gap-2">
+                {(["system", "light", "dark"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => handleThemeChange(t)}
@@ -339,17 +349,26 @@ function OnboardingScreen({
                       currentTheme === t ? activeClass : inactiveClass
                     }`}
                   >
-                    {t === "seasonal" ? "Seasonal / Holiday" : t}
+                    {t}
                   </button>
                 ))}
               </div>
-              {currentTheme === "seasonal" && (() => {
+              <button
+                onClick={() => onSetPalette?.(currentPalette === "seasonal" ? "classic" : "seasonal")}
+                aria-pressed={currentPalette === "seasonal"}
+                className={`mt-2 w-full py-2.5 rounded-lg text-sm font-medium border ${
+                  currentPalette === "seasonal" ? activeClass : inactiveClass
+                }`}
+              >
+                Seasonal colors
+              </button>
+              {currentPalette === "seasonal" && (() => {
                 const accent = getSeasonalAccent();
                 const symbol = ACCENT_SYMBOLS[accent] ?? "";
                 const name = ACCENT_LABELS[accent] ?? "Auto";
                 return (
                   <p className="mt-2 text-xs text-stone-600 dark:text-stone-400">
-                    {symbol} Currently: {name} — changes automatically
+                    {symbol} Currently: {name}. Changes automatically.
                   </p>
                 );
               })()}

@@ -46,7 +46,7 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-200: #ff8fab;
   --color-orange-300: #ff6090;
   --color-orange-400: #f23b72;
-  --color-orange-500: #e0115f;
+  --color-orange-500: #d70f5b;
   --color-orange-600: #c00050;
   --color-orange-700: #9e0042;
   --color-orange-800: #7d0035;
@@ -78,7 +78,7 @@ input[type="search"]::-webkit-search-decoration {
   --color-orange-200: #66e055;
   --color-orange-300: #33cc33;
   --color-orange-400: #1aaa1a;
-  --color-orange-500: #008800;
+  --color-orange-500: #008300;
   --color-orange-600: #006d00;
   --color-orange-700: #005500;
   --color-orange-800: #004400;
@@ -168,13 +168,13 @@ input[type="search"]::-webkit-search-decoration {
 
 /* Halloween — vibrant orange, purple-black, spooky green — max immersion */
 [data-accent="halloween"] {
-  --color-white: #1e1428;
+  --color-white: #fff6ec;
   --color-orange-50: #fff0d4;
   --color-orange-100: #ffe0a8;
   --color-orange-200: #ffcc66;
   --color-orange-300: #ff9900;
   --color-orange-400: #ff6b00;
-  --color-orange-500: #cc4400;
+  --color-orange-500: #c84300;
   --color-orange-600: #b33b00;
   --color-orange-700: #993200;
   --color-orange-800: #993000;
@@ -192,9 +192,8 @@ input[type="search"]::-webkit-search-decoration {
   --color-stone-900: #1a1028;
   --color-stone-950: #0e0818;
 }
-/* Halloween dark mode: darker purple-black base, bright orange text contrast */
+/* Halloween dark mode: purple-black base, bright orange text contrast */
 html.dark[data-accent="halloween"] {
-  --color-white: #0d0818;
   --color-stone-50: #f5e8d8;
   --color-stone-100: #ead0b0;
   --color-stone-200: #ddb888;
@@ -217,7 +216,7 @@ html.dark[data-accent="halloween"] {
   --color-orange-200: #f0b050;
   --color-orange-300: #e09020;
   --color-orange-400: #cc7700;
-  --color-orange-500: #b36200;
+  --color-orange-500: #a75a00;
   --color-orange-600: #994f00;
   --color-orange-700: #804000;
   --color-orange-800: #663300;
@@ -266,13 +265,6 @@ html.dark[data-accent="halloween"] {
   --color-stone-800: #0e2e0e;
   --color-stone-900: #081e08;
   --color-stone-950: #041204;
-}
-/* Christmas dark mode: deep evergreen base */
-html.dark[data-accent="christmas"] {
-  --color-white: #061206;
-  --color-stone-50: #0e2e0e;
-  --color-stone-100: #0a220a;
-  --color-stone-200: #081a08;
 }
 /* Christmas secondary accent: gold */
 [data-accent="christmas"] {
@@ -345,7 +337,7 @@ html.dark[data-accent="christmas"] {
   --color-orange-200: #f0b060;
   --color-orange-300: #e09030;
   --color-orange-400: #cc7510;
-  --color-orange-500: #b36000;
+  --color-orange-500: #ab5b00;
   --color-orange-600: #944e00;
   --color-orange-700: #7a3f00;
   --color-orange-800: #603200;
@@ -389,6 +381,69 @@ html.dark[data-accent="christmas"] {
   --color-stone-800: #1e2234;
   --color-stone-900: #121624;
   --color-stone-950: #080a14;
+}
+
+/* ── Dark mode tuning for seasonal palettes ───────────────
+   Palettes follow the System/Light/Dark mode setting. In dark mode the
+   mid stone tones (used for secondary text) are lifted toward each
+   palette's light end so muted text stays readable on stone-900/950.
+   Winter and Christmas also lift their accent, which is too deep for
+   dark surfaces. */
+html.dark[data-accent="valentine"] {
+  --color-stone-300: #db96ac;
+  --color-stone-400: #bd768e;
+  --color-stone-500: #9f5d75;
+}
+html.dark[data-accent="stpatrick"] {
+  --color-stone-300: #7dbd6b;
+  --color-stone-400: #5c9d4f;
+  --color-stone-500: #4a8041;
+}
+html.dark[data-accent="easter"] {
+  --color-stone-300: #b6a4d2;
+  --color-stone-400: #9984b9;
+  --color-stone-500: #7f689e;
+}
+html.dark[data-accent="july4th"] {
+  --color-stone-300: #9bb0c8;
+  --color-stone-400: #7b92ac;
+  --color-stone-500: #60768e;
+}
+html.dark[data-accent="thanksgiving"] {
+  --color-stone-300: #c0a67d;
+  --color-stone-400: #a28660;
+  --color-stone-500: #846d4c;
+}
+html.dark[data-accent="christmas"] {
+  --color-orange-300: #f48383;
+  --color-orange-400: #ec5656;
+  --color-orange-500: #d62a2a;
+  --color-stone-300: #7cc07c;
+  --color-stone-400: #56a156;
+  --color-stone-500: #3e853e;
+}
+html.dark[data-accent="spring"] {
+  --color-stone-300: #c6a3b3;
+  --color-stone-400: #a88493;
+  --color-stone-500: #8e6877;
+}
+html.dark[data-accent="summer"] {
+  --color-stone-300: #c1ac86;
+  --color-stone-400: #a38e64;
+  --color-stone-500: #86724c;
+}
+html.dark[data-accent="fall"] {
+  --color-stone-300: #bdaa7f;
+  --color-stone-400: #9e8c62;
+  --color-stone-500: #807150;
+}
+html.dark[data-accent="winter"] {
+  --color-orange-300: #82a3db;
+  --color-orange-400: #6187cd;
+  --color-orange-500: #476bbd;
+  --color-stone-300: #a6adc3;
+  --color-stone-400: #878ea8;
+  --color-stone-500: #6c7490;
 }
 
 /* ── Design Style Tokens ──────────────────────────────────
